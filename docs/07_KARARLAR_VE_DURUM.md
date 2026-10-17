@@ -40,6 +40,7 @@ hata ayıklama. İleride gerekirse çizim Rust'a (wgpu) taşınabilir; oyun kura
 - `character.py` — insan iskeleti (kalça, diz, omuz, dirsek, omurga, kafa) + Kaan ve zombi modelleri + pozlar.
 - `nature.py` — meşe, çam, huş, ölü ağaç, çalılar, kayalar, kütük, devrik kütük.
 - `flat.py` — dikişsiz zemin karoları, toprak lekeleri, ot/çiçek, gölge, joystick, panel/tuş, 27 pixel ikon.
+- `sfx.py` — ses efektlerini sentezler (`assets/sfx/*.wav`).
 - `build_assets.py` — hepsini üretip `android/app/src/main/assets/sprites/` + `manifest.json` yazar (~2 dk).
 - Önizlemeler: `art/preview/*.png`.
 
@@ -69,11 +70,14 @@ hata ayıklama. İleride gerekirse çizim Rust'a (wgpu) taşınabilir; oyun kura
   hassasiyeti ve ölü bölgeleri, koşma eşiği, joystick boyutu/saydamlığı, dinamik/sabit joystick, titreşim,
   sol el modu
 - Otomatik kayıt (60 sn, lobiye dönüş, uygulama arka plana alınınca)
+- **Ses efektleri** (kodla sentezlendi, `tools/assetgen/sfx.py`): yumruk savurma, isabet, ağaç vuruşu, ağaç
+  devrilmesi, 3 zombi homurtusu (uzaklığa göre kısılır), zombi saldırısı/ölümü, hasar alma, seviye atlama,
+  ölüm, tuş sesi — ana ses / efekt / arayüz ses ayarlarına bağlı
 
 ## 5. "Yakında" (tuşu var, çalışmıyor)
 Google giriş, hesap oluşturma, İngilizce, posta, görevler, etkinlikler, sıralama, arkadaş, klan, sohbet, mağaza
 satın alma, kıyafet/görünüm/isim değiştirme, ekipman, eşya kullanma/atma, yetenek sıfırlama, HUD düzenleyici,
-renk körlüğü filtreleri, bulut kayıt, online sunucular, **ses ve müzik**.
+renk körlüğü filtreleri, bulut kayıt, online sunucular, **müzik ve ortam sesleri**.
 
 ## 6. APK'yı telefona kurma
 1. GitHub'da repo sayfası → **Releases** → **"Zenvex Online — son derleme"**.
@@ -83,7 +87,7 @@ renk körlüğü filtreleri, bulut kayıt, online sunucular, **ses ve müzik**.
 
 ## 7. Sıradaki adımlar (öneri)
 1. Telefonda ilk test → his/denge geri bildirimi (hız, hasar, zombi sayısı, joystick)
-2. Ses efektleri (kodla sentez: yumruk, isabet, ağaç, zombi homurtusu) + basit müzik
+2. Müzik + ortam sesleri (rüzgâr, kuş), ayak sesleri
 3. Karakter animasyon cilası (yürüme/koşu kol-bacak, yumrukta gövde dönüşü)
 4. Gece-gündüz, yeni zombi türleri
 5. Online altyapı (Rust sunucu — `zenvex_core` aynen kullanılacak)

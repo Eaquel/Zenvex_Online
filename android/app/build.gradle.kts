@@ -51,7 +51,7 @@ android {
         buildConfig = true
     }
     androidResources {
-        noCompress += listOf("png", "json")
+        noCompress += listOf("png", "json", "wav")
     }
 }
 

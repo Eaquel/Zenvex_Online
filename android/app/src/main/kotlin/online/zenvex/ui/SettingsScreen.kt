@@ -105,7 +105,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 }
                             }
                             2 -> {
-                                PText("Ses ve müzik bir sonraki sürümde ekleniyor; ayarların şimdiden kaydedilir.", 11.sp, Pal.Gray)
+                                PText("Müzik ve ortam sesleri bir sonraki sürümde ekleniyor.", 11.sp, Pal.Gray)
                                 Slider("Ana ses", s.master, 0f, 1f, pct = true) { set(s.copy(master = it)) }
                                 Slider("Müzik", s.music, 0f, 1f, pct = true) { set(s.copy(music = it)) }
                                 Slider("Efektler", s.sfx, 0f, 1f, pct = true) { set(s.copy(sfx = it)) }

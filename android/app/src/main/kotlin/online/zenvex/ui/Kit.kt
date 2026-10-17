@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import kotlinx.coroutines.delay
 import online.zenvex.R
 import online.zenvex.game.Assets
+import online.zenvex.game.Audio
 
 object Pal {
     val Outline = Color(0xFF1B1C26)
@@ -134,6 +135,7 @@ fun PixelButton(
                 .offset(y = if (pressed) 2.dp else 0.dp)
                 .pixelFrame(if (enabled) st.fill else Pal.GrayDark, if (enabled) st.light else Pal.Gray, if (enabled) st.shade else Pal.Outline)
                 .clickable(interactionSource = src, indication = null) {
+                    Audio.play("click", bus = Audio.Bus.Ui, pitch = if (locked) 0.7f else 1f)
                     if (locked) Toaster.locked() else if (enabled) onClick()
                 }
                 .padding(horizontal = 12.dp, vertical = 8.dp),

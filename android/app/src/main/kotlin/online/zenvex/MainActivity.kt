@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import online.zenvex.game.Audio
 import online.zenvex.game.GameSession
 import online.zenvex.game.Settings
 import online.zenvex.ui.CharacterScreen
@@ -46,6 +47,7 @@ class MainActivity : ComponentActivity() {
         }
         Settings.load(this)
         GameSession.init(this)
+        Audio.init(this)
 
         setContent {
             var screen by remember { mutableStateOf(Screen.Splash) }

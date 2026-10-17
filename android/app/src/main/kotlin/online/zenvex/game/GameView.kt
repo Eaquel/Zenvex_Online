@@ -237,6 +237,12 @@ class GameView(
             val x = e.optDouble("x", 0.0).toFloat()
             val y = e.optDouble("y", 0.0).toFloat()
             when (e.getString("t")) {
+                "swing" -> Audio.play("swing", 0.6f, 0.9f + Math.random().toFloat() * 0.2f)
+                "groan" -> {
+                    val d = hypot(x - hud[Native.HUD_PX], y - hud[Native.HUD_PY])
+                    Audio.play("groan" + (0..2).random(), (1f - d / 400f).coerceIn(0.15f, 0.8f), 0.85f + Math.random().toFloat() * 0.3f)
+                }
+                "died" -> Audio.play("death")
                 "dmg" -> if (s.damageNumbers) {
                     val crit = e.getBoolean("crit")
                     floaters += Floater(x, y, e.getInt("v").toString() + if (crit) "!" else "",
@@ -245,6 +251,8 @@ class GameView(
                 "pdmg" -> {
                     if (s.damageNumbers) floaters += Floater(x, y, "-" + e.getInt("v"), Color.rgb(224, 72, 72), false)
                     shake(3f); vibrate(40, 160)
+                    Audio.play("hurt", 0.9f, 0.95f + Math.random().toFloat() * 0.1f)
+                    Audio.play("zattack", 0.5f)
                 }
                 "xp" -> floaters += Floater(x, y, "+" + e.getInt("v") + " XP", Color.rgb(94, 224, 255), false, 1.4f)
                 "wood" -> floaters += Floater(x, y, "+" + e.getInt("v") + " Odun", Color.rgb(217, 160, 102), true, 1.6f)
@@ -255,6 +263,7 @@ class GameView(
                     bannerT = 2.6f
                     burst(hud[Native.HUD_PX], hud[Native.HUD_PY] - 30, Color.rgb(255, 210, 94), 40, 140f)
                     vibrate(120, 255)
+                    Audio.play("levelup")
                     post { onLevelUp(lv) }
                 }
                 "hit" -> {
@@ -264,6 +273,7 @@ class GameView(
                         else burst(x, y, Color.rgb(160, 44, 60), 5, 60f)
                     }
                     shake(if (tree) 1f else 2f); vibrate(18, 90)
+                    Audio.play(if (tree) "chop" else "hit", 1f, 0.9f + Math.random().toFloat() * 0.2f)
                 }
                 "treefall" -> {
                     if (s.particles) {
@@ -271,10 +281,14 @@ class GameView(
                         burst(x, y - 10, Color.rgb(217, 160, 102), 10, 80f)
                     }
                     shake(4f); vibrate(60, 200)
+                    Audio.play("treefall")
                 }
-                "kill" -> if (s.particles) {
-                    burst(x, y - 20, Color.rgb(127, 159, 106), 14, 90f)
-                    burst(x, y - 20, Color.rgb(106, 83, 133), 10, 90f)
+                "kill" -> {
+                    Audio.play("zdeath", 0.9f)
+                    if (s.particles) {
+                        burst(x, y - 20, Color.rgb(127, 159, 106), 14, 90f)
+                        burst(x, y - 20, Color.rgb(106, 83, 133), 10, 90f)
+                    }
                 }
                 "lastbreath" -> { bannerText = "SON NEFES!"; bannerT = 1.8f }
             }
