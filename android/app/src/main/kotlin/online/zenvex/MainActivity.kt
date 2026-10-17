@@ -50,7 +50,9 @@ class MainActivity : ComponentActivity() {
         Audio.init(this)
 
         setContent {
-            var screen by remember { mutableStateOf(Screen.Splash) }
+            // Test/kısayol: adb shell am start -n online.zenvex/.MainActivity --es screen Game
+            val start = intent?.getStringExtra("screen")?.let { n -> Screen.entries.firstOrNull { it.name == n } } ?: Screen.Splash
+            var screen by remember { mutableStateOf(start) }
             var settingsFrom by remember { mutableStateOf(Screen.Lobby) }
             // ekranlar yeniden okunsun diye (ör. ilerleme silinince)
             var epoch by remember { mutableStateOf(0) }
