@@ -1,0 +1,472 @@
+{
+ "version": 1,
+ "meters_per_px": 0.036,
+ "tileset": {
+  "file": "tiles/ground.png",
+  "tile": 32,
+  "cols": 8,
+  "names": [
+   "grass0",
+   "grass1",
+   "grass2",
+   "grass3",
+   "flowers0",
+   "flowers1",
+   "flowers2",
+   "flowers3",
+   "dgrass0",
+   "dgrass1",
+   "dirt0",
+   "dirt1",
+   "dirt2",
+   "path0",
+   "path1",
+   "path2"
+  ]
+ },
+ "deco": {
+  "dirt_patch0": "tiles/dirt_patch0.png",
+  "dirt_patch1": "tiles/dirt_patch1.png",
+  "dirt_patch2": "tiles/dirt_patch2.png",
+  "tuft0": "deco/tuft0.png",
+  "tuft1": "deco/tuft1.png",
+  "tuft2": "deco/tuft2.png",
+  "tuft3": "deco/tuft3.png",
+  "tuft4": "deco/tuft4.png",
+  "flower_daisy": "deco/flower_daisy.png",
+  "flower_poppy": "deco/flower_poppy.png",
+  "flower_corn": "deco/flower_corn.png",
+  "flower_butter": "deco/flower_butter.png",
+  "flower_lavender": "deco/flower_lavender.png",
+  "flower_marigold": "deco/flower_marigold.png"
+ },
+ "shadow": "fx/shadow.png",
+ "shadow_big": "fx/shadow_big.png",
+ "ui": {
+  "joy_base": "ui/joy_base.png",
+  "joy_knob": "ui/joy_knob.png",
+  "atk_base": "ui/atk_base.png",
+  "atk_knob": "ui/atk_knob.png",
+  "panel": "ui/panel.png",
+  "btn_primary": "ui/btn_primary.png",
+  "btn_secondary": "ui/btn_secondary.png",
+  "btn_danger": "ui/btn_danger.png",
+  "slot": "ui/slot.png"
+ },
+ "icons": {
+  "play": "icons/play.png",
+  "gear": "icons/gear.png",
+  "bag": "icons/bag.png",
+  "star": "icons/star.png",
+  "user": "icons/user.png",
+  "cart": "icons/cart.png",
+  "people": "icons/people.png",
+  "shield": "icons/shield.png",
+  "chat": "icons/chat.png",
+  "scroll": "icons/scroll.png",
+  "trophy": "icons/trophy.png",
+  "coin": "icons/coin.png",
+  "gem": "icons/gem.png",
+  "bolt": "icons/bolt.png",
+  "lock": "icons/lock.png",
+  "mail": "icons/mail.png",
+  "pause": "icons/pause.png",
+  "close": "icons/close.png",
+  "back": "icons/back.png",
+  "fist": "icons/fist.png",
+  "heart": "icons/heart.png",
+  "wood": "icons/wood.png",
+  "map": "icons/map.png",
+  "globe": "icons/globe.png",
+  "sound": "icons/sound.png",
+  "skill": "icons/skill.png",
+  "plus": "icons/plus.png"
+ },
+ "bg": {
+  "lobby_bg": "bg/lobby_bg.png",
+  "title_bg": "bg/title_bg.png"
+ },
+ "nature": {
+  "oak0": {
+   "file": "nature/oak0.png",
+   "size": [
+    128,
+    168
+   ],
+   "anchor": [
+    64,
+    148
+   ],
+   "type": "tree"
+  },
+  "oak1": {
+   "file": "nature/oak1.png",
+   "size": [
+    128,
+    168
+   ],
+   "anchor": [
+    64,
+    148
+   ],
+   "type": "tree"
+  },
+  "oak2": {
+   "file": "nature/oak2.png",
+   "size": [
+    128,
+    168
+   ],
+   "anchor": [
+    64,
+    148
+   ],
+   "type": "tree"
+  },
+  "pine0": {
+   "file": "nature/pine0.png",
+   "size": [
+    112,
+    192
+   ],
+   "anchor": [
+    56,
+    166
+   ],
+   "type": "tree"
+  },
+  "pine1": {
+   "file": "nature/pine1.png",
+   "size": [
+    112,
+    192
+   ],
+   "anchor": [
+    56,
+    166
+   ],
+   "type": "tree"
+  },
+  "pine2": {
+   "file": "nature/pine2.png",
+   "size": [
+    112,
+    192
+   ],
+   "anchor": [
+    56,
+    166
+   ],
+   "type": "tree"
+  },
+  "birch0": {
+   "file": "nature/birch0.png",
+   "size": [
+    96,
+    160
+   ],
+   "anchor": [
+    48,
+    146
+   ],
+   "type": "tree"
+  },
+  "birch1": {
+   "file": "nature/birch1.png",
+   "size": [
+    96,
+    160
+   ],
+   "anchor": [
+    48,
+    146
+   ],
+   "type": "tree"
+  },
+  "dead0": {
+   "file": "nature/dead0.png",
+   "size": [
+    112,
+    144
+   ],
+   "anchor": [
+    56,
+    132
+   ],
+   "type": "tree"
+  },
+  "dead1": {
+   "file": "nature/dead1.png",
+   "size": [
+    112,
+    144
+   ],
+   "anchor": [
+    56,
+    132
+   ],
+   "type": "tree"
+  },
+  "bush0": {
+   "file": "nature/bush0.png",
+   "size": [
+    64,
+    60
+   ],
+   "anchor": [
+    32,
+    46
+   ],
+   "type": "bush"
+  },
+  "bush1": {
+   "file": "nature/bush1.png",
+   "size": [
+    64,
+    60
+   ],
+   "anchor": [
+    32,
+    46
+   ],
+   "type": "bush"
+  },
+  "bush2": {
+   "file": "nature/bush2.png",
+   "size": [
+    80,
+    60
+   ],
+   "anchor": [
+    40,
+    46
+   ],
+   "type": "bush"
+  },
+  "bush3": {
+   "file": "nature/bush3.png",
+   "size": [
+    64,
+    60
+   ],
+   "anchor": [
+    32,
+    46
+   ],
+   "type": "bush"
+  },
+  "bush4": {
+   "file": "nature/bush4.png",
+   "size": [
+    64,
+    60
+   ],
+   "anchor": [
+    32,
+    46
+   ],
+   "type": "bush"
+  },
+  "rock_big0": {
+   "file": "nature/rock_big0.png",
+   "size": [
+    80,
+    64
+   ],
+   "anchor": [
+    40,
+    52
+   ],
+   "type": "rock"
+  },
+  "rock_big1": {
+   "file": "nature/rock_big1.png",
+   "size": [
+    80,
+    64
+   ],
+   "anchor": [
+    40,
+    52
+   ],
+   "type": "rock"
+  },
+  "rock_big2": {
+   "file": "nature/rock_big2.png",
+   "size": [
+    80,
+    64
+   ],
+   "anchor": [
+    40,
+    52
+   ],
+   "type": "rock"
+  },
+  "rock_small0": {
+   "file": "nature/rock_small0.png",
+   "size": [
+    48,
+    40
+   ],
+   "anchor": [
+    24,
+    30
+   ],
+   "type": "deco"
+  },
+  "rock_small1": {
+   "file": "nature/rock_small1.png",
+   "size": [
+    48,
+    40
+   ],
+   "anchor": [
+    24,
+    30
+   ],
+   "type": "deco"
+  },
+  "rock_small2": {
+   "file": "nature/rock_small2.png",
+   "size": [
+    48,
+    40
+   ],
+   "anchor": [
+    24,
+    30
+   ],
+   "type": "deco"
+  },
+  "stump": {
+   "file": "nature/stump.png",
+   "size": [
+    40,
+    40
+   ],
+   "anchor": [
+    20,
+    30
+   ],
+   "type": "stump"
+  },
+  "log": {
+   "file": "nature/log.png",
+   "size": [
+    96,
+    48
+   ],
+   "anchor": [
+    48,
+    36
+   ],
+   "type": "rock"
+  }
+ },
+ "player": {
+  "frame": [
+   96,
+   80
+  ],
+  "anchor": [
+   48,
+   66
+  ],
+  "dirs": 8,
+  "anims": {
+   "idle": {
+    "file": "player_idle.png",
+    "frames": 4,
+    "fps": 5,
+    "loop": true
+   },
+   "walk": {
+    "file": "player_walk.png",
+    "frames": 8,
+    "fps": 10,
+    "loop": true
+   },
+   "run": {
+    "file": "player_run.png",
+    "frames": 8,
+    "fps": 14,
+    "loop": true
+   },
+   "punch": {
+    "file": "player_punch.png",
+    "frames": 8,
+    "fps": 14,
+    "loop": true
+   },
+   "hurt": {
+    "file": "player_hurt.png",
+    "frames": 2,
+    "fps": 10,
+    "loop": false
+   },
+   "death": {
+    "file": "player_death.png",
+    "frames": 6,
+    "fps": 9,
+    "loop": false
+   }
+  }
+ },
+ "zombie": {
+  "frame": [
+   96,
+   80
+  ],
+  "anchor": [
+   48,
+   66
+  ],
+  "dirs": 8,
+  "anims": {
+   "idle": {
+    "file": "zombie_idle.png",
+    "frames": 4,
+    "fps": 4,
+    "loop": true
+   },
+   "walk": {
+    "file": "zombie_walk.png",
+    "frames": 8,
+    "fps": 7,
+    "loop": true
+   },
+   "attack": {
+    "file": "zombie_attack.png",
+    "frames": 6,
+    "fps": 10,
+    "loop": false
+   },
+   "hurt": {
+    "file": "zombie_hurt.png",
+    "frames": 2,
+    "fps": 10,
+    "loop": false
+   },
+   "death": {
+    "file": "zombie_death.png",
+    "frames": 6,
+    "fps": 8,
+    "loop": false
+   }
+  }
+ },
+ "lobby_player": {
+  "file": "lobby_player.png",
+  "frame": [
+   128,
+   128
+  ],
+  "anchor": [
+   64,
+   118
+  ],
+  "frames": 4,
+  "fps": 5
+ }
+}

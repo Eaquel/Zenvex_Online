@@ -1,5 +1,9 @@
 # 02 — Arayüz (UI/UX) Tasarımı
 
+> **Güncelleme (07):** Oyun içinde sadece **2 joystick** var: hareket (sol) ve **saldırı (sağ)**. Saldırı joysticki
+> çevrildiği yöne yumruk attırır, basılı tuttukça seri devam eder; otomatik nişan ve skill/eşya/etkileşim tuşları
+> kaldırıldı.
+
 Kural: **Her tuş yerinde olacak.** Çalışmayan tuşlar gri değil, normal görünür; basınca "🔒 Yakında!" tostu (1.5 sn) çıkar. Böylece oyun "eksik" değil "büyüyen" hissi verir.
 
 ## 0. Genel UI Kuralları

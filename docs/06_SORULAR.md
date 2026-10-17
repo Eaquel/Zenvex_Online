@@ -1,5 +1,9 @@
 # 06 — Açık Sorular (Karar Bekleyenler)
 
+> **Cevaplananlar (07):** 1 → Android · 8 → tek sabit karakter · 10 → 8 yön · 12 → gerçekçi · 13/14 → görseller kodla
+> · 19 → tek saldırı joysticki (çevir-vur) · 25 → aktif skill yok · 38 → lobi Kotlin, oyun mantığı Rust
+> · 40 → sadece Android telefon, PC yok · 48 → hepsine başla. Diğerlerinde öneriler uygulandı.
+
 Her sorunun yanında **önerim** var. Cevap vermediğin sorularda önerilen seçenekle ilerlenir. Cevaplarını numarasıyla yazman yeterli (örn. "3: B, 7: 8 yön").
 
 ## A. Vizyon & Platform

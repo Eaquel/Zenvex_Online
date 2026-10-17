@@ -1,0 +1,10 @@
+[package]
+name = "zenvex_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Zenvex Online oyun kuralları: dünya, oyuncu, zombi, savaş, ilerleme (motordan bağımsız)"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

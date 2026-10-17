@@ -1,0 +1,91 @@
+# Her push'ta: Rust testleri + Android APK derlemesi.
+# APK, GitHub'da "Releases" sayfasına "latest" etiketiyle yüklenir -> telefondan indirip kurabilirsin.
+name: Android APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NDK_VERSION: 27.2.12479018
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Android NDK kur
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - name: cargo-ndk kur
+        run: cargo install cargo-ndk --locked
+
+      - name: Rust kontrolleri
+        working-directory: rust
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: APK derle
+        working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 0.1.${{ github.run_number }}
+        run: |
+          ./gradlew assembleRelease --console=plain
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.1.${{ github.run_number }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZenvexOnline-apk
+          path: dist/*.apk
+
+      - name: "latest" etiketini bu commit'e taşı
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Sürüm sayfasına yükle
+        uses: ncipollo/release-action@v1
+        with:
+          tag: latest
+          name: "Zenvex Online — son derleme (0.1.${{ github.run_number }})"
+          body: |
+            Telefonuna kurmak için aşağıdaki **ZenvexOnline-0.1.${{ github.run_number }}.apk** dosyasına dokun.
+            İlk kurulumda "Bilinmeyen kaynaklardan yüklemeye izin ver" demen gerekebilir.
+            Dal: `${{ github.ref_name }}` · Commit: `${{ github.sha }}`
+          artifacts: dist/*.apk
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          prerelease: true
+          makeLatest: true

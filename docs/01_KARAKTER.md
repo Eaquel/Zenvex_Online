@@ -1,5 +1,9 @@
 # 01 — Karakter Tasarımı
 
+> **Güncelleme (07):** Karakter **gerçekçi oranlı**, **8 yönlü**, kare boyutu **96×80** (ayak noktası 48,66).
+> Görseller kodla üretiliyor (`tools/assetgen/character.py`). Aşağıdaki tablolarda 4 yön / 48×48 / yarı-chibi
+> geçen yerler bu kararla değişti; uygulanan animasyon listesi 07 §3'te.
+
 ## 1. İlk Karakter: "Kaan" (çalışma adı — değiştirilebilir)
 | Özellik | Değer |
 |---------|-------|

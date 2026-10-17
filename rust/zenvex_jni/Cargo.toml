@@ -1,0 +1,14 @@
+[package]
+name = "zenvex_jni"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kotlin (Android) <-> Rust köprüsü"
+
+[lib]
+name = "zenvex"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+zenvex_core = { path = "../zenvex_core" }
+jni = "0.21"

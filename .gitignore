@@ -1,0 +1,10 @@
+rust/target/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/jniLibs/
+android/.kotlin/
+__pycache__/
+*.pyc
+dist/

@@ -1,5 +1,9 @@
 # 04 — Teknik Mimari (Rust + Kotlin)
 
+> **Güncelleme (07):** Uygulanan mimari: Rust çekirdek (`zenvex_core`) + JNI (`zenvex_jni`) + Kotlin'de Compose menüler
+> ve SurfaceView/Canvas çizici. Bevy kullanılmadı (telefon-only geliştirme, bulutta hızlı derleme için). Güncel
+> özet 07 §2'de; bu belgedeki Bevy/klasör planı ilk taslaktır.
+
 ## 1. Görev Paylaşımı
 | Katman | Dil | Sorumluluk |
 |--------|-----|-----------|
