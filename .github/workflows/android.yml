@@ -69,7 +69,7 @@ jobs:
           name: ZenvexOnline-apk
           path: dist/*.apk
 
-      - name: "latest" etiketini bu commit'e taşı
+      - name: latest etiketini bu commit'e taşı
         run: |
           git tag -f latest
           git push -f origin latest
