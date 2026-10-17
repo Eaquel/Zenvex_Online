@@ -6,6 +6,13 @@
 > **Durum:** Oynanabilir ilk prototip (MVP). Telefona kurulabilir APK her push'ta otomatik derlenir.
 > 📱 **Kurulum:** GitHub → **Releases** → "Zenvex Online — son derleme" → `.apk` dosyasını indir ve kur.
 
+## Ekran Görüntüleri (gerçek Android emülatöründen, CI duman testi)
+
+| Lobi | Oyun |
+|------|------|
+| ![Lobi](art/screenshots/lobi.png) | ![Oyun](art/screenshots/oyun.png) |
+| ![Yetenekler](art/screenshots/yetenekler.png) | ![Ayarlar](art/screenshots/ayarlar.png) |
+
 ## Belgeler
 
 | # | Belge | İçerik |

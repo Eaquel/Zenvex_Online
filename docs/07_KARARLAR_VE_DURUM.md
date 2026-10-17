@@ -85,7 +85,16 @@ renk körlüğü filtreleri, bulut kayıt, online sunucular, **müzik ve ortam s
 3. İlk seferde "Bu kaynaktan yüklemeye izin ver" → Yükle.
 4. Yeni sürümler aynı imzayla derlendiği için eskisini silmeden üstüne kurulur (ilerleme korunur).
 
-## 7. Sıradaki adımlar (öneri)
+## 7. Test
+- **Rust:** 18 birim testi (XP eğrisi, seviye/yetenek kuralları, dünya üretimi, hareket, yumrukla zombi öldürme,
+  zombinin oyuncuya vurması, çizim listesi sıralaması, kayıt) — her push'ta `cargo fmt`, `clippy -D warnings`, `test`.
+- **Duman testi (CI `smoke` işi):** KVM hızlandırmalı Android 11 emülatöründe APK kurulur; giriş, lobi ve 7 alt
+  ekran açılır; oyunda hareket ve saldırı joysticklerine dokunulur; çökme olursa CI kırmızı olur. Ekran
+  görüntüleri `smoke-screenshots` adıyla Actions sayfasına yüklenir.
+- Hızlı test için ekran kısayolu: `adb shell am start -n online.zenvex/.MainActivity --es screen Game`
+  (Lobby, Skills, Settings, ... da olur).
+
+## 8. Sıradaki adımlar (öneri)
 1. Telefonda ilk test → his/denge geri bildirimi (hız, hasar, zombi sayısı, joystick)
 2. Müzik + ortam sesleri (rüzgâr, kuş), ayak sesleri
 3. Karakter animasyon cilası (yürüme/koşu kol-bacak, yumrukta gövde dönüşü)

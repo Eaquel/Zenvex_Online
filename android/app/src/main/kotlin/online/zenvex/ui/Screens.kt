@@ -148,10 +148,10 @@ fun LobbyCharacter(modifier: Modifier, dirState: Int = 0, onDir: (Int) -> Unit =
         val scale = minOf(size.height / 100f, size.width / 72f).toInt().coerceAtLeast(1).toFloat()
         val w = fw * scale; val h = fh * scale
         // gölge
-        drawOval(Color(0x55172238), topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - 26 * scale, size.height - 8 * scale), size = androidx.compose.ui.geometry.Size(52 * scale, 12 * scale))
+        drawOval(Color(0x55172238), topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - 26 * scale, size.height - 16 * scale), size = androidx.compose.ui.geometry.Size(52 * scale, 12 * scale))
         drawImage(
             sheet, srcOffset = IntOffset(f * fw, dirState * fh), srcSize = IntSize(fw, fh),
-            dstOffset = IntOffset((size.width / 2 - w / 2).toInt(), (size.height - h + 8 * scale).toInt()),
+            dstOffset = IntOffset((size.width / 2 - w / 2).toInt(), (size.height - h).toInt()),
             dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.None,
         )
     }
