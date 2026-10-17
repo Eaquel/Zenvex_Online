@@ -144,13 +144,14 @@ fun LobbyCharacter(modifier: Modifier, dirState: Int = 0, onDir: (Int) -> Unit =
         }
     }) {
         val f = ((t * 5).toInt()) % frames
-        val scale = (size.height / fh).toInt().coerceAtLeast(1).toFloat()
+        // karakter karenin ~100 pikselini kaplar; tam sayı ölçek (keskin pikseller)
+        val scale = minOf(size.height / 100f, size.width / 72f).toInt().coerceAtLeast(1).toFloat()
         val w = fw * scale; val h = fh * scale
         // gölge
-        drawOval(Color(0x55172238), topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - 26 * scale, size.height - 14 * scale), size = androidx.compose.ui.geometry.Size(52 * scale, 12 * scale))
+        drawOval(Color(0x55172238), topLeft = androidx.compose.ui.geometry.Offset(size.width / 2 - 26 * scale, size.height - 8 * scale), size = androidx.compose.ui.geometry.Size(52 * scale, 12 * scale))
         drawImage(
             sheet, srcOffset = IntOffset(f * fw, dirState * fh), srcSize = IntSize(fw, fh),
-            dstOffset = IntOffset((size.width / 2 - w / 2).toInt(), (size.height - h).toInt()),
+            dstOffset = IntOffset((size.width / 2 - w / 2).toInt(), (size.height - h + 8 * scale).toInt()),
             dstSize = IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.None,
         )
     }
@@ -239,16 +240,16 @@ fun LobbyScreen(go: (Screen) -> Unit) {
             Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.Bottom) {
                 Column {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PixelButton("Karakter", icon = "user") { go(Screen.Character) }
-                        PixelButton("Yetenek", icon = "skill", badge = points) { go(Screen.Skills) }
-                        PixelButton("Envanter", icon = "bag") { go(Screen.Inventory) }
-                        PixelButton("Mağaza", icon = "cart") { go(Screen.Shop) }
-                        PixelButton("Arkadaş", icon = "people", locked = true) {}
-                        PixelButton("Klan", icon = "shield", locked = true) {}
+                        PixelButton("Karakter", icon = "user", compact = true, textSize = 12.sp) { go(Screen.Character) }
+                        PixelButton("Yetenek", icon = "skill", badge = points, compact = true, textSize = 12.sp) { go(Screen.Skills) }
+                        PixelButton("Envanter", icon = "bag", compact = true, textSize = 12.sp) { go(Screen.Inventory) }
+                        PixelButton("Mağaza", icon = "cart", compact = true, textSize = 12.sp) { go(Screen.Shop) }
+                        PixelButton("Arkadaş", icon = "people", locked = true, compact = true, textSize = 12.sp) {}
+                        PixelButton("Klan", icon = "shield", locked = true, compact = true, textSize = 12.sp) {}
                     }
                     Spacer(Modifier.height(8.dp))
                     Row(
-                        Modifier.width(420.dp).pixelFrame(Pal.NavyDark.copy(alpha = 0.85f), Pal.Navy, Pal.Night)
+                        Modifier.width(380.dp).pixelFrame(Pal.NavyDark.copy(alpha = 0.85f), Pal.Navy, Pal.Night)
                             .clickable { Toaster.locked() }.padding(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {

@@ -149,10 +149,10 @@ def human_scene(J, kind="player"):
     hair_c = J["head"] + H @ v3(0, 0.022, -0.012)
     hair_f = sd_ellipsoid(hair_c, H, (0.115, 0.126, 0.125))
     n = H @ unit([0, 1.0, -0.75])
-    sc.append((hair, sd_cut(hair_f, n, float(n @ J["head"]) - 0.035)))
+    sc.append((hair, sd_cut(hair_f, n, float(n @ J["head"]) - (0.035 if zombie else 0.008))))
     if not zombie:
         # alna düşen tutam
-        sc.append((hair, sd_sphere(J["head"] + H @ v3(0.03, 0.075, 0.075), 0.03)))
+        sc.append((hair, sd_sphere(J["head"] + H @ v3(0.035, 0.09, 0.07), 0.026)))
     # kollar
     for pre in ("l", "r"):
         if zombie:
@@ -186,7 +186,8 @@ def guard(P):
 
 def player_pose(anim, t):
     s = math.sin
-    P = {}
+    # yüz kameradan görünsün diye kafa hafifçe yukarı bakar
+    P = {"head_pitch": -0.22}
     if anim == "idle":
         guard(P)
         b = s(TAU * t)

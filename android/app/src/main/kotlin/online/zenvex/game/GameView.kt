@@ -69,6 +69,8 @@ class GameView(
         staticSprites = Array(names.length()) { assets.static(names.getString(it)) }
     }
 
+    private val portrait: Bitmap = assets.bmp(assets.manifest.getJSONObject("lobby_player").getString("file"))
+
     // ---- çizim araçları
     private val px = Paint().apply { isFilterBitmap = false; isAntiAlias = false; isDither = false }
     private val pxAlpha = Paint(px)
@@ -192,7 +194,9 @@ class GameView(
         // joystick -> giriş
         inputArr[0] = moveStick.vx; inputArr[1] = moveStick.vy
         if (atkStick.active) {
-            if (atkStick.vx != 0f || atkStick.vy != 0f) { lastAtkX = atkStick.vx; lastAtkY = atkStick.vy }
+            // saldırıda sadece yön önemli: vektörü birim uzunluğa getir
+            val l = hypot(atkStick.vx, atkStick.vy)
+            if (l > 1e-3f) { lastAtkX = atkStick.vx / l; lastAtkY = atkStick.vy / l }
             inputArr[2] = lastAtkX; inputArr[3] = lastAtkY; inputArr[4] = 1f
         } else {
             inputArr[2] = 0f; inputArr[3] = 0f; inputArr[4] = 0f
@@ -491,13 +495,12 @@ class GameView(
         c.drawRect(0f, 0f, sw.toFloat(), 3 * u, fill)
         fill.color = Color.rgb(94, 224, 255)
         c.drawRect(0f, 0f, sw * (xp / max(1f, xpN)), 3 * u, fill)
-        // portre paneli
+        // portre paneli (lobi karakterinin baş-omuz kısmı, 2x detay)
         val px0 = inset; val py0 = inset
         panel(c, px0, py0, 34 * u, 34 * u)
-        val idle = assets.player.anims[0]
-        src.set(28, 6, 68, 46)
+        src.set(34, 24, 94, 84)
         dstF.set(px0 + 2 * u, py0 + 2 * u, px0 + 32 * u, py0 + 32 * u)
-        c.drawBitmap(idle.bitmap, src, dstF, px)
+        c.drawBitmap(portrait, src, dstF, px)
         // seviye rozeti
         text.textSize = 8 * u; textShadow.textSize = 8 * u
         val lt = "Lv $lvl"
@@ -518,7 +521,7 @@ class GameView(
             c.drawText("+${hud[Native.HUD_POINTS].toInt()} yetenek puanı", bx, py0 + 44 * u, text)
         }
         // mini harita (sağ üst, duraklat/çanta tuşlarının altında)
-        drawMinimap(c, sw - 70 * u - inset, 30 * u, 70 * u, u)
+        drawMinimap(c, sw - 70 * u - inset, 72 * density, 70 * u, u)
         // düşük can uyarısı
         if (hp > 0 && hp / max(1f, maxHp) < 0.3f) {
             val a = ((sin(time * 6f) * 0.5f + 0.5f) * 90).toInt()

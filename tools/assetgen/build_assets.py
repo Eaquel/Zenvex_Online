@@ -66,10 +66,9 @@ def render_lobby_player():
             P["yaw"] = d * math.pi / 4
             J = C.skeleton(P)
             row.append(render(C.human_scene(J, "player"), w, h, (64, 118), C.MATERIALS,
-                              [], mpp=METERS_PER_PX / 2))
+                              C.human_decals(J, "player"), mpp=METERS_PER_PX / 2))
         rows.append(np.concatenate(row, 1))
     img = Image.fromarray(np.concatenate(rows, 0), "RGBA")
-    # 2x çözünürlükte gözler 2 piksel: ayrıca çiz
     return save(img, "lobby_player.png"), {"frame": [w, h], "anchor": [64, 118], "frames": 4, "fps": 5}
 
 

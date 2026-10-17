@@ -41,7 +41,7 @@ data class Settings(
     val vegetationDensity: Float get() = when (vegetation) { 0 -> 0.3f; 1 -> 0.6f; else -> 1f }
     val effectiveFps: Int get() = if (batterySaver) 30 else fpsLimit
     /** Sanal ekran yüksekliği (piksel sanat pikseli cinsinden) */
-    val virtualHeight: Int get() = when (zoom) { 0 -> 270; 1 -> 330; else -> 400 }
+    val virtualHeight: Int get() = when (zoom) { 0 -> 230; 1 -> 290; else -> 360 }
 
     fun withPreset(p: Int): Settings = when (p) {
         0 -> copy(preset = 0, vegetation = 0, wind = false, shadows = false, particles = false, fpsLimit = 30)

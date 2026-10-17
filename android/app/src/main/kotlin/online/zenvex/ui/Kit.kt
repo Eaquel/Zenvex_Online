@@ -124,26 +124,27 @@ fun PixelButton(
     textSize: TextUnit = 14.sp,
     enabled: Boolean = true,
     badge: Int = 0,
+    compact: Boolean = false,
     onClick: () -> Unit,
 ) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
     val st = if (!enabled) BtnStyle.Secondary else style
-    Box(modifier) {
+    Box {
         Box(
-            Modifier
+            modifier
                 .offset(y = if (pressed) 2.dp else 0.dp)
                 .pixelFrame(if (enabled) st.fill else Pal.GrayDark, if (enabled) st.light else Pal.Gray, if (enabled) st.shade else Pal.Outline)
                 .clickable(interactionSource = src, indication = null) {
                     Audio.play("click", bus = Audio.Bus.Ui, pitch = if (locked) 0.7f else 1f)
                     if (locked) Toaster.locked() else if (enabled) onClick()
                 }
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = if (compact) 8.dp else 12.dp, vertical = if (compact) 6.dp else 8.dp),
             contentAlignment = Alignment.Center,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                 if (icon != null) {
-                    PixelIcon(icon, 20.dp)
+                    PixelIcon(icon, if (compact) 16.dp else 20.dp)
                     if (text.isNotEmpty()) Spacer(Modifier.width(6.dp))
                 }
                 if (text.isNotEmpty()) PText(text, textSize, if (enabled) st.text else Pal.Gray, shadow = st.text != Pal.Outline)

@@ -256,7 +256,7 @@ impl World {
                     });
                 }
                 // otlar ve çiçekler (dekor, çarpışmasız)
-                let deco_n = if on_path { 0 } else { 2 + rng.below(3) };
+                let deco_n = if on_path { 0 } else { 1 + rng.below(3) };
                 for _ in 0..deco_n {
                     let dx = x + rng.range(-cell * 0.5, cell * 0.5);
                     let dy = y + rng.range(-cell * 0.5, cell * 0.5);
