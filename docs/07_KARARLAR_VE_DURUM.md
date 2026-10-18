@@ -136,9 +136,10 @@ Görselleri yeniden üretmek için (bilgisayarda): `pip install bpy` → `python
 
 ## V3 — Lobi ve çevrimiçi yenilendi (Ekim 2026)
 - **Firebase kaldırıldı, Supabase geldi.** Hesap = Zenvex ID + 12 harfli anahtar (Supabase Auth gerekmez).
-- **4 sunucu:** Normal #1, Normal #2, Normal #3 - Dünya, Hardcore. Her sunucuda ayrı karakter ilerlemesi ve ayrı çevrimiçi dünya.
-  Hardcore: zombiler %50 sert, +%50 XP, ölünce çanta ölüm yerine düşer ve altının yarısı gider.
-- **Lobi (Zombix düzeni):** kayan piksel dünya haritası, üst çubuk (Sıralama, Klanlar, Haberler, Ayarlar),
-  ortada Sunucular / Karakter sekmeleri, sol altta hesap kartı. Ayarlar → Hesap: ID, anahtar, isim, başka hesaba giriş.
+- **Şimdilik tek sunucu:** "Sunucu #1". Kod çoklu sunucuya hazır (`SERVERS` listesi; Rust'ta Hardcore kuralları var).
+- **Lobi:** kayan piksel dünya haritası; solda büyük karakter vitrini (sürükle-döndür, oklarla karakter değiştir),
+  sağda oyuncu kartı (klan, isim, seviye, altın, XP, sunucu durumu) ve OYNA; sağ üstte hesap kartı, Sıralama, Klanlar,
+  Haberler, Ayarlar. Ayarlar → Hesap: ID, anahtar, isim, başka hesaba giriş.
+- **Yeni uygulama simgesi:** 3D renderlardan (Kaan + AK47, arkada zombiler, kızıl ay).
 - **Oyun içi:** harita + bölgeler arası seyahat, görevler, sezon, yetenekler (sol üst); posta, oyuncular, klan, menü (sağ üst);
   hızlı eşya slotları + çanta + sohbet çubuğu (alt orta); XP şeridi ve koordinat (alt). Envanter/üretim/tüccar/kozmetik oyunun içinde.

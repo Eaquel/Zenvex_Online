@@ -8,15 +8,10 @@ import com.zenvex.online.net.Supa
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** Oyun sunucuları: her birinde ayrı karakter ilerlemesi ve ayrı çevrimiçi dünya. */
+/** Oyun sunucusu: kendi karakter ilerlemesi ve kendi çevrimiçi dünyası. Şimdilik tek sunucu var. */
 data class GameServer(val id: String, val title: String, val hardcore: Boolean = false)
 
-val SERVERS = listOf(
-    GameServer("n1", "Normal #1"),
-    GameServer("n2", "Normal #2"),
-    GameServer("n3", "Normal #3 - Dünya"),
-    GameServer("hc", "Hardcore", hardcore = true),
-)
+val SERVERS = listOf(GameServer("n1", "Sunucu #1"))
 
 fun serverById(id: String) = SERVERS.firstOrNull { it.id == id } ?: SERVERS[0]
 

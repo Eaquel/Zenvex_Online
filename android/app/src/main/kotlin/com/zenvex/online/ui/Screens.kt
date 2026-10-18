@@ -770,41 +770,6 @@ fun ChatScreen(back: () -> Unit) {
 }
 
 // =========================================================================== geliştirici menüsü
-@Composable
-fun DevMenu(onClose: () -> Unit) {
-    var cmd by remember { mutableStateOf("") }
-    var log by remember { mutableStateOf("Komut yaz ya da hızlı tuşları kullan.") }
-    fun run(c: String) {
-        val r = GameSession.cmd("cheat", "text" to c)
-        log = (if (r.ok) "✔ " else "✖ ") + r.msg
-    }
-    Dim(onClose) {
-        Column(Modifier.width(620.dp).glass(20.dp, Pal.Purple).clickable(remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, null) {}.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon("dev", 24.dp, Pal.Purple); Spacer(Modifier.width(8.dp)); T("GELİŞTİRİCİ MENÜSÜ", 20.sp, Pal.Purple, display = true)
-                Spacer(Modifier.weight(1f)); RoundIcon("close", size = 36.dp) { onClose() }
-            }
-            Spacer(Modifier.height(8.dp))
-            val quick = listOf("gold 10000", "gem 1000", "level 10", "level 30", "charlevel 10", "items", "weapons", "set police", "set military", "set titan",
-                "god", "onehit", "speed 2", "heal", "night", "day", "spawn tank 3", "spawn dark 3", "spawn toxic 3", "spawn mystery 1", "boss",
-                "killall", "tp city", "tp camp", "tp boss", "tp swamp", "unlock", "pass 30", "pass buy elite", "vehicle car", "vehicle moto", "vehicle suv")
-            @OptIn(ExperimentalLayoutApi::class)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                for (q in quick) Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x553A2A60)).border(1.dp, Pal.Purple.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
-                    .clickable { run(q) }.padding(horizontal = 10.dp, vertical = 6.dp)) { T(q, 12.sp) }
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Field(cmd, { cmd = it }, "örn: item w_ak47 1", Modifier.weight(1f)) { run(cmd); cmd = "" }
-                Spacer(Modifier.width(8.dp))
-                GButton("ÇALIŞTIR", tone = Tone.Purple, height = 44.dp) { run(cmd); cmd = "" }
-            }
-            Spacer(Modifier.height(6.dp))
-            T(log, 12.sp, Pal.Sub, maxLines = 4)
-        }
-    }
-}
-
 // =========================================================================== takas
 @Composable
 fun TradeScreen(close: () -> Unit) {

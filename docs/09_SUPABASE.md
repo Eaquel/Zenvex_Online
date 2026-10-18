@@ -4,16 +4,15 @@ Proje: **zenvex-online** (Frankfurt, ücretsiz plan) — `https://blvstsvmvmdydy
 Uygulama bu adresi ve herkese açık (anon) anahtarı `android/app/build.gradle.kts` içinde varsayılan olarak kullanır.
 Başka bir projeye geçmek için GitHub → Settings → Secrets → Actions altına `SB_URL` ve `SB_KEY` eklenebilir.
 
-## Veritabanı kurulumu (bir kez)
-`supabase/migrations/20261018_zenvex_core.sql` dosyasının tamamını Supabase paneli → **SQL Editor** → yapıştır → **Run**.
-Kurulmazsa oyun yine çalışır (çok oyunculu dünya Realtime ile çalışır) ama hesap, bulut kaydı, posta, klan ve sıralama
-"Sunucu kurulumu eksik" der.
+## Veritabanı
+`supabase/migrations/20261018_zenvex_core.sql` zenvex-online projesine **kuruldu**. Yeni bir projeye kurmak için:
+Supabase paneli → **SQL Editor** → dosyanın tamamı → **Run**.
 
 ## Neler nerede
 | Özellik | Nasıl |
 |---|---|
 | Hesap | `zx_register`, `zx_login`, `zx_change_key`, `zx_rename` — ID + bcrypt'li anahtar |
-| Karakter kaydı | `zx_save` / `zx_load` — sunucu başına (`n1`, `n2`, `n3`, `hc`); oyun 60 sn'de bir ve çıkışta yükler |
+| Karakter kaydı | `zx_save` / `zx_load` — sunucu başına (şimdilik tek sunucu: `n1`); oyun 60 sn'de bir ve çıkışta yükler |
 | Sunucu listesi | `zx_servers` (son 3 dk aktif oyuncu sayısı), `zx_top` (sıralama) |
 | Sohbet geçmişi | `zx_chat_post` / `zx_chat_recent` (canlı akış Realtime yayınıyla) |
 | Posta | `zx_mail_list`, `zx_mail_claim` (hediye altın/eşya), `zx_mail_send` |

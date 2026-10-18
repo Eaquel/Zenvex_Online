@@ -53,9 +53,6 @@ object GameSession {
         }
     }
 
-    /** Cihazdaki kayıttan seviye (lobi sunucu listesi için) */
-    fun localLevelOf(id: String): Int = localLevel(readLocal(id))
-
     private fun localLevel(save: String): Int = runCatching { JSONObject(save).optInt("level", 0) }.getOrDefault(0)
 
     /**

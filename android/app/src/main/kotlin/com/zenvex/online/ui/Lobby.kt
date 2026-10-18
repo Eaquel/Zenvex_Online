@@ -50,7 +50,6 @@ import androidx.compose.ui.unit.sp
 import com.zenvex.online.BuildConfig
 import com.zenvex.online.game.Account
 import com.zenvex.online.game.GameSession
-import com.zenvex.online.game.SERVERS
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
@@ -64,8 +63,8 @@ fun fmt(n: Int): String = "%,d".format(n).replace(',', '.')
 fun fmtId(id: Long): String = id.toString().reversed().chunked(3).joinToString(" ").reversed()
 
 /**
- * Lobi (Zombix düzeni): kayan dünya haritası, üst çubuk, ortada Sunucular / Karakter sekmeleri.
- * Envanter, üretim, görevler vb. artık oyunun içinde.
+ * Lobi: kayan dünya haritası üstünde solda büyük karakter vitrini, sağda oyuncu kartı ve OYNA.
+ * Envanter, üretim, görevler vb. oyunun içinde.
  */
 @Composable
 fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
@@ -73,53 +72,97 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     var tick by remember { mutableIntStateOf(0) }
     val prof = remember(epoch, tick) { GameSession.ui("profile") }
     val chars = remember(epoch, tick) { GameSession.ui("characters") }
-    var tab by remember { mutableIntStateOf(1) }
-    var switching by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf(if (!Account.loggedIn && !GameSession.prefs().getBoolean("guest_ok", false)) "welcome" else "") }
     var devTaps by remember { mutableIntStateOf(0) }
+    var sel by remember(prof) { mutableIntStateOf(prof.optInt("character")) }
+    var dir by remember { mutableIntStateOf(1) }
     LaunchedEffect(Unit) { Account.servers(); if (Account.loggedIn) Account.refresh() }
+    val ch = chars.optJSONArray("chars")?.optJSONObject(sel) ?: JSONObject()
+    val unlocked = ch.optBoolean("unlocked", sel == 0)
+    val col = HERO_COLORS[sel]
 
-    MapBackground(t) {
-        // ---- üst çubuk
-        Row(
-            Modifier.fillMaxWidth().height(58.dp).background(Color(0xB01E1D19)).padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    MapBackground(t, dim = 0.38f) {
+        // ---- sol: karakter vitrini (sürükleyerek döndür)
+        Box(
+            Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(0.56f).pointerInput(Unit) {
+                var acc = 0f
+                detectHorizontalDragGestures { _, dx -> acc += dx; if (kotlin.math.abs(acc) > 36f) { dir = (dir + (if (acc > 0) 7 else 1)) % 8; acc = 0f } }
+            },
         ) {
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PxButton("Sıralama", height = 40.dp, size = 15.sp, color = Px.Dark, textColor = Color(0xFF6FB4FF)) { dialog = "top" }
-                PxButton("Klanlar", height = 40.dp, size = 15.sp, color = Px.Dark, textColor = Color(0xFF6FB4FF)) { dialog = "clans" }
-                PxButton("Haberler", height = 40.dp, size = 15.sp, color = Px.Dark, textColor = Color(0xFF6FB4FF)) { dialog = "news" }
+            Canvas(Modifier.fillMaxSize()) {
+                // karakter rengiyle ışık huzmesi
+                val c = center.copy(y = size.height * 0.62f)
+                drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color.Transparent), c, size.height * 0.45f), size.height * 0.45f, c)
             }
+            Box(Modifier.align(Alignment.Center).padding(top = 30.dp).size(330.dp, 380.dp)) { HeroSprite(sel, dir, t, unlocked) }
+            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                PxIcon("back", size = 42.dp) { sel = (sel + 3) % 4 }
+                Column(Modifier.width(230.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    PT(ch.optString("name").uppercase(), 26.sp, col, outline = true)
+                    PT(ch.optString("class") + " · Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 13.sp, Px.Text)
+                    PT(ch.optString("ability"), 12.sp, Px.Sub)
+                }
+                PxIcon("next", size = 42.dp) { sel = (sel + 1) % 4 }
+            }
+        }
+        // ---- sol üst: logo
+        Column(Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 12.dp)) {
+            PT("ZENVEX", 46.sp, Px.Orange, outline = true)
+            PT("O N L I N E", 17.sp, Px.Clan, outline = true)
+        }
+        // ---- sağ üst: kısayollar
+        Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AccountCard(Modifier) { if (Account.loggedIn) go(Screen.Settings) else dialog = "welcome" }
+            PxIcon("trophy", size = 48.dp, tint = Px.Clan) { dialog = "top" }
+            PxIcon("people", size = 48.dp) { dialog = "clans" }
+            PxIcon("info", size = 48.dp) { dialog = "news" }
+            PxIcon("gear", size = 48.dp, color = Px.Blue) { go(Screen.Settings) }
+        }
+        // ---- sağ: oyuncu kartı + OYNA
+        PxPanel(Modifier.align(Alignment.CenterEnd).padding(end = 20.dp, top = 36.dp).width(340.dp), pad = 12.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TitleZombie("walker", 2, t)
-                PT("Zenvex Online", 34.sp, Px.Orange, outline = true)
-                TitleZombie("walker", 6, t + 0.4f)
+                LevelBadge(prof.optInt("level", 1), size = 34.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Account.clan.value?.let { PT(it.name, 14.sp, Px.Clan) }
+                    PT(Account.name.value.ifEmpty { prof.optString("name") }, 20.sp, Px.Name)
+                }
+                Icon("coin", 22.dp, Pal.Gold)
+                PT(" " + fmt(prof.optInt("gold")), 15.sp, Px.Clan)
             }
-            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.End) {
-                PxButton("Ayarlar", height = 44.dp, color = Px.Blue, icon = "gear") { go(Screen.Settings) }
+            Spacer(Modifier.height(6.dp))
+            PxBar(prof.optInt("xp") / prof.optInt("xp_next", 1).toFloat().coerceAtLeast(1f), Color(0xFFE8C840), Modifier.fillMaxWidth(), 12.dp)
+            PT("${fmt(prof.optInt("xp"))} / ${fmt(prof.optInt("xp_next"))} XP", 12.sp, Px.Sub)
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth().background(Px.Row).padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                val n = Account.online[GameSession.server.value.id] ?: 0
+                Box(Modifier.size(10.dp).clip(CircleShape).background(if (Account.status.value == "Çevrimiçi") Px.Name else Px.Sub))
+                Spacer(Modifier.width(8.dp))
+                PT(GameSession.server.value.title, 16.sp, modifier = Modifier.weight(1f))
+                PT(if (n > 0) "$n çevrimiçi" else "", 13.sp, Px.Name)
+            }
+            Spacer(Modifier.height(10.dp))
+            when {
+                !unlocked -> {
+                    val can = ch.optBoolean("can_unlock")
+                    PxButton("Aç · Sv ${ch.optInt("req")} · ${ch.optInt("gold")} altın", Modifier.fillMaxWidth(), if (can) Px.Orange else Px.Dark,
+                        icon = "lock", size = 16.sp, textColor = if (can) Color(0xFF2A1A04) else Color.White) {
+                        val r = GameSession.cmd("unlock_char", "i" to sel); Toaster.show(r.msg, r.ok); if (r.ok) tick++
+                    }
+                }
+                prof.optInt("character") != sel -> PxButton("Bu karakteri seç", Modifier.fillMaxWidth(), Px.Blue, size = 18.sp, height = 52.dp) {
+                    val r = GameSession.cmd("select_char", "i" to sel); Toaster.show(r.msg, r.ok); tick++
+                }
+                else -> PxButton("OYNA", Modifier.fillMaxWidth(), Px.Green, icon = "play", size = 32.sp, height = 64.dp) { go(Screen.Loading) }
             }
         }
-        // ---- orta panel
-        Column(Modifier.align(Alignment.Center).padding(top = 40.dp).width(420.dp)) {
-            PxTabs(listOf("Sunucular", "Karakter"), tab) { tab = it }
-            Column(Modifier.fillMaxWidth().height(300.dp).background(Px.Panel).padding(10.dp)) {
-                if (tab == 0) ServerList { s ->
-                    if (s.id == GameSession.server.value.id) { tab = 1; return@ServerList }
-                    switching = true
-                    GameSession.switchServer(s) { switching = false; tick++; tab = 1 }
-                } else CharacterTab(prof, chars, t, { tick++ }) { go(Screen.Loading) }
-            }
-        }
-        // ---- sol alt: hesap
-        AccountCard(Modifier.align(Alignment.BottomStart).padding(12.dp)) { dialog = if (Account.loggedIn) "" else "welcome"; if (Account.loggedIn) go(Screen.Settings) }
         // ---- sağ alt: sürüm (7 dokunuş → geliştirici menüsü)
-        Box(Modifier.align(Alignment.BottomEnd).padding(12.dp).pxPanel(Color(0xCC1E1D19))
+        PT("v${BuildConfig.VERSION_NAME}", 13.sp, Px.Sub, Modifier.align(Alignment.BottomEnd).padding(10.dp)
             .clickable(remember { MutableInteractionSource() }, null) {
                 devTaps++
                 if (devTaps >= 7) { devTaps = 0; dialog = "dev" } else if (devTaps >= 4) Toaster.show("Geliştirici menüsüne ${7 - devTaps} dokunuş")
-            }.padding(horizontal = 10.dp, vertical = 6.dp)) { PT("v${BuildConfig.VERSION_NAME}", 15.sp, Px.Sub) }
+            })
 
-        if (switching) Dim { PxPanel(Modifier.width(320.dp)) { PT("Sunucuya bağlanılıyor…", 18.sp, modifier = Modifier.align(Alignment.CenterHorizontally)) } }
         when (dialog) {
             "welcome" -> AccountDialog(first = true) { dialog = ""; tick++ }
             "top" -> TopDialog { dialog = "" }
@@ -130,105 +173,6 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     }
 }
 
-@Composable
-private fun TitleZombie(kind: String, dir: Int, t: Float) {
-    val ctx = LocalContext.current
-    val f = (t * 7f).toInt() % 8
-    val img = remember(f, dir) { SpriteCache.get(ctx, "z/$kind/walk_${dir}_$f") }
-    Box(Modifier.size(48.dp)) { if (img != null) Image(img, null, Modifier.fillMaxSize(), filterQuality = FilterQuality.Low) }
-}
-
-private fun localLevel(id: String): Int = Account.levels[id] ?: GameSession.localLevelOf(id)
-
-@Composable
-private fun ServerList(onPick: (com.zenvex.online.game.GameServer) -> Unit) {
-    val cur = GameSession.server.value
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (s in SERVERS) {
-                val lvl = localLevel(s.id)
-                val on = s.id == cur.id
-                val n = Account.online[s.id] ?: 0
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Px.RowHi else Px.Row)
-                        .clickable { onPick(s) }.padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        PT(s.title, 20.sp, if (s.hardcore) Px.Hard else Px.Text)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (on && Account.name.value.isNotEmpty()) { PT(Account.name.value, 15.sp, Px.Name); Spacer(Modifier.width(8.dp)) }
-                            PT(if (lvl > 0) "Seviye. $lvl" else "Yeni karakter", 15.sp, if (lvl > 0) Px.Level else Px.Sub)
-                        }
-                        if (s.hardcore) PT("Ölünce çanta yere düşer · zombiler sert · +%50 XP", 11.sp, Px.Sub)
-                    }
-                    Box(Modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xFF24241F)).padding(horizontal = 10.dp, vertical = 6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon("globe", 22.dp, if (on) Px.Clan else Px.Sub)
-                            Spacer(Modifier.width(6.dp))
-                            PT(if (n > 0) "$n" else "TR", 15.sp, if (n > 0) Px.Name else Px.Clan)
-                        }
-                    }
-                }
-            }
-        }
-        PT("Mevcut sunucu: ${cur.title}", 17.sp, Px.Clan, Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp))
-    }
-}
-
-@Composable
-private fun CharacterTab(prof: JSONObject, chars: JSONObject, t: Float, changed: () -> Unit, play: () -> Unit) {
-    var sel by remember(prof) { mutableIntStateOf(prof.optInt("character")) }
-    var dir by remember { mutableIntStateOf(1) }
-    val list = chars.optJSONArray("chars")
-    val ch = list?.optJSONObject(sel) ?: JSONObject()
-    val unlocked = ch.optBoolean("unlocked", sel == 0)
-    val active = prof.optInt("character") == sel
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        // isim satırı: klan + isim + seviye
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Account.clan.value?.let { PT(it.name, 17.sp, Px.Clan); Spacer(Modifier.width(8.dp)) }
-            PT(Account.name.value.ifEmpty { prof.optString("name") }, 17.sp)
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LevelBadge(prof.optInt("level", 1))
-            Spacer(Modifier.width(4.dp))
-            PxBar(1f, Color(0xFF3CB043), Modifier.width(140.dp), 12.dp)
-        }
-        // karakter (sürükleyerek döndür)
-        Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            PxIcon("back", size = 40.dp) { sel = (sel + 3) % 4 }
-            Box(
-                Modifier.weight(1f).fillMaxHeight().pointerInput(Unit) {
-                    var acc = 0f
-                    detectHorizontalDragGestures { _, dx -> acc += dx; if (kotlin.math.abs(acc) > 36f) { dir = (dir + (if (acc > 0) 7 else 1)) % 8; acc = 0f } }
-                },
-                contentAlignment = Alignment.Center,
-            ) {
-                HeroSprite(sel, dir, t, unlocked)
-                Column(Modifier.align(Alignment.BottomCenter), horizontalAlignment = Alignment.CenterHorizontally) {
-                    PT(ch.optString("name") + " · " + ch.optString("class"), 13.sp, HERO_COLORS[sel])
-                    PT(ch.optString("ability"), 11.sp, Px.Sub)
-                }
-            }
-            PxIcon("next", size = 40.dp) { sel = (sel + 1) % 4 }
-        }
-        Spacer(Modifier.height(6.dp))
-        when {
-            !unlocked -> {
-                val can = ch.optBoolean("can_unlock")
-                PxButton("Aç · Sv ${ch.optInt("req")} · ${ch.optInt("gold")} altın", Modifier.fillMaxWidth(), if (can) Px.Orange else Px.Dark,
-                    icon = "lock", size = 16.sp, textColor = if (can) Color(0xFF2A1A04) else Color.White) {
-                    val r = GameSession.cmd("unlock_char", "i" to sel); Toaster.show(r.msg, r.ok); if (r.ok) changed()
-                }
-            }
-            !active -> PxButton("Bu karakteri seç", Modifier.fillMaxWidth(), Px.Blue, size = 18.sp) {
-                val r = GameSession.cmd("select_char", "i" to sel); Toaster.show(r.msg, r.ok); changed()
-            }
-            else -> PxButton(">>>  Oyna!  <<<", Modifier.fillMaxWidth(), Px.Green, size = 30.sp, height = 62.dp) { play() }
-        }
-    }
-}
 
 @Composable
 private fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
@@ -365,15 +309,11 @@ fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Com
 
 @Composable
 fun TopDialog(close: () -> Unit) {
-    var sid by remember { mutableStateOf(GameSession.server.value.id) }
+    val sid = GameSession.server.value.id
     var rows by remember { mutableStateOf<JSONArray?>(null) }
     var err by remember { mutableStateOf("") }
     LaunchedEffect(sid) { rows = null; Account.top(sid) { r -> r.onSuccess { rows = it }.onFailure { err = it.message ?: "" } } }
     PxDialog("Sıralama", close) {
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            for (s in SERVERS) PxButton(s.title.substringBefore(" -"), Modifier.weight(1f), if (s.id == sid) Px.Green else Px.Dark, size = 13.sp, height = 34.dp) { sid = s.id }
-        }
-        Spacer(Modifier.height(8.dp))
         Column(Modifier.height(240.dp).verticalScroll(rememberScrollState())) {
             val r = rows
             when {
@@ -463,8 +403,7 @@ fun NewsDialog(close: () -> Unit) {
         Column(Modifier.height(240.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             PT("v${BuildConfig.VERSION_NAME}", 18.sp, Px.Clan)
             for (l in listOf(
-                "• Yeni lobi: sunucu seçimi ve karakter ekranı",
-                "• 4 sunucu: Normal #1, #2, #3 - Dünya ve Hardcore",
+                "• Yeni lobi ve yeni uygulama simgesi",
                 "• Zenvex hesabı: ID + anahtar ile her telefondan gir",
                 "• Çevrimiçi dünya Supabase'e taşındı",
                 "• Posta kutusu, klanlar, sıralama",

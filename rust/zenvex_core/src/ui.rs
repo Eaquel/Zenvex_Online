@@ -66,6 +66,13 @@ impl Game {
     pub fn ui_json(&self, kind: &str) -> String {
         let g = &self.progress;
         let v = match kind {
+            "cheat" => {
+                let items: Vec<Value> = ITEMS.iter().filter(|d| d.kind != ItemKind::Currency)
+                    .map(|d| json!([d.id, d.name, format!("{:?}", d.kind), d.rarity as u8])).collect();
+                json!({ "god": self.player.god, "onehit": self.player.one_hit, "speed": self.player.speed_cheat,
+                        "net": self.net, "level": g.level, "gold": g.gold, "items": items,
+                        "x": (self.player.x / world::TILE) as i32, "y": (self.player.y / world::TILE) as i32 })
+            }
             "profile" => {
                 let c = g.character;
                 json!({
@@ -822,6 +829,9 @@ impl Game {
                 self.player.ability_cd = 0.0;
                 Ok("Can ve dayanıklılık doldu".into())
             }
+            "spawn" | "zombi" | "boss" | "killall" | "temizle" if self.net == 2 => {
+                Err("Çevrimiçi katılımcısın: zombileri ev sahibi yönetir, bu hile yalnızca ev sahibinde ya da tek başınayken çalışır".into())
+            }
             "spawn" | "zombi" => {
                 let kind = match arg(1) {
                     "runner" | "kosucu" => data::ZKind::Runner,
@@ -896,6 +906,32 @@ impl Game {
                 self.vehicles.push(Vehicle { kind: k, x, y, angle: 0.0, speed: 0.0, hp: data::VEHICLES[k].hp, fuel: 100.0, driver: false, wrecked: false });
                 Ok(format!("{} getirildi", data::VEHICLES[k].name))
             }
+            "ammo" | "mermi" => {
+                for w in &WEAPONS[1..] {
+                    if !w.ammo.is_empty() {
+                        self.progress.inv.add_id(w.ammo, 200);
+                    }
+                }
+                Ok("Her mermiden 200 eklendi".into())
+            }
+            "points" | "puan" => {
+                self.progress.points += num(1, 10.0) as u32;
+                Ok(format!("Yetenek puanı: {}", self.progress.points))
+            }
+            "fuel" | "yakit" => {
+                for v in self.vehicles.iter_mut() {
+                    v.fuel = 100.0;
+                    v.hp = data::VEHICLES[v.kind].hp;
+                    v.wrecked = false;
+                }
+                Ok("Tüm araçların yakıtı ve canı doldu".into())
+            }
+            "clearbag" | "cantabosalt" => {
+                for sl in self.progress.inv.slots.iter_mut() {
+                    *sl = None;
+                }
+                Ok("Çanta boşaltıldı".into())
+            }
             "reset" | "sifirla" => {
                 self.progress = progress::Progress::default();
                 self.respawn(false);
@@ -903,7 +939,7 @@ impl Game {
             }
             _ => Err("Komutlar: gold N, gem N, item id N, items, weapons, set basic|police|military|titan, level N, xp N, charlevel N, \
                       god, onehit, speed X, time H, day, night, heal, spawn tür N lvl, boss, killall, tp city|camp|boss|swamp|downtown|deep|x y, \
-                      unlock, pass N, pass buy [elite], vehicle bike|moto|car|suv, reset"
+                      unlock, pass N, pass buy [elite], vehicle bike|moto|car|suv, ammo, points N, fuel, clearbag, reset"
                 .into()),
         }
     }
@@ -926,5 +962,39 @@ fn reward_json(r: &str) -> Value {
             let d = data::item(id);
             json!({ "type": "item", "id": id, "name": d.name, "count": v.parse::<u32>().unwrap_or(1), "rarity": d.rarity as u8 })
         }
+    }
+}
+
+#[cfg(test)]
+mod cheat_tests {
+    use crate::game::Game;
+    use crate::progress::Progress;
+
+    /// Hile panelindeki her hızlı komut hatasız çalışmalı.
+    #[test]
+    fn all_panel_cheats_work() {
+        let mut g = Game::new(7, Progress::default(), 1);
+        let cmds = [
+            "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "ammo", "points 10",
+            "set basic", "set police", "set military", "set titan", "item w_ak47 1", "item medkit 5", "god", "god", "onehit", "onehit",
+            "speed 2", "speed 1", "heal", "day", "night", "time 18", "spawn walker 3", "spawn runner 2", "spawn dog 2",
+            "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle bike", "vehicle moto",
+            "vehicle car", "vehicle suv", "fuel", "tp camp", "tp city", "tp swamp", "tp deep", "tp downtown", "tp boss", "tp 100 100",
+            "unlock", "pass 30", "pass buy", "pass buy elite", "clearbag", "reset",
+        ];
+        for c in cmds {
+            let r = g.cheat(c);
+            assert!(r.is_ok(), "{c}: {r:?}");
+            for _ in 0..3 {
+                g.step(1.0 / 30.0, crate::game::Input::default());
+            }
+        }
+        assert!(g.cheat("bilinmeyen").is_err());
+        // çevrimiçi katılımcıda zombi hileleri açıkça reddedilir
+        g.net = 2;
+        assert!(g.cheat("spawn tank 1").is_err());
+        assert!(g.cheat("gold 5").is_ok());
+        let v: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
+        assert!(v["items"].as_array().unwrap().len() > 40);
     }
 }

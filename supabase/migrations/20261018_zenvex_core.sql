@@ -1,7 +1,7 @@
 -- Zenvex Online — Supabase şeması.
 -- Hesap = Zenvex ID + hesap anahtarı (Supabase Auth kullanılmaz; panelde ayar gerekmez).
 -- Tablolara doğrudan erişim kapalıdır (RLS açık, politika yok); istemci yalnızca zx_* RPC'lerini çağırır.
--- Uygulamak için: Supabase paneli → SQL Editor → bu dosyanın tamamını yapıştır → Run.
+-- zenvex-online projesine kuruldu (18.10.2026). Yeni projeye: SQL Editor → bu dosyanın tamamı → Run.
 
 create extension if not exists pgcrypto with schema extensions;
 
@@ -97,11 +97,12 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 create or replace function public._zx_name_ok(n text) returns boolean
-language sql immutable as $$ select n ~ '^[A-Za-z0-9_ÇçĞğİıÖöŞşÜü.\-]{3,16}$' $$;
+language sql immutable set search_path = public as $$ select n ~ '^[A-Za-z0-9_ÇçĞğİıÖöŞşÜü.\-]{3,16}$' $$;
 
 revoke all on function public._zx_auth(bigint, text) from public, anon, authenticated;
 revoke all on function public._zx_key() from public, anon, authenticated;
 revoke all on function public._zx_profile(public.accounts) from public, anon, authenticated;
+revoke all on function public._zx_name_ok(text) from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- hesap
 create or replace function public.zx_register(p_name text) returns jsonb
@@ -185,7 +186,6 @@ begin
   update public.accounts set last_chat = now() where id = a.id;
   insert into public.chat (server, account_id, name, clan, text)
   values (p_server, a.id, a.name, (select name from public.clans where id = a.clan_id), t) returning * into r;
-  delete from public.chat where server = p_server and id < r.id - 500;
   return jsonb_build_object('id', r.id, 'ts', (extract(epoch from r.created_at) * 1000)::bigint);
 end $$;
 
@@ -236,8 +236,13 @@ language plpgsql security definer set search_path = public as $$
 declare a public.accounts := public._zx_auth(p_id, p_key); c public.clans;
 begin
   if a.clan_id is not null then raise exception 'Önce klanından ayrıl'; end if;
-  if exists (select 1 from public.clans where lower(name) = lower(trim(p_name))) then raise exception 'Bu klan adı alınmış'; end if;
-  insert into public.clans (name, color, owner) values (trim(p_name), p_color, a.id) returning * into c;
+  select * into c from public.clans where lower(name) = lower(trim(p_name));
+  if c.id is not null then
+    if exists (select 1 from public.accounts where clan_id = c.id) then raise exception 'Bu klan adı alınmış'; end if;
+    update public.clans set owner = a.id, color = p_color where id = c.id returning * into c;
+  else
+    insert into public.clans (name, color, owner) values (trim(p_name), p_color, a.id) returning * into c;
+  end if;
   update public.accounts set clan_id = c.id where id = a.id returning * into a;
   return public._zx_profile(a);
 end $$;
@@ -258,12 +263,9 @@ language plpgsql security definer set search_path = public as $$
 declare a public.accounts := public._zx_auth(p_id, p_key); c bigint := a.clan_id;
 begin
   update public.accounts set clan_id = null where id = a.id returning * into a;
-  if c is not null then
-    if not exists (select 1 from public.accounts where clan_id = c) then
-      delete from public.clans where id = c;
-    elsif (select owner from public.clans where id = c) = a.id then
-      update public.clans set owner = (select id from public.accounts where clan_id = c order by created_at limit 1) where id = c;
-    end if;
+  -- lider ayrılırsa en eski üye lider olur; boş kalan klan listede görünmez, adı yeniden kurulabilir
+  if c is not null and (select owner from public.clans where id = c) = a.id then
+    update public.clans set owner = coalesce((select id from public.accounts where clan_id = c order by created_at limit 1), 0) where id = c;
   end if;
   return public._zx_profile(a);
 end $$;
@@ -271,7 +273,7 @@ end $$;
 create or replace function public.zx_clans() returns jsonb
 language sql stable security definer set search_path = public as $$
   select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'color', c.color, 'members', c.n) order by c.n desc), '[]'::jsonb)
-  from (select c.*, (select count(*) from public.accounts a where a.clan_id = c.id) n from public.clans c) c
+  from (select c.*, (select count(*) from public.accounts a where a.clan_id = c.id) n from public.clans c) c where c.n > 0
 $$;
 
 create or replace function public.zx_clan_members(p_clan bigint) returns jsonb

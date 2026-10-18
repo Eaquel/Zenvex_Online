@@ -54,7 +54,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players,
+    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat,
 }
 
 /**
@@ -119,6 +119,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Clan -> ClanDialog { overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }
             Overlay.Top -> TopDialog(close)
             Overlay.Players -> PlayersDialog(close)
+            Overlay.Cheat -> DevMenu(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
         }
@@ -156,6 +157,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("star", size = 46.dp, tint = Px.Orange, color = Color(0xCC6A4A1A)) { open(Overlay.Pass) }
         PxIcon("magic", size = 46.dp, badge = points) { open(Overlay.Skills) }
+        PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // sağ üst (radarın altı): posta, oyuncular, klan, menü
     Row(Modifier.align(Alignment.TopEnd).padding(end = 14.dp, top = 146.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -232,7 +234,7 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
             val items = listOf(
                 Triple("Devam Et", "play", Overlay.None), Triple("Karakterler", "user", Overlay.Characters),
                 Triple("Profil", "profile", Overlay.Profile), Triple("Kozmetik", "hanger", Overlay.Cosmetics),
-                Triple("Sıralama", "trophy", Overlay.Top), Triple("Ayarlar", "gear", Overlay.Settings),
+                Triple("Sıralama", "trophy", Overlay.Top), Triple("Hile Paneli", "dev", Overlay.Cheat), Triple("Ayarlar", "gear", Overlay.Settings),
             )
             for ((label, icon, o) in items) {
                 PxButton(label, Modifier.fillMaxWidth(), if (o == Overlay.None) Px.Green else Px.Dark, icon = icon, size = 17.sp, height = 42.dp) { open(o) }
