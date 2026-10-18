@@ -146,8 +146,11 @@ def collect_static(dirname, prefix, out, actor=False):
         out.append((f"{prefix}/{f[:-4]}", im, ax, ay))
 
 
-def collect_dirs(dirname, prefix, out, actor=False):
-    """dirname/<isim>/<yön>.png + .json"""
+LIFT_PX = 1.0 / 0.016 * 0.8191520  # render_sdf lift=1 m → çapa zeminde; model kökeni bu kadar yukarıda
+
+
+def collect_dirs(dirname, prefix, out, actor=False, lifted=False):
+    """dirname/<isim>/<yön>.png + .json  (lifted: ekipman/silah — çapa model kökenine taşınır)"""
     d = os.path.join(SRC, dirname)
     if not os.path.isdir(d):
         return
@@ -159,7 +162,10 @@ def collect_dirs(dirname, prefix, out, actor=False):
             p = os.path.join(sub, f"{k}.png")
             meta = jload(p[:-4] + ".json")
             if meta and os.path.exists(p):
-                im, ax, ay = load(p, meta["anchor"], actor)
+                a = meta["anchor"]
+                if lifted:
+                    a = (a[0], a[1] - LIFT_PX)
+                im, ax, ay = load(p, a, actor)
                 out.append((f"{prefix}/{name}/{k}", im, ax, ay))
 
 
@@ -207,8 +213,8 @@ def main():
     collect_static("items", "i", items)
     P.pack_group("items", items)
     gear = []
-    collect_dirs("equip", "e", gear)
-    collect_dirs("weapons", "w", gear)
+    collect_dirs("equip", "e", gear, lifted=True)
+    collect_dirs("weapons", "w", gear, lifted=True)
     P.pack_group("gear", gear)
     veh = []
     collect_dirs("vehicles", "v", veh, actor=True)
