@@ -155,6 +155,15 @@ pub enum Event {
     LastBreath,
     #[serde(rename = "step")]
     Step,
+    /// ev sahibi: uzak oyuncuya zombi hasarı (i = setRemotes sırası)
+    #[serde(rename = "rdmg")]
+    RemoteDamage { i: usize, v: i32, poison: bool },
+    /// istemci: zombiye vuruş → ev sahibine gönderilir
+    #[serde(rename = "zhit")]
+    ZHit { id: u32, dmg: f32, kx: f32, ky: f32, stun: bool },
+    /// ev sahibi: uzak oyuncunun öldürdüğü zombi → ödül o oyuncuya
+    #[serde(rename = "nkill")]
+    NetKill { k: i32, kind: u8, level: u32, x: f32, y: f32 },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -212,6 +221,11 @@ pub enum ZState {
 
 #[derive(Clone, Debug)]
 pub struct Zombie {
+    /// ağ kimliği (ev sahibi atar)
+    pub id: u32,
+    /// istemcide ara değerleme hedefi
+    pub snap_x: f32,
+    pub snap_y: f32,
     pub kind: ZKind,
     pub level: u32,
     pub x: f32,
@@ -352,6 +366,13 @@ pub struct Game {
     pub npcs: Vec<Npc>,
     pub drone: Drone,
     pub remotes: Vec<Remote>,
+    /// 0 tek oyunculu, 1 ev sahibi (zombileri o çalıştırır), 2 istemci
+    pub net: u8,
+    pub next_zid: u32,
+    /// ev sahibinde uzak oyuncu vuruşunun sahibi (-1 = yerel)
+    pub kill_credit: i32,
+    /// başka oyuncunun aracında yolcu
+    pub passenger: bool,
     pub events: Vec<Event>,
     pub time: f32,
     pub day_t: f32,
@@ -430,6 +451,10 @@ impl Game {
                 ..Default::default()
             },
             remotes: Vec::new(),
+            net: 0,
+            next_zid: 1,
+            kill_credit: -1,
+            passenger: false,
             events: Vec::new(),
             time: 0.0,
             day_t: 0.3,
@@ -491,7 +516,11 @@ impl Game {
         self.time += dt;
         self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
-        if self.player.vehicle.is_some() {
+        if self.passenger {
+            // yolcu: konumu ağ katmanı verir; sadece zamanlayıcılar
+            self.player.anim_t += dt;
+            self.player.ability_cd = (self.player.ability_cd - dt).max(0.0);
+        } else if self.player.vehicle.is_some() {
             self.update_vehicle_drive(dt, input);
         } else {
             self.update_player(dt, input);

@@ -338,3 +338,26 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_localState<'l>(
     ];
     let _ = env.set_float_array_region(&out, 0, &rec);
 }
+
+/// Ev sahibi: zombi anlık görüntüsü (net::NET_STRIDE kayıtlar); kayıt sayısı döner.
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_netSnapshot<'l>(env: JNIEnv<'l>, _c: JClass<'l>, h: jlong, out: JFloatArray<'l>) -> jint {
+    let Some(g) = game(h) else { return 0 };
+    let cap = env.get_array_length(&out).unwrap_or(0) as usize;
+    let mut buf = vec![0.0f32; cap];
+    let n = g.net_snapshot(&mut buf);
+    let _ = env.set_float_array_region(&out, 0, &buf[..n * zenvex_core::net::NET_STRIDE]);
+    n as jint
+}
+
+/// İstemci: ev sahibinin görüntüsünü uygula.
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_netApply<'l>(env: JNIEnv<'l>, _c: JClass<'l>, h: jlong, data: JFloatArray<'l>, count: jint) {
+    let Some(g) = game(h) else { return };
+    let n = count.max(0) as usize * zenvex_core::net::NET_STRIDE;
+    let mut v = vec![0.0f32; n];
+    if n > 0 && env.get_float_array_region(&data, 0, &mut v).is_err() {
+        return;
+    }
+    g.net_apply(&v);
+}

@@ -11,6 +11,7 @@ pub mod world;
 
 mod combat;
 mod draw;
+pub mod net;
 mod vehicles;
 mod zombies;
 

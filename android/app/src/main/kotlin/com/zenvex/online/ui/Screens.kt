@@ -847,3 +847,72 @@ fun DevMenu(onClose: () -> Unit) {
         }
     }
 }
+
+// =========================================================================== takas
+@Composable
+fun TradeScreen(close: () -> Unit) {
+    val st = Online.trade.value
+    var tick by remember { mutableIntStateOf(0) }
+    val inv = remember(tick) { GameSession.ui("inventory") }
+    val offer = remember { androidx.compose.runtime.mutableStateListOf<Online.TradeItem>() }
+    var gold by remember { mutableStateOf("") }
+    fun push() {
+        val g = gold.toIntOrNull() ?: 0
+        Online.setTradeItems(offer.toList() + if (g > 0) listOf(Online.TradeItem("coin", g)) else emptyList())
+    }
+    ScreenFrame("TAKAS", "trade", { Online.cancelTrade(); close() }) {
+        if (st == null) {
+            T("Karşı tarafın kabul etmesi bekleniyor…", 15.sp, Pal.Sub)
+            return@ScreenFrame
+        }
+        if (st.done) { T("Takas tamamlandı!", 18.sp, Pal.Green, bold = true); LaunchedEffect(Unit) { delay(1200); close() }; return@ScreenFrame }
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // çanta
+            Column(Modifier.weight(1f).fillMaxHeight().glass(20.dp).padding(10.dp)) {
+                SectionTitle("Çantan (eklemek için dokun)")
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(Modifier.verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val slots = inv.optJSONArray("slots")
+                    for (i in 0 until (slots?.length() ?: 0)) {
+                        val s = slots!!.optJSONObject(i) ?: continue
+                        val id = s.optString("id")
+                        val have = s.optInt("count")
+                        val used = offer.filter { it.id == id }.sumOf { it.n }
+                        ItemSlot(id, have - used, s.optInt("rarity"), 54.dp) {
+                            if (have - used > 0) {
+                                val ix = offer.indexOfFirst { it.id == id }
+                                if (ix >= 0) offer[ix] = Online.TradeItem(id, offer[ix].n + 1) else offer += Online.TradeItem(id, 1)
+                                push()
+                            }
+                        }
+                    }
+                }
+            }
+            // teklifler
+            Column(Modifier.weight(1.2f).fillMaxHeight().glass(20.dp, Pal.Blue).padding(12.dp)) {
+                SectionTitle("Senin teklifin" + if (st.myOk) " ✔" else "")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    for (it in offer) ItemSlot(it.id, it.n, 0, 54.dp) { offer.remove(it); push() }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon("coin", 22.dp, Pal.Gold); Spacer(Modifier.width(6.dp))
+                    Field(gold, { v -> gold = v.filter { c -> c.isDigit() }.take(7); push() }, "Altın", Modifier.width(140.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+                SectionTitle("${st.otherName} teklifi" + if (st.theirOk) " ✔" else "")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
+                    if (st.theirs.isEmpty()) T("Henüz bir şey eklemedi", 12.sp, Pal.Sub)
+                    for (it in st.theirs) ItemSlot(it.id, it.n, 0, 54.dp)
+                }
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GButton("İptal", Modifier.weight(1f), Tone.Red, height = 44.dp) { Online.cancelTrade(); close() }
+                    GButton(if (st.myOk) "Hazırım ✔" else "Onayla", Modifier.weight(1.4f), if (st.myOk) Tone.Dark else Tone.Green, height = 44.dp) {
+                        Online.setTradeReady(!st.myOk)
+                    }
+                }
+                T("İki taraf da onaylayınca eşyalar takas edilir. Teklif değişirse onaylar sıfırlanır.", 11.sp, Pal.Sub)
+            }
+        }
+    }
+}

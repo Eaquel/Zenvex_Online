@@ -277,6 +277,65 @@ impl Game {
                 Ok("Yeniden doğdun".into())
             }
             "cheat" => self.cheat(v["text"].as_str().unwrap_or("")),
+            "net_mode" => {
+                self.set_net(v["mode"].as_u64().unwrap_or(0) as u8);
+                Ok(String::new())
+            }
+            "net_hit" => {
+                let f = |k: &str| v[k].as_f64().unwrap_or(0.0) as f32;
+                self.net_hit(v["id"].as_u64().unwrap_or(0) as u32, f("dmg"), f("kx"), f("ky"), v["stun"].as_bool().unwrap_or(false),
+                             v["killer"].as_i64().unwrap_or(-1) as i32);
+                Ok(String::new())
+            }
+            "net_kill" => {
+                let f = |k: &str| v[k].as_f64().unwrap_or(0.0) as f32;
+                self.net_kill(v["kind"].as_u64().unwrap_or(0) as u8, v["level"].as_u64().unwrap_or(1) as u32, f("x"), f("y"));
+                Ok(String::new())
+            }
+            "net_pdmg" => {
+                self.net_damage(v["v"].as_f64().unwrap_or(0.0) as f32, v["poison"].as_bool().unwrap_or(false));
+                Ok(String::new())
+            }
+            "ride" => {
+                let f = |k: &str| v[k].as_f64().unwrap_or(0.0) as f32;
+                self.ride(v["on"].as_bool().unwrap_or(false), f("x"), f("y"));
+                Ok(String::new())
+            }
+            "trade_take" => {
+                // takas: verilen eşyayı envanterden çıkar
+                let id = v["id"].as_str().unwrap_or("");
+                let n = v["n"].as_u64().unwrap_or(1) as u32;
+                if id == "coin" {
+                    if self.progress.gold >= n {
+                        self.progress.gold -= n;
+                        Ok("ok".into())
+                    } else {
+                        Err("Yeterli altın yok".into())
+                    }
+                } else if self.progress.inv.remove_id(id, n) {
+                    Ok("ok".into())
+                } else {
+                    Err("Eşya yok".into())
+                }
+            }
+            "trade_give" => {
+                // takas: karşı taraftan gelen eşyayı ekle
+                let id = v["id"].as_str().unwrap_or("");
+                let n = v["n"].as_u64().unwrap_or(1) as u32;
+                if id == "coin" {
+                    self.progress.add_gold(n);
+                    Ok(format!("+{n} altın"))
+                } else if crate::data::item_index(id).is_some() {
+                    let left = self.progress.inv.add_id(id, n);
+                    if left > 0 {
+                        let (x, y) = (self.player.x, self.player.y);
+                        self.spawn_drop_id(id, left, x, y);
+                    }
+                    Ok(format!("+{n} {}", crate::data::item(id).name))
+                } else {
+                    Err("Geçersiz eşya".into())
+                }
+            }
             _ => Err(format!("Bilinmeyen komut: {cmd}")),
         };
         match res {

@@ -279,7 +279,7 @@ impl Game {
                 ],
             ));
         }
-        if self.player.vehicle.is_none() {
+        if self.player.vehicle.is_none() && !self.passenger {
             let p = &self.player;
             let flash = if p.flash_t > 0.0 {
                 1.0

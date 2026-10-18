@@ -46,4 +46,6 @@ object Native {
     external fun minimap(h: Long, n: Int, out: IntArray)
     external fun setRemotes(h: Long, data: FloatArray, count: Int)
     external fun localState(h: Long, out: FloatArray)
+    external fun netSnapshot(h: Long, out: FloatArray): Int
+    external fun netApply(h: Long, data: FloatArray, count: Int)
 }

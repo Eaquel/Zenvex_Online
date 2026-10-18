@@ -174,11 +174,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val btnReload = Btn("reload")
     private val btnVehicle = Btn("vehicle")
     private val btnInteract = Btn("interact")
+    private val btnTrade = Btn("trade")
+    private val btnRide = Btn("ride")
+    @Volatile private var rideUid: String? = null
+    private var nearCache: Online.Near? = null
     private val btnBag = Btn("bag")
     private val btnChat = Btn("chat")
     private val btnMenu = Btn("menu")
     private val btnMap = Btn("map")
-    private val buttons = listOf(btnAbility, btnWeapon, btnReload, btnVehicle, btnInteract, btnBag, btnChat, btnMenu, btnMap)
+    private val buttons = listOf(btnAbility, btnWeapon, btnReload, btnVehicle, btnInteract, btnTrade, btnRide, btnBag, btnChat, btnMenu, btnMap)
 
     // ------------------------------------------------------------------ efektler
     private class Floater(var x: Float, var y: Float, val text: String, val color: Int, val size: Float, var life: Float = 1.2f, val max: Float = 1.2f)
@@ -253,6 +257,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         place(btnReload, 172f, stickR * 2.1f, br * 0.8f)
         place(btnVehicle, 62f, stickR * 2.3f)
         place(btnInteract, 30f, stickR * 2.45f)
+        place(btnTrade, 4f, stickR * 2.6f, br * 0.85f)
+        place(btnRide, -20f, stickR * 2.6f, br * 0.85f)
         val top = 14 * density
         val tb = 22 * density
         var x = w - 16 * density - tb
@@ -305,14 +311,22 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (!paused) Native.step(h, dt, inputArr)
             Native.hud(h, hud)
             Online.remotes(remoteBuf)?.let { n -> Native.setRemotes(h, remoteBuf, n) }
-            Online.publishLocal(h)
+            Online.tick(h)
+            // yolcu: sürücünün konumunu izle
+            rideUid?.let { u ->
+                val pos = Online.position(u)
+                if (pos == null || pos[9] < 2f) {
+                    rideUid = null
+                    Native.command(h, "{\"cmd\":\"ride\",\"on\":false,\"x\":${hud[Native.PX]},\"y\":${hud[Native.PY]}}")
+                } else Native.command(h, "{\"cmd\":\"ride\",\"on\":true,\"x\":${pos[0]},\"y\":${pos[1]}}")
+            }
             // kamera
             val px = hud[Native.PX]; val py = hud[Native.PY]
             val k = 1f - kotlin.math.exp(-8f * dt)
             camX += (px - camX) * k
             camY += (py - 40f - camY) * k
             if (abs(px - camX) > 1500 || abs(py - camY) > 1500) { camX = px; camY = py - 40f }
-            val visibleM = when (s.zoom) { 0 -> 12.5f; 1 -> 15.5f; else -> 19.5f }
+            val visibleM = when (s.zoom) { 0 -> 10.5f; 1 -> 13f; else -> 16.5f }
             scale = sh / (visibleM * 62.5f)
             viewW = sw / scale; viewH = sh / scale
             viewArr[0] = camX - viewW / 2; viewArr[1] = camY - viewH / 2
@@ -325,6 +339,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
         // efektler
         if (shakeT > 0) shakeT -= dt
+        updateFx(dt)
         if (bannerT > 0) bannerT -= dt
         vignetteRed = max(0f, vignetteRed - dt * 1.6f)
         val fit = floaters.iterator()
@@ -393,7 +408,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val x = e.optDouble("x", 0.0).toFloat()
             val y = e.optDouble("y", 0.0).toFloat()
             when (e.getString("t")) {
+                "zhit", "rdmg", "nkill" -> Online.onEvent(e)
                 "dmg" -> {
+                    fx("blood", x, y + 50, 90f, (Math.random() * 360).toFloat())
                     if (s.damageNumbers) floaters += Floater(x, y, e.getInt("v").toString(),
                         if (e.optBoolean("crit")) 0xFFFFD040.toInt() else Color.WHITE, if (e.optBoolean("crit")) 30f else 22f)
                     burst(x, y + 60, 6, 0xFF7A1A14.toInt(), 160f, 4f)
@@ -411,6 +428,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "invfull" -> ui.onToast("Çanta dolu!")
                 "lvl" -> {
+                    fx("levelup", 0f, 0f, 340f, follow = true)
                     setBanner("SEVİYE ${e.getInt("level")}", "+${e.getInt("points")} yetenek puanı", 0xFFFFD34A.toInt())
                     Audio.play("levelup"); vibrate(120, 200)
                     burst(hud[Native.PX], hud[Native.PY], 40, 0xFFFFE070.toInt(), 300f, 5f, 1, 1.2f)
@@ -418,10 +436,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "clvl" -> setBanner("KARAKTER SEVİYESİ ${e.getInt("level")}", "Yetenek güçlendi", 0xFF7FE0FF.toInt())
                 "hit" -> {
                     val kind = e.getInt("kind")
+                    fx("spark", x, y, 85f, (Math.random() * 360).toFloat())
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
                     burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
                 }
+                "kill" -> fx("blood", x, y - 40, 150f)
                 "treefall" -> { Audio.play("treefall", near(x, y)); burst(x, y, 24, 0xFF4E8A34.toInt(), 260f, 5f, 0, 1.0f) }
                 "kill" -> {
                     Audio.play("zdeath", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
@@ -434,6 +454,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val a = e.getDouble("a").toFloat()
                     Audio.play(when (w) { 3 -> "shot_pistol"; 6 -> "shot_sniper"; 7 -> "rocket"; else -> "shot_rifle" }, near(x, y), 0.95f + Math.random().toFloat() * 0.1f)
                     flashes += Light(x + sin(a) * 50, y + cos(a) * 30 - 70, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
+                    fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees((-a + PI / 2).toDouble()).toFloat(), dur = 0.07f, frame = (0..2).random())
                     shake(if (w == 6 || w == 7) 6f else 2.5f, 0.07f)
                     burst(x + sin(a) * 40, y + cos(a) * 25, 2, 0xFFD8B060.toInt(), 120f, 2.5f, 0, 0.8f, 200f)
                 }
@@ -441,6 +462,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "noammo" -> { Audio.play("empty", 0.8f); ui.onToast("Mermi yok!") }
                 "explode" -> {
                     val r = e.getDouble("r").toFloat()
+                    fx("explosion", x, y - r * 0.4f, r * 2.8f)
+                    fx("shockwave", x, y, r * 3.2f)
                     Audio.play("explosion", max(0.35f, near(x, y)))
                     flashes += Light(x, y - 40, r * 3f, 0xFFFFA040.toInt(), 0.5f, 0.5f)
                     burst(x, y, 30, 0xFFFF8A20.toInt(), r * 2.4f, 7f, 1, 0.7f)
@@ -448,9 +471,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     shake(14f * near(x, y) + 3f, 0.4f); vibrate(120, 220)
                 }
                 "groan" -> if (Math.random() < 0.6) Audio.play("groan" + (0..2).random(), near(x, y) * 0.7f, 0.85f + Math.random().toFloat() * 0.3f)
-                "teleport" -> { Audio.play("teleport", near(x, y)); burst(x, y, 26, 0xFFB070FF.toInt(), 260f, 5f, 1, 0.8f) }
-                "toxic" -> { Audio.play("toxic", near(x, y)); burst(x, y, 30, 0xFF9AFF40.toInt(), 180f, 9f, 1, 1.4f) }
+                "teleport" -> {
+                    fx("teleport", x, y - 70, 220f)
+                    Audio.play("teleport", near(x, y)); burst(x, y, 26, 0xFFB070FF.toInt(), 260f, 5f, 1, 0.8f) }
+                "toxic" -> {
+                    fx("toxic", x, y - 30, 300f, dur = 5f)
+                    Audio.play("toxic", near(x, y)); burst(x, y, 30, 0xFF9AFF40.toInt(), 180f, 9f, 1, 1.4f) }
                 "slam" -> {
+                    fx("shockwave", x, y, e.getDouble("r").toFloat() * 2.4f)
+                    fx("dust", x, y - 20, e.getDouble("r").toFloat() * 1.6f)
                     Audio.play("explosion", near(x, y) * 0.8f, 0.6f)
                     burst(x, y, 30, 0xFF8A7A60.toInt(), e.getDouble("r").toFloat() * 2f, 6f, 0, 0.8f)
                     shake(10f * near(x, y), 0.3f)
@@ -470,8 +499,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "drone" -> Audio.play("drone", near(x, y) * 0.5f, 1.3f)
                 "shield" -> { Audio.play("shield"); floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, "+" + e.getInt("v") + " KALKAN", 0xFF70C8FF.toInt(), 20f) }
                 "heal" -> { Audio.play("heal", 0.6f); floaters += Floater(x, y - 140, "+" + e.getInt("v"), 0xFF60FF80.toInt(), 22f); burst(x, y, 10, 0xFF70FF90.toInt(), 80f, 5f, 1, 1f) }
-                "rage" -> { Audio.play("rage"); setBanner("ÖFKE", "Hasar arttı!", 0xFFFF5A3A.toInt()) }
-                "cloak" -> { Audio.play("shield", 1f, 0.7f); setBanner("TANRI PELERİNİ", "3 sn ölümsüzlük", 0xFFFFD34A.toInt()) }
+                "rage" -> {
+                    fx("rage", 0f, 0f, 220f, follow = true, dur = 5f)
+                    Audio.play("rage"); setBanner("ÖFKE", "Hasar arttı!", 0xFFFF5A3A.toInt()) }
+                "cloak" -> {
+                    fx("levelup", 0f, 0f, 300f, follow = true)
+                    Audio.play("shield", 1f, 0.7f); setBanner("TANRI PELERİNİ", "3 sn ölümsüzlük", 0xFFFFD34A.toInt()) }
                 "lastbreath" -> setBanner("SON NEFES", "Ölümden döndün!", 0xFFFF8080.toInt())
                 "crate" -> { Audio.play("crate", near(x, y)); burst(x, y, 18, 0xFFB08A50.toInt(), 260f, 5f) }
                 "car_hit" -> { Audio.play("car_hit", near(x, y)); shake(5f, 0.15f); vibrate(40, 150) }
@@ -522,6 +555,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 Native.D_AREA -> drawArea(c, o)
             }
         }
+        drawFx(c)
         drawParticles(c)
         drawTracers(c)
         drawLighting(c)
@@ -646,8 +680,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         if (who <= -3f) sy -= 235f * scale  // kule platformu (4.6 m × cos35°)
         val f = frameOf(atlas.heroAnims, anim, t)
+        val wIdx = drawBuf[o + 10].toInt() % 16
         var key = spriteKey(prefix, anim, dir, f)
-        var sp = atlas[key]
+        // elde gerçek silahla render edilmiş kare varsa onu kullan
+        val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else null
+        var weaponBaked = false
+        var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
+        if (sp == null) sp = atlas[key]
         if (sp == null) { key = spriteKey(prefix, "idle", dir, 0); sp = atlas[key] }
         if (sp == null) { placeholder(c, sx, sy, 0xFF4A7AB0.toInt()); return }
         val paint = when {
@@ -675,15 +714,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         atlas.draw(c, sp, sx, sy, scale, paint)
         if (isHero) {
-            if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }
-            if (jacket.isNotEmpty()) gear("jacket_$jacket", "chest")
+            if (sp.k == 1f) { // eski (düşük yoğunluklu) karakterlerde ceket/bot katmanı
+                if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }
+                if (jacket.isNotEmpty()) gear("jacket_$jacket", "chest")
+            }
             if (helmet.isNotEmpty()) gear("helm_$helmet", "head")
             if (back) {
                 if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
                 if (cloak) gear("cloak", "neck")
             }
             // silah: gövde ile kollar arasında
-            if (weapon > 0) {
+            if (weapon > 0 && !weaponBaked) {
                 val p = att("rhand")
                 val ws = atlas["w/" + weaponSprites.getOrElse(weapon) { "" } + "/" + dir]
                 if (p != null && ws != null) {
@@ -698,11 +739,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         when {
             who == -1f -> {
                 if (localName.isNotEmpty()) plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, null)
-                if (hud[Native.SHIELD] > 0) {
-                    stroke.color = 0x9070C8FF.toInt(); stroke.strokeWidth = 3 * density
-                    c.drawOval(sx - 34 * scale * 1.4f, sy - 120 * scale, sx + 34 * scale * 1.4f, sy + 14 * scale, stroke)
-                    fill.color = 0x2070C8FF; c.drawOval(sx - 34 * scale * 1.4f, sy - 120 * scale, sx + 34 * scale * 1.4f, sy + 14 * scale, fill)
-                }
+                if (hud[Native.SHIELD] > 0) drawFxSprite(c, "shield", x, y - 62, 175f, time)
                 if (Settings.current.particles && hud[Native.POISON] > 0 && Math.random() < 0.2)
                     particles += Particle(x, y, 60f, 0f, 0f, 40f, 0.8f, 0.8f, 0xFF9AFF40.toInt(), 4f, 3)
             }
@@ -837,8 +874,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (hs != null) atlas.draw(c, hs, sx, sy - (if (kind == 0) 18f else 22f) * scale, scale, bmpPaint)
         }
         if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
-        if (driver >= 0 && kind >= 1 && speed > 40 && Settings.current.particles && Math.random() < 0.5)
-            particles += Particle(x - sin(dir * PI.toFloat() / 4) * 60, y - cos(dir * PI.toFloat() / 4) * 40, 20f, 0f, 0f, 30f, 0.6f, 0.6f, 0x80A09A90.toInt(), 7f, 1)
+        if (driver >= 0 && speed > 30) {
+            val bx = -sin(dir * PI.toFloat() / 4); val by = -cos(dir * PI.toFloat() / 4)
+            val back = if (kind >= 2) 120f else 55f
+            if (kind >= 1 && Math.random() < 0.35) fx("exhaust", x + bx * back, y + by * back * 0.7f - 15, 55f + speed * 0.06f)
+            if (speed > 160 && Math.random() < 0.45) {
+                val side = if (Math.random() < 0.5) -1 else 1
+                fx("dust", x + bx * back * 0.8f + by * side * 30, y + by * back * 0.55f - bx * side * 20, 70f + speed * 0.1f)
+            }
+        }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
             lightSources += floatArrayOf(x + sin(dir * PI.toFloat() / 4) * 160, y + cos(dir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
     }
@@ -880,6 +924,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (Settings.current.particles && Math.random() < 0.15) particles += Particle(x + (Math.random().toFloat() - 0.5f) * r / scale, y + (Math.random().toFloat() - 0.5f) * r / scale * 0.5f, 0f, 0f, 0f, 30f, 0.8f, 0.8f, 0xFFB0FF60.toInt(), 3f, 3)
             }
             1 -> { // zehir bulutu
+                drawFxSprite(c, "toxic", x, y - 30, drawBuf[o + 7] * 2.4f, age, alpha = (200 * fade).toInt())
                 for (k in 0..4) {
                     val a = age * 0.6f + k * 1.3f
                     val cx = sx + cos(a) * r * 0.35f; val cy = sy - 40 * scale + sin(a * 1.3f) * r * 0.2f
@@ -889,6 +934,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 fill.shader = null
             }
             2 -> { // şifa alanı
+                drawFxSprite(c, "heal", x, y - drawBuf[o + 7] * 0.6f, drawBuf[o + 7] * 2.2f, age, alpha = (230 * fade).toInt())
                 stroke.color = alphaC(0xFF60FF90.toInt(), 0.8f * fade); stroke.strokeWidth = 3 * density
                 c.save(); c.scale(1f, 0.55f, sx, sy)
                 c.drawCircle(sx, sy, r, stroke)
@@ -918,6 +964,62 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     private fun alphaC(c: Int, a: Float): Int = (c and 0x00FFFFFF) or ((a.coerceIn(0f, 1f) * ((c ushr 24) and 255)).toInt() shl 24)
+
+    // ------------------------------------------------------------------ sprite efektleri
+    private class Fx(val name: String, var x: Float, var y: Float, val size: Float, val rot: Float, val follow: Boolean, val dur: Float, val frame: Int) {
+        var t = 0f
+    }
+    private val fxs = ArrayList<Fx>()
+    private val addPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD) }
+
+    private fun fx(name: String, x: Float, y: Float, size: Float, rot: Float = 0f, follow: Boolean = false, dur: Float = -1f, frame: Int = -1) {
+        if (!Settings.current.particles && name in setOf("dust", "exhaust", "blood", "spark")) return
+        if (fxs.size > 120) fxs.removeAt(0)
+        fxs += Fx(name, x, y, size, rot, follow, dur, frame)
+    }
+
+    private fun updateFx(dt: Float) {
+        val it = fxs.iterator()
+        while (it.hasNext()) {
+            val f = it.next()
+            f.t += dt
+            val m = atlas.fx[f.name]
+            val done = when {
+                m == null -> true
+                f.dur > 0 -> f.t > f.dur
+                m[2] > 0f -> false
+                else -> f.t * m[1] >= m[0]
+            }
+            if (done) it.remove()
+        }
+    }
+
+    /** Döngüsel/tek seferlik efekti dünya konumunda çizer (size: dünya pikseli çap). */
+    private fun drawFxSprite(c: Canvas, name: String, wxp: Float, wyp: Float, size: Float, t: Float, rot: Float = 0f, alpha: Int = 255, fixedFrame: Int = -1) {
+        val m = atlas.fx[name] ?: return
+        val frames = m[0].toInt()
+        val fr = if (fixedFrame >= 0) fixedFrame.coerceAtMost(frames - 1) else {
+            val f = (t * m[1]).toInt()
+            if (m[2] > 0f) f.mod(frames) else f.coerceAtMost(frames - 1)
+        }
+        val sp = atlas["fx/$name/$fr"] ?: return
+        val paint = if (m[3] > 0f) addPaint else alphaPaint
+        paint.alpha = alpha
+        val sx = wx(wxp); val sy = wy(wyp)
+        val k = size * scale / sp.w
+        if (rot != 0f) { c.save(); c.rotate(rot, sx, sy) }
+        atlas.draw(c, sp, sx, sy, k, paint)
+        if (rot != 0f) c.restore()
+        paint.alpha = 255
+    }
+
+    private fun drawFx(c: Canvas) {
+        for (f in fxs) {
+            if (f.follow) { f.x = hud[Native.PX]; f.y = hud[Native.PY] - 60 }
+            val fade = if (f.dur > 0) ((f.dur - f.t) / 0.4f).coerceIn(0f, 1f) else 1f
+            drawFxSprite(c, f.name, f.x, f.y, f.size, f.t, f.rot, (255 * fade).toInt(), f.frame)
+        }
+    }
 
     private fun drawParticles(c: Canvas) {
         for (p in particles) {
@@ -1195,6 +1297,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // hızlı tuşlar
         btnVehicle.visible = hud[Native.NEAR_VEHICLE] > 0 || hud[Native.IN_VEHICLE] > 0
         btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0
+        nearCache = Online.nearest(220f)
+        val nr = nearCache
+        btnTrade.visible = nr != null && nr.dist < 170f && hud[Native.IN_VEHICLE] < 0.5f && rideUid == null
+        btnRide.visible = rideUid != null || (nr != null && nr.vehicle >= 2 && hud[Native.IN_VEHICLE] < 0.5f)
         btnReload.visible = hud[Native.AMMO] >= 0
         val cd = hud[Native.ABILITY_CD]
         roundBtn(c, btnAbility, "ability", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF7A4AE0.toInt(), cd > 0)
@@ -1203,6 +1309,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         roundBtn(c, btnWeapon, "weapon", wlabel, 0xFF3A6AA0.toInt(), false)
         if (btnReload.visible) roundBtn(c, btnReload, "reload", null, 0xFF3A4A5A.toInt(), hud[Native.RELOADING] > 0)
         if (btnVehicle.visible) roundBtn(c, btnVehicle, if (hud[Native.IN_VEHICLE] > 0) "exit" else "car", null, 0xFF2E8A5A.toInt(), false)
+        if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
+        if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", null, 0xFF8A5AC0.toInt(), false)
         if (btnInteract.visible) roundBtn(c, btnInteract, if (hud[Native.NEAR_MERCHANT] > 0) "shop" else "craft", null, 0xFFC08A20.toInt(), false)
         for (b in listOf(btnMenu, btnChat, btnBag, btnMap)) roundBtn(c, b, b.id, null, 0xFF1E2A3C.toInt(), false, small = true)
     }
@@ -1280,6 +1388,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "chat" -> {
                 rect.set(cx - s * 0.8f, cy - s * 0.6f, cx + s * 0.8f, cy + s * 0.4f); c.drawRoundRect(rect, s * 0.3f, s * 0.3f, fill)
                 path.moveTo(cx - s * 0.4f, cy + s * 0.3f); path.lineTo(cx - s * 0.55f, cy + s * 0.8f); path.lineTo(cx, cy + s * 0.35f); path.close(); c.drawPath(path, fill)
+            }
+            "trade" -> {
+                c.drawLine(cx - s * 0.7f, cy - s * 0.3f, cx + s * 0.7f, cy - s * 0.3f, stroke)
+                c.drawLine(cx + s * 0.4f, cy - s * 0.6f, cx + s * 0.7f, cy - s * 0.3f, stroke)
+                c.drawLine(cx - s * 0.7f, cy + s * 0.3f, cx + s * 0.7f, cy + s * 0.3f, stroke)
+                c.drawLine(cx - s * 0.4f, cy + s * 0.6f, cx - s * 0.7f, cy + s * 0.3f, stroke)
             }
             "menu" -> for (k in -1..1) c.drawLine(cx - s * 0.6f, cy + k * s * 0.4f, cx + s * 0.6f, cy + k * s * 0.4f, stroke)
             "map" -> {
@@ -1363,6 +1477,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "reload" -> GameSession.cmd("reload")
             "vehicle" -> { val r = GameSession.cmd("vehicle"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
             "interact" -> ui.onOpen(if (hud[Native.NEAR_MERCHANT] > 0) "merchant" else "craft")
+            "trade" -> nearCache?.let { Online.requestTrade(it.uid); ui.onOpen("trade") }
+            "ride" -> {
+                if (rideUid != null) {
+                    rideUid = null
+                    GameSession.cmd("ride", "on" to false, "x" to hud[Native.PX], "y" to hud[Native.PY])
+                    ui.onToast("Araçtan indin")
+                } else nearCache?.let { n -> rideUid = n.uid; ui.onToast("${n.name} ile yolculuk") }
+            }
             else -> ui.onOpen(b.id)
         }
     }

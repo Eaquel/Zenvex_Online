@@ -40,7 +40,7 @@ import com.zenvex.online.game.GameView
 import com.zenvex.online.game.Native
 import com.zenvex.online.game.Online
 
-private enum class Overlay { None, Pause, Settings, Bag, Craft, Merchant, Chat, Map, Dead }
+private enum class Overlay { None, Pause, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade }
 
 @Composable
 fun GameScreen(toLobby: () -> Unit) {
@@ -54,7 +54,7 @@ fun GameScreen(toLobby: () -> Unit) {
                 v.post {
                     overlay = when (panel) {
                         "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
-                        "chat" -> Overlay.Chat; "map" -> Overlay.Map; else -> Overlay.Pause
+                        "chat" -> Overlay.Chat; "map" -> Overlay.Map; "trade" -> Overlay.Trade; else -> Overlay.Pause
                     }
                 }
             }
@@ -97,6 +97,7 @@ fun GameScreen(toLobby: () -> Unit) {
                 ChatPanel(Modifier.width(460.dp).fillMaxHeight().align(Alignment.CenterStart), close)
             }
             Overlay.Map -> Dim(close) { WorldMap(close) }
+            Overlay.Trade -> TradeScreen(close)
             Overlay.Dead -> Dim {
                 Panel(Modifier.width(360.dp), Pal.Red) {
                     T("ÖLDÜN", 40.sp, Pal.Red, display = true, glow = Pal.Red.copy(alpha = 0.6f), modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -115,6 +116,19 @@ fun GameScreen(toLobby: () -> Unit) {
                 }
             }
             Overlay.None -> {}
+        }
+        // gelen takas isteği
+        Online.tradeRequest.value?.let { (_, n) ->
+            Box(Modifier.align(Alignment.TopCenter).padding(top = 90.dp)) {
+                Panel(Modifier.width(340.dp), Pal.Blue) {
+                    T("$n seninle takas yapmak istiyor", 15.sp, bold = true)
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GButton("Reddet", Modifier.weight(1f), Tone.Dark, height = 40.dp) { Online.declineTrade() }
+                        GButton("Kabul", Modifier.weight(1f), Tone.Green, height = 40.dp) { Online.acceptTrade(); overlay = Overlay.Trade }
+                    }
+                }
+            }
         }
     }
 }

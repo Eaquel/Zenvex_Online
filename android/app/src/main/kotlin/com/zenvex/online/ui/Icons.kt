@@ -209,6 +209,10 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawPath(path(0.1f, 0.78f, 0.5f, 0.46f, 0.9f, 0.78f), c, style = thin)
             drawArc(c, 180f, 270f, false, p(0.4f, 0.14f), Size(w * 0.2f, w * 0.22f), style = thin)
         }
+        "trade" -> {
+            drawPath(path(0.15f, 0.38f, 0.85f, 0.38f, 0.66f, 0.2f, close = false), c, style = st)
+            drawPath(path(0.85f, 0.62f, 0.15f, 0.62f, 0.34f, 0.8f, close = false), c, style = st)
+        }
         "dev" -> {
             drawPath(path(0.34f, 0.26f, 0.12f, 0.5f, 0.34f, 0.74f, close = false), c, style = st)
             drawPath(path(0.66f, 0.26f, 0.88f, 0.5f, 0.66f, 0.74f, close = false), c, style = st)

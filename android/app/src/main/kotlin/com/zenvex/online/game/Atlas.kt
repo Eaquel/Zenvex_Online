@@ -10,7 +10,7 @@ import android.graphics.RectF
 import org.json.JSONObject
 
 /** Atlas içindeki bir görsel. ax/ay: çapa (ayak noktası) kırpılmış görüntüde. */
-class Sprite(val page: Int, val src: Rect, val ax: Float, val ay: Float) {
+class Sprite(val page: Int, val src: Rect, val ax: Float, val ay: Float, val k: Float = 1f) {
     val w get() = src.width()
     val h get() = src.height()
 }
@@ -31,6 +31,8 @@ class Atlas private constructor(ctx: Context) {
     // Sayfalar GPU belleğinde (HARDWARE) tutulur: Java yığınını doldurmaz, donanım tuvalinde doğrudan çizilir.
     private val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.HARDWARE; inScaled = false }
     private val softOpts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inScaled = false }
+    /** efekt meta: ad → [kare, fps, döngü(1/0), toplamalı(1/0)] */
+    val fx = HashMap<String, FloatArray>()
     val heroAnims = HashMap<String, IntArray>()   // isim → [kare, fps, döngü]
     val zombieAnims = HashMap<String, IntArray>()
 
@@ -48,7 +50,15 @@ class Atlas private constructor(ctx: Context) {
         for (k in s.keys()) {
             val a = s.getJSONArray(k)
             val x = a.getInt(1); val y = a.getInt(2)
-            sprites[k] = Sprite(a.getInt(0), Rect(x, y, x + a.getInt(3), y + a.getInt(4)), a.getDouble(5).toFloat(), a.getDouble(6).toFloat())
+            sprites[k] = Sprite(a.getInt(0), Rect(x, y, x + a.getInt(3), y + a.getInt(4)), a.getDouble(5).toFloat(), a.getDouble(6).toFloat(),
+                if (a.length() > 7) a.getDouble(7).toFloat() else 1f)
+        }
+        manifest.optJSONObject("fx")?.let { f ->
+            for (k in f.keys()) {
+                val m = f.getJSONObject(k)
+                fx[k] = floatArrayOf(m.getInt("frames").toFloat(), m.getDouble("fps").toFloat(), if (m.optBoolean("loop")) 1f else 0f,
+                    if (m.optString("blend") == "add") 1f else 0f)
+            }
         }
         val an = manifest.getJSONObject("anims")
         for ((key, map) in listOf("hero" to heroAnims, "zombie" to zombieAnims)) {
@@ -85,8 +95,9 @@ class Atlas private constructor(ctx: Context) {
     private val dst = RectF()
 
     /** (x, y) ekran noktası çapaya gelecek şekilde çizer. */
-    fun draw(c: Canvas, sp: Sprite, x: Float, y: Float, scale: Float, paint: Paint?, flipX: Boolean = false) {
+    fun draw(c: Canvas, sp: Sprite, x: Float, y: Float, scale0: Float, paint: Paint?, flipX: Boolean = false) {
         val bmp = page(sp.page) ?: return
+        val scale = scale0 * sp.k
         val l = x - sp.ax * scale
         val t = y - sp.ay * scale
         dst.set(l, t, l + sp.w * scale, t + sp.h * scale)

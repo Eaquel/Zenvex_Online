@@ -434,6 +434,21 @@ impl Game {
         stun: bool,
         by_player: bool,
     ) {
+        if self.net == 2 {
+            // istemci: hasarı ev sahibi uygular; burada sadece geri bildirim
+            let z = &mut self.zombies[i];
+            if z.state == ZState::Dead {
+                return;
+            }
+            z.flash_t = 0.1;
+            z.bar_t = 3.0;
+            let (id, zx, zy) = (z.id, z.x, z.y);
+            if by_player {
+                self.events.push(Event::ZHit { id, dmg, kx, ky, stun });
+                self.events.push(Event::Damage { x: zx, y: zy - 120.0, v: dmg.min(99999.0) as i32, crit });
+            }
+            return;
+        }
         let z = &mut self.zombies[i];
         if z.state == ZState::Dead {
             return;
@@ -500,6 +515,17 @@ impl Game {
         if z.decoy {
             return;
         }
+        if self.kill_credit >= 0 {
+            // uzak oyuncu öldürdü: ödül ona gider
+            self.events.push(Event::NetKill { k: self.kill_credit, kind: z.kind as u8, level: z.level, x: z.x, y: z.y });
+            self.events.push(Event::Kill { x: z.x, y: z.y, z: z.kind as u8 });
+            return;
+        }
+        self.kill_rewards(z);
+    }
+
+    /// Öldürme ödülleri (yerel ya da ağdan gelen öldürme için).
+    pub fn kill_rewards(&mut self, z: Zombie) {
         let def = &ZOMBIES[z.kind as usize];
         self.progress.kills += 1;
         self.progress.kills_by[z.kind as usize] += 1;

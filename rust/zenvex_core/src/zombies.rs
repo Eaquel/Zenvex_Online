@@ -11,7 +11,12 @@ impl Game {
     pub fn make_zombie(&mut self, kind: ZKind, level: u32, x: f32, y: f32) -> Zombie {
         let def = &ZOMBIES[kind as usize];
         let hp = def.hp + def.hp_lv * level as f32;
+        let id = self.next_zid;
+        self.next_zid = self.next_zid.wrapping_add(1);
         Zombie {
+            id,
+            snap_x: x,
+            snap_y: y,
             kind,
             level,
             x,
@@ -48,7 +53,20 @@ impl Game {
     }
 
     pub fn update_spawning(&mut self, dt: f32) {
-        let (px, py) = (self.player.x, self.player.y);
+        if self.net == 2 {
+            return; // istemci: zombileri ev sahibi doğurur
+        }
+        // ev sahibi: doğma merkezi rastgele bir oyuncu
+        let (px, py) = if self.net == 1 && !self.remotes.is_empty() {
+            let k = self.rng.below(self.remotes.len() as u32 + 1) as usize;
+            if k == 0 {
+                (self.player.x, self.player.y)
+            } else {
+                (self.remotes[k - 1].x, self.remotes[k - 1].y)
+            }
+        } else {
+            (self.player.x, self.player.y)
+        };
         // uzaktakileri kaldır
         self.zombies
             .retain(|z| z.boss || (z.x - px).hypot(z.y - py) < ACTIVE_R + 600.0);
@@ -145,9 +163,30 @@ impl Game {
     }
 
     pub fn update_zombies(&mut self, dt: f32) {
-        let (px, py, pdead) = (self.player.x, self.player.y, self.player.dead);
-        let in_vehicle = self.player.vehicle.is_some();
-        let p_safe = self.world.zone(px, py).safe();
+        if self.net == 2 {
+            // istemci: ev sahibinin anlık görüntüsüne doğru yumuşak takip
+            let k = 1.0 - (-10.0 * dt).exp();
+            for z in self.zombies.iter_mut() {
+                z.x += (z.snap_x - z.x) * k;
+                z.y += (z.snap_y - z.y) * k;
+                z.anim_t += dt;
+                z.flash_t = (z.flash_t - dt).max(0.0);
+                z.bar_t = (z.bar_t - dt).max(0.0);
+            }
+            return;
+        }
+        let (lpx, lpy, lpdead) = (self.player.x, self.player.y, self.player.dead);
+        let l_in_vehicle = self.player.vehicle.is_some() || self.passenger;
+        let lp_safe = self.world.zone(lpx, lpy).safe();
+        let targets: Vec<(f32, f32, bool, bool, bool, u8, u8)> = if self.net == 1 {
+            self.remotes
+                .iter()
+                .map(|r| (r.x, r.y, false, self.world.zone(r.x, r.y).safe(), r.vehicle >= 0.0, r.dir, r.anim))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let mut remote_hits: Vec<(usize, f32, bool)> = Vec::new();
         let mut player_damage = 0.0f32;
         let n = self.zombies.len();
         // birbirini itme
@@ -201,6 +240,29 @@ impl Game {
                     z.ky = 0.0;
                 }
             }
+            // hedef: en yakın oyuncu (ev sahibinde uzak oyuncular dahil)
+            let mut ti: i32 = -1;
+            let (mut px, mut py, mut pdead, mut p_safe, mut in_vehicle) = (lpx, lpy, lpdead, lp_safe, l_in_vehicle);
+            let mut tdir = self.player.dir;
+            let mut tanim = self.player.anim;
+            let mut best = if lpdead || lp_safe { f32::MAX } else { (lpx - z.x).hypot(lpy - z.y) };
+            for (k, t) in targets.iter().enumerate() {
+                if t.3 {
+                    continue;
+                }
+                let d = (t.0 - z.x).hypot(t.1 - z.y);
+                if d < best {
+                    best = d;
+                    ti = k as i32;
+                    px = t.0;
+                    py = t.1;
+                    pdead = t.2;
+                    p_safe = t.3;
+                    in_vehicle = t.4;
+                    tdir = t.5;
+                    tanim = t.6;
+                }
+            }
             let (dx, dy) = (px - z.x, py - z.y);
             let dist = dx.hypot(dy);
             // tür efektleri (sürekli)
@@ -235,7 +297,7 @@ impl Game {
             let sees = !pdead
                 && !p_safe
                 && (dist < 300.0
-                    || (dist < 460.0 && (self.player.anim == A_RUN || self.player.atk_cd > 0.0))
+                    || (dist < 460.0 && (tanim == A_RUN || (ti < 0 && self.player.atk_cd > 0.0)))
                     || z.boss && dist < 900.0);
             match z.state {
                 ZState::Dead => {
@@ -331,7 +393,7 @@ impl Game {
                     {
                         // ışınlan: oyuncunun arkasına
                         z.special_cd = self.rng.range(5.0, 8.0);
-                        let (bx, by) = dir_vec(self.player.dir);
+                        let (bx, by) = dir_vec(tdir);
                         let nx = px - bx * 70.0;
                         let ny = py - by * 70.0;
                         self.events.push(Event::Teleport { x: z.x, y: z.y });
@@ -393,17 +455,26 @@ impl Game {
                             }
                             ZKind::Titan => {
                                 if dist < def.radius + 110.0 {
-                                    player_damage += lvl_dmg;
+                                    if ti < 0 {
+                                        player_damage += lvl_dmg;
+                                    } else {
+                                        remote_hits.push((ti as usize, lvl_dmg, false));
+                                    }
                                 }
                             }
                             _ => {
                                 if dist < def.radius + 40.0 && facing > 0.2 && !in_vehicle {
-                                    player_damage += lvl_dmg;
+                                    let poison = z.kind == ZKind::Toxic;
+                                    if ti < 0 {
+                                        player_damage += lvl_dmg;
+                                        if poison {
+                                            self.player.poison_t = self.player.poison_t.max(4.0);
+                                        }
+                                    } else {
+                                        remote_hits.push((ti as usize, lvl_dmg, poison));
+                                    }
                                     if z.kind == ZKind::Dark {
                                         z.hp = (z.hp + lvl_dmg * 0.5).min(z.max_hp);
-                                    }
-                                    if z.kind == ZKind::Toxic {
-                                        self.player.poison_t = self.player.poison_t.max(4.0);
                                     }
                                 }
                             }
@@ -458,6 +529,11 @@ impl Game {
                 hit_done: true,
             });
             self.events.push(Event::Slam { x, y, r });
+            for (k, t) in targets.iter().enumerate() {
+                if (t.0 - x).hypot(t.1 - y) < r {
+                    remote_hits.push((k, d, false));
+                }
+            }
             if (self.player.x - x).hypot(self.player.y - y) < r {
                 player_damage += d;
                 let (dx, dy) = (self.player.x - x, self.player.y - y);
@@ -484,6 +560,9 @@ impl Game {
         }
         if player_damage > 0.0 {
             self.damage_player(player_damage);
+        }
+        for (i, v, poison) in remote_hits {
+            self.events.push(Event::RemoteDamage { i, v: v.round() as i32, poison });
         }
     }
 
