@@ -1,4 +1,4 @@
-package online.zenvex.ui
+package com.zenvex.online.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,9 +39,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import online.zenvex.BuildConfig
-import online.zenvex.game.Online
-import online.zenvex.game.Settings
+import com.zenvex.online.BuildConfig
+import com.zenvex.online.game.Online
+import com.zenvex.online.game.Settings
 import kotlin.math.roundToInt
 
 @Composable

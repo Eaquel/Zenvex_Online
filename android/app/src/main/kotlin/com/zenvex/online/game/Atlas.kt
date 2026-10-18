@@ -1,4 +1,4 @@
-package online.zenvex.game
+package com.zenvex.online.game
 
 import android.content.Context
 import android.graphics.Bitmap

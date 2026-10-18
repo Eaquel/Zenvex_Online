@@ -1,4 +1,4 @@
-package online.zenvex.game
+package com.zenvex.online.game
 
 /** Rust çekirdeği (rust/zenvex_jni). Tüm çağrılar GameSession.lock altında yapılmalı. */
 object Native {

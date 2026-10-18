@@ -1,4 +1,4 @@
-package online.zenvex.game
+package com.zenvex.online.game
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -25,7 +25,7 @@ import android.view.MotionEvent
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.core.content.res.ResourcesCompat
-import online.zenvex.R
+import com.zenvex.online.R
 import org.json.JSONArray
 import kotlin.math.PI
 import kotlin.math.abs

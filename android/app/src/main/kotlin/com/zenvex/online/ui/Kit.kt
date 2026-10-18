@@ -1,4 +1,4 @@
-package online.zenvex.ui
+package com.zenvex.online.ui
 
 import android.graphics.Bitmap
 import androidx.compose.animation.core.animateFloatAsState
@@ -63,9 +63,9 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import online.zenvex.R
-import online.zenvex.game.Atlas
-import online.zenvex.game.Audio
+import com.zenvex.online.R
+import com.zenvex.online.game.Atlas
+import com.zenvex.online.game.Audio
 
 // =========================================================================== tema
 object Pal {

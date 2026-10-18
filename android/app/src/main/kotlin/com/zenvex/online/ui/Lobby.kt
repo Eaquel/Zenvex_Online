@@ -1,4 +1,4 @@
-package online.zenvex.ui
+package com.zenvex.online.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
@@ -59,9 +59,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import online.zenvex.BuildConfig
-import online.zenvex.game.GameSession
-import online.zenvex.game.Online
+import com.zenvex.online.BuildConfig
+import com.zenvex.online.game.GameSession
+import com.zenvex.online.game.Online
 import org.json.JSONObject
 import kotlin.math.PI
 import kotlin.math.cos
@@ -311,7 +311,7 @@ private fun PassCard(prof: JSONObject, t: Float, onClick: () -> Unit) {
 private fun DockItem(icon: String, label: String, badge: Int = 0, onClick: () -> Unit) {
     Box {
         Column(
-            Modifier.clip(RoundedCornerShape(14.dp)).clickable { online.zenvex.game.Audio.play("click", bus = online.zenvex.game.Audio.Bus.Ui); onClick() }
+            Modifier.clip(RoundedCornerShape(14.dp)).clickable { com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); onClick() }
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {

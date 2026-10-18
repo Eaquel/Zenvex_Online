@@ -7,7 +7,7 @@ Oyun Firebase ayarı olmadan da tam çalışır (çevrimdışı). Ayarlar ekleni
 2. Sol menü **Build → Authentication → Get started → Sign-in method → Anonymous → Enable**.
 3. **Build → Realtime Database → Create database** → konum: `europe-west1` → **Locked mode**.
 4. **Rules** sekmesine bu depodaki `firebase/database.rules.json` içeriğini yapıştır → **Publish**.
-5. **Proje ayarları (⚙) → Genel → Uygulamalarınız → Android simgesi**: paket adı `online.zenvex` → Kaydet (google-services.json indirmen GEREKMEZ).
+5. **Proje ayarları (⚙) → Genel → Uygulamalarınız → Android simgesi**: paket adı `com.zenvex.online` → Kaydet (google-services.json indirmen GEREKMEZ).
 
 ## 2. Değerleri GitHub'a gizli anahtar olarak ekle
 GitHub'da depo → **Settings → Secrets and variables → Actions → New repository secret**:

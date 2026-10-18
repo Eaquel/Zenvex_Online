@@ -1,4 +1,4 @@
-package online.zenvex.ui
+package com.zenvex.online.ui
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -52,9 +52,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
-import online.zenvex.game.Atlas
-import online.zenvex.game.GameSession
-import online.zenvex.game.Online
+import com.zenvex.online.game.Atlas
+import com.zenvex.online.game.GameSession
+import com.zenvex.online.game.Online
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -461,11 +461,11 @@ fun CraftScreen(back: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         GButton("ÜRET", Modifier.weight(1f), if (r.optBoolean("can")) Tone.Green else Tone.Dark, icon = "craft") {
                             val res = GameSession.cmd("craft", "i" to sel, "n" to 1); Toaster.show(res.msg, res.ok); tick++
-                            if (res.ok) online.zenvex.game.Audio.play("craft")
+                            if (res.ok) com.zenvex.online.game.Audio.play("craft")
                         }
                         GButton("×5", Modifier.width(80.dp), if (r.optBoolean("can")) Tone.Blue else Tone.Dark) {
                             val res = GameSession.cmd("craft", "i" to sel, "n" to 5); Toaster.show(res.msg, res.ok); tick++
-                            if (res.ok) online.zenvex.game.Audio.play("craft")
+                            if (res.ok) com.zenvex.online.game.Audio.play("craft")
                         }
                     }
                 }
@@ -500,7 +500,7 @@ fun ShopScreen(back: () -> Unit) {
                             if (locked) GButton("Sv ${o.optInt("req")}", Modifier.fillMaxWidth(), Tone.Dark, icon = "lock", height = 34.dp, size = 12.sp) {}
                             else GButton("${o.optInt("price")}", Modifier.fillMaxWidth(), if (o.optBoolean("afford")) Tone.Gold else Tone.Dark, icon = "coin", height = 34.dp, size = 13.sp) {
                                 val r = GameSession.cmd("buy", "i" to o.optInt("i"), "n" to 1); Toaster.show(r.msg, r.ok); tick++
-                                if (r.ok) online.zenvex.game.Audio.play("coin")
+                                if (r.ok) com.zenvex.online.game.Audio.play("coin")
                             }
                         }
                     }

@@ -1,4 +1,4 @@
-package online.zenvex.game
+package com.zenvex.online.game
 
 import android.content.Context
 import android.os.SystemClock
@@ -14,7 +14,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
-import online.zenvex.BuildConfig
+import com.zenvex.online.BuildConfig
 import kotlin.math.hypot
 
 /**

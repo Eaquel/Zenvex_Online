@@ -7,12 +7,12 @@ plugins {
 }
 
 android {
-    namespace = "online.zenvex"
+    namespace = "com.zenvex.online"
     compileSdk = 35
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "online.zenvex"
+        applicationId = "com.zenvex.online"
         minSdk = 26
         targetSdk = 35
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()

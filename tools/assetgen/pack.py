@@ -22,6 +22,8 @@ from PIL import Image, ImageEnhance, ImageFilter
 SRC = sys.argv[1] if len(sys.argv) > 1 else "/home/user/zx_render"
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "..", "..", "android", "app", "src", "main",
                                                          "assets", "v2")
+SRC3 = os.environ.get("ZX_WORK3", "/home/user/zx_render3")
+K3 = 0.0107 / 0.016  # yüksek yoğunluklu aktör renderları → dünya pikseli
 PAGE = 2048
 PAD = 2
 
@@ -70,7 +72,7 @@ class Packer:
         self.groups = {}
         self.sprites = {}
 
-    def pack_group(self, name, items):
+    def pack_group(self, name, items, k=1.0):
         """items: [(anahtar, Image, ax, ay)] — büyükten küçüğe raf yerleşimi."""
         items = sorted(items, key=lambda t: (-t[1].height, -t[1].width))
         page_ids = []
@@ -92,6 +94,8 @@ class Packer:
                 x = y = shelf = 0
             page.paste(im, (x, y))
             self.sprites[key] = [len(self.pages) - 1, int(x), int(y), int(im.width), int(im.height), round(float(ax), 1), round(float(ay), 1)]
+            if k != 1.0:
+                self.sprites[key].append(round(k, 5))
             x += w
             shelf = max(shelf, h)
         self.groups[name] = page_ids
@@ -132,8 +136,8 @@ def jload(p):
         return None
 
 
-def collect_static(dirname, prefix, out, actor=False):
-    d = os.path.join(SRC, dirname)
+def collect_static(dirname, prefix, out, actor=False, root=None):
+    d = os.path.join(root or SRC, dirname)
     if not os.path.isdir(d):
         return
     for f in sorted(os.listdir(d)):
@@ -149,9 +153,9 @@ def collect_static(dirname, prefix, out, actor=False):
 LIFT_PX = 1.0 / 0.016 * 0.8191520  # render_sdf lift=1 m → çapa zeminde; model kökeni bu kadar yukarıda
 
 
-def collect_dirs(dirname, prefix, out, actor=False, lifted=False):
+def collect_dirs(dirname, prefix, out, actor=False, lifted=False, root=None):
     """dirname/<isim>/<yön>.png + .json  (lifted: ekipman/silah — çapa model kökenine taşınır)"""
-    d = os.path.join(SRC, dirname)
+    d = os.path.join(root or SRC, dirname)
     if not os.path.isdir(d):
         return
     for name in sorted(os.listdir(d)):
@@ -169,8 +173,9 @@ def collect_dirs(dirname, prefix, out, actor=False, lifted=False):
                 out.append((f"{prefix}/{name}/{k}", im, ax, ay))
 
 
-def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_anchor=None, arms=False, scale=1.0):
-    d = os.path.join(SRC, group_dir, kind)
+def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_anchor=None, arms=False, scale=1.0, root=None, k=1.0):
+    d = os.path.join(root or SRC, group_dir, kind)
+    files = set(os.listdir(d)) if os.path.isdir(d) else set()
     if not os.path.isdir(d):
         return 0
     att = jload(os.path.join(d, "attach.json")) or {}
@@ -189,67 +194,101 @@ def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_ancho
                 im, ax, ay = load(p, a, True, scale)
                 items.append((f"{prefix}/{key}", im, ax, ay))
                 n += 1
+                # silahlı varyantlar: <key>@<silah>.png
+                for fn in files:
+                    if fn.startswith(key + "@") and fn.endswith(".png"):
+                        imw, axw, ayw = load(os.path.join(d, fn), a, True, scale)
+                        items.append((f"{prefix}/{fn[:-4]}", imw, axw, ayw))
                 if arms and os.path.exists(os.path.join(d, key + "_arms.png")):
                     im2, ax2, ay2 = load(os.path.join(d, key + "_arms.png"), a, False, scale)
                     items.append((f"{prefix}/{key}_a", im2, ax2, ay2))
                 if key in att:
-                    rel[key] = {k: [round(float(v[0] - a[0]) * scale, 1), round(float(v[1] - a[1]) * scale, 1)]
-                                for k, v in att[key].items() if k != "anchor"}
+                    rel[key] = {kk: [round(float(v[0] - a[0]) * scale * k, 1), round(float(v[1] - a[1]) * scale * k, 1)]
+                                for kk, v in att[key].items() if kk != "anchor"}
     if rel:
         attach_out[prefix] = rel
     return n
 
 
+def has3(*p):
+    return os.path.isdir(os.path.join(SRC3, *p))
+
+
 def main():
     P = Packer()
     attach = {}
-    # dünya: doğa + binalar + eşyalar + ekipman + silahlar + araçlar
+    fxmeta = {}
     world = []
     collect_static("nature", "s", world)
     collect_static("buildings", "s", world)
     P.pack_group("world", world)
     print("world", len(world))
+    # eşya simgeleri: yeni (yüksek çözünürlük) varsa onu kullan
     items = []
-    collect_static("items", "i", items)
+    collect_static("items", "i", items, root=SRC3 if has3("items") else SRC)
     P.pack_group("items", items)
     gear = []
-    collect_dirs("equip", "e", gear, lifted=True)
-    collect_dirs("weapons", "w", gear, lifted=True)
-    P.pack_group("gear", gear)
+    if has3("equip"):
+        collect_dirs("equip", "e", gear, root=SRC3)
+        collect_dirs("weapons", "w", gear, root=SRC3)
+        P.pack_group("gear", gear, K3)
+    else:
+        collect_dirs("equip", "e", gear, lifted=True)
+        collect_dirs("weapons", "w", gear, lifted=True)
+        P.pack_group("gear", gear)
     veh = []
     collect_dirs("vehicles", "v", veh, actor=True)
     P.pack_group("vehicles", veh)
+    r3 = SRC3 if has3("npcs") else None
+    kk = K3 if r3 else 1.0
     npc = []
-    collect_actor("npcs", "soldier", "n/soldier", {"rifle_idle": (2, 3, 1)}, attach, npc)
-    collect_actor("npcs", "merchant", "n/merchant", {"idle": (6, 5, 1)}, attach, npc)
-    P.pack_group("npcs", npc)
+    collect_actor("npcs", "soldier", "n/soldier", {"rifle_idle": (2, 3, 1)}, attach, npc, root=r3, k=kk)
+    collect_actor("npcs", "merchant", "n/merchant", {"idle": (6, 5, 1)}, attach, npc, root=r3, k=kk)
+    P.pack_group("npcs", npc, kk)
     for h in HEROES:
         it = []
-        n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=True)
+        r3 = SRC3 if has3("heroes", h) else None
+        kk = K3 if r3 else 1.0
+        n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
         if it:
-            P.pack_group(f"hero_{h}", it)
+            P.pack_group(f"hero_{h}", it, kk)
         print("hero", h, n)
         lob = []
-        d = os.path.join(SRC, "lobby", h)
+        d = os.path.join(SRC3 if has3("lobby", h) else SRC, "lobby", h)
         if os.path.isdir(d):
+            anc = (180, 400) if d.startswith(SRC3) else (180, 392)
             for f in sorted(os.listdir(d)):
                 if f.endswith(".png"):
-                    im, ax, ay = load(os.path.join(d, f), (180, 392), True)
+                    im, ax, ay = load(os.path.join(d, f), anc, True)
                     lob.append((f"l/{h}/{f[:-4]}", im, ax, ay))
         if lob:
             P.pack_group(f"lobby_{h}", lob)
     for z in ZOMBIES:
         it = []
-        fixed = (100, 136) if z == "dog" else None
-        n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed)
+        r3 = SRC3 if has3("zombies", z) else None
+        kk = K3 if r3 else 1.0
+        fixed = (100, 136) if z == "dog" and r3 is None else None
+        n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed, root=r3, k=kk)
         if it:
-            P.pack_group(f"zombie_{z}", it)
+            P.pack_group(f"zombie_{z}", it, kk)
         print("zombie", z, n)
+    # efektler
+    fx = []
+    fd = os.path.join(SRC3, "fx")
+    if os.path.isdir(fd):
+        for name in sorted(os.listdir(fd)):
+            meta = jload(os.path.join(fd, name, "meta.json"))
+            if not meta:
+                continue
+            fxmeta[name] = meta
+            for i in range(meta["frames"]):
+                im = Image.open(os.path.join(fd, name, f"{i}.png")).convert("RGBA")
+                fx.append((f"fx/{name}/{i}", im, im.width / 2, im.height / 2))
+        P.pack_group("fx", fx)
     pages = P.save(OUT)
-    manifest = {"pages": pages, "groups": P.groups, "sprites": P.sprites, "attach": attach,
+    manifest = {"pages": pages, "groups": P.groups, "sprites": P.sprites, "attach": attach, "fx": fxmeta,
                 "anims": {"hero": HERO_ANIMS, "zombie": ZOMBIE_ANIMS}}
     json.dump(manifest, open(os.path.join(OUT, "manifest.json"), "w"), separators=(",", ":"))
-    # zemin dokuları
     gdir = os.path.join(SRC, "ground")
     if os.path.isdir(gdir):
         gout = os.path.join(OUT, "ground")

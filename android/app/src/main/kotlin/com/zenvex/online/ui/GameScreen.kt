@@ -1,4 +1,4 @@
-package online.zenvex.ui
+package com.zenvex.online.ui
 
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
@@ -34,11 +34,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import online.zenvex.game.GameSession
-import online.zenvex.game.GameUi
-import online.zenvex.game.GameView
-import online.zenvex.game.Native
-import online.zenvex.game.Online
+import com.zenvex.online.game.GameSession
+import com.zenvex.online.game.GameUi
+import com.zenvex.online.game.GameView
+import com.zenvex.online.game.Native
+import com.zenvex.online.game.Online
 
 private enum class Overlay { None, Pause, Settings, Bag, Craft, Merchant, Chat, Map, Dead }
 

@@ -1,4 +1,4 @@
-package online.zenvex
+package com.zenvex.online
 
 import android.os.Bundle
 import android.view.WindowManager
@@ -23,29 +23,29 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import online.zenvex.game.Audio
-import online.zenvex.game.GameSession
-import online.zenvex.game.Settings
-import online.zenvex.ui.CharacterScreen
-import online.zenvex.ui.ChatScreen
-import online.zenvex.ui.CosmeticsScreen
-import online.zenvex.ui.CraftScreen
-import online.zenvex.ui.GameScreen
-import online.zenvex.ui.InventoryScreen
-import online.zenvex.ui.LoadingScreen
-import online.zenvex.ui.LobbyScreen
-import online.zenvex.ui.Pal
-import online.zenvex.ui.PassScreen
-import online.zenvex.ui.ProfileScreen
-import online.zenvex.ui.QuestsScreen
-import online.zenvex.ui.Screen
-import online.zenvex.ui.SettingsScreen
-import online.zenvex.ui.ShopScreen
-import online.zenvex.ui.SkillsScreen
-import online.zenvex.ui.SplashScreen
-import online.zenvex.ui.TitleScreen
-import online.zenvex.ui.ToastHost
-import online.zenvex.ui.Toaster
+import com.zenvex.online.game.Audio
+import com.zenvex.online.game.GameSession
+import com.zenvex.online.game.Settings
+import com.zenvex.online.ui.CharacterScreen
+import com.zenvex.online.ui.ChatScreen
+import com.zenvex.online.ui.CosmeticsScreen
+import com.zenvex.online.ui.CraftScreen
+import com.zenvex.online.ui.GameScreen
+import com.zenvex.online.ui.InventoryScreen
+import com.zenvex.online.ui.LoadingScreen
+import com.zenvex.online.ui.LobbyScreen
+import com.zenvex.online.ui.Pal
+import com.zenvex.online.ui.PassScreen
+import com.zenvex.online.ui.ProfileScreen
+import com.zenvex.online.ui.QuestsScreen
+import com.zenvex.online.ui.Screen
+import com.zenvex.online.ui.SettingsScreen
+import com.zenvex.online.ui.ShopScreen
+import com.zenvex.online.ui.SkillsScreen
+import com.zenvex.online.ui.SplashScreen
+import com.zenvex.online.ui.TitleScreen
+import com.zenvex.online.ui.ToastHost
+import com.zenvex.online.ui.Toaster
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
         Audio.init(this)
 
         setContent {
-            // Kısayol: adb shell am start -n online.zenvex/.MainActivity --es screen Game
+            // Kısayol: adb shell am start -n com.zenvex.online/.MainActivity --es screen Game
             val start = intent?.getStringExtra("screen")?.let { n -> Screen.entries.firstOrNull { it.name == n } } ?: Screen.Splash
             var screen by remember { mutableStateOf(start) }
             var settingsFrom by remember { mutableStateOf(Screen.Lobby) }

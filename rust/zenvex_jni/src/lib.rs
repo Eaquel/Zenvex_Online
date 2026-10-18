@@ -1,4 +1,4 @@
-//! Kotlin `online.zenvex.game.Native` nesnesinin JNI uygulaması.
+//! Kotlin `com.zenvex.online.game.Native` nesnesinin JNI uygulaması.
 //! Oyun nesnesi `Box<Game>` olarak tutulur, Kotlin'e `Long` tutamaç olarak verilir.
 #![allow(non_snake_case)]
 
@@ -40,7 +40,7 @@ fn rstr(env: &mut JNIEnv, s: &JString) -> String {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_create<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_create<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     seed: jlong,
@@ -61,7 +61,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_create<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_destroy<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_destroy<'l>(
     _env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -73,7 +73,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_destroy<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_worldJson<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_worldJson<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -85,7 +85,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_worldJson<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_uiJson<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_uiJson<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -99,7 +99,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_uiJson<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_command<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_command<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -113,7 +113,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_command<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_step<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_step<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -140,7 +140,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_step<'l>(
 
 /// view: [x, y, w, h, bitki_yoğunluğu]
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_drawList<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_drawList<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -163,7 +163,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_drawList<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_hud<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_hud<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -176,7 +176,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_hud<'l>(
 
 /// Radar kayıtları (x, y, tür) üçlüleri; dönen değer kayıt sayısı.
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_radar<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_radar<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -191,7 +191,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_radar<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_events<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_events<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -203,7 +203,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_events<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_saveJson<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_saveJson<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -216,7 +216,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_saveJson<'l>(
 
 /// Zemin dokuları: `size`x`size` ARGB, world::ground sırasıyla art arda.
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_setTextures<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_setTextures<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -240,7 +240,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_setTextures<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_renderChunk<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_renderChunk<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -267,7 +267,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_renderChunk<'l>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_minimap<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_minimap<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -284,7 +284,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_minimap<'l>(
 
 /// Uzak oyuncular: REMOTE_STRIDE'lık kayıtlar.
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_setRemotes<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_setRemotes<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
@@ -314,7 +314,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_setRemotes<'l>(
 
 /// Yerel oyuncu durumu (çevrimiçi yayın için), LOCAL_STRIDE uzunluğunda.
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_localState<'l>(
+pub extern "system" fn Java_com_zenvex_online_game_Native_localState<'l>(
     env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
