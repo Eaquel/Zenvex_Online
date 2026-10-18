@@ -74,6 +74,20 @@ hata ayıklama. İleride gerekirse çizim Rust'a (wgpu) taşınabilir; oyun kura
   devrilmesi, 3 zombi homurtusu (uzaklığa göre kısılır), zombi saldırısı/ölümü, hasar alma, seviye atlama,
   ölüm, tuş sesi — ana ses / efekt / arayüz ses ayarlarına bağlı
 
+## 5a. V3 güncellemesi (paket adı: com.zenvex.online)
+- **Karakterler artık gerçekçi:** MakeHuman/MPFB2 (CC0) insan modelleri — gerçek deri dokusu, göz, kaş, saç,
+  dokulu kıyafet ve ayakkabılar. Bizim prosedürel animasyon iskeletimize bağlanıyor (13 animasyon × 8 yön).
+  Zombiler: yeşil/gri deri, kan lekeli yırtık kıyafet, parlayan gözler; Titan dev, zırhlı, boynuzlu.
+- **Silahlar elde gerçek model** (Glock, AK-47, M4, keskin nişancı, RPG, sopa, cop) — her silahlı animasyon ayrı render.
+- **Eşya simgeleri** 50 eşya için gerçek 3D model (mermi kutuları, ilk yardım, benzin bidonu, devre kartı, kask/yelek/bot/çanta setleri...).
+- **Efektler:** namlu alevi, patlama ateş topu + şok dalgası, kıvılcım, kan, Rady kalkan kubbesi, Elif şifa sütunu,
+  Kaan öfke aurası, ışınlanma girdabı, zehir bulutu, seviye atlama ışığı, araç egzozu ve toz.
+- **Tam online (Firebase, ev sahibi modeli):** aynı odadaki oyuncular aynı zombileri görür; bir oyuncunun telefonu
+  zombileri çalıştırır (en küçük kimlikli oyuncu; ayrılırsa sıradaki devralır). Vuruşlar ev sahibine gider, öldürme
+  ödülü vurana verilir, zombi hasarı hedef oyuncuya iletilir. **Takas** (yakındaki oyuncuya Takas tuşu → iki taraf da
+  onaylayınca eşya + altın değişimi) ve **yolculuk** (2/4 kişilik arabası olan oyuncunun aracına yolcu olarak bin).
+- Paket adı değişti → telefondaki eski "Zenvex Online"u silip yenisini kur.
+
 ## 5. V2 durumu (bu sürüm: 0.2.x)
 **Görseller (hepsi kodla, Blender Cycles ile 3D render):** 4 kahraman (13 animasyon × 8 yön, silah için ayrı kol
 katmanı + ek noktaları), 7 zombi türü + zombi köpek (5 animasyon × 8 yön), Titan boss, asker/tüccar NPC'leri,
@@ -108,8 +122,7 @@ Ayar yoksa oyun çevrimdışı çalışır.
 çağırma, ışınlanma, pass, araç...).
 
 ## 6. Henüz yok / sonraki adımlar
-Google Play ödeme (pass, elmas), Google ile giriş, takas (oyuncular arası), çok oyunculu zombi senkronu (şu an her
-oyuncu kendi zombilerini görür; konum + sohbet ortak), oyuncuların arabaya birlikte binmesi, kendi Rust sunucumuz.
+Google Play ödeme (pass, elmas), Google ile giriş, hile korumalı kendi Rust sunucumuz (Firebase modeli güvene dayalı).
 
 ## 7. APK'yı telefona kurma
 1. GitHub'da repo sayfası → **Releases** → **"Zenvex Online — son derleme"**.

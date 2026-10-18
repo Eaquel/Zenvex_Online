@@ -23,6 +23,10 @@ GitHub'da depo → **Settings → Secrets and variables → Actions → New repo
 Herhangi bir push (veya Actions → *Android APK* → **Run workflow**) yeni APK üretir. Lobide **SUNUCU: Çevrimiçi** yazıyorsa hazır.
 
 ## Veri yapısı
+- `/world/dunya1/z` ev sahibinin zombi görüntüsü · `/world/dunya1/hits` vuruşlar · `/world/dunya1/kills/<uid>` ödüller · `/world/dunya1/pdmg/<uid>` hasar
+- `/trade/<a_b>` takas oturumu · `/trade_req/<uid>` takas istekleri
+(Kurallar `firebase/database.rules.json` içinde — kurallar değiştiyse tekrar yapıştırıp Publish et.)
+
 - `/presence/dunya1/<uid>` → `{n: isim, s: [x, y, yön, anim, t, karakter, ekip0, ekip1, ekip2, araç], ts}` (8 Hz, bağlantı kopunca silinir)
 - `/chat/global/<id>`, `/chat/local/<id>` → `{n, m, u, g, ts}` (+ `x, y` yakın sohbette)
 
