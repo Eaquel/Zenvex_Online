@@ -1,0 +1,511 @@
+//! Zombi yapay zekası, türlere özel yetenekler, doğma ve boss.
+use crate::data::{ZKind, ZOMBIES};
+use crate::game::*;
+use crate::world::{self, Zone, TILE};
+use std::f32::consts::TAU;
+
+const ACTIVE_R: f32 = 1700.0;
+const MAX_ACTIVE: usize = 26;
+
+impl Game {
+    pub fn make_zombie(&mut self, kind: ZKind, level: u32, x: f32, y: f32) -> Zombie {
+        let def = &ZOMBIES[kind as usize];
+        let hp = def.hp + def.hp_lv * level as f32;
+        Zombie {
+            kind,
+            level,
+            x,
+            y,
+            dir: self.rng.below(8) as u8,
+            state: ZState::Wander,
+            anim: Z_IDLE,
+            anim_t: self.rng.range(0.0, 1.0),
+            hp,
+            max_hp: hp,
+            tx: x,
+            ty: y,
+            timer: self.rng.range(0.5, 3.0),
+            attack_cd: 0.0,
+            hit_done: false,
+            flash_t: 0.0,
+            bar_t: 0.0,
+            kx: 0.0,
+            ky: 0.0,
+            alpha: 1.0,
+            special_cd: self.rng.range(2.0, 6.0),
+            puddle_t: 0.0,
+            decoy: false,
+            cloned: false,
+            summoned: false,
+            enraged: false,
+            boss: kind == ZKind::Titan,
+        }
+    }
+
+    pub fn spawn_zombie_at(&mut self, kind: ZKind, level: u32, x: f32, y: f32) {
+        let z = self.make_zombie(kind, level, x, y);
+        self.zombies.push(z);
+    }
+
+    pub fn update_spawning(&mut self, dt: f32) {
+        let (px, py) = (self.player.x, self.player.y);
+        // uzaktakileri kaldır
+        self.zombies
+            .retain(|z| z.boss || (z.x - px).hypot(z.y - py) < ACTIVE_R + 600.0);
+        // boss
+        self.boss_t -= dt;
+        let boss_alive = self
+            .zombies
+            .iter()
+            .any(|z| z.boss && z.state != ZState::Dead);
+        let (bx, by) = world::BOSS;
+        if !boss_alive && self.boss_t <= 0.0 && (bx - px).hypot(by - py) < 1600.0 {
+            self.boss_t = 600.0;
+            self.spawn_zombie_at(ZKind::Titan, 50, bx, by);
+            self.events.push(Event::Boss {
+                name: "TİTAN".into(),
+            });
+            self.msg("TİTAN uyandı! Sanayi bölgesinin kuzeydoğusunda.");
+        }
+        self.spawn_t -= dt;
+        if self.spawn_t > 0.0 {
+            return;
+        }
+        self.spawn_t = 0.9;
+        let alive = self
+            .zombies
+            .iter()
+            .filter(|z| z.state != ZState::Dead && !z.boss)
+            .count();
+        let night = self.is_night();
+        let cap = if night { MAX_ACTIVE + 8 } else { MAX_ACTIVE };
+        if alive >= cap {
+            return;
+        }
+        for _ in 0..12 {
+            let a = self.rng.range(0.0, TAU);
+            let r = self.rng.range(950.0, ACTIVE_R);
+            let x = px + a.cos() * r;
+            let y = py + a.sin() * r;
+            if x < TILE * 3.0
+                || y < TILE * 3.0
+                || x > world::MAP_PX - TILE * 3.0
+                || y > world::MAP_PX - TILE * 3.0
+            {
+                continue;
+            }
+            let zone = self.world.zone(x, y);
+            let table = zone.spawns();
+            if table.is_empty() || self.world.blocked(x, y, 16.0, &mut self.scratch) {
+                continue;
+            }
+            let total: u32 = table
+                .iter()
+                .map(|(k, w)| {
+                    if night && *k == ZKind::Dark {
+                        w * 2
+                    } else {
+                        *w
+                    }
+                })
+                .sum();
+            let mut pick = self.rng.below(total.max(1));
+            let mut kind = table[0].0;
+            for (k, w) in table {
+                let w = if night && *k == ZKind::Dark {
+                    w * 2
+                } else {
+                    *w
+                };
+                if pick < w {
+                    kind = *k;
+                    break;
+                }
+                pick -= w;
+            }
+            let (lo, hi) = zone.level_range();
+            let level = lo + self.rng.below(hi - lo + 1);
+            if kind == ZKind::Dog {
+                let n = 2 + self.rng.below(3);
+                for k in 0..n {
+                    let ox = (k as f32 - 1.0) * 40.0;
+                    let rv = self.rng.range(-30.0, 30.0);
+                    self.spawn_zombie_at(ZKind::Dog, level, x + ox, y + rv);
+                }
+            } else {
+                self.spawn_zombie_at(kind, level, x, y);
+            }
+            return;
+        }
+    }
+
+    fn zombie_blocked_by_safe(&self, x: f32, y: f32) -> bool {
+        let z = self.world.zone(x, y);
+        z.safe() || z == Zone::Wall
+    }
+
+    pub fn update_zombies(&mut self, dt: f32) {
+        let (px, py, pdead) = (self.player.x, self.player.y, self.player.dead);
+        let in_vehicle = self.player.vehicle.is_some();
+        let p_safe = self.world.zone(px, py).safe();
+        let mut player_damage = 0.0f32;
+        let n = self.zombies.len();
+        // birbirini itme
+        for i in 0..n {
+            for j in (i + 1)..n {
+                if self.zombies[i].state == ZState::Dead || self.zombies[j].state == ZState::Dead {
+                    continue;
+                }
+                let ri = ZOMBIES[self.zombies[i].kind as usize].radius;
+                let rj = ZOMBIES[self.zombies[j].kind as usize].radius;
+                let (dx, dy) = (
+                    self.zombies[j].x - self.zombies[i].x,
+                    self.zombies[j].y - self.zombies[i].y,
+                );
+                let d = dx.hypot(dy);
+                let min = ri + rj;
+                if d < min && d > 0.01 {
+                    let push = (min - d) * 0.5;
+                    let (ux, uy) = (dx / d * push, dy / d * push);
+                    self.zombies[i].x -= ux;
+                    self.zombies[i].y -= uy;
+                    self.zombies[j].x += ux;
+                    self.zombies[j].y += uy;
+                }
+            }
+        }
+        let mut spawn_puddles: Vec<(f32, f32)> = Vec::new();
+        let mut summons: Vec<(f32, f32)> = Vec::new();
+        let mut shockwaves: Vec<(f32, f32)> = Vec::new();
+        let mut slams: Vec<(f32, f32, f32, f32)> = Vec::new();
+        for zi in 0..n {
+            let mut z = self.zombies[zi].clone();
+            let def = &ZOMBIES[z.kind as usize];
+            z.anim_t += dt;
+            z.flash_t = (z.flash_t - dt).max(0.0);
+            z.bar_t = (z.bar_t - dt).max(0.0);
+            z.attack_cd = (z.attack_cd - dt).max(0.0);
+            z.special_cd -= dt;
+            // geri itilme
+            if z.kx != 0.0 || z.ky != 0.0 {
+                let (mut x, mut y) = (z.x + z.kx * dt, z.y + z.ky * dt);
+                self.world
+                    .resolve(&mut x, &mut y, def.radius, false, &mut self.scratch);
+                z.x = x;
+                z.y = y;
+                let k = (1.0 - 8.0 * dt).max(0.0);
+                z.kx *= k;
+                z.ky *= k;
+                if z.kx.abs() + z.ky.abs() < 2.0 {
+                    z.kx = 0.0;
+                    z.ky = 0.0;
+                }
+            }
+            let (dx, dy) = (px - z.x, py - z.y);
+            let dist = dx.hypot(dy);
+            // tür efektleri (sürekli)
+            match z.kind {
+                ZKind::Dark => {
+                    if z.state != ZState::Dead {
+                        let flick = 0.55 + 0.35 * ((self.time * 7.0 + zi as f32).sin() * 0.5 + 0.5);
+                        z.alpha = if self.is_night() { flick * 0.85 } else { flick };
+                    }
+                }
+                ZKind::Mystery => {
+                    if z.state != ZState::Dead {
+                        let target = if dist < 170.0 || z.state == ZState::Flee || z.bar_t > 0.0 {
+                            1.0
+                        } else {
+                            0.12
+                        };
+                        z.alpha += (target - z.alpha) * (1.0 - (-4.0 * dt).exp());
+                    }
+                }
+                ZKind::Toxic => {
+                    if z.state != ZState::Dead && z.anim == Z_WALK {
+                        z.puddle_t -= dt;
+                        if z.puddle_t <= 0.0 {
+                            z.puddle_t = 2.2;
+                            spawn_puddles.push((z.x, z.y));
+                        }
+                    }
+                }
+                _ => {}
+            }
+            let sees = !pdead
+                && !p_safe
+                && (dist < 300.0
+                    || (dist < 460.0 && (self.player.anim == A_RUN || self.player.atk_cd > 0.0))
+                    || z.boss && dist < 900.0);
+            match z.state {
+                ZState::Dead => {
+                    z.timer -= dt;
+                    if z.timer < 1.0 {
+                        z.alpha = z.timer.max(0.0);
+                    }
+                }
+                ZState::Hurt => {
+                    z.timer -= dt;
+                    if z.timer <= 0.0 {
+                        z.state = ZState::Chase;
+                        z.anim = Z_WALK;
+                        z.anim_t = 0.0;
+                    }
+                }
+                ZState::Flee => {
+                    z.timer -= dt;
+                    if dist > 1.0 {
+                        self.move_zombie(&mut z, -dx / dist, -dy / dist, dt, def.chase * 1.2);
+                    }
+                    if z.timer <= 0.0 || dist > 900.0 {
+                        z.state = ZState::Wander;
+                    }
+                }
+                ZState::Wander => {
+                    z.timer -= dt;
+                    if sees {
+                        z.state = ZState::Notice;
+                        z.timer = if matches!(z.kind, ZKind::Runner | ZKind::Dog) {
+                            0.15
+                        } else {
+                            0.4
+                        };
+                        z.anim = Z_IDLE;
+                        z.dir = dir_from_vec(dx, dy);
+                        self.events.push(Event::Groan {
+                            x: z.x,
+                            y: z.y,
+                            z: z.kind as u8,
+                        });
+                    } else if z.timer <= 0.0 {
+                        if z.anim == Z_WALK {
+                            z.anim = Z_IDLE;
+                            z.anim_t = 0.0;
+                            z.timer = self.rng.range(1.0, 3.0);
+                        } else {
+                            let a = self.rng.range(0.0, TAU);
+                            let r = self.rng.range(60.0, 220.0);
+                            z.tx = z.x + a.cos() * r;
+                            z.ty = z.y + a.sin() * r;
+                            if z.boss {
+                                z.tx = world::BOSS.0 + a.cos() * r;
+                                z.ty = world::BOSS.1 + a.sin() * r;
+                            }
+                            z.anim = Z_WALK;
+                            z.anim_t = 0.0;
+                            z.timer = self.rng.range(2.0, 5.0);
+                        }
+                    }
+                    if z.anim == Z_WALK {
+                        let (mx, my) = (z.tx - z.x, z.ty - z.y);
+                        let md = mx.hypot(my);
+                        if md < 6.0 {
+                            z.timer = 0.0;
+                        } else {
+                            self.move_zombie(&mut z, mx / md, my / md, dt, def.speed);
+                        }
+                    }
+                }
+                ZState::Notice => {
+                    z.timer -= dt;
+                    z.dir = dir_from_vec(dx, dy);
+                    if z.timer <= 0.0 {
+                        z.state = ZState::Chase;
+                        z.anim = Z_WALK;
+                        z.anim_t = 0.0;
+                    }
+                }
+                ZState::Chase => {
+                    let reach = def.radius + if z.boss { 70.0 } else { 26.0 };
+                    if pdead || p_safe || dist > 1100.0 {
+                        z.state = ZState::Wander;
+                        z.anim = Z_IDLE;
+                        z.timer = 1.0;
+                    } else if z.kind == ZKind::Mystery && z.hp < z.max_hp * 0.4 && !z.decoy {
+                        z.state = ZState::Flee;
+                        z.timer = 4.0;
+                    } else if z.kind == ZKind::Dark
+                        && z.special_cd <= 0.0
+                        && dist > 180.0
+                        && dist < 520.0
+                    {
+                        // ışınlan: oyuncunun arkasına
+                        z.special_cd = self.rng.range(5.0, 8.0);
+                        let (bx, by) = dir_vec(self.player.dir);
+                        let nx = px - bx * 70.0;
+                        let ny = py - by * 70.0;
+                        self.events.push(Event::Teleport { x: z.x, y: z.y });
+                        if !self.world.blocked(nx, ny, def.radius, &mut self.scratch)
+                            && !self.zombie_blocked_by_safe(nx, ny)
+                        {
+                            z.x = nx;
+                            z.y = ny;
+                        }
+                        self.events.push(Event::Teleport { x: z.x, y: z.y });
+                    } else if z.boss && z.special_cd <= 0.0 && dist < 700.0 {
+                        z.special_cd = if z.enraged { 4.0 } else { 6.5 };
+                        z.state = ZState::Attack;
+                        z.anim = Z_ATTACK;
+                        z.anim_t = 0.0;
+                        z.hit_done = false;
+                        shockwaves.push((z.x, z.y));
+                    } else if dist < reach && z.attack_cd <= 0.0 && !in_vehicle {
+                        z.state = ZState::Attack;
+                        z.anim = Z_ATTACK;
+                        z.anim_t = 0.0;
+                        z.hit_done = false;
+                        z.dir = dir_from_vec(dx, dy);
+                    } else if dist >= reach * 0.8 {
+                        let mut sp = def.chase * if z.enraged { 1.4 } else { 1.0 };
+                        if z.kind == ZKind::Runner && dist < 260.0 {
+                            sp *= 1.35; // atılma
+                        }
+                        self.move_zombie(&mut z, dx / dist, dy / dist, dt, sp);
+                        if z.anim != Z_WALK {
+                            z.anim = Z_WALK;
+                            z.anim_t = 0.0;
+                        }
+                    } else {
+                        z.dir = dir_from_vec(dx, dy);
+                        z.anim = Z_IDLE;
+                    }
+                    // boss evreleri
+                    if z.boss {
+                        if !z.summoned && z.hp < z.max_hp * 0.5 {
+                            z.summoned = true;
+                            summons.push((z.x, z.y));
+                        }
+                        if !z.enraged && z.hp < z.max_hp * 0.3 {
+                            z.enraged = true;
+                            self.msg("Titan öfkelendi!");
+                        }
+                    }
+                }
+                ZState::Attack => {
+                    if !z.hit_done && z.anim_t >= 0.3 {
+                        z.hit_done = true;
+                        let (fx, fy) = dir_vec(z.dir);
+                        let facing = (dx * fx + dy * fy) / dist.max(1e-3);
+                        let lvl_dmg = def.dmg + def.dmg_lv * z.level as f32;
+                        match z.kind {
+                            ZKind::Tank => {
+                                slams.push((z.x + fx * 40.0, z.y + fy * 40.0, m(2.0), lvl_dmg));
+                            }
+                            ZKind::Titan => {
+                                if dist < def.radius + 110.0 {
+                                    player_damage += lvl_dmg;
+                                }
+                            }
+                            _ => {
+                                if dist < def.radius + 40.0 && facing > 0.2 && !in_vehicle {
+                                    player_damage += lvl_dmg;
+                                    if z.kind == ZKind::Dark {
+                                        z.hp = (z.hp + lvl_dmg * 0.5).min(z.max_hp);
+                                    }
+                                    if z.kind == ZKind::Toxic {
+                                        self.player.poison_t = self.player.poison_t.max(4.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if z.anim_t >= 0.6 {
+                        z.state = ZState::Chase;
+                        z.anim = Z_WALK;
+                        z.anim_t = 0.0;
+                        z.attack_cd = if z.kind == ZKind::Tank { 3.5 } else { 1.0 };
+                    }
+                }
+            }
+            self.zombies[zi] = z;
+        }
+        self.zombies
+            .retain(|z| !(z.state == ZState::Dead && z.timer <= 0.0));
+        for (x, y) in spawn_puddles {
+            self.areas.push(Area {
+                kind: AreaKind::ToxicPuddle,
+                x,
+                y,
+                r: m(0.9),
+                life: 6.0,
+                max_life: 6.0,
+                dps: 4.0,
+                hit_done: false,
+            });
+        }
+        for (x, y) in shockwaves {
+            self.areas.push(Area {
+                kind: AreaKind::Shockwave,
+                x,
+                y,
+                r: m(7.0),
+                life: 1.2,
+                max_life: 1.2,
+                dps: 32.0,
+                hit_done: false,
+            });
+            self.events.push(Event::Slam { x, y, r: m(7.0) });
+        }
+        for (x, y, r, d) in slams {
+            self.areas.push(Area {
+                kind: AreaKind::Explosion,
+                x,
+                y,
+                r,
+                life: 0.4,
+                max_life: 0.4,
+                dps: 0.0,
+                hit_done: true,
+            });
+            self.events.push(Event::Slam { x, y, r });
+            if (self.player.x - x).hypot(self.player.y - y) < r {
+                player_damage += d;
+                let (dx, dy) = (self.player.x - x, self.player.y - y);
+                let l = dx.hypot(dy).max(1.0);
+                let (mut nx, mut ny) =
+                    (self.player.x + dx / l * 60.0, self.player.y + dy / l * 60.0);
+                self.world.resolve(
+                    &mut nx,
+                    &mut ny,
+                    14.0,
+                    self.progress.level >= crate::progress::CITY_LEVEL,
+                    &mut self.scratch,
+                );
+                self.player.x = nx;
+                self.player.y = ny;
+            }
+        }
+        for (x, y) in summons {
+            for k in 0..4 {
+                let a = k as f32 * TAU / 4.0;
+                self.spawn_zombie_at(ZKind::Walker, 40, x + a.cos() * 160.0, y + a.sin() * 160.0);
+            }
+            self.msg("Titan yardım çağırdı!");
+        }
+        if player_damage > 0.0 {
+            self.damage_player(player_damage);
+        }
+    }
+
+    fn move_zombie(&mut self, z: &mut Zombie, nx: f32, ny: f32, dt: f32, speed_m: f32) {
+        let sp = m(speed_m);
+        let r = ZOMBIES[z.kind as usize].radius;
+        let (mut x, mut y) = (z.x + nx * sp * dt, z.y + ny * sp * dt);
+        self.world
+            .resolve(&mut x, &mut y, r, false, &mut self.scratch);
+        if (x - z.x).hypot(y - z.y) < sp * dt * 0.3 {
+            let (sx, sy) = (-ny, nx);
+            x = z.x + sx * sp * dt;
+            y = z.y + sy * sp * dt;
+            self.world
+                .resolve(&mut x, &mut y, r, false, &mut self.scratch);
+        }
+        // güvenli bölgeye giremez
+        if self.zombie_blocked_by_safe(x, y) && !z.boss {
+            return;
+        }
+        z.x = x;
+        z.y = y;
+        z.dir = dir_from_vec(nx, ny);
+    }
+}

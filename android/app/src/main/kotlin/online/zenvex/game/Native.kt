@@ -1,47 +1,49 @@
 package online.zenvex.game
 
-/** Rust çekirdeği (rust/zenvex_jni). Tüm çağrılar GameSession kilidi altında yapılmalı. */
+/** Rust çekirdeği (rust/zenvex_jni). Tüm çağrılar GameSession.lock altında yapılmalı. */
 object Native {
     init {
         System.loadLibrary("zenvex")
     }
 
-    /** Çizim listesi kaydı: [tür, id, x, y, yön, anim, animZamanı, ek1, ek2] */
-    const val STRIDE = 9
-    const val DRAW_STATIC = 0
-    const val DRAW_PLAYER = 1
-    const val DRAW_ZOMBIE = 2
+    /** Çizim listesi kaydı uzunluğu (rust game::STRIDE) */
+    const val STRIDE = 12
+    const val D_STATIC = 0
+    const val D_HUMAN = 1
+    const val D_ZOMBIE = 2
+    const val D_DROP = 3
+    const val D_PROJ = 4
+    const val D_VEHICLE = 5
+    const val D_DRONE = 6
+    const val D_AREA = 7
 
-    // HUD dizisindeki alanlar
-    const val HUD_HP = 0
-    const val HUD_MAXHP = 1
-    const val HUD_ST = 2
-    const val HUD_MAXST = 3
-    const val HUD_XP = 4
-    const val HUD_XPNEXT = 5
-    const val HUD_LEVEL = 6
-    const val HUD_POINTS = 7
-    const val HUD_WOOD = 8
-    const val HUD_KILLS = 9
-    const val HUD_PX = 10
-    const val HUD_PY = 11
-    const val HUD_DEAD = 12
-    const val HUD_TEETH = 13
-    const val HUD_TREES = 14
-    const val HUD_SIZE = 15
+    // HUD dizisi (rust draw.rs hud())
+    const val HUD_SIZE = 32
+    const val HP = 0; const val MAXHP = 1; const val ST = 2; const val MAXST = 3
+    const val XP = 4; const val XPNEXT = 5; const val LEVEL = 6; const val POINTS = 7
+    const val GOLD = 8; const val KILLS = 9; const val PX = 10; const val PY = 11
+    const val DEAD = 12; const val SHIELD = 13; const val LIGHT = 14; const val WEAPON = 15
+    const val MAG = 16; const val AMMO = 17; const val RELOADING = 18; const val ABILITY_CD = 19
+    const val CHARACTER = 20; const val CHAR_LEVEL = 21; const val NEAR_VEHICLE = 22; const val NEAR_MERCHANT = 23
+    const val NEAR_BENCH = 24; const val IN_VEHICLE = 25; const val FUEL = 26; const val VEHICLE_HP = 27
+    const val BOSS_HP = 28; const val BOSS_MAX = 29; const val POISON = 30; const val ZONE = 31
 
-    @JvmStatic external fun create(seed: Long, save: String): Long
-    @JvmStatic external fun destroy(h: Long)
-    @JvmStatic external fun worldJson(h: Long): String
-    /** input: [hareketX, hareketY, saldırıX, saldırıY, saldırıyor(0/1)] */
-    @JvmStatic external fun step(h: Long, dt: Float, input: FloatArray)
-    /** view: [x, y, w, h, bitkiYoğunluğu] */
-    @JvmStatic external fun drawList(h: Long, view: FloatArray, out: FloatArray): Int
-    @JvmStatic external fun hud(h: Long, out: FloatArray)
-    @JvmStatic external fun radar(h: Long, out: FloatArray): Int
-    @JvmStatic external fun events(h: Long): String
-    @JvmStatic external fun saveJson(h: Long): String
-    @JvmStatic external fun skillsJson(h: Long): String
-    @JvmStatic external fun upgradeSkill(h: Long, id: Int): Boolean
-    @JvmStatic external fun respawn(h: Long)
+    const val REMOTE_STRIDE = 10
+
+    external fun create(seed: Long, save: String, day: Int): Long
+    external fun destroy(h: Long)
+    external fun worldJson(h: Long): String
+    external fun uiJson(h: Long, kind: String): String
+    external fun command(h: Long, json: String): String
+    external fun step(h: Long, dt: Float, input: FloatArray)
+    external fun drawList(h: Long, view: FloatArray, out: FloatArray): Int
+    external fun hud(h: Long, out: FloatArray)
+    external fun radar(h: Long, out: FloatArray): Int
+    external fun events(h: Long): String
+    external fun saveJson(h: Long): String
+    external fun setTextures(h: Long, size: Int, pixels: IntArray)
+    external fun renderChunk(h: Long, x0: Float, y0: Float, size: Int, out: IntArray): Int
+    external fun minimap(h: Long, n: Int, out: IntArray)
+    external fun setRemotes(h: Long, data: FloatArray, count: Int)
+    external fun localState(h: Long, out: FloatArray)
 }

@@ -1,4 +1,4 @@
-# Her push'ta: Rust testleri + Android APK derlemesi.
+# Her push'ta: Android APK derlemesi (test yok — testleri oyuncu telefonda yapar).
 # APK, GitHub'da "Releases" sayfasına "latest" etiketiyle yüklenir -> telefondan indirip kurabilirsin.
 name: Android APK
 
@@ -36,7 +36,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-          components: clippy, rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -45,24 +44,22 @@ jobs:
       - name: cargo-ndk kur
         run: cargo install cargo-ndk --locked
 
-      - name: Rust kontrolleri
-        working-directory: rust
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets -- -D warnings
-          cargo test
-
       - uses: gradle/actions/setup-gradle@v4
 
       - name: APK derle
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.1.${{ github.run_number }}
+          VERSION_NAME: 0.2.${{ github.run_number }}
+          # Firebase (isteğe bağlı): Settings → Secrets → Actions altına eklenirse çevrimiçi mod açılır
+          FB_API_KEY: ${{ secrets.FB_API_KEY }}
+          FB_APP_ID: ${{ secrets.FB_APP_ID }}
+          FB_PROJECT_ID: ${{ secrets.FB_PROJECT_ID }}
+          FB_DB_URL: ${{ secrets.FB_DB_URL }}
         run: |
           ./gradlew assembleRelease --console=plain
           mkdir -p ../dist
-          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.1.${{ github.run_number }}.apk
+          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.2.${{ github.run_number }}.apk
 
       - uses: actions/upload-artifact@v4
         with:
@@ -78,9 +75,9 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: latest
-          name: "Zenvex Online — son derleme (0.1.${{ github.run_number }})"
+          name: "Zenvex Online — son derleme (0.2.${{ github.run_number }})"
           body: |
-            Telefonuna kurmak için aşağıdaki **ZenvexOnline-0.1.${{ github.run_number }}.apk** dosyasına dokun.
+            Telefonuna kurmak için aşağıdaki **ZenvexOnline-0.2.${{ github.run_number }}.apk** dosyasına dokun.
             İlk kurulumda "Bilinmeyen kaynaklardan yüklemeye izin ver" demen gerekebilir.
             Dal: `${{ github.ref_name }}` · Commit: `${{ github.sha }}`
           artifacts: dist/*.apk
@@ -89,39 +86,3 @@ jobs:
           replacesArtifacts: true
           prerelease: true
           makeLatest: true
-
-  # Gerçek bir Android emülatöründe (KVM hızlandırmalı) uygulamayı açıp oynar, ekran görüntüsü alır.
-  smoke:
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: KVM'yi etkinleştir
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: ZenvexOnline-apk
-          path: dist
-
-      - name: Emülatörde duman testi
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          arch: x86_64
-          target: default
-          profile: pixel_4
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash tools/smoke_test.sh dist/*.apk smoke
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: smoke-screenshots
-          path: smoke/

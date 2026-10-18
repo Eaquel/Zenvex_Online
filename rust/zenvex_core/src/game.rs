@@ -1,43 +1,50 @@
-//! Oyun döngüsü: oyuncu, zombiler, yumruk savaşı, ağaç kesme, olaylar.
-use crate::progress::Progress;
+//! V2 oyun durumu ve ana döngü.
+use crate::data::{self, WeaponClass, ZKind, PX_PER_M, WEAPONS};
+use crate::ground::Textures;
+use crate::progress::{Progress, CITY_LEVEL};
 use crate::rng::Rng;
-use crate::world::{spawn_point, Kind, World, MAP_PX, STUMP_SPRITE, TILE};
+use crate::world::{self, World};
 use serde::Serialize;
 use std::f32::consts::{FRAC_PI_4, TAU};
 
-// ---- animasyon kimlikleri (Kotlin ile ortak)
-pub const P_IDLE: u8 = 0;
-pub const P_WALK: u8 = 1;
-pub const P_RUN: u8 = 2;
-pub const P_PUNCH: u8 = 3;
-pub const P_HURT: u8 = 4;
-pub const P_DEATH: u8 = 5;
-
+// ---- kahraman animasyonları (assetgen/character2.HERO_ANIMS sırası)
+pub const A_IDLE: u8 = 0;
+pub const A_WALK: u8 = 1;
+pub const A_RUN: u8 = 2;
+pub const A_PUNCH: u8 = 3;
+pub const A_MELEE: u8 = 4;
+pub const A_PISTOL_IDLE: u8 = 5;
+pub const A_PISTOL_WALK: u8 = 6;
+pub const A_RIFLE_IDLE: u8 = 7;
+pub const A_RIFLE_WALK: u8 = 8;
+pub const A_CAST: u8 = 9;
+pub const A_HURT: u8 = 10;
+pub const A_DEATH: u8 = 11;
+pub const A_RIDE: u8 = 12;
+// zombi animasyonları
 pub const Z_IDLE: u8 = 0;
 pub const Z_WALK: u8 = 1;
 pub const Z_ATTACK: u8 = 2;
 pub const Z_HURT: u8 = 3;
 pub const Z_DEATH: u8 = 4;
 
-// ---- çizim listesi türleri
-pub const DRAW_STATIC: f32 = 0.0;
-pub const DRAW_PLAYER: f32 = 1.0;
-pub const DRAW_ZOMBIE: f32 = 2.0;
-/// [tür, id, x, y, yön, anim, anim_zamanı, ek1, ek2]
-/// statik: id=sprite, yön=indeks, anim=0/1 (kütük), zaman=rüzgâr fazı, ek1=sallanma, ek2=can
-/// zombi: id=saydamlık, ek1=beyaz flaş, ek2=can (-1 gizli) · oyuncu: ek1=flaş
-pub const STRIDE: usize = 9;
+// ---- çizim listesi
+pub const STRIDE: usize = 12;
+pub const D_STATIC: f32 = 0.0;
+pub const D_HUMAN: f32 = 1.0;
+pub const D_ZOMBIE: f32 = 2.0;
+pub const D_DROP: f32 = 3.0;
+pub const D_PROJ: f32 = 4.0;
+pub const D_VEHICLE: f32 = 5.0;
+pub const D_DRONE: f32 = 6.0;
+pub const D_AREA: f32 = 7.0;
 
-const WALK_SPEED: f32 = 52.0; // px/sn
-const RUN_SPEED: f32 = 112.0;
-const PUNCH_FPS: f32 = 14.0;
-const PUNCH_HALF: f32 = 4.0 / PUNCH_FPS; // bir yumruk (jab veya düz)
-const PUNCH_RANGE: f32 = 34.0;
-const PUNCH_ARC: f32 = 0.75; // rad (~43°) yarım açı
-const MAX_ZOMBIES: usize = 24;
+pub fn m(v: f32) -> f32 {
+    v * PX_PER_M
+}
 
 pub fn dir_from_vec(x: f32, y: f32) -> u8 {
-    let mut a = x.atan2(y); // 0 = aşağı (güney)
+    let mut a = x.atan2(y);
     if a < 0.0 {
         a += TAU;
     }
@@ -67,29 +74,90 @@ pub enum Event {
     PlayerDamage { x: f32, y: f32, v: i32 },
     #[serde(rename = "xp")]
     Xp { x: f32, y: f32, v: u32 },
-    #[serde(rename = "wood")]
-    Wood { x: f32, y: f32, v: u32 },
-    #[serde(rename = "item")]
-    Item { x: f32, y: f32, name: &'static str },
+    #[serde(rename = "gold")]
+    Gold { x: f32, y: f32, v: u32 },
+    #[serde(rename = "pickup")]
+    Pickup {
+        x: f32,
+        y: f32,
+        name: String,
+        count: u32,
+        rarity: u8,
+    },
+    #[serde(rename = "invfull")]
+    InvFull,
     #[serde(rename = "lvl")]
     LevelUp { level: u32, points: u32 },
+    #[serde(rename = "clvl")]
+    CharLevel { level: u32 },
     #[serde(rename = "hit")]
-    Hit { x: f32, y: f32, tree: bool },
+    Hit { x: f32, y: f32, kind: u8 },
     #[serde(rename = "treefall")]
     TreeFall { x: f32, y: f32 },
     #[serde(rename = "kill")]
-    Kill { x: f32, y: f32 },
+    Kill { x: f32, y: f32, z: u8 },
     #[serde(rename = "died")]
     Died,
-    #[serde(rename = "lastbreath")]
-    LastBreath,
     #[serde(rename = "swing")]
     Swing,
+    #[serde(rename = "shoot")]
+    Shoot { x: f32, y: f32, a: f32, w: u8 },
+    #[serde(rename = "reload")]
+    Reload,
+    #[serde(rename = "noammo")]
+    NoAmmo,
+    #[serde(rename = "explode")]
+    Explode { x: f32, y: f32, r: f32 },
     #[serde(rename = "groan")]
-    Groan { x: f32, y: f32 },
+    Groan { x: f32, y: f32, z: u8 },
+    #[serde(rename = "teleport")]
+    Teleport { x: f32, y: f32 },
+    #[serde(rename = "toxic")]
+    ToxicCloud { x: f32, y: f32 },
+    #[serde(rename = "slam")]
+    Slam { x: f32, y: f32, r: f32 },
+    #[serde(rename = "boss")]
+    Boss { name: String },
+    #[serde(rename = "quest")]
+    Quest { title: String },
+    #[serde(rename = "zone")]
+    ZoneEnter {
+        name: String,
+        lo: u32,
+        hi: u32,
+        safe: bool,
+    },
+    #[serde(rename = "locked")]
+    CityLocked,
+    #[serde(rename = "sniper")]
+    Sniper { x1: f32, y1: f32, x2: f32, y2: f32 },
+    #[serde(rename = "drone")]
+    DroneShot { x: f32, y: f32 },
+    #[serde(rename = "shield")]
+    Shield { v: i32 },
+    #[serde(rename = "heal")]
+    Heal { x: f32, y: f32, v: i32 },
+    #[serde(rename = "rage")]
+    Rage,
+    #[serde(rename = "cloak")]
+    Cloak,
+    #[serde(rename = "crate")]
+    Crate { x: f32, y: f32 },
+    #[serde(rename = "car_hit")]
+    CarHit { x: f32, y: f32 },
+    #[serde(rename = "enter")]
+    EnterVehicle { v: u8 },
+    #[serde(rename = "exit")]
+    ExitVehicle,
+    #[serde(rename = "msg")]
+    Msg { text: String },
+    #[serde(rename = "lastbreath")]
+    LastBreath,
+    #[serde(rename = "step")]
+    Step,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Player {
     pub x: f32,
     pub y: f32,
@@ -99,14 +167,36 @@ pub struct Player {
     pub hp: f32,
     pub stamina: f32,
     pub stamina_delay: f32,
-    pub punch_active: bool,
-    pub punch_hit_done: bool,
-    pub hurt_t: f32,
-    pub flash_t: f32,
+    pub shield: f32,
+    pub shield_t: f32,
+    pub rage_t: f32,
+    pub cloak_t: f32,
+    pub cloak_cd: f32,
+    pub energy_t: f32,
+    pub food_t: f32,
+    pub poison_t: f32,
+    pub heal_t: f32,
+    pub heal_rate: f32,
+    pub atk_cd: f32,
+    pub atk_active: bool,
+    pub hit_done: bool,
+    pub reload_t: f32,
+    pub ability_cd: f32,
+    pub cast_t: f32,
+    pub vehicle: Option<usize>,
     pub dead: bool,
     pub combat_t: f32,
     pub last_breath_cd: f32,
+    pub hurt_t: f32,
+    pub flash_t: f32,
     pub moving: bool,
+    pub step_t: f32,
+    pub noammo_t: f32,
+    pub locked_t: f32,
+    pub zone: u8,
+    pub god: bool,
+    pub one_hit: bool,
+    pub speed_cheat: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -116,11 +206,14 @@ pub enum ZState {
     Chase,
     Attack,
     Hurt,
+    Flee,
     Dead,
 }
 
 #[derive(Clone, Debug)]
 pub struct Zombie {
+    pub kind: ZKind,
+    pub level: u32,
     pub x: f32,
     pub y: f32,
     pub dir: u8,
@@ -129,7 +222,6 @@ pub struct Zombie {
     pub anim_t: f32,
     pub hp: f32,
     pub max_hp: f32,
-    pub level: u32,
     pub tx: f32,
     pub ty: f32,
     pub timer: f32,
@@ -139,23 +231,113 @@ pub struct Zombie {
     pub bar_t: f32,
     pub kx: f32,
     pub ky: f32,
-    pub stun_t: f32,
     pub alpha: f32,
+    pub special_cd: f32,
+    pub puddle_t: f32,
+    pub decoy: bool,
+    pub cloned: bool,
+    pub summoned: bool,
+    pub enraged: bool,
+    pub boss: bool,
 }
 
-impl Zombie {
-    fn speed(&self) -> f32 {
-        match self.state {
-            ZState::Chase => 44.0 + self.level as f32 * 1.2,
-            _ => 16.0,
-        }
-    }
-    fn damage(&self) -> f32 {
-        6.0 + self.level as f32 * 1.4
-    }
-    fn xp(&self) -> u32 {
-        15 + self.level * 3
-    }
+#[derive(Clone, Debug)]
+pub struct Drop {
+    pub item: u16,
+    pub count: u32,
+    pub x: f32,
+    pub y: f32,
+    pub age: f32,
+    pub pop: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProjKind {
+    Bullet = 0,
+    Rocket = 1,
+    DroneBullet = 2,
+    Acid = 3,
+    DroneRocket = 4,
+}
+
+#[derive(Clone, Debug)]
+pub struct Projectile {
+    pub kind: ProjKind,
+    pub x: f32,
+    pub y: f32,
+    pub vx: f32,
+    pub vy: f32,
+    pub dmg: f32,
+    pub pierce: u8,
+    pub life: f32,
+    pub splash: f32,
+    pub hostile: bool,
+    pub hit: Vec<usize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AreaKind {
+    ToxicPuddle = 0,
+    PoisonCloud = 1,
+    Heal = 2,
+    ShieldFx = 3,
+    Shockwave = 4,
+    Explosion = 5,
+}
+
+#[derive(Clone, Debug)]
+pub struct Area {
+    pub kind: AreaKind,
+    pub x: f32,
+    pub y: f32,
+    pub r: f32,
+    pub life: f32,
+    pub max_life: f32,
+    pub dps: f32,
+    pub hit_done: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Vehicle {
+    pub kind: usize,
+    pub x: f32,
+    pub y: f32,
+    pub angle: f32,
+    pub speed: f32,
+    pub hp: f32,
+    pub fuel: f32,
+    pub driver: bool,
+    pub wrecked: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct Npc {
+    pub kind: u8, // 0 keskin nişancı, 1 tüccar
+    pub x: f32,
+    pub y: f32,
+    pub dir: u8,
+    pub cd: f32,
+    pub anim_t: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Drone {
+    pub x: f32,
+    pub y: f32,
+    pub cd: f32,
+    pub t: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Remote {
+    pub x: f32,
+    pub y: f32,
+    pub dir: u8,
+    pub anim: u8,
+    pub anim_t: f32,
+    pub character: u8,
+    pub equip: [f32; 3],
+    pub vehicle: f32,
 }
 
 pub struct Game {
@@ -163,417 +345,518 @@ pub struct Game {
     pub progress: Progress,
     pub player: Player,
     pub zombies: Vec<Zombie>,
+    pub drops: Vec<Drop>,
+    pub projectiles: Vec<Projectile>,
+    pub areas: Vec<Area>,
+    pub vehicles: Vec<Vehicle>,
+    pub npcs: Vec<Npc>,
+    pub drone: Drone,
+    pub remotes: Vec<Remote>,
     pub events: Vec<Event>,
     pub time: f32,
-    rng: Rng,
-    scratch: Vec<u32>,
-    spawn_t: f32,
-    draw_tmp: Vec<(f32, [f32; STRIDE])>,
+    pub day_t: f32,
+    pub boss_t: f32,
+    pub textures: Textures,
+    pub rng: Rng,
+    pub scratch: Vec<u32>,
+    pub spawn_t: f32,
+    pub draw_tmp: Vec<(f32, [f32; STRIDE])>,
+    pub day_index: u32,
 }
 
 impl Game {
-    pub fn new(seed: u64, progress: Progress) -> Game {
+    pub fn new(seed: u64, mut progress: Progress, day_index: u32) -> Game {
         let world = World::generate(seed);
-        let (x, y) = spawn_point();
+        let cap = progress.inventory_cap();
+        progress.inv.resize(cap);
+        progress.ensure_dailies(day_index);
+        let (x, y) = world::camp_spawn();
         let player = Player {
             x,
             y,
-            dir: 0,
-            anim: P_IDLE,
-            anim_t: 0.0,
             hp: progress.max_hp(),
             stamina: progress.max_stamina(),
-            stamina_delay: 0.0,
-            punch_active: false,
-            punch_hit_done: false,
-            hurt_t: 0.0,
-            flash_t: 0.0,
-            dead: false,
-            combat_t: 99.0,
-            last_breath_cd: 0.0,
-            moving: false,
+            speed_cheat: 1.0,
+            ..Default::default()
         };
-        let mut g = Game {
+        let vehicles = world
+            .vehicle_spawns
+            .iter()
+            .map(|&(k, x, y, a)| Vehicle {
+                kind: k,
+                x,
+                y,
+                angle: a,
+                speed: 0.0,
+                hp: data::VEHICLES[k].hp,
+                fuel: 60.0,
+                driver: false,
+                wrecked: false,
+            })
+            .collect();
+        let mut npcs: Vec<Npc> = world
+            .snipers
+            .iter()
+            .map(|&(x, y)| Npc {
+                kind: 0,
+                x,
+                y,
+                dir: 0,
+                cd: 0.0,
+                anim_t: 0.0,
+            })
+            .collect();
+        npcs.extend(world.merchants.iter().map(|&(x, y)| Npc {
+            kind: 1,
+            x,
+            y,
+            dir: 0,
+            cd: 0.0,
+            anim_t: 0.0,
+        }));
+        Game {
             world,
             progress,
             player,
             zombies: Vec::new(),
+            drops: Vec::new(),
+            projectiles: Vec::new(),
+            areas: Vec::new(),
+            vehicles,
+            npcs,
+            drone: Drone {
+                x,
+                y,
+                ..Default::default()
+            },
+            remotes: Vec::new(),
             events: Vec::new(),
             time: 0.0,
+            day_t: 0.3,
+            boss_t: 5.0,
+            textures: Textures::default(),
             rng: Rng::new(seed ^ 0x5EED),
             scratch: Vec::new(),
             spawn_t: 0.0,
             draw_tmp: Vec::new(),
-        };
-        for _ in 0..MAX_ZOMBIES {
-            g.spawn_zombie(true);
+            day_index,
         }
-        g
     }
 
-    /// Dünyayı sıfırlamadan oyuncuyu doğuş noktasında yeniden başlatır.
-    pub fn respawn(&mut self) {
-        let (x, y) = spawn_point();
+    pub fn msg(&mut self, t: impl Into<String>) {
+        self.events.push(Event::Msg { text: t.into() });
+    }
+
+    pub fn respawn(&mut self, city: bool) {
+        let (x, y) = if city && self.progress.level >= CITY_LEVEL {
+            world::city_spawn()
+        } else {
+            world::camp_spawn()
+        };
+        let max_hp = self.progress.max_hp();
+        let max_st = self.progress.max_stamina();
         let p = &mut self.player;
         p.x = x;
         p.y = y;
         p.dead = false;
-        p.hp = self.progress.max_hp();
-        p.stamina = self.progress.max_stamina();
-        p.anim = P_IDLE;
+        p.hp = max_hp;
+        p.stamina = max_st;
+        p.anim = A_IDLE;
         p.anim_t = 0.0;
-        p.hurt_t = 0.0;
-        // doğuş noktasındaki zombileri uzaklaştır
-        let (sx, sy) = (x, y);
-        self.zombies.retain(|z| (z.x - sx).hypot(z.y - sy) > 400.0);
-    }
-
-    fn zombie_level_at(x: f32, y: f32) -> u32 {
-        let (cx, cy) = spawn_point();
-        let d_tiles = (x - cx).hypot(y - cy) / TILE;
-        (1 + (d_tiles / 6.0) as u32).clamp(1, 12)
-    }
-
-    fn spawn_zombie(&mut self, initial: bool) {
-        for _ in 0..30 {
-            let x = self.rng.range(120.0, MAP_PX - 120.0);
-            let y = self.rng.range(120.0, MAP_PX - 120.0);
-            let d = (x - self.player.x).hypot(y - self.player.y);
-            let min_d = if initial { 300.0 } else { 420.0 };
-            if d < min_d || self.world.blocked(x, y, 10.0, &mut self.scratch) {
-                continue;
-            }
-            let level = Self::zombie_level_at(x, y);
-            let hp = 40.0 + level as f32 * 8.0;
-            self.zombies.push(Zombie {
-                x,
-                y,
-                dir: self.rng.below(8) as u8,
-                state: ZState::Wander,
-                anim: Z_IDLE,
-                anim_t: self.rng.range(0.0, 1.0),
-                hp,
-                max_hp: hp,
-                level,
-                tx: x,
-                ty: y,
-                timer: self.rng.range(0.5, 3.0),
-                attack_cd: 0.0,
-                hit_done: false,
-                flash_t: 0.0,
-                bar_t: 0.0,
-                kx: 0.0,
-                ky: 0.0,
-                stun_t: 0.0,
-                alpha: 1.0,
-            });
-            return;
+        p.vehicle = None;
+        p.poison_t = 0.0;
+        for v in self.vehicles.iter_mut() {
+            v.driver = false;
         }
+        self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 900.0);
+    }
+
+    pub fn light(&self) -> f32 {
+        // 0.25-0.75 gündüz; geceye yumuşak geçiş
+        let t = self.day_t.fract();
+        let d = (t * TAU - std::f32::consts::FRAC_PI_2).sin() * -1.0; // t=0.5 öğlen → 1
+        (0.42 + 0.58 * ((d + 0.35) / 1.35).clamp(0.0, 1.0)).clamp(0.4, 1.0)
+    }
+
+    pub fn is_night(&self) -> bool {
+        self.light() < 0.6
+    }
+
+    pub fn weapon(&self) -> &'static data::WeaponDef {
+        &WEAPONS[data::weapon_for(&self.progress.eq.weapon)]
     }
 
     pub fn step(&mut self, dt: f32, input: Input) {
         let dt = dt.clamp(0.0, 0.05);
         self.time += dt;
+        self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
-        self.update_player(dt, input);
+        if self.player.vehicle.is_some() {
+            self.update_vehicle_drive(dt, input);
+        } else {
+            self.update_player(dt, input);
+        }
+        self.update_zone();
+        self.update_drone(dt);
         self.update_zombies(dt);
+        self.update_projectiles(dt);
+        self.update_areas(dt);
+        self.update_npcs(dt);
+        self.update_drops(dt);
         self.update_statics(dt);
-        self.spawn_t -= dt;
-        let alive = self
-            .zombies
-            .iter()
-            .filter(|z| z.state != ZState::Dead)
-            .count();
-        if alive < MAX_ZOMBIES && self.spawn_t <= 0.0 {
-            self.spawn_zombie(false);
-            self.spawn_t = 2.5;
+        self.update_spawning(dt);
+    }
+
+    fn update_zone(&mut self) {
+        let z = self.world.zone(self.player.x, self.player.y);
+        let zi = world::ZONES_ALL.iter().position(|q| *q == z).unwrap_or(0) as u8;
+        if zi != self.player.zone {
+            self.player.zone = zi;
+            let (lo, hi) = z.level_range();
+            self.events.push(Event::ZoneEnter {
+                name: z.name().into(),
+                lo,
+                hi,
+                safe: z.safe(),
+            });
+            if z.city() && !self.progress.city_entered {
+                self.progress.city_entered = true;
+                let done = self.progress.quest_event(data::QuestKind::EnterCity, 1);
+                self.quests_done(done);
+            }
         }
     }
 
+    pub fn quests_done(&mut self, done: Vec<String>) {
+        for t in done {
+            self.events.push(Event::Quest { title: t });
+        }
+    }
+
+    // ------------------------------------------------------------------ oyuncu
     fn update_player(&mut self, dt: f32, input: Input) {
-        let prog = &self.progress;
-        let max_hp = prog.max_hp();
-        let max_st = prog.max_stamina();
-        let p = &mut self.player;
-        p.anim_t += dt;
-        p.flash_t = (p.flash_t - dt).max(0.0);
-        p.last_breath_cd = (p.last_breath_cd - dt).max(0.0);
-        p.combat_t += dt;
-        if p.dead {
-            return;
-        }
-        // can yenilenmesi (savaş dışında)
-        if p.combat_t > 5.0 && p.hp < max_hp {
-            p.hp = (p.hp + 2.0 * prog.regen_mult() * dt).min(max_hp);
-        }
-        p.hp = p.hp.min(max_hp);
-        p.stamina_delay -= dt;
-        if p.stamina_delay <= 0.0 {
-            p.stamina = (p.stamina + 18.0 * dt).min(max_st);
-        }
-
-        if p.hurt_t > 0.0 {
-            p.hurt_t -= dt;
-            if p.anim != P_HURT {
-                p.anim = P_HURT;
-                p.anim_t = 0.0;
+        let max_hp = self.progress.max_hp();
+        let max_st = self.progress.max_stamina();
+        let regen = self.progress.regen_mult();
+        {
+            let p = &mut self.player;
+            p.anim_t += dt;
+            p.flash_t = (p.flash_t - dt).max(0.0);
+            p.last_breath_cd = (p.last_breath_cd - dt).max(0.0);
+            p.combat_t += dt;
+            p.ability_cd = (p.ability_cd - dt).max(0.0);
+            p.cloak_cd = (p.cloak_cd - dt).max(0.0);
+            p.noammo_t = (p.noammo_t - dt).max(0.0);
+            p.locked_t = (p.locked_t - dt).max(0.0);
+            for t in [
+                &mut p.rage_t,
+                &mut p.cloak_t,
+                &mut p.energy_t,
+                &mut p.shield_t,
+                &mut p.cast_t,
+            ] {
+                *t = (*t - dt).max(0.0);
             }
-            return;
-        }
-
-        // --- saldırı joysticki: yönü çevir, o yöne yumruk at
-        let atk_len = input.atk_x.hypot(input.atk_y);
-        let wants_attack = input.attacking && atk_len > 0.2;
-        if wants_attack {
-            p.dir = dir_from_vec(input.atk_x, input.atk_y);
-        }
-        if wants_attack && !p.punch_active {
-            p.punch_active = true;
-            p.punch_hit_done = false;
-            if p.anim != P_PUNCH {
-                p.anim = P_PUNCH;
-                p.anim_t = 0.0;
+            if p.shield_t <= 0.0 {
+                p.shield = 0.0;
             }
-        }
-        let mut swing = false;
-        if p.punch_active {
-            // yorgunsa yumruk yavaşlar
-            let tired = p.stamina < 4.0;
-            let speed = if tired { 0.6 } else { 1.0 };
-            p.anim_t += dt * (speed - 1.0); // ana artışı ölçekle
-            let half_t = p.anim_t % PUNCH_HALF;
-            if !p.punch_hit_done && half_t >= 1.5 / PUNCH_FPS {
-                p.punch_hit_done = true;
-                swing = true;
-                p.stamina = (p.stamina - 4.0 * prog.stamina_cost_mult()).max(0.0);
-                p.stamina_delay = 0.8;
+            if p.dead {
+                return;
             }
-            if half_t + dt * speed >= PUNCH_HALF - 1e-4 {
-                // yumruk bitti: devam mı?
-                p.punch_hit_done = false;
-                if !wants_attack {
-                    p.punch_active = false;
+            if p.food_t > 0.0 {
+                p.food_t -= dt;
+                p.hp = (p.hp + 3.0 * dt).min(max_hp);
+            }
+            if p.heal_t > 0.0 {
+                p.heal_t -= dt;
+                p.hp = (p.hp + p.heal_rate * dt).min(max_hp);
+            }
+            if p.poison_t > 0.0 {
+                p.poison_t -= dt;
+                if !p.god {
+                    p.hp -= 3.0 * dt;
                 }
             }
-        } else if p.anim == P_PUNCH {
-            p.anim = P_IDLE;
-            p.anim_t = 0.0;
+            if p.combat_t > 5.0 && p.hp < max_hp {
+                p.hp = (p.hp + 2.0 * regen * dt).min(max_hp);
+            }
+            p.hp = p.hp.min(max_hp);
+            p.stamina_delay -= dt;
+            if p.stamina_delay <= 0.0 || p.energy_t > 0.0 {
+                p.stamina = (p.stamina + 18.0 * dt).min(max_st);
+            }
         }
-
-        // --- hareket
+        if self.player.hp <= 0.0 && !self.player.dead {
+            self.kill_player();
+            return;
+        }
+        if self.player.hurt_t > 0.0 {
+            self.player.hurt_t -= dt;
+            if self.player.anim != A_HURT {
+                self.player.anim = A_HURT;
+                self.player.anim_t = 0.0;
+            }
+            return;
+        }
+        if self.player.cast_t > 0.0 {
+            return;
+        }
+        let w = self.weapon();
+        let ranged = matches!(
+            w.class,
+            WeaponClass::Pistol | WeaponClass::Rifle | WeaponClass::Sniper | WeaponClass::Heavy
+        );
+        let (aim_idle, aim_walk) = match w.class {
+            WeaponClass::Pistol => (A_PISTOL_IDLE, A_PISTOL_WALK),
+            WeaponClass::Fist | WeaponClass::Melee => (A_IDLE, A_WALK),
+            _ => (A_RIFLE_IDLE, A_RIFLE_WALK),
+        };
+        // ---- saldırı
+        let atk_len = input.atk_x.hypot(input.atk_y);
+        let wants = input.attacking && atk_len > 0.2;
+        if wants {
+            self.player.dir = dir_from_vec(input.atk_x, input.atk_y);
+            self.player.combat_t = self.player.combat_t.min(2.0);
+        }
+        self.player.atk_cd = (self.player.atk_cd - dt).max(0.0);
+        if self.player.reload_t > 0.0 {
+            self.player.reload_t -= dt;
+            if self.player.reload_t <= 0.0 {
+                self.finish_reload();
+            }
+        }
+        let aim = (
+            input.atk_x / atk_len.max(1e-3),
+            input.atk_y / atk_len.max(1e-3),
+        );
+        match w.class {
+            WeaponClass::Fist => self.update_fist(dt, wants),
+            WeaponClass::Melee => self.update_melee(dt, wants, w),
+            _ => {
+                if wants && self.player.atk_cd <= 0.0 && self.player.reload_t <= 0.0 {
+                    self.fire(w, aim);
+                }
+                self.player.atk_active = wants;
+            }
+        }
+        // ---- hareket
         let mlen = input.move_x.hypot(input.move_y).min(1.0);
+        let attacking = self.player.atk_active;
         let mut moving = false;
         if mlen > 0.08 {
-            let (nx, ny) = (input.move_x / mlen.max(1e-4), input.move_y / mlen.max(1e-4));
-            let run = mlen > 0.6 && p.stamina > 1.0 && !p.punch_active;
+            let (nx, ny) = (input.move_x / mlen, input.move_y / mlen);
+            let run = mlen > 0.6 && self.player.stamina > 1.0 && !attacking;
             let mut speed = if run {
-                RUN_SPEED * prog.run_mult()
+                m(4.0) * self.progress.run_mult()
             } else {
-                WALK_SPEED * (0.4 + 0.6 * (mlen / 0.6).min(1.0))
+                m(1.6) * (0.45 + 0.55 * (mlen / 0.6).min(1.0))
             };
-            speed *= prog.move_mult();
-            if p.punch_active {
-                speed *= 0.45;
+            speed *= self.progress.move_mult() * self.player.speed_cheat;
+            if self.player.cloak_t > 0.0 {
+                speed *= 1.2;
+            }
+            if self.player.energy_t > 0.0 {
+                speed *= 1.2;
+            }
+            if attacking {
+                speed *= if ranged { 0.65 } else { 0.45 };
             }
             if run {
-                p.stamina = (p.stamina - 6.0 * prog.stamina_cost_mult() * dt).max(0.0);
-                p.stamina_delay = 0.6;
+                let cost = 6.0 * self.progress.stamina_cost_mult() * dt;
+                self.player.stamina = (self.player.stamina - cost).max(0.0);
+                self.player.stamina_delay = 0.6;
             }
-            let (mut x, mut y) = (p.x + nx * speed * dt, p.y + ny * speed * dt);
+            let gate_open = self.progress.level >= CITY_LEVEL;
+            let (mut x, mut y) = (
+                self.player.x + nx * speed * dt,
+                self.player.y + ny * speed * dt,
+            );
             self.world
-                .resolve_collision(&mut x, &mut y, 9.0, &mut self.scratch);
-            p.x = x;
-            p.y = y;
-            moving = true;
-            if !p.punch_active {
-                p.dir = dir_from_vec(nx, ny);
-                let a = if run { P_RUN } else { P_WALK };
-                if p.anim != a {
-                    p.anim = a;
-                    p.anim_t = 0.0;
-                }
+                .resolve(&mut x, &mut y, 14.0, gate_open, &mut self.scratch);
+            if !gate_open
+                && y < (world::WALL_Y as f32 + 2.2) * world::TILE
+                && self.player.y >= (world::WALL_Y as f32 + 2.2) * world::TILE
+                && (x / world::TILE - 180.0).abs() < 5.0
+                && self.player.locked_t <= 0.0
+            {
+                self.player.locked_t = 3.0;
+                self.events.push(Event::CityLocked);
             }
-        } else if !p.punch_active && p.anim != P_IDLE {
-            p.anim = P_IDLE;
+            self.player.x = x;
+            self.player.y = y;
+            moving = true;
+            self.player.step_t -= dt * if run { 1.6 } else { 1.0 };
+            if self.player.step_t <= 0.0 {
+                self.player.step_t = 0.42;
+                self.events.push(Event::Step);
+            }
+            if !attacking {
+                self.player.dir = dir_from_vec(nx, ny);
+            }
+            let a = if attacking && !ranged {
+                self.player.anim
+            } else if ranged && (attacking || self.player.combat_t < 1.5) {
+                aim_walk
+            } else if run {
+                A_RUN
+            } else {
+                A_WALK
+            };
+            if self.player.anim != a {
+                self.player.anim = a;
+                self.player.anim_t = 0.0;
+            }
+        } else if !attacking || ranged {
+            let a = if ranged && (attacking || self.player.combat_t < 1.5) {
+                aim_idle
+            } else if !ranged && attacking {
+                self.player.anim
+            } else {
+                A_IDLE
+            };
+            if self.player.anim != a {
+                self.player.anim = a;
+                self.player.anim_t = 0.0;
+            }
+        }
+        self.player.moving = moving;
+        self.pickup_drops();
+    }
+
+    fn update_fist(&mut self, dt: f32, wants: bool) {
+        const FPS: f32 = 14.0;
+        const HALF: f32 = 4.0 / FPS;
+        let p = &mut self.player;
+        if wants && !p.atk_active {
+            p.atk_active = true;
+            p.hit_done = false;
+            if p.anim != A_PUNCH {
+                p.anim = A_PUNCH;
+                p.anim_t = 0.0;
+            }
+        }
+        if !p.atk_active {
+            return;
+        }
+        let tired = p.stamina < 4.0;
+        let speed = if tired { 0.6 } else { 1.0 };
+        p.anim_t += dt * (speed - 1.0);
+        let half_t = p.anim_t % HALF;
+        let mut swing = false;
+        if !p.hit_done && half_t >= 1.5 / FPS {
+            p.hit_done = true;
+            swing = true;
+        }
+        if half_t + dt * speed >= HALF - 1e-4 {
+            p.hit_done = false;
+            if !wants {
+                p.atk_active = false;
+            }
+        }
+        if swing {
+            let cost = 4.0 * self.progress.stamina_cost_mult();
+            self.player.stamina = (self.player.stamina - cost).max(0.0);
+            self.player.stamina_delay = 0.8;
+            self.events.push(Event::Swing);
+            let dmg = self.progress.fist_damage();
+            self.melee_hit(dmg, m(1.4), 0.75, 0.0);
+        }
+    }
+
+    fn update_melee(&mut self, _dt: f32, wants: bool, w: &'static data::WeaponDef) {
+        let p = &mut self.player;
+        let period = 1.0 / w.rate;
+        if wants && !p.atk_active {
+            p.atk_active = true;
+            p.hit_done = false;
+            p.anim = A_MELEE;
             p.anim_t = 0.0;
         }
-        p.moving = moving;
-
-        if swing {
+        if !p.atk_active {
+            return;
+        }
+        if p.anim != A_MELEE {
+            p.anim = A_MELEE;
+            p.anim_t = 0.0;
+        }
+        let ct = p.anim_t % period;
+        if !p.hit_done && ct >= period * 0.4 {
+            p.hit_done = true;
+            self.player.stamina =
+                (self.player.stamina - 5.0 * self.progress.stamina_cost_mult()).max(0.0);
+            self.player.stamina_delay = 0.8;
             self.events.push(Event::Swing);
-            self.resolve_punch();
+            self.melee_hit(w.damage, m(w.range_m), 0.9, w.stun);
         }
-    }
-
-    fn resolve_punch(&mut self) {
-        let (px, py, pdir) = (self.player.x, self.player.y, self.player.dir);
-        let (fx, fy) = dir_vec(pdir);
-        let base = self.progress.punch_damage();
-        let crit = self.rng.chance(self.progress.crit_chance());
-        let dmg = if crit { base * 1.75 } else { base } * self.rng.range(0.9, 1.1);
-        let stun = self.rng.chance(self.progress.stun_chance());
-        let mut hit_any = false;
-        let mut kills: Vec<usize> = Vec::new();
-        for (i, z) in self.zombies.iter_mut().enumerate() {
-            if z.state == ZState::Dead {
-                continue;
-            }
-            let (dx, dy) = (z.x - px, z.y - py);
-            let d = dx.hypot(dy);
-            if d > PUNCH_RANGE + 10.0 {
-                continue;
-            }
-            let ang = ((dx * fx + dy * fy) / d.max(1e-3)).clamp(-1.0, 1.0).acos();
-            if d > 12.0 && ang > PUNCH_ARC {
-                continue;
-            }
-            hit_any = true;
-            z.hp -= dmg;
-            z.flash_t = 0.1;
-            z.bar_t = 3.0;
-            let push = if crit { 150.0 } else { 90.0 };
-            z.kx = fx * push;
-            z.ky = fy * push;
-            self.events.push(Event::Damage {
-                x: z.x,
-                y: z.y - 50.0,
-                v: dmg.round() as i32,
-                crit,
-            });
-            if z.hp <= 0.0 {
-                z.state = ZState::Dead;
-                z.anim = Z_DEATH;
-                z.anim_t = 0.0;
-                z.timer = 3.0;
-                kills.push(i);
-            } else {
-                z.state = ZState::Hurt;
-                z.anim = Z_HURT;
-                z.anim_t = 0.0;
-                z.timer = if stun { 1.0 } else { 0.25 };
-            }
-        }
-        for i in kills {
-            let (x, y, xp) = (self.zombies[i].x, self.zombies[i].y, self.zombies[i].xp());
-            self.progress.kills += 1;
-            self.events.push(Event::Kill { x, y });
-            if self.rng.chance(0.3) {
-                self.progress.zombie_teeth += 1;
-                self.events.push(Event::Item {
-                    x,
-                    y: y - 30.0,
-                    name: "Zombi Dişi",
-                });
-            }
-            self.give_xp(x, y, xp);
-        }
-        if hit_any {
-            self.player.combat_t = 0.0;
-            self.events.push(Event::Hit {
-                x: px + fx * 20.0,
-                y: py + fy * 20.0 - 24.0,
-                tree: false,
-            });
-            return;
-        }
-        // zombi yoksa: önündeki ağaca vur
-        self.world.query(
-            px - 80.0,
-            py - 80.0,
-            px + 80.0,
-            py + 80.0,
-            &mut self.scratch,
-        );
-        let mut best: Option<(usize, f32)> = None;
-        for &i in &self.scratch {
-            let s = &self.world.statics[i as usize];
-            if s.kind != Kind::Tree || s.felled {
-                continue;
-            }
-            let (dx, dy) = (s.x - px, (s.y - py) * 1.3);
-            let d = dx.hypot(dy);
-            if d > PUNCH_RANGE + s.radius {
-                continue;
-            }
-            let ang = ((dx * fx + dy * fy) / d.max(1e-3)).clamp(-1.0, 1.0).acos();
-            if d > 14.0 && ang > PUNCH_ARC + 0.2 {
-                continue;
-            }
-            if best.is_none_or(|(_, bd)| d < bd) {
-                best = Some((i as usize, d));
-            }
-        }
-        if let Some((i, _)) = best {
-            let tdmg = (base * self.progress.tree_damage_mult()).round();
-            let bonus = self.progress.bonus_wood_chance();
-            let s = &mut self.world.statics[i];
-            s.hp -= tdmg;
-            s.shake = 0.3;
-            let (sx, sy) = (s.x, s.y);
-            self.events.push(Event::Hit {
-                x: sx,
-                y: sy - 20.0,
-                tree: true,
-            });
-            self.events.push(Event::Damage {
-                x: sx,
-                y: sy - 60.0,
-                v: tdmg as i32,
-                crit: false,
-            });
-            if s.hp <= 0.0 {
-                s.felled = true;
-                s.regrow = 90.0 * self.progress.regrow_mult();
-                let mut wood = 3 + self.rng.below(4);
-                if self.rng.chance(bonus) {
-                    wood += 1;
-                }
-                if s.sprite >= 8 && s.sprite <= 9 {
-                    wood = 1 + self.rng.below(2);
-                }
-                self.progress.wood += wood;
-                self.progress.trees += 1;
-                self.events.push(Event::TreeFall { x: sx, y: sy });
-                self.events.push(Event::Wood {
-                    x: sx,
-                    y: sy - 40.0,
-                    v: wood,
-                });
-                self.give_xp(sx, sy, 10);
-            }
-        }
-    }
-
-    fn give_xp(&mut self, x: f32, y: f32, xp: u32) {
-        self.events.push(Event::Xp {
-            x,
-            y: y - 70.0,
-            v: xp,
-        });
-        let ups = self.progress.add_xp(xp);
-        if ups > 0 {
-            self.player.hp = self.progress.max_hp();
-            self.player.stamina = self.progress.max_stamina();
-            self.events.push(Event::LevelUp {
-                level: self.progress.level,
-                points: self.progress.points,
-            });
-        }
-    }
-
-    fn damage_player(&mut self, amount: f32) {
         let p = &mut self.player;
-        if p.dead {
+        if ct + 0.02 >= period * 0.98 {
+            p.hit_done = false;
+            if !wants {
+                p.atk_active = false;
+                p.anim = A_IDLE;
+            }
+        }
+    }
+
+    pub fn damage_mult(&self) -> f32 {
+        let mut k = self.progress.damage_mult();
+        if self.player.rage_t > 0.0 {
+            k *= 1.4 + 0.03 * self.progress.char_level[0] as f32;
+        }
+        if self.player.cloak_t > 0.0 {
+            k *= 1.25;
+        }
+        k
+    }
+
+    fn kill_player(&mut self) {
+        let p = &mut self.player;
+        p.hp = 0.0;
+        p.dead = true;
+        p.anim = A_DEATH;
+        p.anim_t = 0.0;
+        p.atk_active = false;
+        self.progress.deaths += 1;
+        self.events.push(Event::Died);
+    }
+
+    pub fn damage_player(&mut self, amount: f32) {
+        if self.player.dead || self.player.god || self.player.cloak_t > 0.0 {
             return;
         }
+        let z = self.world.zone(self.player.x, self.player.y);
+        if z.safe() {
+            return;
+        }
+        let armor = self.progress.armor();
+        let mut dmg = amount * 100.0 / (100.0 + armor) * (1.0 - self.progress.damage_resist());
+        let p = &mut self.player;
         p.combat_t = 0.0;
-        p.hp -= amount;
+        if p.shield > 0.0 {
+            let absorbed = p.shield.min(dmg);
+            p.shield -= absorbed;
+            dmg -= absorbed;
+        }
+        if dmg <= 0.0 {
+            return;
+        }
+        p.hp -= dmg;
         p.flash_t = 0.12;
+        let (x, y) = (p.x, p.y);
         self.events.push(Event::PlayerDamage {
-            x: p.x,
-            y: p.y - 60.0,
-            v: amount.round() as i32,
+            x,
+            y: y - 110.0,
+            v: dmg.round().max(1.0) as i32,
         });
+        let max_hp = self.progress.max_hp();
+        let has_cloak = self.progress.eq.cloak == "cloak";
+        let p = &mut self.player;
+        if has_cloak && p.cloak_cd <= 0.0 && p.hp > 0.0 && p.hp < max_hp * 0.2 {
+            p.cloak_t = 3.0;
+            p.cloak_cd = 60.0;
+            self.events.push(Event::Cloak);
+        }
+        let p = &mut self.player;
         if p.hp <= 0.0 {
             if self.progress.has_last_breath() && p.last_breath_cd <= 0.0 {
                 p.hp = 1.0;
@@ -581,380 +864,300 @@ impl Game {
                 self.events.push(Event::LastBreath);
                 return;
             }
-            p.hp = 0.0;
-            p.dead = true;
-            p.anim = P_DEATH;
-            p.anim_t = 0.0;
-            p.punch_active = false;
-            self.progress.deaths += 1;
-            self.events.push(Event::Died);
-        } else if !p.punch_active {
-            p.hurt_t = 0.2;
+            self.kill_player();
+        } else if !p.atk_active {
+            p.hurt_t = 0.18;
         }
     }
 
-    fn update_zombies(&mut self, dt: f32) {
-        let (px, py, pdead) = (self.player.x, self.player.y, self.player.dead);
-        let mut player_damage = 0.0;
-        let n = self.zombies.len();
-        // birbirini itme (üst üste binmesin)
-        for i in 0..n {
-            for j in (i + 1)..n {
-                let (a, b) = (&self.zombies[i], &self.zombies[j]);
-                if a.state == ZState::Dead || b.state == ZState::Dead {
-                    continue;
-                }
-                let (dx, dy) = (b.x - a.x, b.y - a.y);
-                let d = dx.hypot(dy);
-                if d < 18.0 && d > 0.01 {
-                    let push = (18.0 - d) * 0.5;
-                    let (ux, uy) = (dx / d * push, dy / d * push);
-                    self.zombies[i].x -= ux;
-                    self.zombies[i].y -= uy;
-                    self.zombies[j].x += ux;
-                    self.zombies[j].y += uy;
-                }
-            }
+    // ------------------------------------------------------------------ yetenekler
+    pub fn use_ability(&mut self) -> Result<String, String> {
+        if self.player.dead || self.player.vehicle.is_some() {
+            return Err("Şu an kullanılamaz".into());
         }
-        for zi in 0..n {
-            let mut z = self.zombies[zi].clone();
-            z.anim_t += dt;
-            z.flash_t = (z.flash_t - dt).max(0.0);
-            z.bar_t = (z.bar_t - dt).max(0.0);
-            z.attack_cd = (z.attack_cd - dt).max(0.0);
-            // geri itilme
-            if z.kx != 0.0 || z.ky != 0.0 {
-                let (mut x, mut y) = (z.x + z.kx * dt, z.y + z.ky * dt);
-                self.world
-                    .resolve_collision(&mut x, &mut y, 9.0, &mut self.scratch);
-                z.x = x;
-                z.y = y;
-                z.kx *= (1.0 - 8.0 * dt).max(0.0);
-                z.ky *= (1.0 - 8.0 * dt).max(0.0);
-                if z.kx.abs() + z.ky.abs() < 2.0 {
-                    z.kx = 0.0;
-                    z.ky = 0.0;
-                }
-            }
-            let (dx, dy) = (px - z.x, py - z.y);
-            let dist = dx.hypot(dy);
-            match z.state {
-                ZState::Dead => {
-                    z.timer -= dt;
-                    if z.timer < 1.0 {
-                        z.alpha = z.timer.max(0.0);
-                    }
-                }
-                ZState::Hurt => {
-                    z.timer -= dt;
-                    if z.timer <= 0.0 {
-                        z.state = ZState::Chase;
-                        z.anim = Z_WALK;
-                        z.anim_t = 0.0;
-                    }
-                }
-                ZState::Wander => {
-                    z.timer -= dt;
-                    let sees =
-                        !pdead && (dist < 190.0 || (dist < 290.0 && self.player.anim == P_RUN));
-                    if sees {
-                        z.state = ZState::Notice;
-                        z.timer = 0.4;
-                        z.anim = Z_IDLE;
-                        z.dir = dir_from_vec(dx, dy);
-                        self.events.push(Event::Groan { x: z.x, y: z.y });
-                    } else if z.timer <= 0.0 {
-                        if z.anim == Z_WALK {
-                            z.anim = Z_IDLE;
-                            z.anim_t = 0.0;
-                            z.timer = self.rng.range(1.0, 3.0);
-                        } else {
-                            let a = self.rng.range(0.0, TAU);
-                            let r = self.rng.range(40.0, 140.0);
-                            z.tx = (z.x + a.cos() * r).clamp(64.0, MAP_PX - 64.0);
-                            z.ty = (z.y + a.sin() * r).clamp(64.0, MAP_PX - 64.0);
-                            z.anim = Z_WALK;
-                            z.anim_t = 0.0;
-                            z.timer = self.rng.range(2.0, 5.0);
-                        }
-                    }
-                    if z.anim == Z_WALK {
-                        let (mx, my) = (z.tx - z.x, z.ty - z.y);
-                        let md = mx.hypot(my);
-                        if md < 4.0 {
-                            z.timer = 0.0;
-                        } else {
-                            Self::move_zombie(
-                                &self.world,
-                                &mut self.scratch,
-                                &mut z,
-                                mx / md,
-                                my / md,
-                                dt,
-                            );
-                        }
-                    }
-                }
-                ZState::Notice => {
-                    z.timer -= dt;
-                    z.dir = dir_from_vec(dx, dy);
-                    if z.timer <= 0.0 {
-                        z.state = ZState::Chase;
-                        z.anim = Z_WALK;
-                        z.anim_t = 0.0;
-                    }
-                }
-                ZState::Chase => {
-                    if pdead || dist > 420.0 {
-                        z.state = ZState::Wander;
-                        z.anim = Z_IDLE;
-                        z.timer = 1.0;
-                    } else if dist < 24.0 && z.attack_cd <= 0.0 {
-                        z.state = ZState::Attack;
-                        z.anim = Z_ATTACK;
-                        z.anim_t = 0.0;
-                        z.hit_done = false;
-                        z.dir = dir_from_vec(dx, dy);
-                    } else if dist >= 20.0 {
-                        Self::move_zombie(
-                            &self.world,
-                            &mut self.scratch,
-                            &mut z,
-                            dx / dist,
-                            dy / dist,
-                            dt,
-                        );
-                        if z.anim != Z_WALK {
-                            z.anim = Z_WALK;
-                            z.anim_t = 0.0;
-                        }
-                    } else {
-                        z.dir = dir_from_vec(dx, dy);
-                        z.anim = Z_IDLE;
-                    }
-                }
-                ZState::Attack => {
-                    // 6 kare @10fps, 3. karede vuruş
-                    if !z.hit_done && z.anim_t >= 0.3 {
-                        z.hit_done = true;
-                        let (fx, fy) = dir_vec(z.dir);
-                        let facing = (dx * fx + dy * fy) / dist.max(1e-3);
-                        if dist < 32.0 && facing > 0.3 {
-                            player_damage += z.damage();
-                        }
-                    }
-                    if z.anim_t >= 0.6 {
-                        z.state = ZState::Chase;
-                        z.anim = Z_WALK;
-                        z.anim_t = 0.0;
-                        z.attack_cd = 1.0;
-                    }
-                }
-            }
-            self.zombies[zi] = z;
+        if self.player.ability_cd > 0.0 {
+            return Err(format!("Bekleme: {:.0} sn", self.player.ability_cd));
         }
-        self.zombies
-            .retain(|z| !(z.state == ZState::Dead && z.timer <= 0.0));
-        if player_damage > 0.0 {
-            self.damage_player(player_damage);
+        let c = self.progress.character;
+        let lvl = self.progress.char_level[c] as f32;
+        match c {
+            0 => {
+                self.player.rage_t = 5.0;
+                self.player.ability_cd = 40.0;
+                self.events.push(Event::Rage);
+                Ok("Öfke!".into())
+            }
+            1 => Err("Dron otomatik çalışır".into()),
+            2 => {
+                let v = 50.0 + 20.0 * (lvl - 1.0);
+                self.player.shield = v;
+                self.player.shield_t = 8.0;
+                self.player.ability_cd = 25.0;
+                self.player.cast_t = 0.5;
+                self.player.anim = A_CAST;
+                self.player.anim_t = 0.0;
+                let (x, y) = (self.player.x, self.player.y);
+                self.areas.push(Area {
+                    kind: AreaKind::ShieldFx,
+                    x,
+                    y,
+                    r: m(4.0),
+                    life: 0.8,
+                    max_life: 0.8,
+                    dps: 0.0,
+                    hit_done: true,
+                });
+                self.events.push(Event::Shield { v: v as i32 });
+                Ok(format!("Büyü Kalkanı: {v:.0}"))
+            }
+            _ => {
+                // Lv1 %5/5sn, Lv5 %10/4sn, Lv10 %20/3sn
+                let (pct, dur) = if lvl <= 5.0 {
+                    let k = (lvl - 1.0) / 4.0;
+                    (0.05 + 0.05 * k, 5.0 - 1.0 * k)
+                } else {
+                    let k = (lvl - 5.0) / 5.0;
+                    (0.10 + 0.10 * k, 4.0 - 1.0 * k)
+                };
+                let total = self.progress.max_hp() * pct;
+                self.player.heal_t = dur;
+                self.player.heal_rate = total / dur;
+                self.player.ability_cd = 30.0;
+                self.player.cast_t = 0.5;
+                self.player.anim = A_CAST;
+                self.player.anim_t = 0.0;
+                let (x, y) = (self.player.x, self.player.y);
+                self.areas.push(Area {
+                    kind: AreaKind::Heal,
+                    x,
+                    y,
+                    r: m(4.0),
+                    life: dur,
+                    max_life: dur,
+                    dps: 0.0,
+                    hit_done: true,
+                });
+                self.events.push(Event::Heal {
+                    x,
+                    y: y - 120.0,
+                    v: total as i32,
+                });
+                Ok(format!("Şifa Alanı: +{total:.0} can / {dur:.1} sn"))
+            }
         }
     }
 
-    fn move_zombie(
-        world: &World,
-        scratch: &mut Vec<u32>,
-        z: &mut Zombie,
-        nx: f32,
-        ny: f32,
-        dt: f32,
-    ) {
-        let sp = z.speed();
-        let (mut x, mut y) = (z.x + nx * sp * dt, z.y + ny * sp * dt);
-        world.resolve_collision(&mut x, &mut y, 9.0, scratch);
-        // engelde takıldıysa yana kay
-        if (x - z.x).hypot(y - z.y) < sp * dt * 0.3 {
-            let (sx, sy) = (-ny, nx);
-            x = z.x + sx * sp * dt;
-            y = z.y + sy * sp * dt;
-            world.resolve_collision(&mut x, &mut y, 9.0, scratch);
+    fn update_drone(&mut self, dt: f32) {
+        if self.progress.character != 1 || self.player.dead {
+            return;
         }
-        z.x = x;
-        z.y = y;
-        z.dir = dir_from_vec(nx, ny);
-    }
-
-    fn update_statics(&mut self, dt: f32) {
+        let lvl = self.progress.char_level[1];
         let (px, py) = (self.player.x, self.player.y);
-        // sadece sallanan/yeniden büyüyen ağaçlar (ucuz döngü)
-        for s in self.world.statics.iter_mut() {
-            if s.kind != Kind::Tree {
+        self.drone.t += dt;
+        let tx = px + (self.drone.t * 1.3).cos() * 60.0;
+        let ty = py - 40.0 + (self.drone.t * 1.3).sin() * 30.0;
+        let k = 1.0 - (-6.0 * dt).exp();
+        self.drone.x += (tx - self.drone.x) * k;
+        self.drone.y += (ty - self.drone.y) * k;
+        self.drone.cd -= dt;
+        if self.drone.cd > 0.0 {
+            return;
+        }
+        let range = m(9.0);
+        let filt = self.progress.drone_targets;
+        let mut best: Option<(usize, f32)> = None;
+        for (i, z) in self.zombies.iter().enumerate() {
+            if z.state == ZState::Dead || z.alpha < 0.3 {
                 continue;
             }
+            let ok = match z.kind {
+                ZKind::Dog => filt[1],
+                ZKind::Titan => filt[2],
+                _ => filt[0],
+            };
+            if !ok {
+                continue;
+            }
+            let d = (z.x - self.drone.x).hypot(z.y - self.drone.y);
+            if d < range && best.is_none_or(|(_, bd)| d < bd) {
+                best = Some((i, d));
+            }
+        }
+        if let Some((i, d)) = best {
+            let z = &self.zombies[i];
+            let (dx, dy) = ((z.x - self.drone.x) / d, (z.y - 40.0 - self.drone.y) / d);
+            let dmg = (6.0 + 1.2 * (lvl as f32 - 1.0)) * self.progress.damage_mult();
+            let rocket = lvl >= 10 && self.rng.chance(0.15);
+            let barrels = if lvl >= 5 { 2 } else { 1 };
+            for b in 0..barrels {
+                let off = (b as f32 - 0.5 * (barrels - 1) as f32) * 10.0;
+                self.projectiles.push(Projectile {
+                    kind: if rocket {
+                        ProjKind::DroneRocket
+                    } else {
+                        ProjKind::DroneBullet
+                    },
+                    x: self.drone.x + off * dy,
+                    y: self.drone.y - off * dx,
+                    vx: dx * m(22.0),
+                    vy: dy * m(22.0),
+                    dmg: if rocket { dmg * 4.0 } else { dmg },
+                    pierce: 0,
+                    life: 0.8,
+                    splash: if rocket { m(1.8) } else { 0.0 },
+                    hostile: false,
+                    hit: Vec::new(),
+                });
+            }
+            let (x, y) = (self.drone.x, self.drone.y);
+            self.events.push(Event::DroneShot { x, y });
+            self.drone.cd = 0.8;
+        }
+    }
+
+    // ------------------------------------------------------------------ eşyalar
+    pub fn spawn_drop(&mut self, item: usize, count: u32, x: f32, y: f32) {
+        if count == 0 {
+            return;
+        }
+        let a = self.rng.range(0.0, TAU);
+        let r = self.rng.range(10.0, 40.0);
+        self.drops.push(Drop {
+            item: item as u16,
+            count,
+            x: x + a.cos() * r,
+            y: y + a.sin() * r * 0.6,
+            age: 0.0,
+            pop: 0.0,
+        });
+    }
+
+    pub fn spawn_drop_id(&mut self, id: &str, count: u32, x: f32, y: f32) {
+        if let Some(i) = data::item_index(id) {
+            self.spawn_drop(i, count, x, y);
+        }
+    }
+
+    fn pickup_drops(&mut self) {
+        let (px, py) = (self.player.x, self.player.y);
+        let mut full = false;
+        let mut i = 0;
+        while i < self.drops.len() {
+            let d = &self.drops[i];
+            if d.age < 0.35 || (d.x - px).hypot(d.y - py) > 40.0 {
+                i += 1;
+                continue;
+            }
+            let item = d.item as usize;
+            let def = &data::ITEMS[item];
+            let (dx, dy, cnt) = (d.x, d.y, d.count);
+            if def.id == "coin" {
+                self.progress.add_gold(cnt);
+                self.events.push(Event::Gold {
+                    x: dx,
+                    y: dy - 60.0,
+                    v: cnt,
+                });
+                let done = self.progress.quest_event(data::QuestKind::Gold, cnt);
+                self.quests_done(done);
+                self.drops.swap_remove(i);
+                continue;
+            }
+            if def.id == "gem" {
+                self.progress.gems += cnt;
+                self.drops.swap_remove(i);
+                continue;
+            }
+            let left = self.progress.inv.add(item, cnt);
+            if left < cnt {
+                self.events.push(Event::Pickup {
+                    x: dx,
+                    y: dy - 60.0,
+                    name: def.name.into(),
+                    count: cnt - left,
+                    rarity: def.rarity as u8,
+                });
+            }
+            if left == 0 {
+                self.drops.swap_remove(i);
+            } else {
+                self.drops[i].count = left;
+                full = true;
+                i += 1;
+            }
+        }
+        if full && self.player.noammo_t <= 0.0 {
+            self.player.noammo_t = 3.0;
+            self.events.push(Event::InvFull);
+        }
+    }
+
+    fn update_drops(&mut self, dt: f32) {
+        for d in self.drops.iter_mut() {
+            d.age += dt;
+            d.pop = (d.pop + dt * 3.0).min(1.0);
+        }
+        self.drops.retain(|d| d.age < 150.0);
+    }
+
+    // ------------------------------------------------------------------ statikler
+    fn update_statics(&mut self, dt: f32) {
+        let (px, py) = (self.player.x, self.player.y);
+        for s in self.world.statics.iter_mut() {
             if s.shake > 0.0 {
                 s.shake = (s.shake - dt).max(0.0);
             }
-            if s.felled {
-                s.regrow -= dt;
-                if s.regrow <= 0.0 && (s.x - px).hypot(s.y - py) > 200.0 {
-                    s.felled = false;
+            if s.broken {
+                s.respawn -= dt;
+                if s.respawn <= 0.0 && (s.x - px).hypot(s.y - py) > 700.0 {
+                    s.broken = false;
                     s.hp = s.max_hp;
                 }
             }
         }
     }
 
-    /// Görünür alandaki her şeyi y'ye göre sıralı yazar. Döndürür: kayıt sayısı.
-    pub fn draw_list(
-        &mut self,
-        vx: f32,
-        vy: f32,
-        vw: f32,
-        vh: f32,
-        out: &mut [f32],
-        deco_density: f32,
-    ) -> usize {
-        let margin = 140.0;
-        let (x0, y0, x1, y1) = (
-            vx - margin,
-            vy - margin,
-            vx + vw + margin,
-            vy + vh + margin * 1.5,
-        );
-        self.draw_tmp.clear();
-        self.world.query(x0, y0, x1, y1, &mut self.scratch);
-        for &i in &self.scratch {
-            let s = &self.world.statics[i as usize];
-            if s.x < x0 || s.x > x1 || s.y < y0 || s.y > y1 {
+    fn update_npcs(&mut self, dt: f32) {
+        for ni in 0..self.npcs.len() {
+            let npc = &mut self.npcs[ni];
+            npc.anim_t += dt;
+            npc.cd -= dt;
+            if npc.kind != 0 {
+                let (dx, dy) = (self.player.x - npc.x, self.player.y - npc.y);
+                if dx.hypot(dy) < 500.0 {
+                    npc.dir = dir_from_vec(dx, dy);
+                }
                 continue;
             }
-            if s.kind == Kind::Deco && s.sprite >= 23 && ((s.phase * 1000.0) % 1.0) > deco_density {
+            if npc.cd > 0.0 {
                 continue;
             }
-            let (sprite, state) = if s.kind == Kind::Tree && s.felled {
-                (STUMP_SPRITE, 1.0)
-            } else {
-                (s.sprite, 0.0)
-            };
-            let shake = if s.shake > 0.0 {
-                (s.shake * 60.0).sin() * 2.0 * (s.shake / 0.3)
-            } else {
-                0.0
-            };
-            let hp = if s.kind == Kind::Tree && s.hp < s.max_hp && !s.felled {
-                s.hp / s.max_hp
-            } else {
-                -1.0
-            };
-            self.draw_tmp.push((
-                s.y,
-                [
-                    DRAW_STATIC,
-                    sprite as f32,
-                    s.x,
-                    s.y,
-                    i as f32,
-                    state,
-                    s.phase,
-                    shake,
-                    hp,
-                ],
-            ));
-        }
-        for z in &self.zombies {
-            if z.x < x0 || z.x > x1 || z.y < y0 || z.y > y1 {
-                continue;
+            let (nx, ny) = (npc.x, npc.y);
+            let range = m(14.0);
+            let mut best: Option<(usize, f32)> = None;
+            for (i, z) in self.zombies.iter().enumerate() {
+                if z.state == ZState::Dead || z.boss {
+                    continue;
+                }
+                let d = (z.x - nx).hypot(z.y - ny);
+                if d < range && best.is_none_or(|(_, bd)| d < bd) {
+                    best = Some((i, d));
+                }
             }
-            let hp = if z.bar_t > 0.0 && z.state != ZState::Dead {
-                z.hp / z.max_hp
-            } else {
-                -1.0
-            };
-            let flash = if z.flash_t > 0.0 { 1.0 } else { 0.0 };
-            self.draw_tmp.push((
-                z.y,
-                [
-                    DRAW_ZOMBIE,
-                    z.alpha,
-                    z.x,
-                    z.y,
-                    z.dir as f32,
-                    z.anim as f32,
-                    z.anim_t,
-                    flash,
-                    hp,
-                ],
-            ));
-        }
-        let p = &self.player;
-        let flash = if p.flash_t > 0.0 { 1.0 } else { 0.0 };
-        self.draw_tmp.push((
-            p.y,
-            [
-                DRAW_PLAYER,
-                0.0,
-                p.x,
-                p.y,
-                p.dir as f32,
-                p.anim as f32,
-                p.anim_t,
-                flash,
-                -1.0,
-            ],
-        ));
-        self.draw_tmp
-            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-        let cap = out.len() / STRIDE;
-        let n = self.draw_tmp.len().min(cap);
-        for (k, (_, rec)) in self.draw_tmp.iter().take(n).enumerate() {
-            out[k * STRIDE..(k + 1) * STRIDE].copy_from_slice(rec);
-        }
-        n
-    }
-
-    /// HUD: [hp, maxhp, st, maxst, xp, xpnext, level, points, wood, kills, px, py, dead, teeth, trees]
-    pub fn hud(&self) -> [f32; 15] {
-        let p = &self.player;
-        let g = &self.progress;
-        [
-            p.hp,
-            g.max_hp(),
-            p.stamina,
-            g.max_stamina(),
-            g.xp as f32,
-            crate::progress::xp_to_next(g.level) as f32,
-            g.level as f32,
-            g.points as f32,
-            g.wood as f32,
-            g.kills as f32,
-            p.x,
-            p.y,
-            if p.dead { 1.0 } else { 0.0 },
-            g.zombie_teeth as f32,
-            g.trees as f32,
-        ]
-    }
-
-    /// Mini harita için yakın zombi konumları [x, y, ...]
-    pub fn radar(&self, out: &mut [f32]) -> usize {
-        let mut k = 0;
-        for z in &self.zombies {
-            if z.state == ZState::Dead || k + 2 > out.len() {
-                continue;
+            if let Some((i, _)) = best {
+                let (zx, zy) = (self.zombies[i].x, self.zombies[i].y);
+                self.npcs[ni].dir = dir_from_vec(zx - nx, zy - ny);
+                self.npcs[ni].cd = 1.2;
+                self.events.push(Event::Sniper {
+                    x1: nx,
+                    y1: ny - 300.0,
+                    x2: zx,
+                    y2: zy - 60.0,
+                });
+                let dmg = 60.0 + self.zombies[i].max_hp * 0.25;
+                self.hurt_zombie(i, dmg, false, 0.0, 0.0, false, false);
             }
-            out[k] = z.x;
-            out[k + 1] = z.y;
-            k += 2;
         }
-        k / 2
-    }
-
-    pub fn take_events_json(&mut self) -> String {
-        if self.events.is_empty() {
-            return "[]".into();
-        }
-        let s = serde_json::to_string(&self.events).unwrap_or_else(|_| "[]".into());
-        self.events.clear();
-        s
     }
 }
 
@@ -968,134 +1171,5 @@ mod tests {
             let (x, y) = dir_vec(d);
             assert_eq!(dir_from_vec(x, y), d);
         }
-        assert_eq!(dir_from_vec(0.0, 1.0), 0); // güney
-        assert_eq!(dir_from_vec(1.0, 0.0), 2); // doğu
-        assert_eq!(dir_from_vec(0.0, -1.0), 4); // kuzey
-        assert_eq!(dir_from_vec(-1.0, 0.0), 6); // batı
-    }
-
-    #[test]
-    fn player_moves_and_runs() {
-        let mut g = Game::new(3, Progress::default());
-        g.zombies.clear();
-        let (x0, y0) = (g.player.x, g.player.y);
-        for _ in 0..60 {
-            g.step(
-                1.0 / 60.0,
-                Input {
-                    move_x: 1.0,
-                    move_y: 0.0,
-                    ..Default::default()
-                },
-            );
-        }
-        assert!(
-            g.player.x > x0 + 80.0,
-            "koşu çok yavaş: {}",
-            g.player.x - x0
-        );
-        assert!((g.player.y - y0).abs() < 1.0);
-        assert_eq!(g.player.anim, P_RUN);
-        assert_eq!(g.player.dir, 2);
-    }
-
-    #[test]
-    fn punching_kills_zombie_and_gives_xp() {
-        let mut g = Game::new(3, Progress::default());
-        g.zombies.clear();
-        g.spawn_t = 999.0;
-        let (px, py) = (g.player.x, g.player.y);
-        g.zombies.push(Zombie {
-            x: px + 22.0,
-            y: py,
-            dir: 6,
-            state: ZState::Wander,
-            anim: Z_IDLE,
-            anim_t: 0.0,
-            hp: 30.0,
-            max_hp: 30.0,
-            level: 1,
-            tx: px + 22.0,
-            ty: py,
-            timer: 99.0,
-            attack_cd: 99.0,
-            hit_done: false,
-            flash_t: 0.0,
-            bar_t: 0.0,
-            kx: 0.0,
-            ky: 0.0,
-            stun_t: 0.0,
-            alpha: 1.0,
-        });
-        for _ in 0..600 {
-            g.step(
-                1.0 / 60.0,
-                Input {
-                    atk_x: 1.0,
-                    atk_y: 0.0,
-                    attacking: true,
-                    ..Default::default()
-                },
-            );
-            // geri itilen zombiyi yakın tut
-            if let Some(z) = g.zombies.first_mut() {
-                if z.state != ZState::Dead {
-                    z.x = px + 22.0;
-                    z.y = py;
-                    z.attack_cd = 99.0;
-                }
-            }
-        }
-        assert_eq!(g.progress.kills, 1);
-        assert!(g.progress.level >= 1 && (g.progress.xp > 0 || g.progress.level > 1));
-        assert_eq!(g.player.dir, 2);
-    }
-
-    #[test]
-    fn zombie_hurts_player() {
-        let mut g = Game::new(3, Progress::default());
-        g.zombies.clear();
-        g.spawn_t = 999.0;
-        let (px, py) = (g.player.x, g.player.y);
-        g.zombies.push(Zombie {
-            x: px + 60.0,
-            y: py,
-            dir: 6,
-            state: ZState::Wander,
-            anim: Z_IDLE,
-            anim_t: 0.0,
-            hp: 50.0,
-            max_hp: 50.0,
-            level: 1,
-            tx: px,
-            ty: py,
-            timer: 1.0,
-            attack_cd: 0.0,
-            hit_done: false,
-            flash_t: 0.0,
-            bar_t: 0.0,
-            kx: 0.0,
-            ky: 0.0,
-            stun_t: 0.0,
-            alpha: 1.0,
-        });
-        let hp0 = g.player.hp;
-        for _ in 0..600 {
-            g.step(1.0 / 60.0, Input::default());
-        }
-        assert!(g.player.hp < hp0);
-    }
-
-    #[test]
-    fn draw_list_sorted() {
-        let mut g = Game::new(11, Progress::default());
-        let mut buf = vec![0.0f32; STRIDE * 4000];
-        let (px, py) = (g.player.x, g.player.y);
-        let n = g.draw_list(px - 400.0, py - 200.0, 800.0, 400.0, &mut buf, 1.0);
-        assert!(n > 10);
-        for k in 1..n {
-            assert!(buf[k * STRIDE + 3] >= buf[(k - 1) * STRIDE + 3]);
-        }
-        assert!((0..n).any(|k| buf[k * STRIDE] == DRAW_PLAYER));
     }
 }

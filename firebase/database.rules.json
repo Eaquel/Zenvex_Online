@@ -1,0 +1,23 @@
+{
+  "rules": {
+    "presence": {
+      "$room": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['n', 's', 'ts']) && newData.child('n').isString() && newData.child('n').val().length <= 24"
+        }
+      }
+    },
+    "chat": {
+      "$channel": {
+        ".read": "auth != null",
+        ".indexOn": ["ts"],
+        "$msg": {
+          ".write": "auth != null && !data.exists()",
+          ".validate": "newData.child('u').val() === auth.uid && newData.child('m').isString() && newData.child('m').val().length <= 140 && newData.child('n').isString()"
+        }
+      }
+    }
+  }
+}

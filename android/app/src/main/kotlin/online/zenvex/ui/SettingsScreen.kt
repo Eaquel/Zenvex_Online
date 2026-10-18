@@ -1,6 +1,7 @@
 package online.zenvex.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -18,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,6 +30,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -35,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import online.zenvex.BuildConfig
+import online.zenvex.game.Online
 import online.zenvex.game.Settings
 import kotlin.math.roundToInt
 
@@ -46,19 +52,17 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
     fun set(n: Settings) { s = n; Settings.save(ctx, n) }
     fun custom(n: Settings) = set(n.copy(preset = 4))
 
-    Box(Modifier.fillMaxSize()) {
-        if (inGame) Box(Modifier.fillMaxSize().background(Pal.Night.copy(alpha = 0.85f))) else Background("lobby_bg", 0.65f)
+    ScreenFrame("AYARLAR", "gear", back) {
         Column(Modifier.fillMaxSize()) {
-            ScreenHeader("Ayarlar", back)
-            Row(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            Row(Modifier.fillMaxSize()) {
                 Column(Modifier.width(170.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("Grafik" to "gear", "Kontroller" to "fist", "Ses" to "sound", "Oyun" to "map", "Hesap" to "user", "Hakkında" to "scroll")
+                    listOf("Grafik" to "eye", "Kontroller" to "fist", "Ses" to "volume", "Oyun" to "map", "Hesap" to "user", "Hakkında" to "info")
                         .forEachIndexed { i, (n, ic) ->
-                            PixelButton(n, Modifier.fillMaxWidth(), if (tab == i) BtnStyle.Primary else BtnStyle.Secondary, icon = ic) { tab = i }
+                            GButton(n, Modifier.fillMaxWidth(), if (tab == i) Tone.Gold else Tone.Dark, icon = ic, height = 42.dp, size = 14.sp) { tab = i }
                         }
                 }
                 Spacer(Modifier.width(12.dp))
-                PixelPanel(Modifier.weight(1f).fillMaxHeight().padding(bottom = 12.dp)) {
+                Panel(Modifier.weight(1f).fillMaxHeight().padding(bottom = 8.dp)) {
                     Column(Modifier.verticalScroll(rememberScrollState())) {
                         when (tab) {
                             0 -> {
@@ -78,25 +82,24 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 Toggle("FPS göstergesi", s.showFps) { set(s.copy(showFps = it)) }
                             }
                             1 -> {
-                                PText("Hareket joysticki", 15.sp, Pal.Cream)
+                                SectionTitle("Hareket joysticki")
                                 Toggle("Dinamik joystick (dokunduğun yerde açılır)", s.moveDynamic) { set(s.copy(moveDynamic = it)) }
                                 Slider("Hareket hassasiyeti", s.moveSensitivity, 0.5f, 2f) { set(s.copy(moveSensitivity = it)) }
                                 Slider("Hareket ölü bölge", s.moveDeadZone, 0f, 0.3f, pct = true) { set(s.copy(moveDeadZone = it)) }
                                 Slider("Koşma eşiği", s.runThreshold, 0.4f, 0.9f, pct = true) { set(s.copy(runThreshold = it)) }
                                 Spacer(Modifier.height(8.dp))
-                                PText("Saldırı joysticki", 15.sp, Pal.Cream)
-                                PText("Çevirdiğin yöne yumruk atar, basılı tuttukça devam eder.", 11.sp, Pal.Gray)
+                                SectionTitle("Saldırı joysticki")
+                                T("Çevirdiğin yöne saldırır, basılı tuttukça devam eder.", 11.sp, Pal.Sub)
                                 Slider("Saldırı hassasiyeti", s.attackSensitivity, 0.5f, 2f) { set(s.copy(attackSensitivity = it)) }
                                 Slider("Saldırı ölü bölge", s.attackDeadZone, 0f, 0.3f, pct = true) { set(s.copy(attackDeadZone = it)) }
                                 Spacer(Modifier.height(8.dp))
-                                PText("Genel", 15.sp, Pal.Cream)
+                                SectionTitle("Genel")
                                 Slider("Joystick boyutu", s.joystickSize, 0.7f, 1.5f, pct = true) { set(s.copy(joystickSize = it)) }
                                 Slider("Joystick saydamlığı", s.joystickOpacity, 0.2f, 1f, pct = true) { set(s.copy(joystickOpacity = it)) }
                                 Choice("Titreşim", listOf("Kapalı", "Hafif", "Güçlü"), s.haptics) { set(s.copy(haptics = it)) }
                                 Toggle("Sol el modu (joystickleri değiştir)", s.leftHanded) { set(s.copy(leftHanded = it)) }
                                 Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PixelButton("Arayüzü Düzenle", icon = "map", locked = true, textSize = 12.sp) {}
-                                    PixelButton("Varsayılana Dön", textSize = 12.sp) {
+                                    GButton("Varsayılana Dön", tone = Tone.Dark, icon = "refresh", height = 38.dp, size = 13.sp) {
                                         val d = Settings()
                                         set(s.copy(moveDynamic = d.moveDynamic, moveSensitivity = d.moveSensitivity, moveDeadZone = d.moveDeadZone,
                                             runThreshold = d.runThreshold, attackSensitivity = d.attackSensitivity, attackDeadZone = d.attackDeadZone,
@@ -105,7 +108,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 }
                             }
                             2 -> {
-                                PText("Müzik ve ortam sesleri bir sonraki sürümde ekleniyor.", 11.sp, Pal.Gray)
+                                T("Müzik lobide ve oyunda çalar; efektler oyun içi.", 11.sp, Pal.Sub)
                                 Slider("Ana ses", s.master, 0f, 1f, pct = true) { set(s.copy(master = it)) }
                                 Slider("Müzik", s.music, 0f, 1f, pct = true) { set(s.copy(music = it)) }
                                 Slider("Efektler", s.sfx, 0f, 1f, pct = true) { set(s.copy(sfx = it)) }
@@ -114,38 +117,36 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             }
                             3 -> {
                                 Choice("Dil", listOf("Türkçe", "English"), if (s.language == "tr") 0 else 1) {
-                                    if (it == 1) Toaster.show("İngilizce yakında!", "globe")
+                                    if (it == 1) Toaster.show("İngilizce yakında!", false)
                                 }
                                 Choice("Renk körlüğü modu", listOf("Kapalı", "Deuteranopi", "Protanopi", "Tritanopi"), s.colorBlind) {
-                                    if (it != 0) Toaster.locked()
+                                    if (it != 0) Toaster.show("Yakında!", false)
                                 }
-                                Toggle("Bildirimler", false) { Toaster.locked() }
+                                Toggle("Bildirimler", false) { Toaster.show("Yakında!", false) }
                             }
                             4 -> {
-                                PText("Misafir hesabı", 15.sp, Pal.Cream)
-                                PText("İlerlemen bu cihazda saklanıyor.", 12.sp, Pal.Gray)
+                                SectionTitle("Misafir hesabı")
+                                T("İlerlemen bu cihazda saklanıyor.", 12.sp, Pal.Sub)
+                                T("Sunucu: " + Online.status.value, 12.sp, if (Online.online.value) Pal.Green else Pal.Sub)
                                 Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    PixelButton("Hesabı Bağla", icon = "globe", locked = true) {}
-                                    PixelButton("Bulut Kayıt", icon = "map", locked = true) {}
+                                    GButton("Hesabı Bağla", tone = Tone.Dark, icon = "globe", height = 40.dp, size = 13.sp) { Toaster.show("Yakında!", false) }
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 if (!inGame) {
                                     var confirm by remember { mutableStateOf(false) }
-                                    PixelButton(if (confirm) "Emin misin? Tekrar bas" else "Tüm İlerlemeyi Sil", style = BtnStyle.Danger) {
+                                    GButton(if (confirm) "Emin misin? Tekrar bas" else "Tüm İlerlemeyi Sil", tone = Tone.Red, height = 40.dp, size = 13.sp) {
                                         if (confirm) { onReset(); confirm = false } else confirm = true
                                     }
                                 }
                             }
                             else -> {
-                                PText("Zenvex Online", 18.sp, Pal.Cream)
-                                PText("Sürüm ${BuildConfig.VERSION_NAME}", 12.sp, Pal.Gray)
+                                T("ZENVEX ONLINE", 22.sp, Pal.Gold, display = true)
+                                T("Sürüm ${BuildConfig.VERSION_NAME}", 12.sp, Pal.Sub)
                                 Spacer(Modifier.height(8.dp))
-                                PText("Oyun çekirdeği Rust, Android arayüzü Kotlin ile yazıldı.", 12.sp, Pal.White)
-                                PText("Tüm görseller kodla üretildi (tools/assetgen).", 12.sp, Pal.White)
-                                PText("Yazı tipi: Pixelify Sans (SIL Open Font License).", 12.sp, Pal.White)
-                                Spacer(Modifier.height(8.dp))
-                                PixelButton("Destek / Geri Bildirim", icon = "mail", locked = true) {}
+                                T("Oyun çekirdeği Rust, Android arayüzü Kotlin ile yazıldı.", 12.sp)
+                                T("Tüm 3D görseller Blender ile kodla üretildi (tools/blender).", 12.sp)
+                                T("Yazı tipleri: Outfit, Big Shoulders (SIL Open Font License).", 12.sp)
                             }
                         }
                     }
@@ -156,18 +157,17 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
 }
 
 @Composable
-private fun Label(t: String) = PText(t, 13.sp, Pal.White)
+private fun Label(t: String) = T(t, 13.sp)
 
 @Composable
 fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable { onChange(!value) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().clickable { onChange(!value) }.padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         Label(label)
         Spacer(Modifier.weight(1f))
-        Box(Modifier.width(52.dp).height(26.dp).pixelFrame(if (value) Pal.GreenDark else Pal.GrayDark, if (value) Pal.Green else Pal.Gray, Pal.Night)) {
-            Box(
-                Modifier.align(if (value) Alignment.CenterEnd else Alignment.CenterStart).padding(4.dp).size(18.dp)
-                    .pixelFrame(Pal.White, Color.White, Pal.Gray),
-            )
+        Box(Modifier.width(50.dp).height(28.dp).clip(RoundedCornerShape(14.dp))
+            .background(if (value) Brush.horizontalGradient(listOf(Color(0xFF1E9A52), Color(0xFF5BE38A))) else Brush.horizontalGradient(listOf(Color(0xFF2A3446), Color(0xFF1A2230))))
+            .padding(3.dp)) {
+            Box(Modifier.align(if (value) Alignment.CenterEnd else Alignment.CenterStart).size(22.dp).clip(CircleShape).background(Color.White))
         }
     }
 }
@@ -177,11 +177,7 @@ fun Choice(label: String, options: List<String>, selected: Int, onSelect: (Int) 
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Label(label)
         Spacer(Modifier.height(4.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            options.forEachIndexed { i, o ->
-                PixelButton(o, style = if (i == selected) BtnStyle.Primary else BtnStyle.Secondary, textSize = 12.sp) { onSelect(i) }
-            }
-        }
+        Tabs(options.map { "" to it }.map { "dot" to it.second }, selected) { onSelect(it) }
     }
 }
 
@@ -199,17 +195,16 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
         Label(label)
         Spacer(Modifier.weight(1f))
         Box(
-            Modifier.width(200.dp).height(26.dp).onSizeChanged { w = it.width }
+            Modifier.width(220.dp).height(28.dp).onSizeChanged { w = it.width }
                 .pointerInput(min, max) { detectTapGestures { pick(it.x) } }
                 .pointerInput(min, max) { detectDragGestures { ch, _ -> pick(ch.position.x) } },
             contentAlignment = Alignment.CenterStart,
         ) {
-            Box(Modifier.fillMaxWidth().height(8.dp).background(Pal.Outline).padding(2.dp).background(Pal.GrayDark))
-            Box(Modifier.fillMaxWidth(frac).height(8.dp).padding(2.dp).background(Pal.Mustard))
-            val knobX = with(density) { (w * frac).toDp() } - 9.dp
-            Box(Modifier.offset(x = knobX).size(18.dp, 24.dp).pixelFrame(Pal.MustardLight, Pal.Cream, Pal.MustardDark))
+            Bar(frac, Pal.Gold, Modifier.fillMaxWidth(), 8.dp)
+            val knobX = with(density) { (w * frac).toDp() } - 11.dp
+            Box(Modifier.offset(x = knobX).size(22.dp).clip(CircleShape).background(Color.White).border(3.dp, Pal.Gold, CircleShape))
         }
         Spacer(Modifier.width(10.dp))
-        PText(if (pct) "%${(value * 100).roundToInt()}" else String.format("%.2fx", value), 12.sp, Pal.Cream, Modifier.width(52.dp))
+        T(if (pct) "%${(value * 100).roundToInt()}" else String.format("%.2fx", value), 12.sp, Pal.Gold, Modifier.width(52.dp), bold = true)
     }
 }

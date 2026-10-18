@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,6 +18,14 @@ android {
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
+        // Firebase (geçici çevrimiçi altyapı): GitHub Secrets veya firebase.properties ile doldurulur; boşsa çevrimdışı.
+        val fb = Properties()
+        rootProject.file("firebase.properties").takeIf { it.exists() }?.inputStream()?.use { fb.load(it) }
+        fun fbv(k: String) = (System.getenv(k) ?: fb.getProperty(k) ?: "").replace("\"", "")
+        buildConfigField("String", "FB_API_KEY", "\"${fbv("FB_API_KEY")}\"")
+        buildConfigField("String", "FB_APP_ID", "\"${fbv("FB_APP_ID")}\"")
+        buildConfigField("String", "FB_PROJECT_ID", "\"${fbv("FB_PROJECT_ID")}\"")
+        buildConfigField("String", "FB_DB_URL", "\"${fbv("FB_DB_URL")}\"")
     }
 
     signingConfigs {
@@ -51,7 +61,7 @@ android {
         buildConfig = true
     }
     androidResources {
-        noCompress += listOf("png", "json", "wav")
+        noCompress += listOf("png", "json", "wav", "webp", "ogg")
     }
 }
 
@@ -81,4 +91,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-auth")
+    implementation("com.google.firebase:firebase-database")
 }

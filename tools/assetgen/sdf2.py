@@ -48,6 +48,7 @@ class Mat:
     spec: parlama gücü (0..1), emissive: True ise ışıktan bağımsız parlak."""
 
     def __init__(self, base, texture=None, spec=0.0, emissive=False, outline=None, hue_shift=0.045, spread=0.42):
+        self.base = base
         self.tones = ramp(base, 5, hue_shift, spread)
         self.texture = texture
         self.spec = spec
@@ -268,3 +269,42 @@ def project(pt, anchor, mpp=MPP):
 def depth_of(pt):
     """Kameraya uzaklık (küçük = önde)."""
     return float(np.asarray(pt, float) @ FWD)
+
+
+def sd_cylinder(a, b, r, rr=0.0):
+    """a-b ekseni boyunca kapalı silindir (yarıçap r, kenar yuvarlatma rr)."""
+    a = np.asarray(a, float)
+    b = np.asarray(b, float)
+    ba = b - a
+    L = np.linalg.norm(ba)
+    u = ba / L
+    c = (a + b) / 2
+
+    def f(p):
+        q = p - c
+        y = q @ u
+        xv = q - y[..., None] * u
+        x = np.sqrt(np.einsum("...i,...i->...", xv, xv))
+        dx = x - (r - rr)
+        dy = np.abs(y) - (L / 2 - rr)
+        out = np.sqrt(np.maximum(dx, 0) ** 2 + np.maximum(dy, 0) ** 2) + np.minimum(np.maximum(dx, dy), 0)
+        return out - rr
+    return f
+
+
+def sd_torus(c, axis, R, r):
+    c = np.asarray(c, float)
+    u = np.asarray(axis, float)
+    u = u / np.linalg.norm(u)
+
+    def f(p):
+        q = p - c
+        y = q @ u
+        xv = q - y[..., None] * u
+        x = np.sqrt(np.einsum("...i,...i->...", xv, xv))
+        return np.sqrt((x - R) ** 2 + y ** 2) - r
+    return f
+
+
+def sd_shell(f, thickness):
+    return lambda p: np.abs(f(p)) - thickness

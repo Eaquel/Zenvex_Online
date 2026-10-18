@@ -2,14 +2,21 @@
 //! Oyun nesnesi `Box<Game>` olarak tutulur, Kotlin'e `Long` tutamaç olarak verilir.
 #![allow(non_snake_case)]
 
-use jni::objects::{JClass, JFloatArray, JString};
-use jni::sys::{jboolean, jfloat, jint, jlong, jstring, JNI_FALSE, JNI_TRUE};
+use jni::objects::{JClass, JFloatArray, JIntArray, JString};
+use jni::sys::{jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 use std::cell::RefCell;
-use zenvex_core::{game::STRIDE, Game, Input};
+use zenvex_core::game::{Remote, STRIDE};
+use zenvex_core::{Game, Input};
+
+/// Uzak oyuncu kaydı: x, y, yön, anim, anim_t, karakter, ekipman0..2, araç
+pub const REMOTE_STRIDE: usize = 10;
+/// Yerel oyuncu kaydı (çevrimiçi yayın): aynı sıra
+pub const LOCAL_STRIDE: usize = 10;
 
 thread_local! {
     static DRAW_BUF: RefCell<Vec<f32>> = RefCell::new(vec![0.0; STRIDE * 6000]);
+    static PIX_BUF: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
 }
 
 fn game<'a>(h: jlong) -> Option<&'a mut Game> {
@@ -17,7 +24,7 @@ fn game<'a>(h: jlong) -> Option<&'a mut Game> {
         None
     } else {
         // SAFETY: tutamaç `create` ile oluşturuldu ve `destroy` çağrılana kadar geçerli;
-        // Kotlin tarafı tüm çağrıları tek bir iş parçacığından (oyun döngüsü kilidi altında) yapar.
+        // Kotlin tarafı tüm çağrıları tek bir kilit altında yapar.
         Some(unsafe { &mut *(h as *mut Game) })
     }
 }
@@ -28,21 +35,29 @@ fn jstr(env: &mut JNIEnv, s: &str) -> jstring {
         .unwrap_or(std::ptr::null_mut())
 }
 
+fn rstr(env: &mut JNIEnv, s: &JString) -> String {
+    env.get_string(s).map(|s| s.into()).unwrap_or_default()
+}
+
 #[no_mangle]
 pub extern "system" fn Java_online_zenvex_game_Native_create<'l>(
     mut env: JNIEnv<'l>,
     _c: JClass<'l>,
     seed: jlong,
     save: JString<'l>,
+    day: jint,
 ) -> jlong {
-    let save: String = env.get_string(&save).map(|s| s.into()).unwrap_or_default();
-    let progress = zenvex_core::progress::Progress::default();
+    let save = rstr(&mut env, &save);
     let progress = if save.is_empty() {
-        progress
+        zenvex_core::Progress::default()
     } else {
         zenvex_core::progress_from_json(&save)
     };
-    Box::into_raw(Box::new(Game::new(seed as u64, progress))) as jlong
+    Box::into_raw(Box::new(Game::new(
+        seed as u64,
+        progress,
+        day.max(0) as u32,
+    ))) as jlong
 }
 
 #[no_mangle]
@@ -66,6 +81,34 @@ pub extern "system" fn Java_online_zenvex_game_Native_worldJson<'l>(
     let s = game(h)
         .map(|g| zenvex_core::world_json(g))
         .unwrap_or_default();
+    jstr(&mut env, &s)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_uiJson<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    kind: JString<'l>,
+) -> jstring {
+    let kind = rstr(&mut env, &kind);
+    let s = game(h)
+        .map(|g| g.ui_json(&kind))
+        .unwrap_or_else(|| "{}".into());
+    jstr(&mut env, &s)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_command<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    cmd: JString<'l>,
+) -> jstring {
+    let cmd = rstr(&mut env, &cmd);
+    let s = game(h)
+        .map(|g| g.command(&cmd))
+        .unwrap_or_else(|| "{\"ok\":false,\"msg\":\"oyun yok\"}".into());
     jstr(&mut env, &s)
 }
 
@@ -112,7 +155,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_drawList<'l>(
     let cap = env.get_array_length(&out).unwrap_or(0) as usize;
     DRAW_BUF.with(|b| {
         let mut buf = b.borrow_mut();
-        let len = cap.min(buf.len());
+        let len = (cap.min(buf.len()) / STRIDE) * STRIDE;
         let n = g.draw_list(v[0], v[1], v[2], v[3], &mut buf[..len], v[4]);
         let _ = env.set_float_array_region(&out, 0, &buf[..n * STRIDE]);
         n as jint
@@ -131,6 +174,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_hud<'l>(
     }
 }
 
+/// Radar kayıtları (x, y, tür) üçlüleri; dönen değer kayıt sayısı.
 #[no_mangle]
 pub extern "system" fn Java_online_zenvex_game_Native_radar<'l>(
     env: JNIEnv<'l>,
@@ -142,7 +186,7 @@ pub extern "system" fn Java_online_zenvex_game_Native_radar<'l>(
     let cap = env.get_array_length(&out).unwrap_or(0) as usize;
     let mut buf = vec![0.0f32; cap];
     let n = g.radar(&mut buf);
-    let _ = env.set_float_array_region(&out, 0, &buf[..n * 2]);
+    let _ = env.set_float_array_region(&out, 0, &buf[..n * 3]);
     n as jint
 }
 
@@ -170,40 +214,127 @@ pub extern "system" fn Java_online_zenvex_game_Native_saveJson<'l>(
     jstr(&mut env, &s)
 }
 
+/// Zemin dokuları: `size`x`size` ARGB, world::ground sırasıyla art arda.
 #[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_skillsJson<'l>(
-    mut env: JNIEnv<'l>,
+pub extern "system" fn Java_online_zenvex_game_Native_setTextures<'l>(
+    env: JNIEnv<'l>,
     _c: JClass<'l>,
     h: jlong,
-) -> jstring {
-    let s = game(h)
-        .map(|g| zenvex_core::skills_json(&g.progress))
-        .unwrap_or_default();
-    jstr(&mut env, &s)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_upgradeSkill<'l>(
-    _env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    h: jlong,
-    id: jint,
-) -> jboolean {
-    let Some(g) = game(h) else { return JNI_FALSE };
-    if id < 0 || g.progress.upgrade(id as usize).is_err() {
-        return JNI_FALSE;
-    }
-    g.player.hp = g.player.hp.min(g.progress.max_hp());
-    JNI_TRUE
-}
-
-#[no_mangle]
-pub extern "system" fn Java_online_zenvex_game_Native_respawn<'l>(
-    _env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    h: jlong,
+    size: jint,
+    pixels: JIntArray<'l>,
 ) {
-    if let Some(g) = game(h) {
-        g.respawn();
+    let Some(g) = game(h) else { return };
+    let size = size.max(1) as usize;
+    let len = env.get_array_length(&pixels).unwrap_or(0) as usize;
+    let mut all = vec![0i32; len];
+    if env.get_int_array_region(&pixels, 0, &mut all).is_err() {
+        return;
     }
+    let per = size * size;
+    g.textures.size = size;
+    g.textures.tex = all
+        .chunks(per)
+        .filter(|c| c.len() == per)
+        .map(|c| c.iter().map(|&p| p as u32).collect())
+        .collect();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_renderChunk<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    x0: jfloat,
+    y0: jfloat,
+    size: jint,
+    out: JIntArray<'l>,
+) -> jint {
+    let Some(g) = game(h) else { return 0 };
+    if !g.textures.ready() {
+        return 0;
+    }
+    let size = size.max(1) as usize;
+    PIX_BUF.with(|b| {
+        let mut buf = b.borrow_mut();
+        buf.resize(size * size, 0);
+        zenvex_core::ground::render_chunk(&g.world, &g.textures, x0, y0, size, &mut buf);
+        // SAFETY: u32 ve i32 aynı boyut ve hizalamaya sahip.
+        let ints: &[i32] =
+            unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const i32, buf.len()) };
+        let _ = env.set_int_array_region(&out, 0, ints);
+        1
+    })
+}
+
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_minimap<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    n: jint,
+    out: JIntArray<'l>,
+) {
+    let Some(g) = game(h) else { return };
+    let n = n.max(1) as usize;
+    let mut buf = vec![0u32; n * n];
+    zenvex_core::minimap(g, n, &mut buf);
+    let ints: Vec<i32> = buf.iter().map(|&p| p as i32).collect();
+    let _ = env.set_int_array_region(&out, 0, &ints);
+}
+
+/// Uzak oyuncular: REMOTE_STRIDE'lık kayıtlar.
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_setRemotes<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    data: JFloatArray<'l>,
+    count: jint,
+) {
+    let Some(g) = game(h) else { return };
+    let n = count.max(0) as usize;
+    let mut v = vec![0.0f32; n * REMOTE_STRIDE];
+    if n > 0 && env.get_float_array_region(&data, 0, &mut v).is_err() {
+        return;
+    }
+    g.remotes = v
+        .chunks(REMOTE_STRIDE)
+        .map(|r| Remote {
+            x: r[0],
+            y: r[1],
+            dir: r[2] as u8 & 7,
+            anim: r[3] as u8,
+            anim_t: r[4],
+            character: r[5] as u8,
+            equip: [r[6], r[7], r[8]],
+            vehicle: r[9],
+        })
+        .collect();
+}
+
+/// Yerel oyuncu durumu (çevrimiçi yayın için), LOCAL_STRIDE uzunluğunda.
+#[no_mangle]
+pub extern "system" fn Java_online_zenvex_game_Native_localState<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    out: JFloatArray<'l>,
+) {
+    let Some(g) = game(h) else { return };
+    let p = &g.player;
+    let eq = g.equip_codes();
+    let veh = p.vehicle.map_or(-1.0, |i| g.vehicles[i].kind as f32);
+    let rec: [f32; LOCAL_STRIDE] = [
+        p.x,
+        p.y,
+        p.dir as f32,
+        p.anim as f32,
+        p.anim_t,
+        g.progress.character as f32,
+        eq[0],
+        eq[1],
+        eq[2],
+        veh,
+    ];
+    let _ = env.set_float_array_region(&out, 0, &rec);
 }

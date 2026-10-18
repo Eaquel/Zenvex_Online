@@ -1,0 +1,678 @@
+//! Savaş: yakın dövüş, ateşli silahlar, mermiler, patlamalar, zombi hasarı, ganimet.
+use crate::data::{self, QuestKind, WeaponClass, ZKind, ZOMBIES};
+use crate::game::*;
+use crate::world::{Kind, Zone};
+
+impl Game {
+    /// Önündeki yayda zombilere, yoksa ağaç/kaya/sandığa vurur.
+    pub fn melee_hit(&mut self, base: f32, range: f32, arc: f32, stun: f32) {
+        let (px, py, pdir) = (self.player.x, self.player.y, self.player.dir);
+        let (fx, fy) = dir_vec(pdir);
+        let mult = self.damage_mult();
+        let mut hit_any = false;
+        for i in 0..self.zombies.len() {
+            let z = &self.zombies[i];
+            if z.state == ZState::Dead {
+                continue;
+            }
+            let (dx, dy) = (z.x - px, z.y - py);
+            let d = dx.hypot(dy);
+            let zr = ZOMBIES[z.kind as usize].radius;
+            if d > range + zr {
+                continue;
+            }
+            let ang = ((dx * fx + dy * fy) / d.max(1e-3)).clamp(-1.0, 1.0).acos();
+            if d > 20.0 && ang > arc {
+                continue;
+            }
+            hit_any = true;
+            let crit = self.rng.chance(self.progress.crit_chance());
+            let mut dmg = base * mult * self.rng.range(0.9, 1.1);
+            if crit {
+                dmg *= 1.75;
+            }
+            if self.player.one_hit {
+                dmg = 1e6;
+            }
+            let st = self.rng.chance(stun.max(self.progress.stun_chance()));
+            self.hurt_zombie(i, dmg, crit, fx, fy, st, true);
+        }
+        if hit_any {
+            self.player.combat_t = 0.0;
+            self.events.push(Event::Hit {
+                x: px + fx * 30.0,
+                y: py + fy * 30.0 - 60.0,
+                kind: 0,
+            });
+            return;
+        }
+        // statik hedef
+        self.world.query(
+            px - 120.0,
+            py - 120.0,
+            px + 120.0,
+            py + 120.0,
+            &mut self.scratch,
+        );
+        let mut best: Option<(usize, f32)> = None;
+        for &i in &self.scratch {
+            let s = &self.world.statics[i as usize];
+            if s.broken || !matches!(s.kind, Kind::Tree | Kind::Rock | Kind::Crate) {
+                continue;
+            }
+            let (dx, dy) = (s.x - px, s.y - py);
+            let d = dx.hypot(dy);
+            let sr = match s.shape {
+                crate::world::Shape::Circle(r) => r,
+                _ => 20.0,
+            };
+            if d > range + sr {
+                continue;
+            }
+            let ang = ((dx * fx + dy * fy) / d.max(1e-3)).clamp(-1.0, 1.0).acos();
+            if d > 24.0 && ang > arc + 0.25 {
+                continue;
+            }
+            if best.is_none_or(|(_, bd)| d < bd) {
+                best = Some((i as usize, d));
+            }
+        }
+        if let Some((i, _)) = best {
+            let dmg = if self.player.one_hit {
+                1e6
+            } else {
+                base * mult
+            };
+            self.hit_static(i, dmg);
+        }
+    }
+
+    pub fn hit_static(&mut self, i: usize, dmg: f32) {
+        let gather = self.progress.gather_mult();
+        let s = &mut self.world.statics[i];
+        s.hp -= dmg;
+        s.shake = 0.3;
+        let (sx, sy, kind) = (s.x, s.y, s.kind);
+        let name = crate::world::STATIC_NAMES[s.sprite as usize];
+        self.events.push(Event::Hit {
+            x: sx,
+            y: sy - 40.0,
+            kind: match kind {
+                Kind::Tree => 1,
+                Kind::Rock => 2,
+                _ => 3,
+            },
+        });
+        self.events.push(Event::Damage {
+            x: sx,
+            y: sy - 120.0,
+            v: dmg.min(9999.0) as i32,
+            crit: false,
+        });
+        if s.hp > 0.0 {
+            return;
+        }
+        s.broken = true;
+        s.respawn = match kind {
+            Kind::Tree => 120.0,
+            Kind::Rock => 150.0,
+            _ => 180.0,
+        };
+        let zone = self.world.zone(sx, sy);
+        match kind {
+            Kind::Tree => {
+                self.progress.trees += 1;
+                self.events.push(Event::TreeFall { x: sx, y: sy });
+                let wood = ((3 + self.rng.below(4)) as f32 * gather).round() as u32;
+                self.spawn_drop_id("wood", wood, sx, sy);
+                if name.starts_with("pine") {
+                    let rv = self.rng.below(3);
+                    self.spawn_drop_id("resin", 1 + rv, sx, sy);
+                }
+                self.give_xp(sx, sy, 10);
+                let done = self.progress.quest_event(QuestKind::Chop, 1);
+                self.quests_done(done);
+            }
+            Kind::Rock => {
+                let n = ((3 + self.rng.below(3)) as f32 * gather).round() as u32;
+                self.spawn_drop_id("stone", n, sx, sy);
+                if self.rng.chance(0.25) {
+                    self.spawn_drop_id("scrap", 1, sx, sy);
+                }
+                self.give_xp(sx, sy, 8);
+            }
+            Kind::Crate => {
+                self.progress.crates += 1;
+                self.events.push(Event::Crate { x: sx, y: sy });
+                let mil = name == "crate_mil";
+                self.crate_loot(sx, sy, zone, mil);
+                self.give_xp(sx, sy, 12);
+                let done = self.progress.quest_event(QuestKind::Crate, 1);
+                self.quests_done(done);
+            }
+            _ => {}
+        }
+    }
+
+    fn crate_loot(&mut self, x: f32, y: f32, zone: Zone, mil: bool) {
+        let mult = zone.loot_mult() * (1.0 + self.progress.luck()) * if mil { 1.5 } else { 1.0 };
+        let gather = self.progress.gather_mult();
+        let common: &[(&str, u32)] = &[
+            ("cloth", 3),
+            ("scrap", 3),
+            ("screw", 3),
+            ("glue", 1),
+            ("leather", 2),
+            ("bandage", 1),
+            ("food", 1),
+        ];
+        for _ in 0..(2 + self.rng.below(2)) {
+            let (id, n) = common[self.rng.below(common.len() as u32) as usize];
+            let c = ((1 + self.rng.below(n)) as f32 * gather).round() as u32;
+            self.spawn_drop_id(id, c.max(1), x, y);
+        }
+        let rv = self.rng.below(8);
+        self.spawn_drop_id("coin", (3.0 * mult) as u32 + rv, x, y);
+        let rare: &[(&str, f32, u32)] = &[
+            ("powder", 0.35, 3),
+            ("electronics", 0.2, 2),
+            ("ammo_9mm", 0.35, 20),
+            ("ammo_762", 0.18, 20),
+            ("ammo_556", 0.18, 20),
+            ("energy", 0.2, 1),
+            ("medkit", 0.1, 1),
+            ("fuel", 0.15, 1),
+            ("helm_basic", 0.06, 1),
+            ("jacket_basic", 0.05, 1),
+            ("boots_basic", 0.06, 1),
+            ("bag_basic", 0.05, 1),
+            ("w_bat", 0.06, 1),
+            ("w_glock", 0.025, 1),
+            ("helm_police", 0.03, 1),
+            ("jacket_police", 0.025, 1),
+            ("boots_police", 0.03, 1),
+            ("w_baton", 0.03, 1),
+            ("ammo_308", 0.04, 5),
+            ("bag_police", 0.015, 1),
+            ("helm_military", 0.012, 1),
+            ("jacket_military", 0.01, 1),
+            ("boots_military", 0.012, 1),
+            ("w_ak47", 0.008, 1),
+            ("w_m4", 0.006, 1),
+            ("bag_military", 0.006, 1),
+            ("ammo_rocket", 0.01, 1),
+            ("w_sniper", 0.003, 1),
+            ("w_rpg", 0.002, 1),
+        ];
+        let city = zone.city();
+        for &(id, p, n) in rare {
+            let def = data::item(id);
+            // ormanda epik/efsanevi eşya çıkmaz
+            if !city && def.rarity >= data::Rarity::Epic {
+                continue;
+            }
+            if self.rng.chance(p * mult) {
+                let rv = self.rng.below(n);
+                self.spawn_drop_id(id, 1 + rv, x, y);
+            }
+        }
+    }
+
+    pub fn fire(&mut self, w: &'static data::WeaponDef, aim: (f32, f32)) {
+        let mag = self.progress.mag(w.item);
+        if mag == 0 {
+            if self.progress.inv.count_id(w.ammo) > 0 {
+                self.start_reload(w);
+            } else if self.player.noammo_t <= 0.0 {
+                self.player.noammo_t = 2.0;
+                self.events.push(Event::NoAmmo);
+            }
+            return;
+        }
+        self.progress.set_mag(w.item, mag - 1);
+        self.player.atk_cd = 1.0 / w.rate;
+        self.player.combat_t = 0.0;
+        let (px, py) = (self.player.x, self.player.y);
+        let spread = w.spread * self.rng.range(-1.0, 1.0);
+        let base_a = aim.0.atan2(aim.1);
+        let a = base_a + spread;
+        let (dx, dy) = (a.sin(), a.cos());
+        let speed = match w.class {
+            WeaponClass::Heavy => m(16.0),
+            WeaponClass::Sniper => m(60.0),
+            _ => m(38.0),
+        };
+        let range = m(w.range_m);
+        let mult = self.damage_mult();
+        let crit = self.rng.chance(self.progress.crit_chance());
+        let dmg = if self.player.one_hit {
+            1e6
+        } else {
+            w.damage * mult * if crit { 1.75 } else { 1.0 }
+        };
+        // namlu: karakterin önünde, el yüksekliğinde
+        let mx = px + dx * 40.0;
+        let my = py + dy * 28.0;
+        self.projectiles.push(Projectile {
+            kind: if w.class == WeaponClass::Heavy {
+                ProjKind::Rocket
+            } else {
+                ProjKind::Bullet
+            },
+            x: mx,
+            y: my,
+            vx: dx * speed,
+            vy: dy * speed,
+            dmg,
+            pierce: w.pierce,
+            life: range / speed,
+            splash: m(w.splash_m),
+            hostile: false,
+            hit: Vec::new(),
+        });
+        self.events.push(Event::Shoot {
+            x: mx,
+            y: my - 70.0,
+            a,
+            w: data::weapon_for(w.item) as u8,
+        });
+        if mag - 1 == 0 && self.progress.inv.count_id(w.ammo) > 0 {
+            self.start_reload(w);
+        }
+    }
+
+    pub fn start_reload(&mut self, w: &'static data::WeaponDef) {
+        if self.player.reload_t > 0.0 {
+            return;
+        }
+        self.player.reload_t = w.reload;
+        self.events.push(Event::Reload);
+    }
+
+    pub fn finish_reload(&mut self) {
+        let w = self.weapon();
+        if w.ammo.is_empty() {
+            return;
+        }
+        let have = self.progress.inv.count_id(w.ammo);
+        let cur = self.progress.mag(w.item) as u32;
+        let need = (w.mag as u32).saturating_sub(cur).min(have);
+        if need > 0 {
+            self.progress.inv.remove_id(w.ammo, need);
+            self.progress.set_mag(w.item, (cur + need) as u16);
+        }
+    }
+
+    pub fn update_projectiles(&mut self, dt: f32) {
+        let mut i = 0;
+        while i < self.projectiles.len() {
+            let mut remove = false;
+            let steps = 3;
+            for _ in 0..steps {
+                let p = &mut self.projectiles[i];
+                p.x += p.vx * dt / steps as f32;
+                p.y += p.vy * dt / steps as f32;
+                let (x, y) = (p.x, p.y);
+                if p.hostile {
+                    if (x - self.player.x).hypot(y - self.player.y) < 24.0 && !self.player.dead {
+                        let d = p.dmg;
+                        self.damage_player(d);
+                        self.player.poison_t = self.player.poison_t.max(3.0);
+                        remove = true;
+                        break;
+                    }
+                } else {
+                    // zombiler
+                    let mut hit_z = None;
+                    for (zi, z) in self.zombies.iter().enumerate() {
+                        if z.state == ZState::Dead || p.hit.contains(&zi) {
+                            continue;
+                        }
+                        let r = ZOMBIES[z.kind as usize].radius + 8.0;
+                        if (z.x - x).hypot(z.y - y) < r {
+                            hit_z = Some(zi);
+                            break;
+                        }
+                    }
+                    if let Some(zi) = hit_z {
+                        let p = &mut self.projectiles[i];
+                        if p.splash > 0.0 {
+                            let (r, d) = (p.splash, p.dmg);
+                            self.explode(x, y, r, d);
+                            remove = true;
+                            break;
+                        }
+                        p.hit.push(zi);
+                        let (vx, vy, d) = (p.vx, p.vy, p.dmg);
+                        let l = vx.hypot(vy).max(1.0);
+                        let crit = false;
+                        self.hurt_zombie(zi, d, crit, vx / l * 0.6, vy / l * 0.6, false, true);
+                        let p = &mut self.projectiles[i];
+                        if p.pierce == 0 {
+                            remove = true;
+                            break;
+                        }
+                        p.pierce -= 1;
+                    }
+                }
+                // katı nesneler
+                if let Some(si) = self.world.solid_at(x, y, &mut self.scratch) {
+                    let p = &self.projectiles[i];
+                    if p.splash > 0.0 {
+                        let (r, d) = (p.splash, p.dmg);
+                        self.explode(x, y, r, d);
+                    } else if !p.hostile {
+                        let k = self.world.statics[si].kind;
+                        if matches!(k, Kind::Crate) {
+                            let d = p.dmg;
+                            self.hit_static(si, d);
+                        } else {
+                            self.events.push(Event::Hit {
+                                x,
+                                y: y - 50.0,
+                                kind: 4,
+                            });
+                        }
+                    }
+                    remove = true;
+                    break;
+                }
+            }
+            if !remove {
+                let p = &mut self.projectiles[i];
+                p.life -= dt;
+                if p.life <= 0.0 {
+                    if p.splash > 0.0 && p.kind == ProjKind::Rocket {
+                        let (x, y, r, d) = (p.x, p.y, p.splash, p.dmg);
+                        self.explode(x, y, r, d);
+                    }
+                    remove = true;
+                }
+            }
+            if remove {
+                self.projectiles.swap_remove(i);
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    pub fn explode(&mut self, x: f32, y: f32, r: f32, dmg: f32) {
+        self.events.push(Event::Explode { x, y, r });
+        self.areas.push(Area {
+            kind: AreaKind::Explosion,
+            x,
+            y,
+            r,
+            life: 0.5,
+            max_life: 0.5,
+            dps: 0.0,
+            hit_done: true,
+        });
+        for zi in 0..self.zombies.len() {
+            let z = &self.zombies[zi];
+            if z.state == ZState::Dead {
+                continue;
+            }
+            let d = (z.x - x).hypot(z.y - y);
+            if d < r {
+                let k = 1.0 - d / r * 0.6;
+                let (dx, dy) = ((z.x - x) / d.max(1.0), (z.y - y) / d.max(1.0));
+                self.hurt_zombie(zi, dmg * k, false, dx, dy, false, true);
+            }
+        }
+    }
+
+    /// Zombiye hasar; ölürse ganimet ve XP. `by_player`: görev/istatistik sayılır mı.
+    pub fn hurt_zombie(
+        &mut self,
+        i: usize,
+        dmg: f32,
+        crit: bool,
+        kx: f32,
+        ky: f32,
+        stun: bool,
+        by_player: bool,
+    ) {
+        let z = &mut self.zombies[i];
+        if z.state == ZState::Dead {
+            return;
+        }
+        z.hp -= dmg;
+        z.flash_t = 0.1;
+        z.bar_t = 3.0;
+        let heavy = matches!(z.kind, ZKind::Tank | ZKind::Titan);
+        let push = if heavy {
+            20.0
+        } else if crit {
+            220.0
+        } else {
+            140.0
+        };
+        z.kx = kx * push;
+        z.ky = ky * push;
+        let (zx, zy) = (z.x, z.y);
+        let head = if z.kind == ZKind::Titan {
+            300.0
+        } else if z.kind == ZKind::Tank {
+            150.0
+        } else {
+            120.0
+        };
+        self.events.push(Event::Damage {
+            x: zx,
+            y: zy - head,
+            v: dmg.min(99999.0).round() as i32,
+            crit,
+        });
+        // Gizemli: ilk vuruşta kopya
+        if z.kind == ZKind::Mystery && !z.cloned && !z.decoy {
+            z.cloned = true;
+            let mut c = z.clone();
+            c.decoy = true;
+            c.hp = 1.0;
+            c.max_hp = 1.0;
+            c.x += 60.0;
+            self.zombies.push(c);
+            let z = &mut self.zombies[i];
+            z.x -= 40.0;
+            self.events.push(Event::Teleport { x: zx, y: zy });
+        }
+        let z = &mut self.zombies[i];
+        if z.hp <= 0.0 {
+            z.state = ZState::Dead;
+            z.anim = Z_DEATH;
+            z.anim_t = 0.0;
+            z.timer = 3.0;
+            // NPC/dron öldürmeleri de ganimet bırakır
+            let _ = by_player;
+            self.on_zombie_killed(i);
+        } else if !heavy && z.state != ZState::Flee {
+            z.state = ZState::Hurt;
+            z.anim = Z_HURT;
+            z.anim_t = 0.0;
+            z.timer = if stun { 1.0 } else { 0.22 };
+        }
+    }
+
+    fn on_zombie_killed(&mut self, i: usize) {
+        let z = self.zombies[i].clone();
+        if z.decoy {
+            return;
+        }
+        let def = &ZOMBIES[z.kind as usize];
+        self.progress.kills += 1;
+        self.progress.kills_by[z.kind as usize] += 1;
+        self.events.push(Event::Kill {
+            x: z.x,
+            y: z.y,
+            z: z.kind as u8,
+        });
+        let mut done = self.progress.quest_event(QuestKind::Kill, 1);
+        done.extend(
+            self.progress
+                .quest_event(QuestKind::KillType(z.kind as u8), 1),
+        );
+        if z.kind == ZKind::Toxic {
+            self.areas.push(Area {
+                kind: AreaKind::PoisonCloud,
+                x: z.x,
+                y: z.y,
+                r: m(2.2),
+                life: 5.0,
+                max_life: 5.0,
+                dps: 6.0,
+                hit_done: false,
+            });
+            self.events.push(Event::ToxicCloud { x: z.x, y: z.y });
+        }
+        // ganimet
+        let zone = self.world.zone(z.x, z.y);
+        let mult = zone.loot_mult() * (1.0 + self.progress.luck());
+        let gold = def.gold.0 + self.rng.below(def.gold.1 - def.gold.0 + 1) + z.level / 2;
+        self.spawn_drop_id("coin", gold, z.x, z.y);
+        if self.rng.chance(0.3 * mult.min(2.0)) {
+            self.spawn_drop_id("tooth", 1, z.x, z.y);
+        }
+        if self.rng.chance(0.35) && z.kind != ZKind::Dog {
+            let rv = self.rng.below(2);
+            self.spawn_drop_id("cloth", 1 + rv, z.x, z.y);
+        }
+        match z.kind {
+            ZKind::Dog => {
+                if self.rng.chance(0.5) {
+                    self.spawn_drop_id("leather", 1, z.x, z.y);
+                }
+            }
+            ZKind::Toxic => {
+                if self.rng.chance(0.45 * mult) {
+                    self.spawn_drop_id("toxic", 1, z.x, z.y);
+                }
+            }
+            ZKind::Dark => {
+                if self.rng.chance(0.06 * mult) {
+                    self.spawn_drop_id("dark_crystal", 1, z.x, z.y);
+                }
+            }
+            ZKind::Tank => {
+                let rv = self.rng.below(3);
+                self.spawn_drop_id("scrap", 1 + rv, z.x, z.y);
+                if self.rng.chance(0.2 * mult) {
+                    self.spawn_drop_id("powder", 2, z.x, z.y);
+                }
+            }
+            ZKind::Mystery => {
+                for (id, p) in [
+                    ("dark_crystal", 0.6),
+                    ("electronics", 0.8),
+                    ("helm_military", 0.08),
+                    ("w_m4", 0.04),
+                    ("w_sniper", 0.02),
+                    ("gem", 0.5),
+                ] {
+                    if self.rng.chance(p * mult) {
+                        self.spawn_drop_id(id, 1, z.x, z.y);
+                    }
+                }
+            }
+            ZKind::Titan => {
+                self.progress.boss_kills += 1;
+                done.extend(self.progress.quest_event(QuestKind::Boss, 1));
+                let rv = self.rng.below(3);
+                self.spawn_drop_id("titan_shard", 3 + rv, z.x, z.y);
+                let rv = self.rng.below(2);
+                self.spawn_drop_id("dark_crystal", 2 + rv, z.x, z.y);
+                self.spawn_drop_id("gem", 10, z.x, z.y);
+                for id in ["w_rpg", "w_sniper", "helm_military", "bag_military"] {
+                    if self.rng.chance(0.25) {
+                        self.spawn_drop_id(id, 1, z.x, z.y);
+                    }
+                }
+                self.msg("TİTAN YENİLDİ! Titan Parçaları düştü.");
+            }
+            _ => {}
+        }
+        // genel nadir düşüş (yüksek seviye bölgelerde daha değerli)
+        if zone.city() && self.rng.chance(0.03 * mult) {
+            let pool = [
+                "ammo_9mm",
+                "ammo_762",
+                "ammo_556",
+                "powder",
+                "electronics",
+                "medkit",
+                "energy",
+            ];
+            let id = pool[self.rng.below(pool.len() as u32) as usize];
+            let n = if id.starts_with("ammo") {
+                10 + self.rng.below(15)
+            } else {
+                1
+            };
+            self.spawn_drop_id(id, n, z.x, z.y);
+        }
+        let xp = def.xp + z.level * 3;
+        self.give_xp(z.x, z.y, xp);
+        self.progress.pass.xp += if z.boss { 500 } else { 5 + z.level / 3 };
+        self.quests_done(done);
+    }
+
+    pub fn give_xp(&mut self, x: f32, y: f32, xp: u32) {
+        self.events.push(Event::Xp {
+            x,
+            y: y - 140.0,
+            v: xp,
+        });
+        let c = self.progress.character;
+        let clvl = self.progress.char_level[c];
+        let ups = self.progress.add_xp(xp);
+        if self.progress.char_level[c] > clvl {
+            self.events.push(Event::CharLevel {
+                level: self.progress.char_level[c],
+            });
+        }
+        if ups > 0 {
+            self.player.hp = self.progress.max_hp();
+            self.player.stamina = self.progress.max_stamina();
+            self.events.push(Event::LevelUp {
+                level: self.progress.level,
+                points: self.progress.points,
+            });
+            let done = self.progress.quest_event(QuestKind::Level, 0);
+            self.quests_done(done);
+            if self.progress.level == crate::progress::CITY_LEVEL {
+                self.msg("Şehir kapısı açıldı! Kuzeye git.");
+            }
+        }
+    }
+
+    pub fn update_areas(&mut self, dt: f32) {
+        let (px, py) = (self.player.x, self.player.y);
+        let mut pdmg = 0.0;
+        for a in self.areas.iter_mut() {
+            a.life -= dt;
+            match a.kind {
+                AreaKind::ToxicPuddle | AreaKind::PoisonCloud => {
+                    if (px - a.x).hypot(py - a.y) < a.r {
+                        pdmg += a.dps * dt;
+                        self.player.poison_t = self.player.poison_t.max(1.5);
+                    }
+                }
+                AreaKind::Shockwave => {
+                    let k = 1.0 - a.life / a.max_life;
+                    let rr = a.r * k;
+                    let d = (px - a.x).hypot(py - a.y);
+                    if !a.hit_done && (d - rr).abs() < 40.0 {
+                        a.hit_done = true;
+                        pdmg += a.dps;
+                    }
+                }
+                _ => {}
+            }
+        }
+        self.areas.retain(|a| a.life > 0.0);
+        if pdmg > 0.0 {
+            self.damage_player(pdmg);
+        }
+    }
+}

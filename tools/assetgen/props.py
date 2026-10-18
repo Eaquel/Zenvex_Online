@@ -4,7 +4,8 @@ Tüm modeller "yerel" kurulur: +z ileri, +y yukarı. Yön (yaw) uygulanması ren
 """
 import math
 import numpy as np
-from sdf2 import Mat, sd_sphere, sd_round_cone, sd_round_box, sd_ellipsoid, sd_cut, sd_displace, rot_x, rot_y, rot_z, v3
+from sdf2 import (Mat, sd_sphere, sd_round_cone, sd_round_box, sd_ellipsoid, sd_cut, sd_displace, sd_cylinder,
+                  sd_torus, sd_shell, rot_x, rot_y, rot_z, v3)
 
 I3 = np.eye(3)
 
@@ -206,22 +207,25 @@ def vest(kind):
 
 
 def cloak():
-    shell = sd_round_cone(v3(0, 0.0, -0.08), v3(0, -0.95, -0.2), 0.17, 0.3)
-    cape = sd_cut(shell, v3(0, 0.1, -1.0), 0.02)  # sadece arka yarı
-    return [("cloak", cape), ("cloak_glow", sd_round_box(v3(0, 0.0, -0.06), I3, (0.17, 0.02, 0.06), 0.02))]
+    outer = sd_round_cone(v3(0, 0.0, -0.06), v3(0, -0.95, -0.16), 0.16, 0.28)
+    shell = sd_shell(outer, 0.012)
+    cape = sd_cut(sd_cut(shell, v3(0, 0.05, -1.0), 0.03), v3(0, -1, 0), -0.02)
+    return [("cloak", cape), ("cloak_glow", sd_torus(v3(0, -0.01, -0.06), (0, 1, 0), 0.15, 0.018))]
 
 
 # ------------------------------------------------------------------ araçlar (merkez yerde)
 def wheel(c, r, w=0.06, axis="x"):
     a = np.array(c, float)
-    d = np.array([w, 0, 0]) if axis == "x" else np.array([0, 0, w])
-    return [("tire", sd_round_cone(a - d, a + d, r, r)), ("chrome", sd_round_cone(a - d * 1.1, a + d * 1.1, r * 0.45, r * 0.45))]
+    ax = np.array([1.0, 0, 0]) if axis == "x" else np.array([0, 0, 1.0])
+    tr = min(w, r * 0.35)
+    return [("tire", sd_torus(a, ax, r - tr, tr)),
+            ("chrome", sd_cylinder(a - ax * w * 0.6, a + ax * w * 0.6, r * 0.62, 0.01))]
 
 
 def vehicle(kind):
     s = []
     if kind == "bike":
-        s += wheel((0, 0.33, 0.5), 0.33, 0.02) + wheel((0, 0.33, -0.5), 0.33, 0.02)
+        s += wheel((0, 0.33, 0.5), 0.33, 0.025) + wheel((0, 0.33, -0.5), 0.33, 0.025)
         s += [("bike_blue", cyl((0, 0.36, -0.5), (0, 0.75, -0.05), 0.022)),
               ("bike_blue", cyl((0, 0.75, -0.05), (0, 0.36, 0.0), 0.022)),
               ("bike_blue", cyl((0, 0.36, 0.0), (0, 0.33, -0.5), 0.02)),
@@ -247,11 +251,11 @@ def vehicle(kind):
         for x in (-width, width):
             for z in (-long * 0.62, long * 0.62):
                 s += wheel((x * 0.98, 0.34 if kind == "car" else 0.4, z), 0.34 if kind == "car" else 0.4, 0.12)
+        cab_z = -0.15 if kind == "car" else -0.25
+        cab_l = long * (0.45 if kind == "car" else 0.62)
         s += [(col, box((0, y0, 0), (width, hb * 0.6, long), 0.18)),
-              (col, box((0, y0 + hb * 0.9, -0.15 if kind == "car" else -0.25), (width * 0.86, hb * 0.55, long * (0.42 if kind == "car" else 0.62)), 0.16)),
-              ("glass", box((0, y0 + hb * 0.95, 0.2 if kind == "car" else 0.4), (width * 0.8, hb * 0.38, 0.4), 0.1, rot_x(-0.55))),
-              ("glass", box((0, y0 + hb * 0.95, -long * 0.42), (width * 0.8, hb * 0.35, 0.18), 0.08, rot_x(0.5))),
-              ("glass", box((0, y0 + hb * 0.95, -0.15 if kind == "car" else -0.25), (width * 0.88, hb * 0.3, long * (0.3 if kind == "car" else 0.5)), 0.06)),
+              ("glass", box((0, y0 + hb * 0.85, cab_z), (width * 0.84, hb * 0.5, cab_l), 0.14)),
+              (col, box((0, y0 + hb * 1.32, cab_z - 0.05), (width * 0.8, 0.05, cab_l * 0.82), 0.04)),
               ("light_y", box((width * 0.65, y0 + 0.05, long + 0.02), (0.18, 0.06, 0.03), 0.02)),
               ("light_y", box((-width * 0.65, y0 + 0.05, long + 0.02), (0.18, 0.06, 0.03), 0.02)),
               ("light_r", box((width * 0.7, y0 + 0.08, -long - 0.02), (0.16, 0.05, 0.03), 0.02)),
@@ -529,6 +533,13 @@ def item_model(name):
         return [(m, (lambda f: (lambda p: f((p - v3(0, 0.2, 0)) @ rot_y(math.pi).T)))(f)) for m, f in bag(name[4:])]
     if name.startswith("vest_"):
         return [(m, (lambda f: (lambda p: f(p - v3(0, 0.22, 0))))(f)) for m, f in vest(name[5:])]
+    if name.startswith("jacket_"):
+        return [(m, (lambda f: (lambda p: f(p - v3(0, 0.25, 0))))(f)) for m, f in jacket(name[7:])]
+    if name.startswith("boots_"):
+        k = name[6:]
+        a = [(m, (lambda f: (lambda p: f((p - v3(-0.07, 0, 0)) @ rot_y(0.3).T)))(f)) for m, f in boot(k)]
+        b = [(m, (lambda f: (lambda p: f((p - v3(0.07, 0, 0.03)) @ rot_y(0.3).T)))(f)) for m, f in boot(k)]
+        return a + b
     if name == "cloak":
         return [(m, (lambda f: (lambda p: f((p - v3(0, 0.9, 0)) @ rot_y(math.pi).T)))(f)) for m, f in cloak()]
     if name == "coin":
@@ -536,3 +547,33 @@ def item_model(name):
     if name == "gem":
         return [("gem", sd_round_box(v3(0, 0.14, 0), rot_y(0.785) @ rot_x(0.6), (0.1, 0.1, 0.1), 0.01))]
     return [("concrete", box((0, 0.1, 0), (0.1, 0.1, 0.1), 0.02))]
+
+
+def boot(kind):
+    """Tek bot (ayak merkezi orijinde, +z ileri). Ayakkabının üstüne giyilir."""
+    m = {"basic": "bag_strap", "police": "gun_black", "military": "gun_tan", "titan": "titan"}[kind]
+    s = [(m, box((0, 0.045, 0.01), (0.058, 0.045, 0.115), 0.03)),
+         (m, cyl((0, 0.05, -0.02), (0, 0.24, -0.01), 0.058, 0.052)),
+         ("rubber", box((0, 0.008, 0.01), (0.06, 0.01, 0.118), 0.008))]
+    if kind == "police":
+        s.append(("chrome", box((0.0, 0.2, 0.05), (0.04, 0.01, 0.01), 0.004)))
+    if kind == "titan":
+        s.append(("titan_glow", box((0, 0.18, 0.055), (0.02, 0.03, 0.004), 0.004)))
+        s.append(("titan_gold", box((0, 0.1, 0.12), (0.05, 0.02, 0.01), 0.005)))
+    return s
+
+
+def jacket(kind):
+    """Ceket/yelek: göğüs noktasında, gövdeyi saran kabuk."""
+    m = {"basic": "vest_basic", "police": "vest_police", "military": "helm_mil", "titan": "titan"}[kind]
+    s = [(m, sd_round_box(v3(0, -0.02, 0), I3, (0.178, 0.22, 0.118), 0.075))]
+    if kind == "police":
+        s += [("police_yel", box((0, 0.06, 0.122), (0.1, 0.018, 0.004), 0.003)), ("police_yel", box((0, 0.04, -0.122), (0.12, 0.03, 0.004), 0.003))]
+    if kind == "military":
+        for x in (-0.08, 0.08):
+            s.append(("bag_olive", box((x, -0.08, 0.12), (0.05, 0.05, 0.02), 0.01)))
+        s.append(("bag_strap", box((0, 0.14, 0.0), (0.18, 0.02, 0.12), 0.01)))
+    if kind == "titan":
+        s += [("titan_glow", box((0, 0.05, 0.122), (0.03, 0.03, 0.004), 0.008)), ("titan_gold", box((0, -0.15, 0.0), (0.18, 0.02, 0.12), 0.01)),
+              ("titan", sd_sphere(v3(0.17, 0.16, 0), 0.07)), ("titan", sd_sphere(v3(-0.17, 0.16, 0), 0.07))]
+    return s

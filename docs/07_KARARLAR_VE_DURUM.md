@@ -74,29 +74,49 @@ hata ayıklama. İleride gerekirse çizim Rust'a (wgpu) taşınabilir; oyun kura
   devrilmesi, 3 zombi homurtusu (uzaklığa göre kısılır), zombi saldırısı/ölümü, hasar alma, seviye atlama,
   ölüm, tuş sesi — ana ses / efekt / arayüz ses ayarlarına bağlı
 
-## 5. "Yakında" (tuşu var, çalışmıyor)
-Google giriş, hesap oluşturma, İngilizce, posta, görevler, etkinlikler, sıralama, arkadaş, klan, sohbet, mağaza
-satın alma, kıyafet/görünüm/isim değiştirme, ekipman, eşya kullanma/atma, yetenek sıfırlama, HUD düzenleyici,
-renk körlüğü filtreleri, bulut kayıt, online sunucular, **müzik ve ortam sesleri**.
+## 5. V2 durumu (bu sürüm: 0.2.x)
+**Görseller (hepsi kodla, Blender Cycles ile 3D render):** 4 kahraman (13 animasyon × 8 yön, silah için ayrı kol
+katmanı + ek noktaları), 7 zombi türü + zombi köpek (5 animasyon × 8 yön), Titan boss, asker/tüccar NPC'leri,
+gerçek modelli 4 araç (bisiklet, motosiklet, spor araba, SUV; jant, far, ayna, plaka) × 8 yön, 15 detaylı bina
+(tuğla/kiremit/sıva/beton prosedürel dokular, pencere çerçevesi, balkon, tabela yazıları, çatıda klima/güneş
+paneli/çanak), enkazlar, 37 doğa nesnesi (yaprak parçacıklı ağaçlar), 50 eşya simgesi, ekipman parçaları
+(kask, ceket, bot, çanta, pelerin × 4 kademe), 7 silah. 9 dikişsiz 512 px zemin dokusu (spektral gürültü + kabartma).
+Paketleme: kırpma, renk/keskinlik düzenleme, aktörlere ince kontur, WebP atlas + manifest (`tools/assetgen/pack.py`).
 
-## 6. APK'yı telefona kurma
+**Oyun (Rust `zenvex_core`):** 360×360 karo dünya (kamp, orman, derin orman, bataklık, şehir duvarı + kapı,
+şehir güvenli bölgesi, banliyö, merkez, sanayi, Titan arenası), seviye 10 şehir kapısı, güvenli bölgede keskin
+nişancılar, yerden eşya toplama, 50 eşya, envanter + çanta kapasitesi, ekipman (silah/kask/ceket/bot/çanta/pelerin),
+18 üretim tarifi (tezgâh), tüccar (al/sat), altın ekonomisi, 7 silah (sopa, cop, Glock, AK-47, M4, keskin nişancı,
+RPG), mermi/şarjör/dolum, 8 düşman türü (Normal, Koşucu, Köpek sürüsü, Toksik: zehir birikintisi + ölünce bulut,
+Karanlık: ışınlanma + can emme + gece 2×, Tank: yer sarsma, Gizemli Maskeli: görünmezlik + sahte kopya, TİTAN:
+şok dalgası, çağırma, öfke), araçlar (yakıt, çarpışma, zombilere çarpma, patlama), 4 karakter + yetenekleri
+(Kaan öfke, Nova dron + hedef seçimi, Rady kalkan 50 +20/sv, Elif şifa %5/5sn → %20/3sn), karakter seviyesi 10,
+12 yetenek, 8 ana görev + günlük görevler, Sezon 1 Pass (30 kademe, ücretsiz/premium, Tanrı Pelerini),
+kozmetikler (kostüm, kaplama, çerçeve, etiket), gece/gündüz, geliştirici hileleri.
+
+**Arayüz (Kotlin):** animasyonlu lobi (gece gökyüzü, ay, bulut, paralaks şehir/orman, sis, korlar; sürükleyerek
+döndürülen 3D kahraman, ◀ ▶ karakter seçimi), profil kartı, altın/elmas, görev/etkinlik/sunucu kartları, Sezon
+kartı, alt dok, OYNA; Karakterler, Yetenekler, Envanter (ekipman yuvaları + ayrıntı), Üretim, Tüccar (al/sat/elmas),
+Görevler, Sezon Pass (49,99 TL / 99,99 TL — ödeme henüz bağlı değil), Kozmetik, Profil, Sohbet, Ayarlar.
+Oyun içi: isim etiketleri ("Lv X Ad", türe göre renk), boss barı, radar, gece ışık haritası (fener, lamba, kamp
+ateşi, namlu alevi, patlama), parçacıklar, hasar sayıları, afişler, harita, ölüm ekranı (kamp/şehir).
+**Ses:** 37 efekt + lobi ve oyun müziği (`tools/assetgen/sfx2.py`).
+**Çevrimiçi:** Firebase (anonim giriş, oyuncu konumları, genel/yakın sohbet) — kurulum: `docs/09_FIREBASE_KURULUM.md`.
+Ayar yoksa oyun çevrimdışı çalışır.
+
+**Geliştirici menüsü:** lobide alttaki sürüm yazısına 7 kez dokun (altın, seviye, eşya, set, ölümsüzlük, zombi/boss
+çağırma, ışınlanma, pass, araç...).
+
+## 6. Henüz yok / sonraki adımlar
+Google Play ödeme (pass, elmas), Google ile giriş, takas (oyuncular arası), çok oyunculu zombi senkronu (şu an her
+oyuncu kendi zombilerini görür; konum + sohbet ortak), oyuncuların arabaya birlikte binmesi, kendi Rust sunucumuz.
+
+## 7. APK'yı telefona kurma
 1. GitHub'da repo sayfası → **Releases** → **"Zenvex Online — son derleme"**.
-2. `ZenvexOnline-0.1.X.apk` dosyasına dokun → indir → aç.
-3. İlk seferde "Bu kaynaktan yüklemeye izin ver" → Yükle.
-4. Yeni sürümler aynı imzayla derlendiği için eskisini silmeden üstüne kurulur (ilerleme korunur).
+2. `ZenvexOnline-0.2.X.apk` dosyasına dokun → indir → aç → "Bu kaynaktan yüklemeye izin ver" → Yükle.
+3. Aynı imzayla derlendiği için eskisinin üstüne kurulur. (V2 yeni kayıt dosyası kullanır; V1 ilerlemesi taşınmaz.)
 
-## 7. Test
-- **Rust:** 18 birim testi (XP eğrisi, seviye/yetenek kuralları, dünya üretimi, hareket, yumrukla zombi öldürme,
-  zombinin oyuncuya vurması, çizim listesi sıralaması, kayıt) — her push'ta `cargo fmt`, `clippy -D warnings`, `test`.
-- **Duman testi (CI `smoke` işi):** KVM hızlandırmalı Android 11 emülatöründe APK kurulur; giriş, lobi ve 7 alt
-  ekran açılır; oyunda hareket ve saldırı joysticklerine dokunulur; çökme olursa CI kırmızı olur. Ekran
-  görüntüleri `smoke-screenshots` adıyla Actions sayfasına yüklenir.
-- Hızlı test için ekran kısayolu: `adb shell am start -n online.zenvex/.MainActivity --es screen Game`
-  (Lobby, Skills, Settings, ... da olur).
-
-## 8. Sıradaki adımlar (öneri)
-1. Telefonda ilk test → his/denge geri bildirimi (hız, hasar, zombi sayısı, joystick)
-2. Müzik + ortam sesleri (rüzgâr, kuş), ayak sesleri
-3. Karakter animasyon cilası (yürüme/koşu kol-bacak, yumrukta gövde dönüşü)
-4. Gece-gündüz, yeni zombi türleri
-5. Online altyapı (Rust sunucu — `zenvex_core` aynen kullanılacak)
+## 8. Derleme
+CI sadece derler (test yok, isteğin üzerine): her push'ta APK üretip Releases'a yükler.
+Görselleri yeniden üretmek için (bilgisayarda): `pip install bpy` → `python tools/blender/render_all.py`,
+`render_build.py`, `render_vehicles.py` → `python tools/assetgen/ground_tex.py` → `python tools/assetgen/pack.py`.

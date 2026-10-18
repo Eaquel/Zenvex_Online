@@ -109,6 +109,7 @@ data class Settings(
                 .putFloat("uiSound", s.uiSound).putString("language", s.language)
                 .putInt("colorBlind", s.colorBlind)
                 .apply()
+            Audio.updateVolume()
         }
     }
 }
