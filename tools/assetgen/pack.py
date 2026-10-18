@@ -57,7 +57,7 @@ def grade(im, actor=False):
 
 def trim(im):
     a = np.array(im.getchannel("A"))
-    ys, xs = np.nonzero(a > 3)
+    ys, xs = np.nonzero(a > 12)
     if len(xs) == 0:
         return im.crop((0, 0, 1, 1)), 0, 0
     x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
@@ -105,18 +105,24 @@ class Packer:
         for f in os.listdir(out):
             if f.startswith("page_"):
                 os.remove(os.path.join(out, f))
-        names = []
-        for i, p in enumerate(self.pages):
-            # son sayfayı gereksiz boşluktan kırp (yükseklik)
-            bb = p.getbbox()
-            if bb:
-                h = min(PAGE, ((bb[3] + 63) // 64) * 64)
-                w = min(PAGE, ((bb[2] + 63) // 64) * 64)
-                p = p.crop((0, 0, w, h))
-            fn = f"page_{i:02d}.webp"
-            p.save(os.path.join(out, fn), "WEBP", quality=92, method=6)
-            names.append(fn)
+        jobs = [(i, p, out) for i, p in enumerate(self.pages)]
+        from multiprocessing import Pool
+        with Pool(os.cpu_count() or 2) as pool:
+            names = pool.map(_save_page, jobs)
         return names
+
+
+def _save_page(job):
+    i, p, out = job
+    # son sayfayı gereksiz boşluktan kırp
+    bb = p.getbbox()
+    if bb:
+        h = min(PAGE, ((bb[3] + 63) // 64) * 64)
+        w = min(PAGE, ((bb[2] + 63) // 64) * 64)
+        p = p.crop((0, 0, w, h))
+    fn = f"page_{i:02d}.webp"
+    p.save(os.path.join(out, fn), "WEBP", quality=90, method=4)
+    return fn
 
 
 def load(path, anchor, actor=False, scale=1.0):
@@ -186,19 +192,20 @@ def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_ancho
             for f in range(frames):
                 key = f"{anim}_{dr}_{f}"
                 p = os.path.join(d, key + ".png")
-                if not os.path.exists(p):
+                variants = [fn for fn in files if fn.startswith(key + "@") and fn.endswith(".png")]
+                if not os.path.exists(p) and not variants:
                     continue
                 a = att.get(key, {}).get("anchor") or fixed_anchor
                 if a is None:
                     continue
-                im, ax, ay = load(p, a, True, scale)
-                items.append((f"{prefix}/{key}", im, ax, ay))
+                if os.path.exists(p):
+                    im, ax, ay = load(p, a, True, scale)
+                    items.append((f"{prefix}/{key}", im, ax, ay))
                 n += 1
                 # silahlı varyantlar: <key>@<silah>.png
-                for fn in files:
-                    if fn.startswith(key + "@") and fn.endswith(".png"):
-                        imw, axw, ayw = load(os.path.join(d, fn), a, True, scale)
-                        items.append((f"{prefix}/{fn[:-4]}", imw, axw, ayw))
+                for fn in variants:
+                    imw, axw, ayw = load(os.path.join(d, fn), a, True, scale)
+                    items.append((f"{prefix}/{fn[:-4]}", imw, axw, ayw))
                 if arms and os.path.exists(os.path.join(d, key + "_arms.png")):
                     im2, ax2, ay2 = load(os.path.join(d, key + "_arms.png"), a, False, scale)
                     items.append((f"{prefix}/{key}_a", im2, ax2, ay2))

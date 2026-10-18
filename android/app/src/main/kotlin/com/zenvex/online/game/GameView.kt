@@ -683,7 +683,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val wIdx = drawBuf[o + 10].toInt() % 16
         var key = spriteKey(prefix, anim, dir, f)
         // elde gerçek silahla render edilmiş kare varsa onu kullan
-        val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else null
+        val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
         var weaponBaked = false
         var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
         if (sp == null) sp = atlas[key]

@@ -64,6 +64,14 @@ def scene(res, anchor, mpp=MPP, samples=None):
     B.set_anchor(sc, anchor[0], anchor[1], res, mpp)
     sc.cycles.max_bounces = 3
     sc.cycles.use_adaptive_sampling = True
+    sc.cycles.adaptive_threshold = 0.03
+    # hızlandırma: veriyi kareler arasında bellekte tut, sprite boyutuna göre doku sınırı, ışık yolu kısaltma
+    sc.render.use_persistent_data = True
+    sc.cycles.texture_limit_render = "512"
+    sc.cycles.diffuse_bounces = 1
+    sc.cycles.glossy_bounces = 1
+    sc.cycles.transmission_bounces = 2
+    sc.cycles.use_auto_tile = False
     sc.render.film_transparent = True
     return sc
 
