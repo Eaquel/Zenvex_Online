@@ -1,0 +1,98 @@
+# Karakter/zombi renderını 20 ücretsiz GitHub sunucusuna bölerek yapar (~20 kat hızlı), sonra paketleyip
+# android/app/src/main/assets/v2'yi günceller ve aynı dala commit'ler. Elle çalıştırılır: Actions → Render → Run workflow.
+name: Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      groups:
+        description: "Gruplar (boşlukla): lobby npcs weapons heroes zombies"
+        default: "lobby npcs weapons heroes zombies"
+      samples:
+        description: "Cycles örnek sayısı"
+        default: "12"
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Blender (bpy) ve MakeHuman kur
+        run: |
+          sudo apt-get install -y -q libxi6 libxxf86vm1 libxfixes3 libxrender1 libgl1 libsm6 > /dev/null
+          pip install -q bpy==5.2.2 numpy pillow scikit-image
+          bash tools/blender/setup_mpfb.sh "$HOME/mh"
+      - name: Render (parça ${{ matrix.shard }}/20)
+        env:
+          ZX_SHARD: ${{ matrix.shard }}/20
+          ZX_SAMPLES: ${{ inputs.samples }}
+          ZX_WORK3: ${{ github.workspace }}/out
+        run: |
+          export MH_ROOT="$HOME/mh" MPFB_HOME="$HOME/mh/user"
+          python tools/blender/render_actors3.py ${{ inputs.groups }} 2>&1 | grep -v "^Fra\|Saved\|^\[" | tail -40
+          if [ "${{ matrix.shard }}" = "0" ]; then python tools/blender/render_items3.py icons equip 2>&1 | tail -3 || true; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: out
+          retention-days: 3
+
+  pack:
+    needs: render
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -q numpy pillow
+      - uses: actions/download-artifact@v4
+        with:
+          path: shards
+      - name: Parçaları birleştir
+        run: |
+          mkdir -p r3
+          python - <<'PY'
+          import json, os, shutil, glob
+          for sh in sorted(glob.glob("shards/shard-*")):
+              for root, _, files in os.walk(sh):
+                  rel = os.path.relpath(root, sh)
+                  os.makedirs(os.path.join("r3", rel), exist_ok=True)
+                  for f in files:
+                      src, dst = os.path.join(root, f), os.path.join("r3", rel, f)
+                      if f == "attach.json" and os.path.exists(dst):
+                          a = json.load(open(dst)); a.update(json.load(open(src))); json.dump(a, open(dst, "w"))
+                      else:
+                          shutil.copy2(src, dst)
+          PY
+      - name: Efektler, zemin dokuları ve paketleme
+        env:
+          ZX_WORK3: ${{ github.workspace }}/r3
+        run: |
+          python tools/assetgen/fx_gen.py r3
+          mkdir -p base && cp -r tools/renders/base/* base/
+          python tools/assetgen/ground_tex.py base/ground
+          python tools/assetgen/pack.py base android/app/src/main/assets/v2
+      - name: Commit
+        run: |
+          git config user.name "zenvex-render"
+          git config user.email "render@users.noreply.github.com"
+          git add android/app/src/main/assets/v2
+          git commit -m "Render: atlaslar güncellendi" || exit 0
+          git push
+      - name: APK derlemesini başlat
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run android.yml --ref "${{ github.ref_name }}"

@@ -9,6 +9,7 @@ import math
 import os
 import sys
 import time
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -28,6 +29,13 @@ SAMPLES = int(os.environ.get("ZX_SAMPLES", "12"))
 RES = (300, 270)
 ANCHOR = (150, 228)
 LOG = None
+# Paralel render (GitHub Actions matrisi): ZX_SHARD="i/N" → bu makine yalnızca crc32(anahtar) % N == i olanları çizer
+_SH = os.environ.get("ZX_SHARD", "")
+SHARD = tuple(int(x) for x in _SH.split("/")) if "/" in _SH else (0, 1)
+
+
+def mine(key):
+    return zlib.crc32(key.encode()) % SHARD[1] == SHARD[0]
 
 BASE = ["idle", "walk", "run", "punch", "cast", "hurt", "death", "ride"]
 WEAPON_ANIMS = {"pistol_idle": ["glock"], "pistol_walk": ["glock"], "rifle_idle": ["ak47", "m4", "sniper", "rpg"],
@@ -114,6 +122,7 @@ def render_actor(group, kind, anims, posef, scale=1.0, dirs=range(8), weapons=No
                     key = f"{anim}_{d}_{f}" + (f"@{w}" if w else "")
                     if not (done(out(group, kind, key + ".png")) and key.split("@")[0] in attach):
                         jobs.append((anim, w, d, f, frames, key))
+    jobs = [j for j in jobs if mine(f"{group}/{kind}/{j[5]}")]
     if not jobs:
         return
     sc = scene(r, a, mpp)
@@ -165,7 +174,7 @@ def npcs():
 def lobby():
     r, a, mpp = (360, 420), (180, 400), 0.0055
     for kind in ("kaan", "nova", "rady", "elif"):
-        jobs = [(d, f) for d in range(8) for f in range(6) if not done(out("lobby", kind, f"{d}_{f}.png"))]
+        jobs = [(d, f) for d in range(8) for f in range(6) if not done(out("lobby", kind, f"{d}_{f}.png")) and mine(f"lobby/{kind}/{d}_{f}")]
         if not jobs:
             continue
         scene(r, a, mpp, samples=SAMPLES + 12)
@@ -181,6 +190,8 @@ def lobby():
 
 def weapons():
     """Yalnız silah (8 yön): silahsız animasyonlarda ele bindirme için."""
+    if SHARD[0] != 0:
+        return
     for kind in WB.BUILDERS:
         for d in range(8):
             p = out("weapons", kind, f"{d}.png")
