@@ -373,6 +373,8 @@ pub struct Game {
     pub kill_credit: i32,
     /// başka oyuncunun aracında yolcu
     pub passenger: bool,
+    /// Hardcore sunucu: daha sert zombiler, daha çok XP, ölünce çanta yere düşer
+    pub hardcore: bool,
     pub events: Vec<Event>,
     pub time: f32,
     pub day_t: f32,
@@ -455,6 +457,7 @@ impl Game {
             next_zid: 1,
             kill_credit: -1,
             passenger: false,
+            hardcore: false,
             events: Vec::new(),
             time: 0.0,
             day_t: 0.3,
@@ -847,6 +850,29 @@ impl Game {
         p.atk_active = false;
         self.progress.deaths += 1;
         self.events.push(Event::Died);
+        if self.hardcore {
+            // çantadaki her şey ölüm yerine düşer, altının yarısı gider
+            let (x, y) = (self.player.x, self.player.y);
+            let slots: Vec<_> = self.progress.inv.slots.iter_mut().filter_map(|s| s.take()).collect();
+            for (i, s) in slots.into_iter().enumerate() {
+                let a = i as f32 * 2.4;
+                self.spawn_drop(s.item as usize, s.count as u32, x + a.cos() * 40.0, y + a.sin() * 30.0);
+            }
+            self.progress.gold /= 2;
+            self.msg("Hardcore: çantan ölüm yerine düştü, altının yarısı gitti");
+        }
+    }
+
+    /// Oyuncuyu (ve sürdüğü aracı bırakarak) verilen noktaya taşır.
+    pub fn teleport(&mut self, x: f32, y: f32) -> (f32, f32) {
+        let (mut x, mut y) = (x.clamp(100.0, world::MAP_PX - 100.0), y.clamp(100.0, world::MAP_PX - 100.0));
+        self.world.resolve(&mut x, &mut y, 14.0, true, &mut self.scratch);
+        if let Some(vi) = self.player.vehicle.take() {
+            self.vehicles[vi].driver = false;
+        }
+        self.player.x = x;
+        self.player.y = y;
+        (x, y)
     }
 
     pub fn damage_player(&mut self, amount: f32) {
@@ -858,6 +884,7 @@ impl Game {
             return;
         }
         let armor = self.progress.armor();
+        let amount = if self.hardcore { amount * 1.5 } else { amount };
         let mut dmg = amount * 100.0 / (100.0 + armor) * (1.0 - self.progress.damage_resist());
         let p = &mut self.player;
         p.combat_t = 0.0;

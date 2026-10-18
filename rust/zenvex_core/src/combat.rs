@@ -644,6 +644,7 @@ impl Game {
     }
 
     pub fn give_xp(&mut self, x: f32, y: f32, xp: u32) {
+        let xp = if self.hardcore { xp + xp / 2 } else { xp };
         self.events.push(Event::Xp {
             x,
             y: y - 140.0,

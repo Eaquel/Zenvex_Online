@@ -115,14 +115,14 @@ Görevler, Sezon Pass (49,99 TL / 99,99 TL — ödeme henüz bağlı değil), Ko
 Oyun içi: isim etiketleri ("Lv X Ad", türe göre renk), boss barı, radar, gece ışık haritası (fener, lamba, kamp
 ateşi, namlu alevi, patlama), parçacıklar, hasar sayıları, afişler, harita, ölüm ekranı (kamp/şehir).
 **Ses:** 37 efekt + lobi ve oyun müziği (`tools/assetgen/sfx2.py`).
-**Çevrimiçi:** Firebase (anonim giriş, oyuncu konumları, genel/yakın sohbet) — kurulum: `docs/09_FIREBASE_KURULUM.md`.
+**Çevrimiçi:** Supabase (Zenvex ID + anahtar hesabı, sunucu başına bulut kaydı, Realtime ile oyuncular/zombiler/sohbet/takas, posta, klan, sıralama) — ayrıntı: `docs/09_SUPABASE.md`.
 Ayar yoksa oyun çevrimdışı çalışır.
 
 **Geliştirici menüsü:** lobide alttaki sürüm yazısına 7 kez dokun (altın, seviye, eşya, set, ölümsüzlük, zombi/boss
 çağırma, ışınlanma, pass, araç...).
 
 ## 6. Henüz yok / sonraki adımlar
-Google Play ödeme (pass, elmas), Google ile giriş, hile korumalı kendi Rust sunucumuz (Firebase modeli güvene dayalı).
+Google Play ödeme (pass, elmas), Google ile giriş, hile korumalı kendi Rust sunucumuz (şu anki ev sahibi modeli istemciye güvenir).
 
 ## 7. APK'yı telefona kurma
 1. GitHub'da repo sayfası → **Releases** → **"Zenvex Online — son derleme"**.
@@ -133,3 +133,12 @@ Google Play ödeme (pass, elmas), Google ile giriş, hile korumalı kendi Rust s
 CI sadece derler (test yok, isteğin üzerine): her push'ta APK üretip Releases'a yükler.
 Görselleri yeniden üretmek için (bilgisayarda): `pip install bpy` → `python tools/blender/render_all.py`,
 `render_build.py`, `render_vehicles.py` → `python tools/assetgen/ground_tex.py` → `python tools/assetgen/pack.py`.
+
+## V3 — Lobi ve çevrimiçi yenilendi (Ekim 2026)
+- **Firebase kaldırıldı, Supabase geldi.** Hesap = Zenvex ID + 12 harfli anahtar (Supabase Auth gerekmez).
+- **4 sunucu:** Normal #1, Normal #2, Normal #3 - Dünya, Hardcore. Her sunucuda ayrı karakter ilerlemesi ve ayrı çevrimiçi dünya.
+  Hardcore: zombiler %50 sert, +%50 XP, ölünce çanta ölüm yerine düşer ve altının yarısı gider.
+- **Lobi (Zombix düzeni):** kayan piksel dünya haritası, üst çubuk (Sıralama, Klanlar, Haberler, Ayarlar),
+  ortada Sunucular / Karakter sekmeleri, sol altta hesap kartı. Ayarlar → Hesap: ID, anahtar, isim, başka hesaba giriş.
+- **Oyun içi:** harita + bölgeler arası seyahat, görevler, sezon, yetenekler (sol üst); posta, oyuncular, klan, menü (sağ üst);
+  hızlı eşya slotları + çanta + sohbet çubuğu (alt orta); XP şeridi ve koordinat (alt). Envanter/üretim/tüccar/kozmetik oyunun içinde.

@@ -54,10 +54,14 @@ interface GameUi {
  * Joystickler ve hızlı tuşlar (yetenek, silah, araç, etkileşim) çoklu dokunuş için tuvalde çizilir.
  */
 @SuppressLint("ViewConstructor")
+private const val CLAN_COLOR = 0xFFF6E05A.toInt()
+
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
     @Volatile var localName: String = ""
+    @Volatile var localClan: String = ""
+    @Volatile var serverTitle: String = ""
 
     // ------------------------------------------------------------------ dünya tabloları
     private val staticNames: Array<String>
@@ -71,6 +75,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val itemSprites: Array<Sprite?>
     private val zones: Array<String>
     private val mapPx: Float
+    private val tile: Float
 
     init {
         holder.addCallback(this)
@@ -93,6 +98,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val zs = w.getJSONArray("zones")
         zones = Array(zs.length()) { zs.getJSONArray(it).getString(0) }
         mapPx = w.getDouble("map_px").toFloat()
+        tile = w.optDouble("tile", 64.0).toFloat()
         atlas.preload("world"); atlas.preload("items"); atlas.preload("npcs")
     }
 
@@ -178,11 +184,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val btnRide = Btn("ride")
     @Volatile private var rideUid: String? = null
     private var nearCache: Online.Near? = null
-    private val btnBag = Btn("bag")
-    private val btnChat = Btn("chat")
-    private val btnMenu = Btn("menu")
-    private val btnMap = Btn("map")
-    private val buttons = listOf(btnAbility, btnWeapon, btnReload, btnVehicle, btnInteract, btnTrade, btnRide, btnBag, btnChat, btnMenu, btnMap)
+    private val buttons = listOf(btnAbility, btnWeapon, btnReload, btnVehicle, btnInteract, btnTrade, btnRide)
 
     // ------------------------------------------------------------------ efektler
     private class Floater(var x: Float, var y: Float, val text: String, val color: Int, val size: Float, var life: Float = 1.2f, val max: Float = 1.2f)
@@ -259,13 +261,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         place(btnInteract, 30f, stickR * 2.45f)
         place(btnTrade, 4f, stickR * 2.6f, br * 0.85f)
         place(btnRide, -20f, stickR * 2.6f, br * 0.85f)
-        val top = 14 * density
-        val tb = 22 * density
-        var x = w - 16 * density - tb
-        for (b in listOf(btnMenu, btnChat, btnBag, btnMap)) {
-            b.r.set(x - tb, top + 150 * density, x + tb, top + 150 * density + tb * 2)
-            x -= tb * 2.5f
-        }
     }
 
     private fun loop() {
@@ -528,7 +523,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun wx(x: Float) = (x - camX) * scale + sw / 2f
     private fun wy(y: Float) = (y - camY) * scale + sh / 2f
 
-    private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?)
+    private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?, val subColor: Int = 0xFFDDDDDD.toInt())
     private val plates = ArrayList<Plate>()
 
     private fun render(c: Canvas, dt: Float) {
@@ -738,14 +733,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val top = sy - sp.ay * scale
         when {
             who == -1f -> {
-                if (localName.isNotEmpty()) plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, null)
+                if (localName.isNotEmpty()) plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, localClan.ifEmpty { null }, CLAN_COLOR)
                 if (hud[Native.SHIELD] > 0) drawFxSprite(c, "shield", x, y - 62, 175f, time)
                 if (Settings.current.particles && hud[Native.POISON] > 0 && Math.random() < 0.2)
                     particles += Particle(x, y, 60f, 0f, 0f, 40f, 0.8f, 0.8f, 0xFF9AFF40.toInt(), 4f, 3)
             }
             who >= 0f -> {
                 val n = Online.lastNames.getOrNull(who.toInt()) ?: "Oyuncu"
-                plates += Plate(sx, top - 4 * density, n, 0xFF7FE0FF.toInt(), -1f, false, null)
+                val cl = Online.lastClans.getOrNull(who.toInt())?.ifEmpty { null }
+                plates += Plate(sx, top - 4 * density, n, 0xFF7FE0FF.toInt(), -1f, false, cl, CLAN_COLOR)
             }
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
         }
@@ -1083,7 +1079,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val ts = if (p.boss) 15 * density else 11.5f * density
             val y = p.y - (if (p.hp >= 0) 10 * density else 2 * density)
             drawText(c, p.text, p.x, y, ts, p.color, center = true)
-            if (p.sub != null) drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.8f, 0xFFDDDDDD.toInt(), center = true)
+            if (p.sub != null) drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true)
             if (p.hp >= 0) bar(c, p.x, p.y - 3 * density, if (p.boss) 120 * density else 54 * density, p.hp,
                 if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
         }
@@ -1174,7 +1170,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (hud[Native.POISON] > 0) drawText(c, "☠ Zehirlendin", bx, py0 + 60 * d, 12 * d, 0xFF9AFF40.toInt())
         // ---- üst orta: bölge, saat
         val zone = zones.getOrElse(hud[Native.ZONE].toInt()) { "" }
-        drawText(c, zone, sw / 2f, 26 * d, 15 * d, 0xFFFFE9A8.toInt(), true, fontDisplay)
+        drawText(c, if (serverTitle.isNotEmpty()) "$serverTitle => $zone" else zone, sw / 2f, 26 * d, 15 * d, 0xFFFFE9A8.toInt(), true, fontDisplay)
         val light = hud[Native.LIGHT]
         drawText(c, if (light < 0.6f) "☾ Gece" else "☀ Gündüz", sw / 2f, 42 * d, 11 * d, 0xFFCCD6E0.toInt(), true)
         // boss barı
@@ -1196,6 +1192,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             hudBar(c, 16 * d, py0 + 76 * d, 150 * d, 8 * d, hud[Native.VEHICLE_HP], 0xFF60D0FF.toInt(), null, 0f)
             drawText(c, "Yakıt %${hud[Native.FUEL].roundToInt()}", 16 * d, py0 + 98 * d, 12 * d, 0xFFFFC870.toInt())
         }
+        // ---- alt: XP şeridi + koordinat
+        val xpv = hud[Native.XP]; val xpn = max(1f, hud[Native.XPNEXT])
+        fill.color = 0xB0101010.toInt(); c.drawRect(0f, sh - 5 * d, sw.toFloat(), sh.toFloat(), fill)
+        fill.color = 0xFFE8C840.toInt(); c.drawRect(0f, sh - 5 * d, sw * (xpv / xpn).coerceIn(0f, 1f), sh.toFloat(), fill)
+        drawText(c, "Sv. ${hud[Native.LEVEL].toInt()}  ${xpv.toInt()}/${xpn.toInt()}  %${"%.2f".format(xpv / xpn * 100)}", 8 * d, sh - 8 * d, 11 * d, 0xFFFFF2B0.toInt())
+        drawText(c, "X: ${(hud[Native.PX] / tile).toInt()}  Y: ${(hud[Native.PY] / tile).toInt()}", 8 * d, sh - 22 * d, 12 * d, 0xC0FFFFFF.toInt())
         // ---- sohbet satırları
         synchronized(chatLines) {
             var y = sh - stickR * 3.4f
@@ -1312,7 +1314,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
         if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", null, 0xFF8A5AC0.toInt(), false)
         if (btnInteract.visible) roundBtn(c, btnInteract, if (hud[Native.NEAR_MERCHANT] > 0) "shop" else "craft", null, 0xFFC08A20.toInt(), false)
-        for (b in listOf(btnMenu, btnChat, btnBag, btnMap)) roundBtn(c, b, b.id, null, 0xFF1E2A3C.toInt(), false, small = true)
     }
 
     private fun roundBtn(c: Canvas, b: Btn, icon: String, label: String?, color: Int, dim: Boolean, small: Boolean = false) {

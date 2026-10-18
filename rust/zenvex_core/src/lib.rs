@@ -42,6 +42,13 @@ pub fn world_json(g: &Game) -> String {
         .iter()
         .map(|z| json!([z.name(), z.level_range().0, z.level_range().1, z.safe()]))
         .collect();
+    let travel: Vec<_> = world::TRAVEL
+        .iter()
+        .map(|t| {
+            let (x, y) = t.pos();
+            json!([t.id, t.name, x, y, t.level, t.cost])
+        })
+        .collect();
     let chars: Vec<_> = data::CHARACTERS
         .iter()
         .map(|c| json!([c.id, c.name]))
@@ -56,6 +63,7 @@ pub fn world_json(g: &Game) -> String {
         "merchants": w.merchants,
         "benches": w.benches,
         "camp": world::CAMP,
+        "travel": travel,
         "boss": world::BOSS,
         "wall_y": world::WALL_Y as f32 * world::TILE,
         "items": items,

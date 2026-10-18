@@ -222,6 +222,29 @@ impl Game {
     }
 
     // ------------------------------------------------------------------ komutlar
+    fn travel(&mut self, to: &str) -> Result<String, String> {
+        let Some(t) = world::TRAVEL.iter().find(|t| t.id == to) else {
+            return Err("Bilinmeyen bölge".into());
+        };
+        if self.player.dead {
+            return Err("Önce yeniden doğ".into());
+        }
+        if self.progress.level < t.level {
+            return Err(format!("{} için seviye {} gerekli", t.name, t.level));
+        }
+        if self.player.combat_t < 5.0 {
+            return Err("Çatışmadayken seyahat edemezsin".into());
+        }
+        if self.progress.gold < t.cost {
+            return Err(format!("{} altın gerekli", t.cost));
+        }
+        self.progress.gold -= t.cost;
+        let (x, y) = t.pos();
+        self.teleport(x, y);
+        self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 700.0 || z.boss);
+        Ok(format!("{} bölgesine seyahat edildi", t.name))
+    }
+
     pub fn command(&mut self, s: &str) -> String {
         let v: Value = serde_json::from_str(s).unwrap_or(Value::Null);
         let cmd = v["cmd"].as_str().unwrap_or("");
@@ -277,6 +300,33 @@ impl Game {
                 Ok("Yeniden doğdun".into())
             }
             "cheat" => self.cheat(v["text"].as_str().unwrap_or("")),
+            "set_rules" => {
+                self.hardcore = v["hardcore"].as_bool().unwrap_or(false);
+                Ok(String::new())
+            }
+            "travel" => self.travel(v["to"].as_str().unwrap_or("")),
+            "mail_claim" => {
+                let g = v["gold"].as_u64().unwrap_or(0) as u32;
+                self.progress.add_gold(g);
+                let mut got = Vec::new();
+                if g > 0 {
+                    got.push(format!("{g} altın"));
+                }
+                for it in v["items"].as_array().cloned().unwrap_or_default() {
+                    let id = it["id"].as_str().unwrap_or("");
+                    let n = it["n"].as_u64().unwrap_or(1) as u32;
+                    if crate::data::item_index(id).is_none() || n == 0 {
+                        continue;
+                    }
+                    let left = self.progress.inv.add_id(id, n);
+                    if left > 0 {
+                        let (x, y) = (self.player.x, self.player.y);
+                        self.spawn_drop_id(id, left, x, y);
+                    }
+                    got.push(format!("{n} {}", crate::data::item(id).name));
+                }
+                Ok(format!("Alındı: {}", got.join(", ")))
+            }
             "net_mode" => {
                 self.set_net(v["mode"].as_u64().unwrap_or(0) as u8);
                 Ok(String::new())
@@ -811,13 +861,7 @@ impl Game {
                     "deep" | "derin" => (300.0 * world::TILE, 250.0 * world::TILE),
                     _ => (num(1, px / world::TILE) * world::TILE, num(2, py / world::TILE) * world::TILE),
                 };
-                let (mut x, mut y) = (x.clamp(100.0, world::MAP_PX - 100.0), y.clamp(100.0, world::MAP_PX - 100.0));
-                self.world.resolve(&mut x, &mut y, 14.0, true, &mut self.scratch);
-                if let Some(vi) = self.player.vehicle.take() {
-                    self.vehicles[vi].driver = false;
-                }
-                self.player.x = x;
-                self.player.y = y;
+                let (x, y) = self.teleport(x, y);
                 Ok(format!("Işınlandın ({:.0}, {:.0})", x / world::TILE, y / world::TILE))
             }
             "unlock" | "ac" => {

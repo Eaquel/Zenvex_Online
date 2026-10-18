@@ -51,11 +51,9 @@ jobs:
         env:
           VERSION_CODE: ${{ github.run_number }}
           VERSION_NAME: 0.2.${{ github.run_number }}
-          # Firebase (isteğe bağlı): Settings → Secrets → Actions altına eklenirse çevrimiçi mod açılır
-          FB_API_KEY: ${{ secrets.FB_API_KEY }}
-          FB_APP_ID: ${{ secrets.FB_APP_ID }}
-          FB_PROJECT_ID: ${{ secrets.FB_PROJECT_ID }}
-          FB_DB_URL: ${{ secrets.FB_DB_URL }}
+          # Supabase (isteğe bağlı): başka bir projeye geçmek için Secrets'a SB_URL / SB_KEY eklenebilir
+          SB_URL: ${{ secrets.SB_URL }}
+          SB_KEY: ${{ secrets.SB_KEY }}
         run: |
           ./gradlew assembleRelease --console=plain
           mkdir -p ../dist

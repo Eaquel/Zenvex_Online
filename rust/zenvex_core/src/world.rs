@@ -134,6 +134,36 @@ pub struct Static {
     pub sort_off: f32,
 }
 
+pub struct Travel {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// karo koordinatı; (-1,-1) kamp, (-2,-2) şehir doğma noktası
+    pub tile: (f32, f32),
+    pub level: u32,
+    pub cost: u32,
+}
+
+impl Travel {
+    pub fn pos(&self) -> (f32, f32) {
+        match self.tile {
+            (a, _) if a == -1.0 => camp_spawn(),
+            (a, _) if a == -2.0 => city_spawn(),
+            (a, _) if a == -3.0 => (BOSS.0 - 600.0, BOSS.1 + 400.0),
+            (x, y) => (x * TILE, y * TILE),
+        }
+    }
+}
+
+/// Haritadan hızlı seyahat noktaları
+pub const TRAVEL: &[Travel] = &[
+    Travel { id: "camp", name: "Kamp", tile: (-1.0, -1.0), level: 1, cost: 0 },
+    Travel { id: "deep", name: "Derin Orman", tile: (300.0, 250.0), level: 5, cost: 25 },
+    Travel { id: "swamp", name: "Bataklık", tile: (50.0, 300.0), level: 8, cost: 40 },
+    Travel { id: "city", name: "Şehir Güvenli Bölgesi", tile: (-2.0, -2.0), level: 10, cost: 60 },
+    Travel { id: "downtown", name: "Şehir Merkezi", tile: (50.0, 60.0), level: 20, cost: 100 },
+    Travel { id: "boss", name: "Titan Arenası", tile: (-3.0, -3.0), level: 45, cost: 200 },
+];
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Zone {
     Camp,

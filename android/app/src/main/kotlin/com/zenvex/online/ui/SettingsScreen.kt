@@ -40,6 +40,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenvex.online.BuildConfig
+import com.zenvex.online.game.Account
+import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Online
 import com.zenvex.online.game.Settings
 import kotlin.math.roundToInt
@@ -125,17 +127,11 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 Toggle("Bildirimler", false) { Toaster.show("Yakında!", false) }
                             }
                             4 -> {
-                                SectionTitle("Misafir hesabı")
-                                T("İlerlemen bu cihazda saklanıyor.", 12.sp, Pal.Sub)
-                                T("Sunucu: " + Online.status.value, 12.sp, if (Online.online.value) Pal.Green else Pal.Sub)
-                                Spacer(Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    GButton("Hesabı Bağla", tone = Tone.Dark, icon = "globe", height = 40.dp, size = 13.sp) { Toaster.show("Yakında!", false) }
-                                }
-                                Spacer(Modifier.height(8.dp))
+                                AccountSettings()
+                                Spacer(Modifier.height(10.dp))
                                 if (!inGame) {
                                     var confirm by remember { mutableStateOf(false) }
-                                    GButton(if (confirm) "Emin misin? Tekrar bas" else "Tüm İlerlemeyi Sil", tone = Tone.Red, height = 40.dp, size = 13.sp) {
+                                    GButton(if (confirm) "Emin misin? Tekrar bas" else "Bu sunucudaki ilerlemeyi sil", tone = Tone.Red, height = 40.dp, size = 13.sp) {
                                         if (confirm) { onReset(); confirm = false } else confirm = true
                                     }
                                 }
@@ -146,7 +142,8 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 Spacer(Modifier.height(8.dp))
                                 T("Oyun çekirdeği Rust, Android arayüzü Kotlin ile yazıldı.", 12.sp)
                                 T("Tüm 3D görseller Blender ile kodla üretildi (tools/blender).", 12.sp)
-                                T("Yazı tipleri: Outfit, Big Shoulders (SIL Open Font License).", 12.sp)
+                                T("Yazı tipleri: Outfit, Big Shoulders, Pixelify Sans (SIL Open Font License).", 12.sp)
+                                T("Çevrimiçi altyapı: Supabase.", 12.sp)
                             }
                         }
                     }
@@ -207,4 +204,55 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
         Spacer(Modifier.width(10.dp))
         T(if (pct) "%${(value * 100).roundToInt()}" else String.format("%.2fx", value), 12.sp, Pal.Gold, Modifier.width(52.dp), bold = true)
     }
+}
+
+/** Zenvex hesabı: ID, anahtar, isim, başka hesaba giriş. */
+@Composable
+private fun AccountSettings() {
+    val ctx = LocalContext.current
+    var showKey by remember { mutableStateOf(false) }
+    var dialog by remember { mutableStateOf(false) }
+    var nick by remember { mutableStateOf(Account.name.value) }
+    var confirmKey by remember { mutableStateOf(false) }
+    SectionTitle("Zenvex hesabı")
+    if (!Account.loggedIn) {
+        T("Misafirsin: ilerlemen yalnızca bu cihazda. Hesap açarsan buluta kaydedilir ve her telefondan girebilirsin.", 12.sp, Pal.Sub)
+        Spacer(Modifier.height(8.dp))
+        GButton("Hesap Aç / Giriş Yap", tone = Tone.Green, icon = "user", height = 42.dp, size = 14.sp) { dialog = true }
+    } else {
+        T("ID: ${fmtId(Account.id.value)}", 18.sp, bold = true)
+        T("Durum: " + Account.status.value, 12.sp, if (Account.status.value == "Çevrimiçi") Pal.Green else Pal.Sub)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            T("Anahtar: " + if (showKey) Account.key else "••••••••••••", 15.sp, Pal.Gold, bold = true)
+            GButton(if (showKey) "Gizle" else "Göster", tone = Tone.Dark, height = 34.dp, size = 12.sp) { showKey = !showKey }
+            GButton("Kopyala", tone = Tone.Dark, height = 34.dp, size = 12.sp) {
+                copy(ctx, "Zenvex ID: ${Account.id.value}  Anahtar: ${Account.key}"); Toaster.show("Kopyalandı")
+            }
+        }
+        T("ID ve anahtarı bir yere not et: telefon değişirse bunlarla girersin.", 11.sp, Pal.Sub)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Field(nick, { nick = it.take(16) }, "Oyuncu adı", Modifier.width(220.dp))
+            Spacer(Modifier.width(8.dp))
+            GButton("İsmi Değiştir", tone = Tone.Blue, height = 40.dp, size = 13.sp) {
+                Account.rename(nick) { e ->
+                    if (e != null) Toaster.show(e, false) else { GameSession.cmd("set_name", "name" to Account.name.value); Toaster.show("İsim değişti") }
+                }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            GButton(if (confirmKey) "Emin misin?" else "Anahtarı Değiştir", tone = Tone.Red, height = 40.dp, size = 13.sp) {
+                if (!confirmKey) { confirmKey = true; return@GButton }
+                confirmKey = false
+                Account.changeKey { e -> if (e != null) Toaster.show(e, false) else { showKey = true; Toaster.show("Yeni anahtar oluşturuldu, not et!") } }
+            }
+            GButton("Başka Hesaba Gir", tone = Tone.Dark, height = 40.dp, size = 13.sp) { dialog = true }
+            GButton("Çıkış", tone = Tone.Dark, height = 40.dp, size = 13.sp) {
+                GameSession.save(cloud = true); Account.logout(); GameSession.reload { Toaster.show("Misafir moduna geçildi") }
+            }
+        }
+    }
+    if (dialog) AccountDialog { dialog = false }
 }

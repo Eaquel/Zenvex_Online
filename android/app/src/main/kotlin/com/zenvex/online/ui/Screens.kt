@@ -53,12 +53,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.zenvex.online.game.Atlas
+import com.zenvex.online.game.Account
 import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Online
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class Screen { Splash, Title, Lobby, Character, Skills, Inventory, Craft, Shop, Quests, Pass, Cosmetics, Profile, Chat, Settings, Loading, Game }
+enum class Screen { Splash, Lobby, Settings, Loading, Game }
 
 fun JSONArray?.objs(): List<JSONObject> = if (this == null) emptyList() else List(length()) { optJSONObject(it) ?: JSONObject() }
 
@@ -77,57 +78,14 @@ fun SplashScreen(done: () -> Unit) {
         delay(400)
         done()
     }
-    Box(Modifier.fillMaxSize()) {
-        LobbyBackground(t, Pal.Red)
+    MapBackground(t, dim = 0.45f) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Logo(t)
+            PT("Zenvex Online", 56.sp, Px.Orange, outline = true)
             Spacer(Modifier.height(30.dp))
-            Bar(progress, Pal.Gold, Modifier.width(320.dp), 8.dp)
+            PxBar(progress, Px.Green, Modifier.width(320.dp), 14.dp)
             Spacer(Modifier.height(8.dp))
-            T("Dünya hazırlanıyor… %${(progress * 100).toInt()}", 12.sp, Pal.Sub)
+            PT("Dünya hazırlanıyor… %${(progress * 100).toInt()}", 15.sp, Px.Sub)
         }
-    }
-}
-
-@Composable
-fun Logo(t: Float) {
-    val glow = 0.6f + 0.4f * kotlin.math.sin(t * 2f)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        T("ZENVEX", 74.sp, Color(0xFFF4ECDC), display = true, glow = Color(0xFFFF5A2A).copy(alpha = glow))
-        T("O N L I N E", 22.sp, Pal.Gold, display = true, glow = Pal.Gold.copy(alpha = 0.5f))
-    }
-}
-
-@Composable
-fun TitleScreen(onPlay: () -> Unit, onSettings: () -> Unit) {
-    val t = rememberTime()
-    val prof = remember { GameSession.ui("profile") }
-    var name by remember { mutableStateOf(prof.optString("name")) }
-    Box(Modifier.fillMaxSize()) {
-        LobbyBackground(t, Pal.Red)
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Logo(t)
-            Spacer(Modifier.height(26.dp))
-            Panel(Modifier.width(380.dp)) {
-                T("Hayatta kalan adın", 12.sp, Pal.Sub)
-                Spacer(Modifier.height(6.dp))
-                Field(name, { if (it.length <= 16) name = it }, "İsim", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(12.dp))
-                GButton("MİSAFİR OLARAK OYNA", Modifier.fillMaxWidth(), Tone.Gold, icon = "play") {
-                    if (name.trim() != prof.optString("name")) {
-                        val r = GameSession.cmd("set_name", "name" to name)
-                        if (!r.ok) { Toaster.show(r.msg, false); return@GButton }
-                    }
-                    onPlay()
-                }
-                Spacer(Modifier.height(8.dp))
-                GButton("Google ile Giriş", Modifier.fillMaxWidth(), Tone.Dark, icon = "globe") {
-                    Toaster.show("Google girişi yakında. Şimdilik misafir hesabın cihazda saklanıyor.", false)
-                }
-            }
-        }
-        RoundIcon("gear", Modifier.align(Alignment.TopEnd).padding(16.dp)) { onSettings() }
-        T("© 2026 Zenvex · Tüm görseller kodla üretildi", 10.sp, Pal.Sub.copy(alpha = 0.6f), Modifier.align(Alignment.BottomCenter).padding(8.dp))
     }
 }
 
@@ -165,18 +123,17 @@ fun LoadingScreen(done: () -> Unit) {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             groups.forEachIndexed { i, g -> runCatching { Atlas.get(ctx).preload(g) }; p = (i + 1f) / groups.size }
         }
-        Online.start(ctx, GameSession.ui("profile").optString("name"), GameSession.ui("profile").optString("tag_name"))
+        Online.start(Account.name.value.ifEmpty { GameSession.ui("profile").optString("name") }, GameSession.ui("profile").optString("tag_name"))
         delay(200)
         done()
     }
-    Box(Modifier.fillMaxSize()) {
-        LobbyBackground(t, Pal.Orange)
+    MapBackground(t, dim = 0.45f) {
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            T("YÜKLENİYOR", 22.sp, display = true)
+            PT(GameSession.server.value.title, 26.sp, Px.Clan, outline = true)
             Spacer(Modifier.height(10.dp))
-            Bar(p, Pal.Gold, Modifier.width(420.dp), 10.dp)
+            PxBar(p, Px.Green, Modifier.width(420.dp), 14.dp)
             Spacer(Modifier.height(10.dp))
-            T(tip, 13.sp, Pal.Sub, align = TextAlign.Center)
+            PT(tip, 14.sp, Px.Text, align = TextAlign.Center, maxLines = 2)
         }
     }
 }

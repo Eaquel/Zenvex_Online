@@ -26,24 +26,14 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.zenvex.online.game.Audio
 import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Settings
-import com.zenvex.online.ui.CharacterScreen
-import com.zenvex.online.ui.ChatScreen
-import com.zenvex.online.ui.CosmeticsScreen
-import com.zenvex.online.ui.CraftScreen
+import com.zenvex.online.game.Account
 import com.zenvex.online.ui.GameScreen
-import com.zenvex.online.ui.InventoryScreen
 import com.zenvex.online.ui.LoadingScreen
 import com.zenvex.online.ui.LobbyScreen
 import com.zenvex.online.ui.Pal
-import com.zenvex.online.ui.PassScreen
-import com.zenvex.online.ui.ProfileScreen
-import com.zenvex.online.ui.QuestsScreen
 import com.zenvex.online.ui.Screen
 import com.zenvex.online.ui.SettingsScreen
-import com.zenvex.online.ui.ShopScreen
-import com.zenvex.online.ui.SkillsScreen
 import com.zenvex.online.ui.SplashScreen
-import com.zenvex.online.ui.TitleScreen
 import com.zenvex.online.ui.ToastHost
 import com.zenvex.online.ui.Toaster
 
@@ -57,6 +47,7 @@ class MainActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         Settings.load(this)
+        Account.init(this)
         GameSession.init(this)
         Audio.init(this)
 
@@ -72,30 +63,16 @@ class MainActivity : ComponentActivity() {
                 screen = it
             }
             LaunchedEffect(screen) { Audio.music(if (screen == Screen.Game) "music_game" else "music_lobby") }
-            BackHandler(enabled = screen != Screen.Game && screen != Screen.Title && screen != Screen.Splash) {
-                go(if (screen == Screen.Lobby) Screen.Title else if (screen == Screen.Settings) settingsFrom else Screen.Lobby)
-            }
+            BackHandler(enabled = screen == Screen.Settings) { go(settingsFrom) }
             Box(Modifier.fillMaxSize().background(Pal.Bg)) {
-                val back = { go(Screen.Lobby) }
                 val reset = {
                     GameSession.resetSave()
-                    Toaster.show("İlerleme silindi.", false); go(Screen.Lobby)
+                    Toaster.show("Bu sunucudaki ilerleme silindi.", false); go(Screen.Lobby)
                 }
                 AnimatedContent(screen, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(200)) }, label = "screen") { s ->
                     when (s) {
-                        Screen.Splash -> SplashScreen { screen = Screen.Title }
-                        Screen.Title -> TitleScreen(onPlay = { go(Screen.Lobby) }, onSettings = { go(Screen.Settings) })
+                        Screen.Splash -> SplashScreen { screen = Screen.Lobby }
                         Screen.Lobby -> LobbyScreen(go, epoch)
-                        Screen.Character -> CharacterScreen(back)
-                        Screen.Skills -> SkillsScreen(back)
-                        Screen.Inventory -> InventoryScreen(back)
-                        Screen.Craft -> CraftScreen(back)
-                        Screen.Shop -> ShopScreen(back)
-                        Screen.Quests -> QuestsScreen(back)
-                        Screen.Pass -> PassScreen(back)
-                        Screen.Cosmetics -> CosmeticsScreen(back)
-                        Screen.Profile -> ProfileScreen(back, reset)
-                        Screen.Chat -> ChatScreen(back)
                         Screen.Settings -> SettingsScreen(back = { go(settingsFrom) }, onReset = reset)
                         Screen.Loading -> LoadingScreen { screen = Screen.Game }
                         Screen.Game -> GameScreen(toLobby = { go(Screen.Lobby) })
@@ -108,7 +85,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        GameSession.save()
+        GameSession.save(cloud = true)
         Audio.pauseMusic()
     }
 

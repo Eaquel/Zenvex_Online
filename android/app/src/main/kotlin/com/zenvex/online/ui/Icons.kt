@@ -213,6 +213,15 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawPath(path(0.15f, 0.38f, 0.85f, 0.38f, 0.66f, 0.2f, close = false), c, style = st)
             drawPath(path(0.85f, 0.62f, 0.15f, 0.62f, 0.34f, 0.8f, close = false), c, style = st)
         }
+        "mail" -> {
+            drawRoundRect(c, p(0.1f, 0.22f), Size(w * 0.8f, w * 0.56f), CornerRadius(w * 0.06f))
+            drawPath(path(0.12f, 0.26f, 0.5f, 0.56f, 0.88f, 0.26f, close = false), Color.Black.copy(alpha = 0.55f), style = thin)
+        }
+        "radio" -> {
+            drawRoundRect(c, p(0.28f, 0.3f), Size(w * 0.44f, w * 0.62f), CornerRadius(w * 0.08f))
+            drawLine(c, p(0.62f, 0.32f), p(0.62f, 0.06f), w * 0.07f, StrokeCap.Round)
+            for (k in 0..2) drawLine(Color.Black.copy(alpha = 0.5f), p(0.36f, 0.5f + k * 0.12f), p(0.64f, 0.5f + k * 0.12f), w * 0.05f)
+        }
         "dev" -> {
             drawPath(path(0.34f, 0.26f, 0.12f, 0.5f, 0.34f, 0.74f, close = false), c, style = st)
             drawPath(path(0.66f, 0.26f, 0.88f, 0.5f, 0.66f, 0.74f, close = false), c, style = st)

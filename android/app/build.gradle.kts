@@ -18,14 +18,13 @@ android {
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
-        // Firebase (geçici çevrimiçi altyapı): GitHub Secrets veya firebase.properties ile doldurulur; boşsa çevrimdışı.
-        val fb = Properties()
-        rootProject.file("firebase.properties").takeIf { it.exists() }?.inputStream()?.use { fb.load(it) }
-        fun fbv(k: String) = (System.getenv(k) ?: fb.getProperty(k) ?: "").replace("\"", "")
-        buildConfigField("String", "FB_API_KEY", "\"${fbv("FB_API_KEY")}\"")
-        buildConfigField("String", "FB_APP_ID", "\"${fbv("FB_APP_ID")}\"")
-        buildConfigField("String", "FB_PROJECT_ID", "\"${fbv("FB_PROJECT_ID")}\"")
-        buildConfigField("String", "FB_DB_URL", "\"${fbv("FB_DB_URL")}\"")
+        // Supabase: ortam değişkeni / supabase.properties ile değiştirilebilir. Yayınlanabilir anahtar herkese açıktır;
+        // veritabanı yalnızca zx_* fonksiyonlarına izin verir (supabase/migrations).
+        val sb = Properties()
+        rootProject.file("supabase.properties").takeIf { it.exists() }?.inputStream()?.use { sb.load(it) }
+        fun sbv(k: String, d: String) = (System.getenv(k)?.takeIf { it.isNotBlank() } ?: sb.getProperty(k) ?: d).replace("\"", "")
+        buildConfigField("String", "SB_URL", "\"${sbv("SB_URL", "https://blvstsvmvmdydyrnecpo.supabase.co")}\"")
+        buildConfigField("String", "SB_KEY", "\"${sbv("SB_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsdnN0c3Ztdm1keWR5cm5lY3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzY2ODcsImV4cCI6MjEwNzkxMjY4N30.DVhL21Y_iaEdhwf_bBsJ2Fv8O1ej-1f8RxW-8wFw40k")}\"")
     }
 
     signingConfigs {
@@ -91,7 +90,5 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-database")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
