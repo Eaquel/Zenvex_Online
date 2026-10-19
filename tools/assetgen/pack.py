@@ -33,6 +33,9 @@ HERO_ANIMS = {"idle": (6, 6, 1), "walk": (8, 10, 1), "run": (8, 14, 1), "punch":
               "roll": (6, 18, 0), "knockdown": (5, 10, 0), "getup": (5, 10, 0)}
 PIX = os.environ.get("ZX_PIX", "/home/user/zx_pix")
 ZOMBIE_ANIMS = {"idle": (4, 4, 1), "walk": (8, 7, 1), "attack": (6, 10, 1), "hurt": (2, 10, 0), "death": (6, 8, 0)}
+DROPPED_ITEMS = ("w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "helm_", "jacket_", "boots_",
+                 "bag_", "cloak", "powder", "screw")  # altın ve elmas simgeleri ödül ekranlarında kalır
+KEEP_GEAR = False  # eski 3D silah/ekipman katmanları; V6'da silahlar (bıçak, katana) yeni piksel görsellerle gelecek
 HEROES = ["kaan"]  # V4: tek kahraman
 ZOMBIES = ["walker", "runner", "dog", "toxic", "dark", "tank", "mystery", "titan"]
 
@@ -279,13 +282,17 @@ def main():
     # eşya simgeleri: yeni (yüksek çözünürlük) varsa onu kullan
     items = []
     collect_static("items", "i", items, root=SRC3 if has3("items") else SRC)
+    # oyundan kaldırılan eşyalar (ateşli silahlar, mermiler, setler, düşen para) atlasa girmez
+    items = [t for t in items if not t[0].split("/", 1)[1].startswith(DROPPED_ITEMS)]
     P.pack_group("items", items)
     gear = []
-    if has3("equip"):
+    if not KEEP_GEAR:
+        print("gear: atlandı (silah/set parçaları kullanılmıyor)")
+    if KEEP_GEAR and has3("equip"):
         collect_dirs("equip", "e", gear, root=SRC3)
         collect_dirs("weapons", "w", gear, root=SRC3)
         P.pack_group("gear", gear, K3)
-    else:
+    elif KEEP_GEAR:
         collect_dirs("equip", "e", gear, lifted=True)
         collect_dirs("weapons", "w", gear, lifted=True)
         P.pack_group("gear", gear)

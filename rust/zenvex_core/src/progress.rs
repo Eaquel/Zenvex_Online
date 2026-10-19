@@ -625,15 +625,15 @@ mod tests {
         assert_eq!(p.inventory_cap(), BASE_SLOTS);
         p.level = 10;
         assert_eq!(p.inventory_cap(), BASE_SLOTS + 4);
-        p.inv.add_id("w_bat", 1);
+        p.inv.add_id("w_knife", 1);
         let slot = p
             .inv
             .slots
             .iter()
-            .position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "w_bat"))
+            .position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "w_knife"))
             .unwrap();
         p.equip_slot(slot).unwrap();
-        assert_eq!(p.eq.weapon, "w_bat");
+        assert_eq!(p.eq.weapon, "w_knife");
         assert_eq!(p.armor(), 0.0);
     }
 

@@ -805,13 +805,10 @@ impl Game {
                 Ok("Tüm malzemelerden 20'şer eklendi".into())
             }
             "weapons" | "silahlar" => {
-                for w in &WEAPONS[1..] {
-                    self.progress.inv.add_id(w.item, 1);
-                    if !w.ammo.is_empty() {
-                        self.progress.inv.add_id(w.ammo, 60);
-                    }
+                for id in ["w_knife", "w_katana"] {
+                    self.progress.inv.add_id(id, 1);
                 }
-                Ok("Tüm silahlar ve mermiler eklendi".into())
+                Ok("Bıçak ve katana eklendi".into())
             }
             "set" => {
                 let t = match arg(1) {
@@ -1055,7 +1052,7 @@ mod cheat_tests {
         let mut g = Game::new(7, Progress::default(), 1);
         let cmds = [
             "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "ammo", "points 10", "infammo", "infammo", "nocd", "nocd", "invis", "invis", "timescale 2", "timescale 1", "dog 5", "potions",
-            "set basic", "set police", "set military", "set titan", "item w_ak47 1", "item medkit 5", "god", "god", "onehit", "onehit",
+            "set basic", "set police", "set military", "set titan", "item w_katana 1", "item medkit 5", "god", "god", "onehit", "onehit",
             "speed 2", "speed 1", "heal", "day", "night", "time 18", "spawn walker 3", "spawn runner 2", "spawn dog 2",
             "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle bike", "vehicle moto",
             "vehicle car", "vehicle suv", "fuel", "tp camp", "tp city", "tp swamp", "tp deep", "tp downtown", "tp boss", "tp 100 100",

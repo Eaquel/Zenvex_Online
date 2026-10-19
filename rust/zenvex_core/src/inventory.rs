@@ -188,7 +188,7 @@ mod tests {
     fn sort_merges() {
         let mut inv = Inventory::new(6);
         let wood = data::item_index("wood").unwrap();
-        let glock = data::item_index("w_glock").unwrap();
+        let glock = data::item_index("w_knife").unwrap();
         inv.slots[3] = Some(Slot {
             item: wood as u16,
             count: 10,

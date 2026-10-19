@@ -165,7 +165,11 @@ impl Game {
         let common: &[(&str, u32)] = &[
             ("cloth", 3),
             ("scrap", 3),
-            ("screw", 3),
+            ("tape", 2),
+            ("nails", 3),
+            ("rope", 2),
+            ("plastic", 3),
+            ("copper", 2),
             ("glue", 1),
             ("leather", 2),
             ("bandage", 1),
@@ -176,28 +180,18 @@ impl Game {
             let c = ((1 + self.rng.below(n)) as f32 * gather).round() as u32;
             self.spawn_drop_id(id, c.max(1), x, y);
         }
-        let rv = self.rng.below(8);
-        self.spawn_drop_id("coin", (3.0 * mult) as u32 + rv, x, y);
         let rare: &[(&str, f32, u32)] = &[
-            ("powder", 0.35, 3),
+            ("battery", 0.25, 1),
+            ("gear", 0.25, 2),
+            ("spring", 0.25, 2),
             ("electronics", 0.2, 2),
-            ("ammo_9mm", 0.35, 20),
-            ("ammo_762", 0.18, 20),
-            ("ammo_556", 0.18, 20),
             ("energy", 0.2, 1),
             ("medkit", 0.1, 1),
             ("potion_heal", 0.08, 1),
             ("potion_speed", 0.05, 1),
             ("fuel", 0.15, 1),
-            ("w_bat", 0.06, 1),
-            ("w_glock", 0.025, 1),
-            ("w_baton", 0.03, 1),
-            ("ammo_308", 0.04, 5),
-            ("w_ak47", 0.008, 1),
-            ("w_m4", 0.006, 1),
-            ("ammo_rocket", 0.01, 1),
-            ("w_sniper", 0.003, 1),
-            ("w_rpg", 0.002, 1),
+            ("w_knife", 0.03, 1),
+            ("w_katana", 0.004, 1),
         ];
         let city = zone.city();
         for &(id, p, n) in rare {
@@ -565,10 +559,12 @@ impl Game {
         // ganimet
         let zone = self.world.zone(z.x, z.y);
         let mult = zone.loot_mult() * (1.0 + self.progress.luck());
-        let gold = def.gold.0 + self.rng.below(def.gold.1 - def.gold.0 + 1) + z.level / 2;
-        self.spawn_drop_id("coin", gold, z.x, z.y);
+        // para düşmez: altın günlük görev ve etkinliklerden gelir
         if self.rng.chance(0.3 * mult.min(2.0)) {
             self.spawn_drop_id("tooth", 1, z.x, z.y);
+        }
+        if self.rng.chance(0.2 * mult.min(2.0)) {
+            self.spawn_drop_id("bone", 1, z.x, z.y);
         }
         if self.rng.chance(0.35) && z.kind != ZKind::Dog {
             let rv = self.rng.below(2);
@@ -593,17 +589,16 @@ impl Game {
             ZKind::Tank => {
                 let rv = self.rng.below(3);
                 self.spawn_drop_id("scrap", 1 + rv, z.x, z.y);
-                if self.rng.chance(0.2 * mult) {
-                    self.spawn_drop_id("powder", 2, z.x, z.y);
+                if self.rng.chance(0.3 * mult) {
+                    self.spawn_drop_id("gear", 1, z.x, z.y);
                 }
             }
             ZKind::Mystery => {
                 for (id, p) in [
                     ("dark_crystal", 0.6),
                     ("electronics", 0.8),
-                    ("w_m4", 0.04),
-                    ("w_sniper", 0.02),
-                    ("gem", 0.5),
+                    ("battery", 0.4),
+                    ("w_katana", 0.03),
                 ] {
                     if self.rng.chance(p * mult) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
@@ -617,8 +612,7 @@ impl Game {
                 self.spawn_drop_id("titan_shard", 3 + rv, z.x, z.y);
                 let rv = self.rng.below(2);
                 self.spawn_drop_id("dark_crystal", 2 + rv, z.x, z.y);
-                self.spawn_drop_id("gem", 10, z.x, z.y);
-                for id in ["w_rpg", "w_sniper", "potion_power", "potion_speed"] {
+                for id in ["w_katana", "potion_power", "potion_speed", "potion_heal"] {
                     if self.rng.chance(0.25) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
                     }
@@ -629,22 +623,9 @@ impl Game {
         }
         // genel nadir düşüş (yüksek seviye bölgelerde daha değerli)
         if zone.city() && self.rng.chance(0.03 * mult) {
-            let pool = [
-                "ammo_9mm",
-                "ammo_762",
-                "ammo_556",
-                "powder",
-                "electronics",
-                "medkit",
-                "energy",
-            ];
+            let pool = ["battery", "gear", "spring", "copper", "electronics", "medkit", "energy"];
             let id = pool[self.rng.below(pool.len() as u32) as usize];
-            let n = if id.starts_with("ammo") {
-                10 + self.rng.below(15)
-            } else {
-                1
-            };
-            self.spawn_drop_id(id, n, z.x, z.y);
+            self.spawn_drop_id(id, 1, z.x, z.y);
         }
         let xp = def.xp + z.level * 3;
         self.give_xp(z.x, z.y, xp);
