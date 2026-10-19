@@ -143,3 +143,9 @@ Görselleri yeniden üretmek için (bilgisayarda): `pip install bpy` → `python
 - **Yeni uygulama simgesi:** 3D renderlardan (Kaan + AK47, arkada zombiler, kızıl ay).
 - **Oyun içi:** harita + bölgeler arası seyahat, görevler, sezon, yetenekler (sol üst); posta, oyuncular, klan, menü (sağ üst);
   hızlı eşya slotları + çanta + sohbet çubuğu (alt orta); XP şeridi ve koordinat (alt). Envanter/üretim/tüccar/kozmetik oyunun içinde.
+- **Kahraman sprite'ı (V5):** 3D→piksel hattı yerine kullanıcının verdiği piksel karakterin kendisi kullanılır
+  (`art/v5/warrior_ref.jpg` → ızgara 2.34 px tespiti, arka plan temizliği, palet → `art/v5/warrior_base.png`, 94×258).
+  Animasyonlar `tools/pixel/cutout_rig.py` ile: kol ayrı katman (omuzdan döner), iki bacak ayrı katman (kalçadan salınır),
+  üst gövde eğilme/nefes, düşme/takla tüm figür döndürmesi; döndürme Scale2x³ + en yakın örnekleme (RotSprite benzeri).
+  Yönler: ön (güney), aynası (doğu/güneydoğu), maske/atkı kapüşonla örtülmüş sırt (kuzey ve aynası).
+  Üret: `python3 tools/pixel/cutout_rig.py art/v5/warrior_base.png /home/user/zx_pix/hero` sonra `pack.py`.
