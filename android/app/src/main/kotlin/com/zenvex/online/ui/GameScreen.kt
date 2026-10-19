@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -88,7 +89,9 @@ fun GameScreen(toLobby: () -> Unit) {
     // çevrimiçiyken dünya durmaz; yalnızca tek başınayken menü oyunu duraklatır
     view.paused = !Online.online.value && (overlay == Overlay.Menu || overlay == Overlay.Settings)
     DisposableEffect(Unit) {
-        Online.onChat = { l -> view.addChat((if (l.channel == "local") "[Yakın] " else if (l.channel == "system") "" else "") + "${l.name}: ${l.text}") }
+        Online.onChat = { l ->
+            if (l.channel != "system") view.bubble(l.name, l.text)
+            view.addChat((if (l.channel == "local") "[Yakın] " else if (l.channel == "system") "" else "") + "${l.name}: ${l.text}") }
         onDispose { Online.onChat = null; GameSession.save(cloud = true); Online.stop() }
     }
     BackHandler {
@@ -110,7 +113,8 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Profile -> ProfileScreen(close) {}
             Overlay.Characters -> CharacterScreen(close)
             Overlay.Cosmetics -> CosmeticsScreen(close)
-            Overlay.Chat -> Box(Modifier.fillMaxSize().padding(16.dp)) {
+            // imePadding: klavye açılınca sohbet paneli klavyenin üstüne kayar
+            Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(12.dp)) {
                 ChatPanel(Modifier.width(460.dp).fillMaxHeight().align(Alignment.CenterStart), close)
             }
             Overlay.Map -> TravelMap(close)
@@ -159,12 +163,10 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("magic", size = 46.dp, badge = points) { open(Overlay.Skills) }
         PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
-    // sağ üst (radarın altı): posta, oyuncular, klan, menü
-    Row(Modifier.align(Alignment.TopEnd).padding(end = 14.dp, top = 146.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PxIcon("mail", size = 46.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
-        PxIcon("radio", size = 46.dp, badge = if (Online.online.value) 0 else 0) { open(Overlay.Players) }
-        PxIcon("people", size = 46.dp, tint = Px.Clan) { open(Overlay.Clan) }
-        PxIcon("menu", size = 46.dp) { open(Overlay.Menu) }
+    // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)
+    Row(Modifier.align(Alignment.TopEnd).padding(end = 146.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
+        PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
     }
     // alt orta: hızlı eşyalar + çanta + sohbet çubuğu
     Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -226,18 +228,24 @@ private fun QuickSlot(item: JSONObject?, onClick: () -> Unit) {
 @Composable
 private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> Unit) {
     Dim(close) {
-        PxPanel(Modifier.width(320.dp).clickable(remember { MutableInteractionSource() }, null) {}, pad = 12.dp) {
+        PxPanel(Modifier.width(440.dp).clickable(remember { MutableInteractionSource() }, null) {}, pad = 12.dp) {
             PT(GameSession.server.value.title, 22.sp, Px.Clan, Modifier.align(Alignment.CenterHorizontally))
             PT(Online.status.value + if (Online.online.value) " · ${Online.playerCount.intValue} oyuncu" else "", 13.sp,
                 if (Online.online.value) Px.Name else Px.Sub, Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(10.dp))
             val items = listOf(
                 Triple("Devam Et", "play", Overlay.None), Triple("Karakterler", "user", Overlay.Characters),
+                Triple("Oyuncular", "radio", Overlay.Players), Triple("Klan", "people", Overlay.Clan),
                 Triple("Profil", "profile", Overlay.Profile), Triple("Kozmetik", "hanger", Overlay.Cosmetics),
                 Triple("Sıralama", "trophy", Overlay.Top), Triple("Hile Paneli", "dev", Overlay.Cheat), Triple("Ayarlar", "gear", Overlay.Settings),
             )
-            for ((label, icon, o) in items) {
-                PxButton(label, Modifier.fillMaxWidth(), if (o == Overlay.None) Px.Green else Px.Dark, icon = icon, size = 17.sp, height = 42.dp) { open(o) }
+            // iki sütun: küçük ekranda da taşmaz
+            for (row in items.chunked(2)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for ((label, icon, o) in row) {
+                        PxButton(label, Modifier.weight(1f), if (o == Overlay.None) Px.Green else Px.Dark, icon = icon, size = 14.sp, height = 40.dp) { open(o) }
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
             }
             PxButton("Lobiye Dön", Modifier.fillMaxWidth(), Px.Red, icon = "exit", size = 17.sp, height = 42.dp) { toLobby() }

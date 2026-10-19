@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -321,7 +322,8 @@ fun ItemSlot(id: String?, count: Int = 0, rarity: Int = 0, size: Dp = 64.dp, sel
 fun Dim(onDismiss: (() -> Unit)? = null, content: @Composable BoxScope.() -> Unit) {
     Box(
         Modifier.fillMaxSize().background(Color(0xB0000000))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() }
+            .imePadding(), // yazı alanı olan pencereler klavyenin üstünde kalsın
         contentAlignment = Alignment.Center,
         content = content,
     )

@@ -783,8 +783,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         atlas.draw(c, sp, sx, sy, scale, paint)
         if (alpha > 0.35f && anim != "death") {
             val boss = kind == 7
-            val label = if (boss) zombieName.getOrElse(kind) { "" } else "Lv $lvl  " + zombieName.getOrElse(kind) { "" }
-            plates += Plate(sx, sy - sp.ay * scale - 2 * density, label, zombieColor.getOrElse(kind) { -1 }, hp, boss, null)
+            // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
+            val elite = kind == 5 || kind == 6
+            val label = when { boss -> zombieName.getOrElse(kind) { "" }; elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; else -> "" }
+            if (label.isNotEmpty() || hp < 0.999f)
+                plates += Plate(sx, sy - sp.ay * scale - 2 * density, label, zombieColor.getOrElse(kind) { -1 }, hp, boss, null)
         }
         if (kind == 3 && Settings.current.particles && Math.random() < 0.12)
             particles += Particle(x + (Math.random().toFloat() - 0.5f) * 30, y, 50f, 0f, 0f, 30f, 1.0f, 1.0f, 0xFF9AFF40.toInt(), 5f, 3)
@@ -1074,14 +1077,49 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.drawBitmap(lightBmp!!, null, rect, multiply)
     }
 
+    /** Konuşma balonları: isim → (metin, bitiş zamanı) */
+    private val bubbles = java.util.concurrent.ConcurrentHashMap<String, Pair<String, Float>>()
+    private val plateRects = ArrayList<RectF>()
+
+    /** Yazılan sohbet mesajını konuşanın kafasının üstünde 5 sn gösterir. */
+    fun bubble(name: String, text: String) { bubbles[name] = text.take(60) to time + 5f }
+
     private fun drawPlates(c: Canvas) {
+        plateRects.clear()
+        val d = density
+        // kameraya yakın olanlar önce: kalabalıkta en fazla 10 isim, üst üste binen isimler yukarı kaydırılır
+        val cx = sw / 2f; val cy = sh / 2f
+        plates.sortBy { hypot(it.x - cx, it.y - cy) }
+        var named = 0
         for (p in plates) {
-            val ts = if (p.boss) 15 * density else 11.5f * density
-            val y = p.y - (if (p.hp >= 0) 10 * density else 2 * density)
-            drawText(c, p.text, p.x, y, ts, p.color, center = true)
-            if (p.sub != null) drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true)
-            if (p.hp >= 0) bar(c, p.x, p.y - 3 * density, if (p.boss) 120 * density else 54 * density, p.hp,
+            val ts = if (p.boss) 15 * d else 11.5f * d
+            var y = p.y - (if (p.hp >= 0) 10 * d else 2 * d)
+            if (p.hp >= 0) bar(c, p.x, p.y - 3 * d, if (p.boss) 120 * d else 46 * d, p.hp,
                 if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
+            if (p.text.isEmpty()) continue
+            if (named >= 10 && !p.boss) continue
+            val w = text.apply { typeface = fontBold; textSize = ts }.measureText(p.text) / 2 + 3 * d
+            val lines = if (p.sub != null) 2 else 1
+            val r = RectF(p.x - w, y - ts * lines - 2 * d, p.x + w, y + 3 * d)
+            var tries = 0
+            while (plateRects.any { RectF.intersects(it, r) } && tries < 4) { r.offset(0f, -(ts + 2 * d)); y -= ts + 2 * d; tries++ }
+            if (tries >= 4 && !p.boss) continue
+            plateRects += r
+            named++
+            drawText(c, p.text, p.x, y, ts, p.color, center = true)
+            var top = y - ts
+            if (p.sub != null) { drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true); top -= ts }
+            // konuşma balonu (oyuncular)
+            bubbles[p.text]?.let { (msg, until) ->
+                if (until < time) { bubbles.remove(p.text); return@let }
+                val bs = 12.5f * d
+                val bw = text.apply { typeface = fontBold; textSize = bs }.measureText(msg) / 2 + 8 * d
+                val bb = RectF(p.x - bw, top - bs - 14 * d, p.x + bw, top - 4 * d)
+                fill.color = 0xF0F4F0E6.toInt(); c.drawRoundRect(bb, 6 * d, 6 * d, fill)
+                path.reset(); path.moveTo(p.x - 5 * d, bb.bottom); path.lineTo(p.x + 5 * d, bb.bottom); path.lineTo(p.x, bb.bottom + 6 * d); path.close()
+                c.drawPath(path, fill)
+                drawText(c, msg, p.x, bb.bottom - 5 * d, bs, 0xFF1A1A1A.toInt(), center = true)
+            }
         }
     }
 
@@ -1185,8 +1223,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val rr = 58 * d
         val rcx = sw - 16 * d - rr; val rcy = 16 * d + rr
         drawRadar(c, rcx, rcy, rr)
-        drawCoin(c, rcx - rr - 30 * d, 30 * d, 9 * d)
-        drawText(c, "%,d".format(gold).replace(',', '.'), rcx - rr - 18 * d, 35 * d, 15 * d, 0xFFFFD34A.toInt())
+        // altın: radarın hemen altında (sağ üst tuşlarla çakışmaz)
+        val gs = "%,d".format(gold).replace(',', '.')
+        val gw = text.apply { typeface = fontBold; textSize = 15 * d }.measureText(gs)
+        drawCoin(c, rcx - gw / 2 - 6 * d, rcy + rr + 18 * d, 8 * d)
+        drawText(c, gs, rcx - gw / 2 + 6 * d, rcy + rr + 23 * d, 15 * d, 0xFFFFD34A.toInt())
         // ---- araç durumu
         if (hud[Native.IN_VEHICLE] > 0) {
             hudBar(c, 16 * d, py0 + 76 * d, 150 * d, 8 * d, hud[Native.VEHICLE_HP], 0xFF60D0FF.toInt(), null, 0f)
