@@ -1,196 +1,217 @@
-# Yapay Zekâ Görsel Prompt'ları (V4 piksel sanat)
+# Yapay Zekâ Görsel Prompt'ları (V5)
 
-**Nasıl kullanılır**
-- Karakter/zombi/köpek: **PixelLab** (pixellab.ai) → "Create character" (metinden) ya da "Rotate / Animate" (referanstan).
-  Tuval: kahraman ve zombiler **96×96**, köpek **64×64**, Titan **128×128**, eşya **32×32**. Görünüm: **high top-down**.
-- Sahne/ekran/simge görselleri (sinema, giriş ekranı, uygulama simgesi): ChatGPT görsel ya da Gemini da olur.
-- Prompt'lar İngilizce: araçlar İngilizceyi daha iyi anlıyor. Altındaki Türkçe not ne istediğimizi açıklar.
-- Her prompt'un başına **STİL** bloğunu ekle (kopyala-yapıştır). Sonuçları bu sohbete at; temizliği ben yaparım.
-- Bir sonuç tutarsız çıkarsa: aynı referansla tekrar üret, ya da sonuna `same character as reference, keep exact colors` ekle.
+Sen görseli üretirsin. Ben şunları yaparım:
+- ızgarayı ve arka planı temizlerim,
+- herkesi aynı boy tablosuna göre ölçeklerim (orantısızlık olmaz),
+- parçalara bölüp kodla oynatırım (yürüme, koşma, saldırı, düşme…).
 
-## STİL (her prompt'un başına)
+Bu yüzden **her şeyin tek bir duruş görseli yeter**. Animasyon karesi üretmene gerek yok.
+
+## Kurallar (çok önemli)
+
+1. **Bir görselde bir şey** olsun. İstisna, aşağıdaki "ızgara tablo" promptları: onlar bilerek çoklu.
+2. **Arka plan düz yeşil (#00FF00)** olsun. Konu yeşilse (toksik zombi, zehir) **düz macenta (#FF00FF)** kullan. Gölge, zemin, yazı, çerçeve olmasın.
+3. **Tam boy, hiçbir yeri kesilmemiş** olsun. Ayaklar ve kafanın üstü görünsün.
+4. **Bakış yönü**: hepsi **sol-aşağıya, 3/4 açı** (senin maskeli karakter fotoğrafındaki gibi). Sağ tarafı ben aynalarım.
+5. **Duruş (kodla oynatabilmem için)**:
+   - Kollar gövdeye **değmesin**, hafif açık olsun.
+   - Bacaklar hafif aralık olsun, iki ayak da görünsün.
+   - Silah ya da eşya elde olmasın. Silahları ayrı üretip ben ele takıyorum.
+6. **Boyut önemli değil**. 1024 de gelse ben gerçek piksel boyuna indiririm, APK küçük kalır.
+7. Çıktıyı beğenmezsen aynı promptla 2–3 kez üret, en iyisini at. Bir karakterin varyantını istiyorsan önceki görseli
+   referans olarak yükle ve `same character, same style, same colors` ekle.
+
+### APK boyutu için hedefler (benim tarafım)
+
+| Tür | Oyundaki gerçek piksel boyu |
+|---|---|
+| Kahraman | 258 px boy (senin onayladığın, değişmiyor) |
+| İnsan zombi, NPC | 110–130 px boy |
+| Tank | 150 px |
+| Titan | 260 px |
+| Köpek | 55 px boy, 80 px uzunluk |
+| Eşya ve beceri simgesi | 32×32 |
+| Arayüz simgesi | 24×24 |
+| Zemin karosu | 32×32 |
+| Araba | 150 px uzunluk |
+
+Tüm atlas hedefi ≤ 10 MB.
+
+### Boy tablosu (oran)
+
+Kahraman = 100 kabul edilir:
+
+| Konu | Boy |
+|---|---|
+| Kahraman | 100 |
+| Köpek (omuz yüksekliği) | 42 |
+| Yürüyen zombi | 98 |
+| Koşucu | 95 |
+| Tank | 140 |
+| Titan | 240 |
+| Tüccar | 96 |
+| Bisiklet | 60 boy, 105 uzun |
+| Araba | 75 boy, 260 uzun |
+| Kapı | 120 |
+| Ağaç | 250–400 |
+
+Görseller farklı boyda gelse de ben bu tabloya göre ölçeklerim.
+
+## STİL (her prompt'un başına yapıştır)
 
 ```
-high-detail pixel art, 16-bit era quality like modern indie games (Children of Morta, Hyper Light Drifter),
-crisp 1px dark outline, soft dithered shading, limited palette of deep night colors (navy, charcoal, crimson, ember orange),
-three-quarter top-down view (camera above at about 45 degrees), flat even lighting with NO cast shadows and NO glow,
-single subject centered, full body visible, transparent or plain flat magenta (#FF00FF) background, no text, no watermark, no ground
+high quality pixel art game sprite, crisp hard-edged pixels, 1px dark selective outline, limited dark palette
+(charcoal, black, deep crimson, bone white, rust brown, muted steel), hue-shifted shading with light from the top-left,
+three-quarter view facing the lower-left, full body, nothing cropped, flat solid #00FF00 green background,
+no ground, no cast shadow, no glow, no text, no frame, no watermark
 ```
-**Negatif (aracın destekliyorsa)**: `blurry, anti-aliased, 3d render, photo, painterly, gradient background, extra limbs, cropped, text, logo, shadow on ground`
+
+**Negatif** (araç destekliyorsa):
+`blurry, anti-aliased, smooth gradient, 3d render, photo, painterly, multiple characters, cropped, text, logo, shadow, background scenery`
 
 ---
 
-## H — Kahraman (Savaşçı)
+## 1) KÖPEK — önce bunu üret
 
-**H1 — Ana referans (İLK BUNU YAP)** · 96×96 · güneye (kameraya) bakar
-```
-[STİL] a lone hooded warrior survivor of a zombie apocalypse, tall slim man, deep black hood casting shadow over the face
-with only the lower jaw visible, dark charcoal layered cloak with torn ragged edges reaching the knees, dark leather vest
-with straps, brown cloth belt with a small skull-shaped pouch, black wrapped forearms and bare-knuckle fists with cloth
-bandages, dark baggy trousers, worn brown leather boots, subtle dark purple stitching, standing in a relaxed fighting
-stance facing the viewer
-```
-> Türkçe: Örnek fotoğraftaki siyah kapüşonlu adam; silahsız, yumruklarında sargı bezi. Kapüşon yüzü gölgeliyor.
-
-**H2 — Kapüşonsuz sivil hâli** (yalnızca hikâye sineması için) · aynı tuval
-```
-[STİL] same man as reference but before the apocalypse: no hood, short messy dark hair, tired face, grey hoodie with the
-hood down, dark jeans, sneakers, holding a game controller, casual standing pose
-```
-
-**H3 — Dönüş**: PixelLab → Rotate → H1'i yükle → 8 yön. Biz G, GD, D, KD, K'yi kullanırız (batı tarafı ayna).
-
-**H4 — Animasyonlar** (PixelLab → Animate, referans = H1 + yönler). Her biri için kısa açıklama yaz:
-
-| Ad | PixelLab'e yazılacak açıklama | Kare |
-|---|---|---|
-| idle | `breathing idle, cloak gently swaying` | 6 |
-| walk | `walking, cloak and hood tip swaying with a slight delay` | 8 |
-| run | `running fast, cloak flowing behind` | 8 |
-| roll | `quick forward dodge roll in the facing direction, cloak wrapping around the body` | 6 |
-| punch_1 | `fast left jab` | 4 |
-| punch_2 | `fast right straight punch` | 4 |
-| punch_3 | `heavy uppercut finisher with a short hop` | 6 |
-| hurt | `flinch backward when hit` | 2 |
-| knockdown | `knocked back and falling to the ground on his back` | 5 |
-| getup | `getting up from the ground` | 5 |
-| death | `collapsing to the knees then falling face down` | 7 |
-| knife_attack | `holding a combat knife in the right hand, quick slash` | 5 |
-| machete_attack | `two-handed wide machete swing` | 6 |
-| bat_attack | `baseball bat overhead swing` | 6 |
-| sword_attack | `long sword diagonal slash` | 6 |
-| pistol_idle / pistol_shoot | `aiming a pistol with both hands` / `firing pistol with recoil` | 4 / 3 |
-| shotgun_idle / shotgun_shoot | `holding a pump shotgun at the hip` / `firing shotgun, strong recoil, pumping` | 4 / 5 |
-| rifle_idle / rifle_shoot | `shouldering an assault rifle` / `firing rifle in short bursts` | 4 / 3 |
-| torch_walk | `walking while holding a lit wooden torch up in the left hand` (alevsiz istersen: `unlit torch`) | 8 |
-
-> Silahlar ayrı çizilmezse sorun yok: silahsız animasyon + silahı biz el noktasına koyarız. Ama her silahın kendine has
-> tutuş/vuruşu istendiği için yukarıdakiler ideal.
-
-**H5 — Seviye 10 Karanlık Aura** (efekt, ayrı) · 128×128
-```
-[STİL] a swirling dark purple and black aura ring with glowing violet sparks, seen from above at 45 degrees, loopable,
-4 animation frames in a horizontal strip, transparent background
-```
-
-## P — Köpek (yardımcı)
-
-**P1** · 64×64
+**D1 · Evcil köpek, yandan**: kod bu görselden yürüme, koşma, ısırma ve yatma animasyonlarını çıkaracak.
 ```
 [STİL] a loyal scruffy german shepherd mix dog companion, dark brown and black fur, red bandana around the neck,
-alert ears, standing facing the viewer
+alert ears, standing side view facing LEFT, all four legs clearly separated and visible, tail slightly raised,
+mouth closed
 ```
-Animasyonlar: idle 4, run 6, bite_attack 4 (`lunging bite`), hurt 2, lie_down 4 (bayıldığında).
-**P2 / P3** (seviye 5 ve 10 görünümü, isteğe bağlı): `same dog with a leather armor vest` / `same dog with spiked
-armor and glowing amber eyes`.
+**D2 · Aynı köpek, 3/4 önden**: kameraya doğru koşarken kullanılacak.
+```
+[STİL] same dog as reference, same colors and bandana, standing three-quarter front view facing the lower-left,
+all four legs visible
+```
+**D3 · Seviye görünümleri** (isteğe bağlı):
+- Seviye 5: `same dog wearing a dark leather armor vest`
+- Seviye 10: `same dog wearing spiked dark iron armor, glowing amber eyes`
 
-## Z — Zombiler · 96×96 (Titan 128×128)
+**D4 · Zombi köpek, yandan**:
+```
+[STİL] rotting zombie dog, patchy grey-brown fur, exposed ribs and bones, torn ear, glowing red eyes, side view facing
+LEFT, all four legs clearly separated
+```
 
-Ortak ek: `undead zombie, grey-green rotting skin, torn clothes, hunched posture, empty glowing pale eyes`
+## 2) ZOMBİLER — tek görsel, kural 5'teki duruş
 
-| Kod | Prompt (STİL + ortak ek + aşağısı) | Animasyon |
-|---|---|---|
-| Z1 Yürüyen | `ordinary townsperson zombie, torn office shirt and tie, one shoe missing, shambling` | idle 4, walk 8, attack 6 (`clawing swipe`), hurt 2, death 6 |
-| Z2 Koşucu | `thin fast runner zombie in a torn tracksuit, leaning forward, long arms` | idle 4, run 8, attack 5 (`leaping scratch`), hurt 2, death 6 |
-| Z3 Toksik | `bloated toxic zombie with green glowing boils, yellow hazmat suit torn open, dripping green slime` | idle 4, walk 8, attack 6 (`vomits green acid`), death 6 (`bursts into green gas`) |
-| Z4 Karanlık | `shadow zombie made of black smoke-like flesh, purple glowing veins and eyes, wispy edges` | idle 4, walk 8, attack 5, teleport 6 (`dissolves into black smoke`), death 6 |
-| Z5 Tank | `huge muscular brute zombie, torn military pants, metal plates bolted to shoulders, tiny head` | idle 4, walk 8, attack 7 (`double fist ground smash`), death 7 |
-| Z6 Gizemli | `tall faceless zombie in a black suit wearing a cracked white porcelain mask with red tear marks` (2. örnek fotoğrafındaki maske) | idle 4, walk 8, attack 6, death 6 |
-| Z7 Titan (boss) · 128×128 | `colossal titan boss zombie, three times human size, exposed rib cage, chains hanging from wrists, burning red eyes, cracked stone-like skin` | idle 6, walk 8, slam 8 (`raises both arms and slams the ground`), roar 6, death 10 |
-| Z8 Köpek zombi · 64×64 | `rotting zombie dog with exposed bones, red eyes` | run 6, bite 4, death 5 |
+Bütün zombilerde STİL'den sonra bu eki kullan:
+`undead zombie, grey-green rotting skin, torn clothes, arms slightly away from the body, legs slightly apart`
 
-## N — Kişiler (NPC) · 96×96
+| Kod | Prompt eki |
+|---|---|
+| Z1 Yürüyen | `ordinary townsperson zombie, torn office shirt and loose tie, one shoe missing, hunched` |
+| Z2 Koşucu | `thin fast runner zombie in a torn red tracksuit, long arms, leaning slightly forward` |
+| Z3 Toksik (**macenta arka plan**) | `bloated toxic zombie with glowing green boils, torn yellow hazmat suit, dripping green slime` |
+| Z4 Karanlık | `shadow zombie made of black smoke-like flesh, purple glowing veins and eyes, wispy edges` |
+| Z5 Tank | `huge muscular brute zombie, torn military pants, metal plates bolted to the shoulders, tiny head` |
+| Z6 Gizemli | `tall faceless zombie in a black suit wearing a cracked white porcelain mask with red tear marks` |
+| Z7 Titan | `colossal titan boss zombie, exposed rib cage, chains hanging from the wrists, burning red eyes, cracked stone-like skin` |
+
+## 3) KİŞİLER
 
 | Kod | Prompt |
 |---|---|
-| N1 Tüccar | `[STİL] old wasteland merchant with a big backpack full of goods, goggles on forehead, long coat, friendly` (idle 4) |
-| N2 Asker | `[STİL] city wall soldier in dark tactical gear and helmet with an assault rifle, guarding` (idle 4, shoot 3) |
+| N1 Tüccar | `[STİL] old wasteland merchant with a huge backpack full of goods, goggles on the forehead, long patched coat, friendly face` |
+| N2 Asker | `[STİL] city wall soldier in dark tactical gear and helmet, standing guard, empty hands` |
 
-## W — Silah ve eşya simgeleri · 32×32 (her biri ayrı üret)
+## 4) BECERİ AĞACI SİMGELERİ — tek görselde 16'lı ızgara
 
-Ortak: `[STİL] single game inventory icon, item centered at a slight angle, 32x32 pixels`
+Beceri ağacında "neyin ne olduğu belli değil" sorununu bunlar çözecek. **Tek görsel, 4×4 ızgara.**
+```
+pixel art RPG skill icon sheet, 4 by 4 grid of 16 separate square icons with equal spacing on a flat #00FF00
+background, each icon a bold readable symbol with 1px dark outline, dark fantasy style, no text, no frames:
+row 1: crossed swords (damage), red heart (max health), cracked shield (damage reduction), spiked mirror shield (reflect),
+row 2: wind swirl with a ghost silhouette (dodge), glowing bullet (bullet damage), bomb with a shield (explosion resist),
+winged boot (move speed),
+row 3: red lightning skull (critical hit), blood drop with fangs (lifesteal), hourglass (cooldown),
+green plus with leaves (regeneration),
+row 4: clenched fist with sparks (punch power), rolling arrows circle (dodge roll), purple dark flame (dark aura),
+golden crown with a star (keystone)
+```
+İstersen aynısını `glowing gold rim` ekiyle bir kez daha üret. "Açılmış" hâli için kullanırım, yoksa parlamayı kodla yaparım.
 
-Silahlar: `brass knuckles` · `combat knife` · `rusty machete` · `wooden baseball bat with nails` · `long steel sword`
-· `black 9mm pistol` · `pump-action shotgun` · `assault rifle` · `wooden torch with flame` · `unlit wooden torch`.
-Kaliteler için ek: `rusty and worn` / `clean steel` / `masterwork with engraved runes and a faint glow`.
+## 5) EŞYA SİMGELERİ — 4×4 ızgaralar (her görsel 16 simge)
 
-İksirler: `round glass potion bottle with glowing red liquid and a cork` (Can) · `... glowing cyan liquid, lightning
-symbol on the label` (Hız) · `... glowing orange liquid` (Güç) · `... glowing green liquid` (Panzehir).
+Ortak giriş: `pixel art inventory icon sheet, 4 by 4 grid of 16 separate items with equal spacing on a flat #00FF00 background, each item centered at a slight angle, 1px dark outline, no text:`
 
-Malzemeler: `stack of wooden planks` · `grey stones` · `folded cloth` · `glue tube` · `amber resin chunk` ·
-`leather piece` · `scrap metal pieces` · `screws` · `gunpowder pouch` · `circuit board` · `zombie tooth` ·
-`toxic green crystal` · `dark purple crystal` · `titan shard glowing red` · `fuel jerrycan` · `bandage roll` ·
-`first aid kit` · `canned food` · `energy drink can` · `gold coin` · `ammo box` (mermi türleri için renk eki).
+- **I1 Silahlar**: `brass knuckles, combat knife, rusty machete, wooden baseball bat with nails, long steel sword, black 9mm pistol,
+  pump shotgun, assault rifle, sniper rifle, wooden torch with flame, unlit torch, crossbow, axe, crowbar, sledgehammer, grenade`
+- **I2 Malzemeler**: `stack of wooden planks, grey stones, folded cloth, glue tube, amber resin chunk, leather piece,
+  scrap metal, screws, gunpowder pouch, circuit board, zombie tooth, toxic green crystal, dark purple crystal,
+  glowing red titan shard, fuel jerrycan, rope coil`
+- **I3 Tüketilir**: `red health potion bottle, cyan speed potion bottle, orange power potion bottle, green antidote bottle,
+  bandage roll, first aid kit, canned food, energy drink can, gold coin pile, pistol ammo box, shotgun shells,
+  rifle ammo box, dog food bowl, bone treat, map scroll, key`
+- **I4 Ekipman**: `dark hood, leather jacket, police vest, military armor vest, work boots, military boots, small backpack,
+  large hiking backpack, motorcycle helmet, military helmet, cloth gloves, iron gauntlets, black cloak, gas mask,
+  night vision goggles, lantern`
 
-## T — Zemin ve dünya · 32×32 dikişsiz karo
+## 6) ARAYÜZ — 4×4 ızgara + tek parçalar
 
-Ortak: `[STİL] seamless tileable top-down ground texture tile, 32x32 pixels, no objects` — Çim · Koyu çim · Kuru çim ·
-Toprak yol · Çamur · Çakıl · Asfalt (çatlak) · Kaldırım · Arnavut kaldırımı · Sığ su · Bataklık suyu · Kum.
+- **U1 Simgeler** (24×24 hedef):
+  ```
+  pixel art UI icon sheet, 4 by 4 grid on flat #00FF00:
+  map, quest scroll, mail envelope, backpack, hammer and anvil, skull, gear, chat bubble, trophy, people group,
+  paw print, potion, torch, shopping bag, crossed swords, lock
+  ```
+- **U2 Panel**: `pixel art game UI panel frame, dark charcoal stone with rusted iron corners and rivets, empty center, symmetrical, flat #00FF00 background`
+- **U3 Tuşlar**: `pixel art game buttons sheet on flat #00FF00: wide dark green metal button, wide dark red metal button, wide dark blue metal button, round dark metal action button with ember rim, each also in pressed state`
+- **U4 Beceri düğüm çerçeveleri**:
+  `pixel art skill tree node frames on flat #00FF00: small round iron ring, medium double gold ring, large ornate octagon frame with spikes and a red gem, each empty in the center`
 
-Nesneler (STİL + `top-down 3/4 view game prop`): ağaç ×3 (çam, meşe, ölü ağaç) · çalı ×2 · kaya ×3 · çit ·
-sokak lambası · kamp ateşi (4 kare alev) · sandık (kapalı/açık) · varil · çöp konteyneri · enkaz yığını · mezar taşı.
+## 7) ZEMİN VE DÜNYA
 
-Binalar (128×128 ya da 192×192, `top-down 3/4 view pixel art building, roof visible`): ahşap ev · tuğla ev ·
-market · benzin istasyonu · karakol · hastane · yıkık bina · şehir duvarı parçası · nöbet kulesi.
+- **T1 Zemin karoları**:
+  ```
+  pixel art seamless tileable top-down ground textures, 4 by 4 grid on flat magenta #FF00FF: grass, dark grass,
+  dry grass, dirt road, mud, gravel, cracked asphalt, sidewalk, cobblestone, shallow water, swamp water, sand,
+  burnt ground, snow, wooden floor, concrete floor
+  ```
+- **T2 Nesneler**: STİL'i bu girişle kullan: `top-down three-quarter view game prop, one object, flat #00FF00 background`.
+  - Ağaçlar: çam, meşe, ölü ağaç (her biri ayrı görsel).
+  - Tek ızgarada: `bush, rock, fence segment, street lamp, campfire, wooden crate, open crate, barrel, dumpster, rubble pile,
+    gravestone, burnt car wreck, sandbags, barbed wire, tent, signpost`.
+- **T3 Binalar** (her biri ayrı): STİL + `top-down three-quarter view pixel art building, roof visible, flat #00FF00
+  background` ve ardından: ahşap ev, tuğla ev, market, benzin istasyonu, karakol, hastane, yıkık bina, şehir duvarı
+  parçası, nöbet kulesi.
+- **T4 Araçlar**: her aracı **iki görsel** yap:
+  - `side view facing LEFT`
+  - `three-quarter view from the front-left`
 
-Araçlar (128×128, 8 yön için PixelLab Rotate): `rusty orange sedan car` · `pickup truck` · `motorbike` · `bicycle` ·
-`military jeep`. Her biri için hasar ekleri: `dented with broken windows` / `heavily damaged, smoking` / `burnt wreck`.
+  Araçlar: `rusty orange sedan`, `black SUV`, `motorbike`, `bicycle`. Hasarlı hâl için ek: `dented, broken windows, smoking`.
 
-## E — Efektler (yatay şerit, 4–8 kare, şeffaf)
+## 8) EFEKTLER — yatay şerit, 6 kare
 
-`muzzle flash` · `blood splatter` · `dust puff from a dodge roll` · `explosion with smoke` · `green toxic gas cloud` ·
-`ground shockwave ring` · `fire burning` · `sparks hitting metal` · `level up golden pillar of light` · `heal green
-sparkles` · `speed potion blue wind lines`.
+`pixel art effect animation strip, 6 frames in a single row, equal spacing, flat #00FF00 background:` ardından şunlardan
+biri: `dust puff`, `blood splatter`, `explosion with smoke`, `green toxic gas` (macenta arka plan), `ground shockwave ring`,
+`fire`, `muzzle flash`, `level up golden light pillar`, `dark purple aura swirl`, `heal sparkles`.
 
-## U — Arayüz
+## 9) HİKÂYE VE EKRANLAR (16:9, sahne olduğu için arka plan serbest)
+
+Ortak: `cinematic pixel art scene, 16:9, detailed, moody night lighting, dark purples, crimson moon, warm orange window light`
 
 | Kod | Prompt |
 |---|---|
-| U1 Panel | `pixel art game UI panel frame, dark charcoal stone with rusted iron corners and rivets, empty center, 9-slice friendly, 96x96` |
-| U2 Tuş | `pixel art game button, dark green metal plate with a lighter top bevel, empty, 64x24` (+ `pressed` hâli, + kırmızı ve mavi) |
-| U3 Yuvarlak tuş | `round pixel art action button, dark metal ring with glowing ember edge, empty center, 48x48` |
-| U4 Çerçeveler | `pixel art avatar frame, ornate dark iron with a red gem`, `... golden laurel`, `... purple flames animated 4 frames` |
-| U5 Simgeler | `pixel art UI icon set: map, quest scroll, mail envelope, backpack, hammer and anvil, skull, gear, chat bubble, trophy, people group, paw print, potion, torch` (her biri 24×24) |
+| S1 Oda | `a young man sitting in a dark bedroom playing a video game on a glowing PC monitor, posters on the wall, calm night city in the window` |
+| S2 Balkon | `the same man on an apartment balcony looking down in shock at a street where people flee from zombies, burning cars` |
+| S3 Savaş | `military jets over a burning city at night, explosions, tracer bullets, helicopters` |
+| S4 Roket | `a rocket streaking toward an apartment building at night, bright explosion flash` |
+| S5 Enkaz | `the man waking up in rubble, dust in the air, a black hood and a white porcelain mask with red stripes lying on the floor in red moonlight` |
+| S6 Tepe | `the hooded warrior with a white mask standing on a cliff seen from behind, black cloak flowing, burning city under a huge crimson moon` |
+| L1 Giriş | `the hooded masked warrior sitting on a broken wall at night with a torch, ruined city and crimson moon behind, empty space on the right for menu buttons` |
+| I1 Simge | `app icon, close-up of the white porcelain mask with red vertical stripes and glowing yellow eyes inside a black hood, crimson moon behind, bold silhouette, no text` |
 
-## S — Hikâye sineması ve ekranlar (ChatGPT/Gemini, 1920×1080, piksel sanat)
+## Gönderme sırası
 
-Ortak: `cinematic pixel art scene, 16:9, detailed, moody night lighting, in the style of the reference: dark purples,
-crimson moon, warm orange window light`
+Görselleri bu sohbete at. Mümkünse dosya adına kodu yaz (D1, Z3, I2…), ama şart değil.
 
-| Sahne | Prompt |
-|---|---|
-| S1 Oda | `a young man without a hood sitting in a dark bedroom playing a video game on a glowing PC monitor, posters on the wall, window showing a calm night city` |
-| S2 Balkon | `the same man on a small apartment balcony looking down in shock at a street where people run from zombies, burning cars, screams` |
-| S3 Savaş | `military jets flying over a burning city at night, bombs exploding, tracer bullets in the sky, helicopters` |
-| S4 Roket | `a rocket streaking toward an apartment building at night, bright explosion flash` (+ ayrı: `pure white flash frame with debris`) |
-| S5 Enkaz | `the man waking up in the rubble of a destroyed apartment, dust in the air, a black hood lying on the floor in a beam of red moonlight` |
-| S6 Tepe | `the hooded warrior standing on a high cliff seen from behind, black cloak flowing in the wind, overlooking a burning city under a huge crimson moon` |
-| S7 Logo arka planı | `a huge crimson full moon over a ruined skyline, empty sky area at the top for a title` |
-| L1 Giriş ekranı | `the hooded warrior sitting on a broken wall at night, a torch beside him, ruined city and crimson moon behind, space on the right side for menu buttons` |
-| I1 Uygulama simgesi | `app icon, the hooded warrior's shadowed face and glowing eyes close-up, crimson moon behind, bold silhouette, 512x512, no text` |
+1. **D1, D2, D4** (köpekler)
+2. **4) beceri simgeleri**, U4 düğüm çerçeveleri
+3. Z1–Z7, N1–N2
+4. I1–I4 ve U1–U3
+5. T1–T4, 8) efektler
+6. S1–S6, L1, I1
 
-> Sahneleri ben paralaks katmanlarına ayırıp hareket (kamera kayması, kül/yağmur parçacıkları, sarsıntı) ve altyazı ekleyeceğim.
-> Mümkünse her sahneyi **iki parça** iste: `background only` ve `character only on plain magenta background`.
-
-## Teslim sırası (öncelik)
-
-1. **H1** (kahraman ana referansı) → onaylayınca H3 + H4.
-2. P1 köpek, Z1–Z7 zombiler.
-3. W silah + iksir simgeleri, U1–U3 arayüz.
-4. T zemin/nesne/bina/araç.
-5. S sahneler, L1, I1.
-
----
-
-## Ek: Benim kullandığım ücretsiz yapay zekâ yolu (Stable Horde)
-
-`tools/ai/horde.py` Stable Horde'a (gönüllü GPU ağı, anahtarsız da çalışır) istek atar. En iyi sonuç:
-**AlbedoBase XL (SDXL) + Pixel Art XL LoRA (civitai 120096)**. Örnek: `art/v4/hero_ref_ai_*.webp` (kahraman referansı).
-
-```
-/opt/bvenv/bin/python tools/ai/horde.py --model "AlbedoBase XL (SDXL)" --lora 120096 --w 832 --h 1216 --n 2 \
-  --out /home/user/zx_ai/ab "pixel art game character sprite, full body, ..." "blurry, photo, text, ..."
-```
-Notlar: anonim sırada bekleme 5–10 dk; koyu görseller bazen yanlışlıkla sansürlenir (prompt'a "fully clothed" eklemek yardımcı).
-Tek görsel kaliteli ama 8 yön × animasyon tutarlılığı vermez; bu yüzden oyundaki kareler kod hattından gelir:
-`tools/blender/warrior_b.py` (model) → `tools/blender/render_warrior.py` (2× render) → `tools/pixel/pixelize.py` (palet, kontur, ışık kenarı).
+Her paket gelince temizleyip oyuna koyar, sonra **kendim kontrol edip** önizlemesini gönderirim.
