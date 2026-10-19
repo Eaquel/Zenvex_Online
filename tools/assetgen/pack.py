@@ -29,7 +29,7 @@ PAD = 2
 
 HERO_ANIMS = {"idle": (6, 6, 1), "walk": (8, 10, 1), "run": (8, 14, 1), "punch": (8, 14, 1), "melee": (6, 12, 1),
               "pistol_idle": (2, 3, 1), "pistol_walk": (8, 10, 1), "rifle_idle": (2, 3, 1), "rifle_walk": (8, 10, 1),
-              "cast": (6, 12, 0), "hurt": (2, 10, 0), "death": (6, 9, 0), "ride": (1, 1, 1),
+              "cast": (6, 12, 0), "hurt": (2, 10, 0), "death": (6, 9, 0), "ride": (4, 8, 1),
               "roll": (6, 18, 0), "knockdown": (5, 10, 0), "getup": (5, 10, 0)}
 PIX = os.environ.get("ZX_PIX", "/home/user/zx_pix")
 ZOMBIE_ANIMS = {"idle": (4, 4, 1), "walk": (8, 7, 1), "attack": (6, 10, 1), "hurt": (2, 10, 0), "death": (6, 8, 0)}
@@ -219,9 +219,14 @@ def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_ancho
     return n
 
 
-def collect_pixel_hero(prefix, items, attach_out=None):
-    """V4 piksel kahraman: <anim>_<yön>_<kare>.png (yön 0-4), 5-7 aynadan. Renk/kontur dokunulmaz (zaten piksel)."""
-    d = os.path.join(PIX, "hero")
+def pixel_k(sub):
+    """Piksel aktörün yerel piksel → dünya ölçeği (meta.json mpp)."""
+    return (jload(os.path.join(PIX, sub, "meta.json")) or {}).get("mpp", 0.0107) / 0.016
+
+
+def collect_pixel_hero(prefix, items, attach_out=None, sub="hero"):
+    """Piksel aktör (kahraman, köpekler): <anim>_<yön>_<kare>.png (yön 0-4), 5-7 aynadan. Renk/kontur dokunulmaz."""
+    d = os.path.join(PIX, sub)
     meta = jload(os.path.join(d, "meta.json")) or {}
     ax0, ay0 = meta.get("anchor", [150, 262])
     kp = meta.get("mpp", 0.0107) / 0.016  # yerel piksel → dünya pikseli
@@ -232,10 +237,10 @@ def collect_pixel_hero(prefix, items, attach_out=None):
         if not f.endswith(".png"):
             continue
         anim, dr, fr = f[:-4].rsplit("_", 2)
+        if dr != "0":
+            continue  # tek görünüm: oyun sağa bakan yönleri çizerken aynalar (atlas 8× küçük)
         im = Image.open(os.path.join(d, f)).convert("RGBA")
         variants = [(int(dr), im, ax0)]
-        if dr in ("1", "2", "3"):
-            variants.append((8 - int(dr), im.transpose(Image.FLIP_LEFT_RIGHT), im.width - ax0))
         for dd, img, ax in variants:
             t, x0, y0 = trim(img)
             items.append((f"{prefix}/{anim}_{dd}_{fr}", t, ax - x0, ay0 - y0))
@@ -290,7 +295,7 @@ def main():
         r3 = SRC3 if has3("heroes", h) else None
         kk = K3 if r3 else 1.0
         if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
-            kk = (jload(os.path.join(PIX, "hero", "meta.json")) or {}).get("mpp", 0.0107) / 0.016  # piksel karesi (m) → dünya
+            kk = pixel_k("hero")
             n = collect_pixel_hero(f"h/{h}", it, attach)
         else:
             n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
@@ -300,7 +305,7 @@ def main():
         lob = []
         d = os.path.join(SRC3 if has3("lobby", h) else SRC, "lobby", h)
         if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
-            # lobi: piksel idle kareleri (8 yön)
+            # lobi: piksel idle kareleri (tek yön; arayüz sağa bakışı aynalar)
             for key, im, ax, ay in it:
                 a = key.split("/")[-1]
                 if a.startswith("idle_"):
@@ -320,10 +325,21 @@ def main():
         r3 = SRC3 if has3("zombies", z) else None
         kk = K3 if r3 else 1.0
         fixed = (100, 136) if z == "dog" and r3 is None else None
-        n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed, root=r3, k=kk)
+        if z == "dog" and os.path.isdir(os.path.join(PIX, "zdog")):
+            kk = pixel_k("zdog")
+            n = collect_pixel_hero("z/dog", it, None, sub="zdog")
+        else:
+            n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed, root=r3, k=kk)
         if it:
             P.pack_group(f"zombie_{z}", it, kk)
         print("zombie", z, n)
+    # evcil köpek: seviye görünümleri (1-4, 5-9, 10)
+    for sub in ("dog0", "dog5", "dog10"):
+        if os.path.isdir(os.path.join(PIX, sub)):
+            it = []
+            n = collect_pixel_hero(f"p/{sub}", it, None, sub=sub)
+            P.pack_group(f"pet_{sub}", it, pixel_k(sub))
+            print("pet", sub, n)
     # efektler
     fx = []
     fd = os.path.join(SRC3, "fx")

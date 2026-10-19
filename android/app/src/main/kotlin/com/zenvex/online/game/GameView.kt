@@ -702,13 +702,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (who <= -3f) sy -= 235f * scale  // kule platformu (4.6 m × cos35°)
         val f = frameOf(atlas.heroAnims, anim, t)
         val wIdx = drawBuf[o + 10].toInt() % 16
-        var key = spriteKey(prefix, anim, dir, f)
+        // piksel kahraman tek görünüm (sola bakar); sağa bakan yönler aynalanır
+        val pix = ch in 0..3
+        val flip = pix && dir in 1..3
+        val kdir = if (pix) 0 else dir
+        var key = spriteKey(prefix, anim, kdir, f)
         // elde gerçek silahla render edilmiş kare varsa onu kullan
         val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
         var weaponBaked = false
         var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
         if (sp == null) sp = atlas[key]
-        if (sp == null) { key = spriteKey(prefix, "idle", dir, 0); sp = atlas[key] }
+        if (sp == null) { key = spriteKey(prefix, "idle", kdir, 0); sp = atlas[key] }
         if (sp == null) { placeholder(c, sx, sy, 0xFF4A7AB0.toInt()); return }
         val paint = when {
             flash == 1f -> flashPaint
@@ -723,7 +727,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val weapon = e2 % 16; val cloak = e2 / 16 > 0
         val back = dir in 3..5
         val akey = key
-        fun att(point: String): FloatArray? = atlas.attach(actor, akey, point)
+        fun att(point: String): FloatArray? = atlas.attach(actor, akey, point)?.also { if (flip) it[0] = -it[0] }
         fun gear(name: String, point: String) {
             val p = att(point) ?: return
             val g = atlas["e/$name/$dir"] ?: return
@@ -734,7 +738,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (cloak) gear("cloak", "neck")
             if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
         }
-        atlas.draw(c, sp, sx, sy, scale, paint)
+        atlas.draw(c, sp, sx, sy, scale, paint, flip)
         if (isHero) {
             if (sp.k == 1f) { // eski (düşük yoğunluklu) karakterlerde ceket/bot katmanı
                 if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }
@@ -797,13 +801,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x); val sy = wy(y)
         if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 400) return
         val f = frameOf(atlas.zombieAnims, anim, t)
-        val sp = atlas[spriteKey("z/dog", anim, dir, f)] ?: atlas[spriteKey("z/dog", "idle", dir, 0)]
+        val lv = drawBuf[o + 9].toInt()
+        val pre = when { lv >= 10 -> "p/dog10"; lv >= 5 -> "p/dog5"; else -> "p/dog0" }
+        val flip = dir in 1..3
+        val sp = atlas[spriteKey(pre, anim, 0, f)] ?: atlas[spriteKey(pre, "idle", 0, 0)] ?: atlas[spriteKey("z/dog", "idle", 0, 0)]
         if (sp == null) { placeholder(c, sx, sy, 0xFFC08A40.toInt()); return }
-        val paint = if (drawBuf[o + 7] > 0) flashPaint else { tintPaint.colorFilter = petTint; tintPaint }
-        atlas.draw(c, sp, sx, sy, scale, paint)
+        val paint = if (drawBuf[o + 7] > 0) flashPaint else pixelPaint
+        atlas.draw(c, sp, sx, sy, scale, paint, flip)
         plates += Plate(sx, sy - sp.ay * scale - 2 * density, "Köpek Sv ${drawBuf[o + 9].toInt()}", 0xFF9BE07A.toInt(), drawBuf[o + 8], false, null)
     }
-    private val petTint = android.graphics.PorterDuffColorFilter(0x40FFB060, PorterDuff.Mode.SRC_ATOP)
 
     private fun drawZombie(c: Canvas, o: Int) {
         val kind = drawBuf[o + 1].toInt()
@@ -820,8 +826,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
         val name = zombieSprite.getOrElse(kind) { "walker" }
         val f = frameOf(atlas.zombieAnims, anim, t)
-        var sp = atlas[spriteKey("z/$name", anim, dir, f)]
-        if (sp == null) sp = atlas[spriteKey("z/$name", "idle", dir, 0)]
+        val zflip = name == "dog" && dir in 1..3  // piksel zombi köpek: tek görünüm + ayna
+        val zdir = if (name == "dog") 0 else dir
+        var sp = atlas[spriteKey("z/$name", anim, zdir, f)]
+        if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
         if (sp == null) sp = atlas[spriteKey("z/walker", anim, dir, f)]
         if (sp == null) { placeholder(c, sx, sy, zombieColor.getOrElse(kind) { -1 }); return }
         // aura
@@ -836,9 +844,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             flash > 0 -> flashPaint
             alpha < 0.99f -> { alphaPaint.alpha = (alpha * 255).toInt().coerceIn(0, 255); alphaPaint }
             enraged -> { tintPaint.colorFilter = PorterDuffColorFilter(0x55FF2010, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            name == "dog" -> pixelPaint
             else -> bmpPaint
         }
-        atlas.draw(c, sp, sx, sy, scale, paint)
+        atlas.draw(c, sp, sx, sy, scale, paint, zflip)
         if (alpha > 0.35f && anim != "death") {
             val boss = kind == 7
             // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
@@ -951,15 +960,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun drawRider(c: Canvas, driver: Int, kind: Int, dir: Int, sx: Float, sy: Float, speed: Float) {
         val actor = "h/" + heroIds.getOrElse(driver) { "kaan" }
         val f = if (speed > 5f) ((time * (5f + speed * 0.02f)).toInt() and 3) else 0
-        val key = spriteKey(actor, "ride", dir, f)
+        val flip = dir in 1..3
+        val key = spriteKey(actor, "ride", 0, f)
         val hs = atlas[key] ?: return
         val d5 = if (dir <= 4) dir else 8 - dir
         val tbl = if (kind == 0) seatBike else seatMoto
         val ox = tbl[d5][0] * (if (dir <= 4) 1f else -1f); val oy = tbl[d5][1]
         val seat = atlas.attach(actor, key, "seat")
-        val ax = sx + ox * scale - (seat?.get(0) ?: 0f) * scale
+        val ax = sx + ox * scale - (seat?.get(0) ?: 0f) * scale * (if (flip) -1f else 1f)
         val ay = sy + oy * scale - (seat?.get(1) ?: -45f) * scale
-        atlas.draw(c, hs, ax, ay, scale, pixelPaint)
+        atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
     }
 
     private fun drawDrone(c: Canvas, o: Int) {

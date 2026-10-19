@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -175,7 +176,8 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
 private fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
     val ctx = LocalContext.current
     val frame = ((t * 6f).toInt()) % 6
-    val key = "l/${HERO_IDS[sel]}/${dir}_$frame"
+    val key = "l/${HERO_IDS[sel]}/0_$frame"  // tek görünüm; sağa bakış aynalanır
+    val flip = dir in 1..3
     val img = remember(key) { SpriteCache.get(ctx, key) ?: SpriteCache.get(ctx, "l/${HERO_IDS[sel]}/0_0") }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Canvas(Modifier.fillMaxSize()) {
@@ -184,7 +186,8 @@ private fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
         }
         if (img != null) {
             val dark = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(0.12f, 0.12f, 0.15f, 1f) }) }
-            Image(img, null, Modifier.fillMaxSize().padding(bottom = 26.dp), filterQuality = FilterQuality.None, colorFilter = if (unlocked) null else dark)
+            Image(img, null, Modifier.fillMaxSize().padding(bottom = 26.dp).graphicsLayer { scaleX = if (flip) -1f else 1f },
+                filterQuality = FilterQuality.None, colorFilter = if (unlocked) null else dark)
         }
         if (!unlocked) Icon("lock", 44.dp, Color.White.copy(alpha = 0.85f), Modifier.align(Alignment.Center))
     }

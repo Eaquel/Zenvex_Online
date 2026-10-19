@@ -153,7 +153,7 @@ fun CharacterScreen(back: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally) {
                     Box(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(14.dp))
                         .background(Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color.Transparent))), contentAlignment = Alignment.BottomCenter) {
-                        SpriteImage("l/${HERO_IDS[i]}/1_0", Modifier.fillMaxSize())
+                        SpriteImage("l/${HERO_IDS[i]}/0_0", Modifier.fillMaxSize())
                         if (!unlocked) Icon("lock", 40.dp, Color.White, Modifier.align(Alignment.Center))
                     }
                     T(c.optString("name").uppercase(), 22.sp, display = true, glow = col.copy(alpha = 0.6f))
