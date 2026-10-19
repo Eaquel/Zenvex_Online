@@ -924,12 +924,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
         val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint } else bmpPaint
         val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
-        atlas.draw(c, sp, sx, sy + vib, scale, paint)
-        // binicili iki tekerlekliler: kahraman sürme pozu
-        if (driver >= 0 && kind <= 1) {
-            val hs = atlas[spriteKey("h/" + heroIds.getOrElse(driver) { "kaan" }, "ride", dir, 0)]
-            if (hs != null) atlas.draw(c, hs, sx, sy - (if (kind == 0) 18f else 22f) * scale, scale, bmpPaint)
-        }
+        // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
+        val rider = driver >= 0 && kind <= 1
+        val riderFront = rider && (dir == 0 || dir == 4)
+        if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
+        if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
+        if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
         if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
         if (driver >= 0 && speed > 30) {
             val bx = -sin(dir * PI.toFloat() / 4); val by = -cos(dir * PI.toFloat() / 4)
@@ -942,6 +942,24 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
             lightSources += floatArrayOf(x + sin(dir * PI.toFloat() / 4) * 160, y + cos(dir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
+    }
+
+    // eyer konumu (araç çapasına göre dünya birimi), yön 0..4; 5..7 aynası
+    private val seatBike = arrayOf(floatArrayOf(0f, -30f), floatArrayOf(-12f, -36f), floatArrayOf(-20f, -42f), floatArrayOf(-12f, -40f), floatArrayOf(0f, -34f))
+    private val seatMoto = arrayOf(floatArrayOf(0f, -40f), floatArrayOf(-14f, -44f), floatArrayOf(-22f, -48f), floatArrayOf(-14f, -48f), floatArrayOf(0f, -42f))
+
+    private fun drawRider(c: Canvas, driver: Int, kind: Int, dir: Int, sx: Float, sy: Float, speed: Float) {
+        val actor = "h/" + heroIds.getOrElse(driver) { "kaan" }
+        val f = if (speed > 5f) ((time * (5f + speed * 0.02f)).toInt() and 3) else 0
+        val key = spriteKey(actor, "ride", dir, f)
+        val hs = atlas[key] ?: return
+        val d5 = if (dir <= 4) dir else 8 - dir
+        val tbl = if (kind == 0) seatBike else seatMoto
+        val ox = tbl[d5][0] * (if (dir <= 4) 1f else -1f); val oy = tbl[d5][1]
+        val seat = atlas.attach(actor, key, "seat")
+        val ax = sx + ox * scale - (seat?.get(0) ?: 0f) * scale
+        val ay = sy + oy * scale - (seat?.get(1) ?: -45f) * scale
+        atlas.draw(c, hs, ax, ay, scale, pixelPaint)
     }
 
     private fun drawDrone(c: Canvas, o: Int) {

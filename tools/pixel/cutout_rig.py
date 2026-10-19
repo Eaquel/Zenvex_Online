@@ -23,15 +23,16 @@ FIST = (10.0, 136.0)
 HIP_Y = 150.0
 LEG_A = (32.0, 150.0)  # izleyiciye göre sol bacak (karakterin sağı)
 LEG_B = (60.0, 152.0)
+KNEE_A = (27.0, 206.0)
+KNEE_B = (66.0, 204.0)
 SPLIT_X = 46.0
-FACE = (34, 4, 62, 50)  # maske + atkı (sırt görünümünde kapüşonla kapanır)
 POINTS = {"head": (48, 22), "neck": (48, 40), "back": (56, 62), "chest": (44, 72), "lhand": (72, 140), "lfoot": (72, 244), "rfoot": (24, 252)}
 
 CW, CH = 560, 340
 ANCHOR = (280, 320)
 MPP = 0.0066  # yerel piksel (m): 258 px ≈ 1.7 m
 
-ANIMS = {"idle": 6, "walk": 8, "run": 8, "punch": 8, "roll": 6, "hurt": 2, "knockdown": 5, "getup": 5, "death": 6}
+ANIMS = {"idle": 6, "walk": 8, "run": 8, "punch": 8, "roll": 6, "hurt": 2, "knockdown": 5, "getup": 5, "death": 6, "ride": 4}
 
 
 def rot(v, a):
@@ -96,7 +97,7 @@ def clean(img, min_px=12):
     return img
 
 
-def rotate_layer(src, ang, pivot, shift=(0.0, 0.0), sy_scale=1.0):
+def rotate_layer(src, ang, pivot, shift=(0.0, 0.0), sy_scale=1.0, sx_scale=1.0):
     """Katmanı pivot çevresinde döndürür (+açı = ekranda saat yönü), sonra kaydırır; ters eşleme."""
     h, w = src.shape[:2]
     ys, xs = np.mgrid[0:h, 0:w].astype(float)
@@ -104,6 +105,7 @@ def rotate_layer(src, ang, pivot, shift=(0.0, 0.0), sy_scale=1.0):
     c, s = math.cos(-ang), math.sin(-ang)
     qx, qy = c * px - s * py, s * px + c * py
     qy = qy / sy_scale
+    qx = qx / sx_scale
     return sample(src, qx + pivot[0], qy + pivot[1])
 
 
@@ -119,12 +121,10 @@ PAD = 110  # kol/eğilme taşmaları için kenar boşluğu
 def _pad_consts():
     g = globals()
     g["ARM"] = [(x + PAD, y + PAD) for x, y in ARM]
-    for k in ("SHOULDER", "FIST", "LEG_A", "LEG_B"):
+    for k in ("SHOULDER", "FIST", "LEG_A", "LEG_B", "KNEE_A", "KNEE_B"):
         g[k] = (g[k][0] + PAD, g[k][1] + PAD)
     g["HIP_Y"] += PAD
     g["SPLIT_X"] += PAD
-    x0, y0, x1, y1 = FACE
-    g["FACE"] = (x0 + PAD, y0 + PAD, x1 + PAD, y1 + PAD)
     g["POINTS"] = {k: (x + PAD, y + PAD) for k, (x, y) in POINTS.items()}
 
 
@@ -163,66 +163,67 @@ class Rig:
             todo &= ~done
         return img
 
-    def back_view(self):
-        """Sırt görünümü: maske/atkı bölgesini kapüşon tonlarıyla kapat (komşu koyu piksellerden doldur)."""
-        b = self.body.copy()
-        x0, y0, x1, y1 = FACE
-        reg = np.zeros(b.shape[:2], bool)
-        reg[y0:y1, x0:x1] = True
-        lum = b[..., :3].astype(int).sum(-1)
-        red = ((b[..., 0].astype(int) - b[..., 2]) > 22) & ((b[..., 0].astype(int) - b[..., 1]) > 22)
-        face = reg & (b[..., 3] > 0) & ((lum > 240) | red)
-        b[face, 3] = 0
-        b = self._inpaint(b, face)
-        r = Rig.__new__(Rig)
-        r.h, r.w, r.arm, r.body, r.foot_y = self.h, self.w, self.arm, b, self.foot_y
-        return r
-
     def layers(self):
-        """Üst gövde / ön bacak (A) / arka bacak (B) katmanları; bacak katmanları ek yerinde boşluk kalmasın diye
-        kalçanın biraz üstünden başlar (üst gövde üstte çizilir)."""
+        """Üst gövde + iki bacak (uyluk/baldır) katmanları. Bacak katmanları ek yerlerinde boşluk kalmasın diye
+        üst komşusuyla biraz örtüşür; çizim sırası: arka bacak, ön bacak, üst gövde."""
         if getattr(self, "_layers", None) is None:
             h, w = self.h, self.w
             ys, xs = np.mgrid[0:h, 0:w]
             U = ys < HIP_Y
-            A = (ys >= HIP_Y - 8) & (xs < SPLIT_X)
-            Bm = (ys >= HIP_Y - 8) & (xs >= SPLIT_X)
-            self._layers = [np.where(m[..., None], self.body, 0).astype(np.uint8) for m in (U, A, Bm)]
+            sideA = xs < SPLIT_X
+            L = {"U": U}
+            for nm, side, knee in (("A", sideA, KNEE_A), ("B", ~sideA, KNEE_B)):
+                L[nm + "t"] = (ys >= HIP_Y - 8) & (ys < knee[1] + 3) & side
+                L[nm + "s"] = (ys >= knee[1] - 5) & side
+            self._layers = {k: np.where(m[..., None], self.body, 0).astype(np.uint8) for k, m in L.items()}
         return self._layers
 
-    def warp_body(self, legA=0.0, legB=0.0, bob=0.0, lean=0.0):
-        """Gövde: üst kısım kalça çevresinde eğilir + iner; bacaklar kalça çevresinde salınır."""
-        U, A, Bl = self.layers()
+    @staticmethod
+    def _leg(L, hip, knee, th, kn, bob):
+        """Uyluk kalça çevresinde th, baldır yeni diz çevresinde th+kn döner."""
+        kv = rot((knee[0] - hip[0], knee[1] - hip[1]), th)
+        nk = (hip[0] + kv[0], hip[1] + kv[1] + bob)
+        shin = rotate_layer(L[1], th + kn, knee, shift=(nk[0] - knee[0], nk[1] - knee[1]))
+        thigh = rotate_layer(L[0], th, hip, shift=(0, bob))
+        return over(shin, thigh), nk
+
+    def warp_body(self, legA=0.0, legB=0.0, bob=0.0, lean=0.0, kneeA=0.0, kneeB=0.0, lift=0.0):
+        """Gövde: üst kısım kalça çevresinde eğilir + iner; bacaklar kalça (uyluk) ve diz (baldır) çevresinde döner."""
+        L = self.layers()
         hx = (LEG_A[0] + LEG_B[0]) / 2
-        out = rotate_layer(Bl, legB, LEG_B, shift=(0, bob * 0.5))
-        out = over(out, rotate_layer(A, legA, LEG_A, shift=(0, bob * 0.5)))
-        return over(out, rotate_layer(U, lean, (hx, HIP_Y), shift=(0, bob)))
+        b2 = bob * 0.5 + lift
+        out, _ = self._leg((L["Bt"], L["Bs"]), LEG_B, KNEE_B, legB, kneeB, b2)
+        a_img, _ = self._leg((L["At"], L["As"]), LEG_A, KNEE_A, legA, kneeA, b2)
+        out = over(out, a_img)
+        return over(out, rotate_layer(L["U"], lean, (hx, HIP_Y), shift=(0, bob + lift)))
 
     def shoulder_pos(self, bob, lean):
         hx, hy = (LEG_A[0] + LEG_B[0]) / 2, HIP_Y
         v = rot((SHOULDER[0] - hx, SHOULDER[1] - hy), lean)
         return (hx + v[0], hy + v[1] + bob)
 
-    def frame(self, legA=0.0, legB=0.0, bob=0.0, lean=0.0, arm=0.0, arm_len=1.0):
-        body = self.warp_body(legA, legB, bob, lean)
+    def frame(self, legA=0.0, legB=0.0, bob=0.0, lean=0.0, arm=0.0, kneeA=0.0, kneeB=0.0, lift=0.0):
+        body = self.warp_body(legA, legB, bob, lean, kneeA, kneeB, lift)
+        bob += lift
         sp = self.shoulder_pos(bob, lean)
         armL = rotate_layer(self.arm, arm + lean, SHOULDER, shift=(sp[0] - SHOULDER[0], sp[1] - SHOULDER[1]))
         img = over(body, armL)
         fv = rot((FIST[0] - SHOULDER[0], FIST[1] - SHOULDER[1]), arm + lean)
-        pts = {"rhand": (sp[0] + fv[0], sp[1] + fv[1])}
         hx, hy = (LEG_A[0] + LEG_B[0]) / 2, HIP_Y
+        pts = {"rhand": (sp[0] + fv[0], sp[1] + fv[1]), "seat": (hx, hy + lift)}
         for k, p in POINTS.items():
             if p[1] < HIP_Y:
                 v = rot((p[0] - hx, p[1] - hy), lean)
                 pts[k] = (hx + v[0], hy + v[1] + bob)
             else:
-                piv, ang = (LEG_A, legA) if p[0] < SPLIT_X else (LEG_B, legB)
-                v = rot((p[0] - piv[0], p[1] - piv[1]), ang)
-                pts[k] = (piv[0] + v[0], piv[1] + v[1])
+                hip, knee, th, kn = (LEG_A, KNEE_A, legA, kneeA) if p[0] < SPLIT_X else (LEG_B, KNEE_B, legB, kneeB)
+                kv = rot((knee[0] - hip[0], knee[1] - hip[1]), th)
+                v = rot((p[0] - knee[0], p[1] - knee[1]), th + kn)
+                pts[k] = (hip[0] + kv[0] + v[0], hip[1] + kv[1] + v[1] + lift)
         return img, pts
 
 
-def place(img, pts, foot_y, ang=0.0, pivot=None, dx=0.0, dy=0.0, sy=1.0):
+def place(img, pts, foot_y, ang=0.0, pivot=None, dx=0.0, dy=0.0, sy=1.0, ground=False, sx=1.0):
     """Kareyi tuvale yerleştirir (ayak ortası = ANCHOR); isteğe bağlı tüm figür döndürme/basma."""
     h, w = img.shape[:2]
     canvas = np.zeros((CH, CW, 4), np.uint8)
@@ -235,40 +236,64 @@ def place(img, pts, foot_y, ang=0.0, pivot=None, dx=0.0, dy=0.0, sy=1.0):
     ww, hh = min(w - sx0, CW - dx0), min(h - sy0, CH - dy0)
     canvas_img[dy0:dy0 + hh, dx0:dx0 + ww] = img[sy0:sy0 + hh, sx0:sx0 + ww]
     piv = pivot if pivot is not None else ANCHOR
-    if ang or dx or dy or sy != 1.0:
-        canvas_img = rotate_layer(canvas_img, ang, piv, shift=(dx, dy), sy_scale=sy)
+    if ang or dx or dy or sy != 1.0 or sx != 1.0:
+        canvas_img = rotate_layer(canvas_img, ang, piv, shift=(dx, dy), sy_scale=sy, sx_scale=sx)
     out = {}
     for k, (x, y) in pts.items():
         X, Y = x + x0, y + y0
         Y = piv[1] + (Y - piv[1]) * sy
+        X = piv[0] + (X - piv[0]) * sx
         v = rot((X - piv[0], Y - piv[1]), ang)
         out[k] = [round(piv[0] + v[0] + dx, 1), round(piv[1] + v[1] + dy, 1)]
-    return clean(over(canvas, canvas_img)), out
+    res = clean(over(canvas, canvas_img))
+    if ground:  # dönen figürün en alt pikseli zemine (ANCHOR y) otursun
+        rows = np.where(res[..., 3].any(1))[0]
+        if len(rows):
+            sh = ANCHOR[1] - 1 - rows[-1]
+            res = np.roll(res, sh, 0)
+            for v in out.values():
+                v[1] = round(v[1] + sh, 1)
+    return res, out
 
 
-def anim_frames(rig, anim, n):
+def anim_frames(rig, anim, n, front=False):
     D = math.radians
     for f in range(n):
         t = f / n
         ph = 2 * math.pi * t
-        g = dict(ang=0.0, dx=0.0, dy=0.0, sy=1.0, pivot=None)
+        g = dict(ang=0.0, dx=0.0, dy=0.0, sy=1.0, pivot=None, ground=False, sx=1.0)
         if anim == "idle":
             k = dict(bob=round(1.0 * (1 - math.cos(ph)) / 2 + 0.2), arm=D(2) * math.sin(ph))
         elif anim == "walk":
             k = dict(legA=D(16) * math.sin(ph), legB=-D(16) * math.sin(ph), bob=round(1.6 * abs(math.sin(ph))),
+                     kneeA=-D(24) * max(0.0, math.cos(ph)), kneeB=-D(24) * max(0.0, -math.cos(ph)),
                      arm=-D(14) * math.sin(ph), lean=-D(2))
         elif anim == "run":
-            k = dict(legA=D(28) * math.sin(ph), legB=-D(28) * math.sin(ph), bob=round(3.0 * abs(math.sin(ph))),
+            k = dict(legA=D(30) * math.sin(ph), legB=-D(30) * math.sin(ph), bob=round(3.0 * abs(math.sin(ph))),
+                     kneeA=-D(55) * max(0.0, math.cos(ph)), kneeB=-D(55) * max(0.0, -math.cos(ph)),
                      arm=-D(30) * math.sin(ph) + D(10), lean=-D(7))
+        elif anim == "ride" and front:
+            # önden/arkadan: bacaklar iki yanda aşağı sarkar, pedal hafif
+            k = dict(legA=D(14 + 8 * math.sin(ph)), kneeA=-D(18 + 10 * math.sin(ph)),
+                     legB=D(14 - 8 * math.sin(ph)), kneeB=-D(18 - 10 * math.sin(ph)), lean=-D(8), arm=D(30))
+        elif anim == "ride":
+            # bisiklet/motor: oturur, öne eğilir, eller gidonda, pedal çevirir (eyer = bağlama noktası "seat")
+            k = dict(legA=D(52 + 16 * math.sin(ph)), kneeA=-D(70 + 18 * math.sin(ph)),
+                     legB=D(52 - 16 * math.sin(ph)), kneeB=-D(70 - 18 * math.sin(ph)),
+                     lean=-D(16), arm=D(48), lift=0)
         elif anim == "punch":
             arm = [0, -14, -20, 35, 82, 84, 50, 14][f]
             lean = [0, 2, 3, -4, -8, -8, -4, -1][f]
             k = dict(arm=D(arm), lean=D(lean), legA=D([0, -3, -4, 6, 10, 10, 6, 2][f]), legB=D([0, 2, 3, -4, -6, -6, -4, -1][f]))
             g["dx"] = [0, 1, 2, -3, -6, -6, -3, -1][f]
         elif anim == "roll":
-            k = dict(legA=D(12), legB=-D(6), arm=D(30), lean=-D(6))
-            g.update(ang=-2 * math.pi * t, sy=0.72, dx=-18 * t, pivot=(ANCHOR[0], ANCHOR[1] - 80))
-            g["dy"] = 0
+            # çömel → top olup dön (3 kare) → çömel → kalk
+            # çömel → küçük top olup 90°'lik adımlarla dön → çömel → kalk (dönüş karelerinde iz/toz oyunda eklenir)
+            crouch = dict(legA=D(16), kneeA=-D(26), legB=D(12), kneeB=-D(22), lean=-D(16), arm=D(36))
+            k = [crouch, crouch, crouch, crouch, crouch, dict(lean=-D(5), arm=D(10), kneeA=-D(8))][f]
+            sc = [1.0, 0.66, 0.62, 0.66, 0.9, 1.0][f]
+            g.update(ang=-D([0, 90, 180, 270, 345, 360][f]), sy=[0.86, 1, 1, 1, 0.9, 0.97][f] * sc, sx=sc * [1.04, 1, 1, 1, 1.02, 1][f],
+                     dx=-[0, 8, 16, 24, 30, 34][f], pivot=(ANCHOR[0], ANCHOR[1] - 90), ground=True)
         elif anim == "hurt":
             k = dict(lean=D([6, 11][f]), arm=-D([10, 18][f]), bob=1)
             g["dx"] = [2, 3][f]
@@ -284,7 +309,7 @@ def anim_frames(rig, anim, n):
         else:
             k = {}
         img, pts = rig.frame(**k)
-        yield place(img, pts, rig.foot_y, g["ang"], g["pivot"], g["dx"], g["dy"], g["sy"])
+        yield place(img, pts, rig.foot_y, g["ang"], g["pivot"], g["dx"], g["dy"], g["sy"], g["ground"], g["sx"])
 
 
 def main(src, out):
@@ -294,16 +319,17 @@ def main(src, out):
             os.remove(os.path.join(out, f))
     _pad_consts()
     front = Rig(Image.open(src))
-    back = front.back_view()
     att = {}
     for anim, n in ANIMS.items():
-        for vi, (rig, mirror) in enumerate(((front, False), (back, False))):
-            for f, (img, pts) in enumerate(anim_frames(rig, anim, n)):
+        for variant in ((False, True) if anim == "ride" else (None,)):
+            for f, (img, pts) in enumerate(anim_frames(front, anim, n, front=bool(variant))):
                 im = Image.fromarray(img)
                 ptsm = {k: [CW - v[0], v[1]] for k, v in pts.items()}
                 imm = im.transpose(Image.FLIP_LEFT_RIGHT)
-                # yön eşlemesi: 0 (güney) = ön, 1-2 = ön ayna, 3 = sırt ayna, 4 (kuzey) = sırt
-                dirs = {0: (im, pts), 1: (imm, ptsm), 2: (imm, ptsm)} if vi == 0 else {3: (imm, ptsm), 4: (im, pts)}
+                # yön eşlemesi: tek (maskeli) görünüm; 0 ve 4 olduğu gibi (sola bakar), 1-3 aynası (sağa bakar)
+                dirs = {0: (im, pts), 1: (imm, ptsm), 2: (imm, ptsm), 3: (imm, ptsm), 4: (im, pts)}
+                if variant is not None:  # binme: ön/arka yönler ayrı poz
+                    dirs = {d: v for d, v in dirs.items() if (d in (0, 4)) == variant}
                 for d, (I, P) in dirs.items():
                     I.save(os.path.join(out, f"{anim}_{d}_{f}.png"))
                     att[f"{anim}_{d}_{f}"] = P
