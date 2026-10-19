@@ -209,6 +209,13 @@ pub struct Progress {
     pub gold_earned: u32,
     pub play_time: f64,
     pub city_entered: bool,
+    /// V4 skill ağacı: açılmış düğümler
+    pub tree: Vec<u16>,
+    pub dog_owned: bool,
+    /// köpek gelişimi: hasar, can, can yenilenmesi (0–10)
+    pub dog_lv: [u8; 3],
+    /// hile/ödül ile verilen ek skill puanı
+    pub extra_points: u32,
 }
 
 impl Default for Progress {
@@ -246,6 +253,10 @@ impl Default for Progress {
             gold_earned: 0,
             play_time: 0.0,
             city_entered: false,
+            tree: Vec::new(),
+            dog_owned: false,
+            dog_lv: [0; 3],
+            extra_points: 0,
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);
@@ -340,58 +351,55 @@ impl Progress {
         }
     }
 
+    /// V4: zırh setleri kalktı; savunma skill ağacından gelir.
     pub fn armor(&self) -> f32 {
-        [&self.eq.helmet, &self.eq.jacket, &self.eq.boots]
-            .iter()
-            .filter_map(|s| self.eq_item(s))
-            .map(|d| d.armor)
-            .sum()
+        0.0
     }
 
+    /// Çanta kalktı: her 5 seviyede +2 slot.
     pub fn inventory_cap(&self) -> usize {
-        BASE_SLOTS + self.eq_item(&self.eq.bag).map_or(0, |d| d.bonus as usize)
+        BASE_SLOTS + 2 * (self.level / 5) as usize
+    }
+
+    pub fn bonus(&self) -> crate::rpg::Bonus {
+        crate::rpg::bonus(self)
     }
 
     pub fn max_hp(&self) -> f32 {
-        let helm = self.eq_item(&self.eq.helmet).map_or(0.0, |d| d.bonus);
-        (100.0 + 5.0 * (self.level - 1) as f32) * (1.0 + 0.04 * self.skill(3) + helm)
+        100.0 + 5.0 * (self.level - 1) as f32 + self.bonus().hp_flat
     }
     pub fn max_stamina(&self) -> f32 {
         100.0 + 2.0 * (self.level - 1) as f32
     }
     pub fn damage_mult(&self) -> f32 {
-        let melee_bonus = if self.character == 0 {
-            1.0 + 0.05 * self.char_level[0] as f32
-        } else {
-            1.0
-        };
-        (1.0 + 0.05 * self.skill(0)) * melee_bonus
+        1.0 + self.bonus().dmg_pct
     }
+    /// Yumruk: temel 20 (+seviye), yakın dövüş düz bonusu, yüzde bonusları (Savaşçı Sv2/Sv7 + ağaç)
     pub fn fist_damage(&self) -> f32 {
-        8.0 + 0.6 * (self.level - 1) as f32
+        let b = self.bonus();
+        (20.0 + 0.6 * (self.level - 1) as f32 + b.melee_flat) * (1.0 + b.fist_pct)
     }
     pub fn crit_chance(&self) -> f32 {
-        0.05 + 0.02 * self.skill(1)
+        0.05 + self.bonus().crit
     }
     pub fn stun_chance(&self) -> f32 {
-        if self.skills[2] > 0 {
-            0.2
-        } else {
-            0.0
-        }
+        self.bonus().stun
     }
     pub fn regen_mult(&self) -> f32 {
-        1.0 + 0.2 * self.skill(4)
+        1.0 + self.bonus().regen
     }
     pub fn has_last_breath(&self) -> bool {
-        self.skills[5] > 0
+        self.bonus().last_breath
     }
     pub fn move_mult(&self) -> f32 {
-        let boots = self.eq_item(&self.eq.boots).map_or(0.0, |d| d.bonus);
-        1.0 + 0.02 * self.skill(6) + boots
+        1.0 + self.bonus().speed
     }
     pub fn stamina_cost_mult(&self) -> f32 {
-        1.0 - 0.08 * self.skill(7)
+        (1.0 - self.bonus().stamina).max(0.3)
+    }
+    /// Takla bekleme süresi (sn)
+    pub fn roll_cd(&self) -> f32 {
+        5.0 * (1.0 - self.bonus().roll_cd)
     }
     pub fn run_mult(&self) -> f32 {
         if self.skills[8] > 0 {
@@ -414,9 +422,7 @@ impl Progress {
         }
     }
     pub fn damage_resist(&self) -> f32 {
-        self.eq_item(&self.eq.jacket)
-            .filter(|d| d.id == "jacket_titan")
-            .map_or(0.0, |d| d.bonus)
+        self.bonus().dmg_taken
     }
 
     /// Envanterdeki slotu giy. Eskisini envantere geri koyar.
@@ -614,28 +620,20 @@ mod tests {
     }
 
     #[test]
-    fn equip_and_bag_capacity() {
+    fn capacity_grows_with_level_and_weapon_equips() {
         let mut p = Progress::default();
-        p.inv.add_id("bag_basic", 1);
+        assert_eq!(p.inventory_cap(), BASE_SLOTS);
+        p.level = 10;
+        assert_eq!(p.inventory_cap(), BASE_SLOTS + 4);
+        p.inv.add_id("w_bat", 1);
         let slot = p
             .inv
             .slots
             .iter()
-            .position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "bag_basic"))
+            .position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "w_bat"))
             .unwrap();
         p.equip_slot(slot).unwrap();
-        assert_eq!(p.inventory_cap(), BASE_SLOTS + 8);
-        assert_eq!(p.inv.slots.len(), BASE_SLOTS + 8);
-        p.inv.add_id("helm_police", 1);
-        let slot = p
-            .inv
-            .slots
-            .iter()
-            .position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "helm_police"))
-            .unwrap();
-        p.equip_slot(slot).unwrap();
-        assert_eq!(p.armor(), 12.0);
-        p.unequip("helmet").unwrap();
+        assert_eq!(p.eq.weapon, "w_bat");
         assert_eq!(p.armor(), 0.0);
     }
 

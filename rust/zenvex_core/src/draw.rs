@@ -326,6 +326,9 @@ impl Game {
                 ],
             ));
         }
+        if let Some(e) = self.dog_draw() {
+            self.draw_tmp.push(e);
+        }
         self.draw_tmp
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         let cap = out.len() / STRIDE;

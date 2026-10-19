@@ -30,6 +30,9 @@ pub const Z_DEATH: u8 = 4;
 
 // ---- çizim listesi
 pub const STRIDE: usize = 12;
+/// takla süresi (sn) ve karanlık aura yarıçapı (px)
+pub const ROLL_TIME: f32 = 0.32;
+pub const AURA_R: f32 = 190.0;
 pub const D_STATIC: f32 = 0.0;
 pub const D_HUMAN: f32 = 1.0;
 pub const D_ZOMBIE: f32 = 2.0;
@@ -68,6 +71,14 @@ pub struct Input {
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "t")]
 pub enum Event {
+    #[serde(rename = "roll")]
+    Roll { x: f32, y: f32 },
+    #[serde(rename = "dodge")]
+    Dodge { x: f32, y: f32 },
+    #[serde(rename = "knock")]
+    Knockdown,
+    #[serde(rename = "potion")]
+    Potion { kind: u8 },
     #[serde(rename = "dmg")]
     Damage { x: f32, y: f32, v: i32, crit: bool },
     #[serde(rename = "pdmg")]
@@ -206,6 +217,20 @@ pub struct Player {
     pub god: bool,
     pub one_hit: bool,
     pub speed_cheat: f32,
+    // V4
+    pub roll_t: f32,
+    pub roll_dx: f32,
+    pub roll_dy: f32,
+    /// takladan sonra hasar almama
+    pub iframe_t: f32,
+    pub speed_t: f32,
+    pub power_t: f32,
+    /// iksir beklemeleri: can, hız, güç, panzehir
+    pub pot_cd: [f32; 4],
+    pub aura_t: f32,
+    pub inf_ammo: bool,
+    pub no_cd: bool,
+    pub invis: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -375,6 +400,9 @@ pub struct Game {
     pub passenger: bool,
     /// Hardcore sunucu: daha sert zombiler, daha çok XP, ölünce çanta yere düşer
     pub hardcore: bool,
+    pub dog: Option<crate::pet::Dog>,
+    /// hile: zaman ölçeği
+    pub time_scale: f32,
     pub events: Vec<Event>,
     pub time: f32,
     pub day_t: f32,
@@ -389,6 +417,7 @@ pub struct Game {
 
 impl Game {
     pub fn new(seed: u64, mut progress: Progress, day_index: u32) -> Game {
+        progress.character = 0;
         let world = World::generate(seed);
         let cap = progress.inventory_cap();
         progress.inv.resize(cap);
@@ -458,6 +487,8 @@ impl Game {
             kill_credit: -1,
             passenger: false,
             hardcore: false,
+            dog: None,
+            time_scale: 1.0,
             events: Vec::new(),
             time: 0.0,
             day_t: 0.3,
@@ -515,7 +546,7 @@ impl Game {
     }
 
     pub fn step(&mut self, dt: f32, input: Input) {
-        let dt = dt.clamp(0.0, 0.05);
+        let dt = dt.clamp(0.0, 0.05) * self.time_scale;
         self.time += dt;
         self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
@@ -530,6 +561,7 @@ impl Game {
         }
         self.update_zone();
         self.update_drone(dt);
+        self.update_dog(dt);
         self.update_zombies(dt);
         self.update_projectiles(dt);
         self.update_areas(dt);
@@ -586,8 +618,18 @@ impl Game {
                 &mut p.energy_t,
                 &mut p.shield_t,
                 &mut p.cast_t,
+                &mut p.iframe_t,
+                &mut p.speed_t,
+                &mut p.power_t,
             ] {
                 *t = (*t - dt).max(0.0);
+            }
+            for c in p.pot_cd.iter_mut() {
+                *c = (*c - dt).max(0.0);
+            }
+            if p.no_cd {
+                p.ability_cd = 0.0;
+                p.pot_cd = [0.0; 4];
             }
             if p.shield_t <= 0.0 {
                 p.shield = 0.0;
@@ -620,6 +662,12 @@ impl Game {
         }
         if self.player.hp <= 0.0 && !self.player.dead {
             self.kill_player();
+            return;
+        }
+        self.update_aura(dt);
+        if self.player.roll_t > 0.0 {
+            self.update_roll(dt);
+            self.pickup_drops();
             return;
         }
         if self.player.hurt_t > 0.0 {
@@ -684,6 +732,9 @@ impl Game {
                 m(1.6) * (0.45 + 0.55 * (mlen / 0.6).min(1.0))
             };
             speed *= self.progress.move_mult() * self.player.speed_cheat;
+            if self.player.speed_t > 0.0 {
+                speed *= 1.25;
+            }
             if self.player.cloak_t > 0.0 {
                 speed *= 1.2;
             }
@@ -832,6 +883,9 @@ impl Game {
 
     pub fn damage_mult(&self) -> f32 {
         let mut k = self.progress.damage_mult();
+        if self.player.power_t > 0.0 {
+            k *= 1.2;
+        }
         if self.player.rage_t > 0.0 {
             k *= 1.4 + 0.03 * self.progress.char_level[0] as f32;
         }
@@ -875,9 +929,44 @@ impl Game {
         (x, y)
     }
 
+    /// Patlama hasarı: skill ağacındaki patlama koruması uygulanır.
+    pub fn damage_player_blast(&mut self, amount: f32) {
+        let k = 1.0 - self.progress.bonus().blast_res;
+        self.damage_player(amount * k);
+    }
+
+    /// Oyuncu şu an hasar almıyor mu (takla, takla sonrası, ölümsüzlük)
+    pub fn player_invulnerable(&self) -> bool {
+        self.player.dead || self.player.god || self.player.cloak_t > 0.0 || self.player.roll_t > 0.0 || self.player.iframe_t > 0.0
+    }
+
     pub fn damage_player(&mut self, amount: f32) {
-        if self.player.dead || self.player.god || self.player.cloak_t > 0.0 {
+        if self.player_invulnerable() {
             return;
+        }
+        let b = self.progress.bonus();
+        if b.dodge > 0.0 && self.rng.chance(b.dodge) {
+            let (x, y) = (self.player.x, self.player.y);
+            self.events.push(Event::Dodge { x, y: y - 110.0 });
+            return;
+        }
+        if b.reflect > 0.0 {
+            // en yakın zombiye yansıt
+            let (px, py) = (self.player.x, self.player.y);
+            let near = self
+                .zombies
+                .iter()
+                .enumerate()
+                .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < 140.0)
+                .min_by(|a, b2| {
+                    let da = (a.1.x - px).hypot(a.1.y - py);
+                    let db = (b2.1.x - px).hypot(b2.1.y - py);
+                    da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .map(|(i, _)| i);
+            if let Some(i) = near {
+                self.hurt_zombie(i, amount * b.reflect * 4.0, false, 0.0, 0.0, false, true);
+            }
         }
         let z = self.world.zone(self.player.x, self.player.y);
         if z.safe() {
@@ -926,6 +1015,69 @@ impl Game {
         }
     }
 
+    // ------------------------------------------------------------------ takla ve aura (V4 Savaşçı)
+    pub fn start_roll(&mut self) -> Result<String, String> {
+        if self.player.roll_t > 0.0 || self.player.hurt_t > 0.3 {
+            return Err(String::new());
+        }
+        let (dx, dy) = dir_vec(self.player.dir);
+        let p = &mut self.player;
+        p.roll_t = ROLL_TIME;
+        p.roll_dx = dx;
+        p.roll_dy = dy;
+        p.atk_active = false;
+        p.hurt_t = 0.0;
+        p.ability_cd = if p.no_cd { 0.0 } else { self.progress.roll_cd() };
+        p.anim = A_RUN;
+        p.anim_t = 0.0;
+        let (x, y) = (p.x, p.y);
+        self.events.push(Event::Roll { x, y });
+        Ok(String::new())
+    }
+
+    fn update_roll(&mut self, dt: f32) {
+        let gate_open = self.progress.level >= CITY_LEVEL;
+        let speed = m(3.0) / ROLL_TIME; // 3 metre
+        let (mut x, mut y) = (self.player.x + self.player.roll_dx * speed * dt, self.player.y + self.player.roll_dy * speed * dt);
+        self.world.resolve(&mut x, &mut y, 14.0, gate_open, &mut self.scratch);
+        let p = &mut self.player;
+        p.x = x;
+        p.y = y;
+        p.anim_t += dt * 1.6; // koşu karesini hızlı oynat
+        p.roll_t -= dt;
+        if p.roll_t <= 0.0 {
+            p.roll_t = 0.0;
+            p.iframe_t = self.progress.bonus().iframe;
+            p.anim = A_IDLE;
+            p.anim_t = 0.0;
+        }
+    }
+
+    /// Savaşçı Sv10: yakındaki düşmanlara saniyede 20 hasar
+    fn update_aura(&mut self, dt: f32) {
+        if !self.progress.bonus().aura || self.player.dead {
+            return;
+        }
+        self.player.aura_t -= dt;
+        if self.player.aura_t > 0.0 {
+            return;
+        }
+        self.player.aura_t = 1.0;
+        let (px, py) = (self.player.x, self.player.y);
+        let hits: Vec<usize> = self
+            .zombies
+            .iter()
+            .enumerate()
+            .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < AURA_R)
+            .map(|(i, _)| i)
+            .collect();
+        for i in hits.into_iter().rev() {
+            if i < self.zombies.len() {
+                self.hurt_zombie(i, 20.0, false, 0.0, 0.0, false, true);
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ yetenekler
     pub fn use_ability(&mut self) -> Result<String, String> {
         if self.player.dead || self.player.vehicle.is_some() {
@@ -936,6 +1088,9 @@ impl Game {
         }
         let c = self.progress.character;
         let lvl = self.progress.char_level[c] as f32;
+        if c == 0 {
+            return self.start_roll();
+        }
         match c {
             0 => {
                 self.player.rage_t = 5.0;

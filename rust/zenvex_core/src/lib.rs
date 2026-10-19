@@ -6,6 +6,8 @@ pub mod ground;
 pub mod inventory;
 pub mod progress;
 pub mod rng;
+pub mod rpg;
+pub mod pet;
 pub mod ui;
 pub mod world;
 

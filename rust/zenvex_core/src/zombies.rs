@@ -175,7 +175,7 @@ impl Game {
             }
             return;
         }
-        let (lpx, lpy, lpdead) = (self.player.x, self.player.y, self.player.dead);
+        let (lpx, lpy, lpdead) = (self.player.x, self.player.y, self.player.dead || self.player.invis);
         let l_in_vehicle = self.player.vehicle.is_some() || self.passenger;
         let lp_safe = self.world.zone(lpx, lpy).safe();
         let targets: Vec<(f32, f32, bool, bool, bool, u8, u8)> = if self.net == 1 {
@@ -188,6 +188,7 @@ impl Game {
         };
         let mut remote_hits: Vec<(usize, f32, bool)> = Vec::new();
         let mut player_damage = 0.0f32;
+        let mut blast_damage = 0.0f32;
         let n = self.zombies.len();
         // birbirini itme
         for i in 0..n {
@@ -535,7 +536,7 @@ impl Game {
                 }
             }
             if (self.player.x - x).hypot(self.player.y - y) < r {
-                player_damage += d;
+                blast_damage += d;
                 let (dx, dy) = (self.player.x - x, self.player.y - y);
                 let l = dx.hypot(dy).max(1.0);
                 let (mut nx, mut ny) =
@@ -560,6 +561,9 @@ impl Game {
         }
         if player_damage > 0.0 {
             self.damage_player(player_damage);
+        }
+        if blast_damage > 0.0 && !self.player_invulnerable() {
+            self.damage_player_blast(blast_damage);
         }
         for (i, v, poison) in remote_hits {
             self.events.push(Event::RemoteDamage { i, v: v.round() as i32, poison });

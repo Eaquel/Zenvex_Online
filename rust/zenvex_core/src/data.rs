@@ -131,6 +131,10 @@ pub const ITEMS: &[ItemDef] = &[
     // para (48-49)
     item!("coin", "Altın", Currency, Common, 9999, 1, "Tüccarla alışveriş için."),
     item!("gem", "Elmas", Currency, Epic, 9999, 0, "Mağaza parası."),
+    // V4 iksirler (50-52) — kayıtlar dizin sakladığı için yeni eşyalar hep sona eklenir
+    item!("potion_heal", "Can İksiri", Consumable, Rare, 10, 40, "10 sn boyunca saniyede +5 can. 30 sn bekleme."),
+    item!("potion_speed", "Hız İksiri", Consumable, Rare, 10, 60, "30 sn boyunca +%25 hız. 60 sn bekleme."),
+    item!("potion_power", "Güç İksiri", Consumable, Epic, 10, 90, "20 sn boyunca +%20 hasar. 60 sn bekleme."),
 ];
 
 pub fn item_index(id: &str) -> Option<usize> {
@@ -458,6 +462,18 @@ pub struct Recipe {
 
 pub const RECIPES: &[Recipe] = &[
     Recipe {
+        out: "potion_heal",
+        count: 1,
+        inputs: &[("bandage", 1), ("resin", 2)],
+        bench: false,
+    },
+    Recipe {
+        out: "potion_speed",
+        count: 1,
+        inputs: &[("energy", 1), ("toxic", 1)],
+        bench: true,
+    },
+    Recipe {
         out: "glue",
         count: 1,
         inputs: &[("resin", 2)],
@@ -485,30 +501,6 @@ pub const RECIPES: &[Recipe] = &[
         out: "antidote",
         count: 1,
         inputs: &[("toxic", 2), ("glue", 1)],
-        bench: true,
-    },
-    Recipe {
-        out: "bag_basic",
-        count: 1,
-        inputs: &[("cloth", 5), ("leather", 2), ("glue", 2)],
-        bench: true,
-    },
-    Recipe {
-        out: "helm_basic",
-        count: 1,
-        inputs: &[("scrap", 4), ("screw", 2), ("cloth", 1)],
-        bench: true,
-    },
-    Recipe {
-        out: "jacket_basic",
-        count: 1,
-        inputs: &[("cloth", 4), ("scrap", 3), ("glue", 2)],
-        bench: true,
-    },
-    Recipe {
-        out: "boots_basic",
-        count: 1,
-        inputs: &[("leather", 3), ("cloth", 1), ("glue", 1)],
         bench: true,
     },
     Recipe {
@@ -547,24 +539,6 @@ pub const RECIPES: &[Recipe] = &[
         inputs: &[("scrap", 8), ("screw", 4), ("electronics", 2)],
         bench: true,
     },
-    Recipe {
-        out: "helm_titan",
-        count: 1,
-        inputs: &[("titan_shard", 5), ("scrap", 10), ("dark_crystal", 2)],
-        bench: true,
-    },
-    Recipe {
-        out: "jacket_titan",
-        count: 1,
-        inputs: &[("titan_shard", 8), ("leather", 6), ("dark_crystal", 3)],
-        bench: true,
-    },
-    Recipe {
-        out: "boots_titan",
-        count: 1,
-        inputs: &[("titan_shard", 4), ("leather", 4), ("dark_crystal", 1)],
-        bench: true,
-    },
 ];
 
 // --------------------------------------------------------------------------- tüccar
@@ -577,28 +551,19 @@ pub const MERCHANT: &[(&str, u32, u32)] = &[
     ("glue", 10, 1),
     ("cloth", 6, 1),
     ("w_bat", 40, 1),
-    ("bag_basic", 120, 2),
-    ("helm_basic", 80, 2),
-    ("jacket_basic", 100, 3),
-    ("boots_basic", 80, 3),
     ("w_glock", 400, 5),
     ("medkit", 60, 5),
     ("antidote", 35, 6),
+    ("potion_heal", 80, 3),
+    ("potion_speed", 120, 6),
+    ("potion_power", 180, 12),
     ("fuel", 25, 8),
     ("ammo_762", 3, 10),
     ("ammo_556", 3, 10),
     ("w_baton", 180, 10),
-    ("helm_police", 300, 12),
-    ("jacket_police", 380, 12),
-    ("boots_police", 280, 12),
-    ("bag_police", 450, 14),
     ("w_ak47", 1600, 15),
     ("w_m4", 1800, 18),
     ("ammo_308", 10, 20),
-    ("helm_military", 900, 22),
-    ("jacket_military", 1100, 24),
-    ("boots_military", 850, 24),
-    ("bag_military", 1200, 25),
     ("w_sniper", 4000, 28),
     ("ammo_rocket", 120, 30),
     ("w_rpg", 6000, 32),
@@ -616,15 +581,11 @@ pub struct CharDef {
     pub ability_desc: &'static str,
 }
 
+/// V4: tek kahraman. (Görseller "kaan" kimliğiyle paketli.)
 pub const CHARACTERS: &[CharDef] = &[
-    CharDef { id: "kaan", name: "Kaan", class: "Savaşçı", desc: "Sokak dövüşçüsü. Yakın dövüşte en güçlüsü.", unlock_gold: 0, unlock_level: 1,
-              ability: "Öfke", ability_desc: "5 sn boyunca +%40 hasar (her seviye +%3). 40 sn bekleme." },
-    CharDef { id: "nova", name: "Nova", class: "Tekno", desc: "Mühendis. Yanında otomatik ateş eden bir dron gezdirir.", unlock_gold: 5000, unlock_level: 8,
-              ability: "Savaş Dronu", ability_desc: "Dron hedefleri otomatik vurur. Lv5 çift namlu, Lv10 roket. Hedefler ayarlardan." },
-    CharDef { id: "rady", name: "Rady", class: "Büyücü", desc: "Kadim büyülerin koruyucusu. Dostlarına kalkan basar.", unlock_gold: 8000, unlock_level: 12,
-              ability: "Büyü Kalkanı", ability_desc: "Kendine ve yakındaki dostlara kalkan: Lv1 50, her seviye +20. 8 sn sürer, 25 sn bekleme." },
-    CharDef { id: "elif", name: "Elif", class: "Şifacı", desc: "Saha doktoru. Alandaki herkesi iyileştirir.", unlock_gold: 8000, unlock_level: 12,
-              ability: "Şifa Alanı", ability_desc: "Alandakilere can: Lv1 %5/5 sn, Lv5 %10/4 sn, Lv10 %20/3 sn. 30 sn bekleme." },
+    CharDef { id: "kaan", name: "Savaşçı", class: "Yumruk Dövüşçüsü", desc: "Siyah kapüşonlu hayatta kalan. Yumruklarıyla dövüşür, taklayla kaçar.",
+              unlock_gold: 0, unlock_level: 1,
+              ability: "Takla", ability_desc: "Bakılan yöne yuvarlanır, yuvarlanırken hasar almaz. 5 sn bekleme." },
 ];
 
 pub fn char_xp_to_next(level: u32) -> u32 {

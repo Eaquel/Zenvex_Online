@@ -36,6 +36,11 @@ impl Game {
             }
             let st = self.rng.chance(stun.max(self.progress.stun_chance()));
             self.hurt_zombie(i, dmg, crit, fx, fy, st, true);
+            let ls = self.progress.bonus().lifesteal;
+            if ls > 0.0 && dmg < 1e5 {
+                let max_hp = self.progress.max_hp();
+                self.player.hp = (self.player.hp + dmg * ls).min(max_hp);
+            }
         }
         if hit_any {
             self.player.combat_t = 0.0;
@@ -181,25 +186,15 @@ impl Game {
             ("ammo_556", 0.18, 20),
             ("energy", 0.2, 1),
             ("medkit", 0.1, 1),
+            ("potion_heal", 0.08, 1),
+            ("potion_speed", 0.05, 1),
             ("fuel", 0.15, 1),
-            ("helm_basic", 0.06, 1),
-            ("jacket_basic", 0.05, 1),
-            ("boots_basic", 0.06, 1),
-            ("bag_basic", 0.05, 1),
             ("w_bat", 0.06, 1),
             ("w_glock", 0.025, 1),
-            ("helm_police", 0.03, 1),
-            ("jacket_police", 0.025, 1),
-            ("boots_police", 0.03, 1),
             ("w_baton", 0.03, 1),
             ("ammo_308", 0.04, 5),
-            ("bag_police", 0.015, 1),
-            ("helm_military", 0.012, 1),
-            ("jacket_military", 0.01, 1),
-            ("boots_military", 0.012, 1),
             ("w_ak47", 0.008, 1),
             ("w_m4", 0.006, 1),
-            ("bag_military", 0.006, 1),
             ("ammo_rocket", 0.01, 1),
             ("w_sniper", 0.003, 1),
             ("w_rpg", 0.002, 1),
@@ -229,8 +224,11 @@ impl Game {
             }
             return;
         }
+        let b = self.progress.bonus();
+        let keep = self.player.inf_ammo || (b.ammo_save > 0.0 && self.rng.chance(b.ammo_save));
+        let mag = if keep { mag + 1 } else { mag };
         self.progress.set_mag(w.item, mag - 1);
-        self.player.atk_cd = 1.0 / w.rate;
+        self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.fire_rate));
         self.player.combat_t = 0.0;
         let (px, py) = (self.player.x, self.player.y);
         let spread = w.spread * self.rng.range(-1.0, 1.0);
@@ -248,7 +246,7 @@ impl Game {
         let dmg = if self.player.one_hit {
             1e6
         } else {
-            w.damage * mult * if crit { 1.75 } else { 1.0 }
+            w.damage * mult * (1.0 + b.bullet_pct) * if crit { 1.75 } else { 1.0 }
         };
         // namlu: karakterin önünde, el yüksekliğinde
         let mx = px + dx * 40.0;
@@ -285,7 +283,7 @@ impl Game {
         if self.player.reload_t > 0.0 {
             return;
         }
-        self.player.reload_t = w.reload;
+        self.player.reload_t = w.reload * (1.0 - self.progress.bonus().reload).max(0.3);
         self.events.push(Event::Reload);
     }
 
@@ -527,6 +525,18 @@ impl Game {
     /// Öldürme ödülleri (yerel ya da ağdan gelen öldürme için).
     pub fn kill_rewards(&mut self, z: Zombie) {
         let def = &ZOMBIES[z.kind as usize];
+        let kh = self.progress.bonus().kill_heal;
+        if kh > 0.0 && !self.player.dead {
+            let max_hp = self.progress.max_hp();
+            self.player.hp = (self.player.hp + max_hp * kh).min(max_hp);
+        }
+        // iksirler: %4 (seçkinlerde %15)
+        let pc = if matches!(z.kind, ZKind::Tank | ZKind::Mystery | ZKind::Titan) { 0.15 } else { 0.04 };
+        if self.rng.chance(pc) {
+            let pots = ["potion_heal", "potion_heal", "potion_speed", "potion_power"];
+            let id = pots[self.rng.below(pots.len() as u32) as usize];
+            self.spawn_drop_id(id, 1, z.x, z.y);
+        }
         self.progress.kills += 1;
         self.progress.kills_by[z.kind as usize] += 1;
         self.events.push(Event::Kill {
@@ -591,7 +601,6 @@ impl Game {
                 for (id, p) in [
                     ("dark_crystal", 0.6),
                     ("electronics", 0.8),
-                    ("helm_military", 0.08),
                     ("w_m4", 0.04),
                     ("w_sniper", 0.02),
                     ("gem", 0.5),
@@ -609,7 +618,7 @@ impl Game {
                 let rv = self.rng.below(2);
                 self.spawn_drop_id("dark_crystal", 2 + rv, z.x, z.y);
                 self.spawn_drop_id("gem", 10, z.x, z.y);
-                for id in ["w_rpg", "w_sniper", "helm_military", "bag_military"] {
+                for id in ["w_rpg", "w_sniper", "potion_power", "potion_speed"] {
                     if self.rng.chance(0.25) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
                     }
@@ -676,6 +685,7 @@ impl Game {
     pub fn update_areas(&mut self, dt: f32) {
         let (px, py) = (self.player.x, self.player.y);
         let mut pdmg = 0.0;
+        let mut shock: Option<(f32, f32, f32)> = None;
         for a in self.areas.iter_mut() {
             a.life -= dt;
             match a.kind {
@@ -691,7 +701,7 @@ impl Game {
                     let d = (px - a.x).hypot(py - a.y);
                     if !a.hit_done && (d - rr).abs() < 40.0 {
                         a.hit_done = true;
-                        pdmg += a.dps;
+                        shock = Some((a.x, a.y, a.dps));
                     }
                 }
                 _ => {}
@@ -700,6 +710,22 @@ impl Game {
         self.areas.retain(|a| a.life > 0.0);
         if pdmg > 0.0 {
             self.damage_player(pdmg);
+        }
+        if let Some((sx, sy, d)) = shock {
+            // Titan dalgası: takla atan kaçar; değerse geri savrulur ve yere düşer
+            if !self.player_invulnerable() {
+                self.damage_player_blast(d);
+                let (dx, dy) = (px - sx, py - sy);
+                let l = dx.hypot(dy).max(1.0);
+                let (mut nx, mut ny) = (px + dx / l * 110.0, py + dy / l * 110.0);
+                let gate = self.progress.level >= crate::progress::CITY_LEVEL;
+                self.world.resolve(&mut nx, &mut ny, 14.0, gate, &mut self.scratch);
+                self.player.x = nx;
+                self.player.y = ny;
+                self.player.hurt_t = 1.1;
+                self.player.atk_active = false;
+                self.events.push(Event::Knockdown);
+            }
         }
     }
 }

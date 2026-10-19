@@ -66,17 +66,41 @@ impl Game {
     pub fn ui_json(&self, kind: &str) -> String {
         let g = &self.progress;
         let v = match kind {
+            "tree" => {
+                let t = crate::rpg::tree();
+                let nodes: Vec<Value> = t.iter().map(|n| {
+                    let owned = n.id == 0 || g.tree.contains(&n.id);
+                    let avail = !owned && n.links.iter().any(|&l| l == 0 || g.tree.contains(&l));
+                    json!({ "id": n.id, "x": n.x, "y": n.y, "b": n.branch, "k": n.kind, "name": n.name, "desc": n.desc,
+                            "links": n.links, "own": owned, "av": avail })
+                }).collect();
+                json!({ "points": g.tree_points(), "level": g.level, "reset_cost": g.tree_reset_cost(), "branches": crate::rpg::BRANCHES,
+                        "nodes": nodes, "perks": crate::rpg::WARRIOR_PERKS, "char_level": g.char_level[0],
+                        "char_xp": g.char_xp[0], "char_next": data::char_xp_to_next(g.char_level[0]) })
+            }
+            "dog" => {
+                let lv = g.dog_lv;
+                let stats: Vec<Value> = (0..3).map(|i| {
+                    let val = match i { 0 => crate::rpg::dog_damage(lv[i]), 1 => crate::rpg::dog_hp(lv[i]), _ => crate::rpg::dog_regen(lv[i]) };
+                    json!({ "name": crate::rpg::DOG_STATS[i], "lv": lv[i], "max": crate::rpg::DOG_MAX, "val": val,
+                            "cost": crate::rpg::dog_upgrade_cost(lv[i]) })
+                }).collect();
+                let d = self.dog.as_ref();
+                json!({ "owned": g.dog_owned, "price": crate::rpg::DOG_PRICE, "gold": g.gold, "near": self.near_merchant(),
+                        "stats": stats, "hp": d.map_or(0.0, |d| d.hp), "dead": d.map_or(0.0, |d| d.dead_t) })
+            }
             "cheat" => {
                 let items: Vec<Value> = ITEMS.iter().filter(|d| d.kind != ItemKind::Currency)
                     .map(|d| json!([d.id, d.name, format!("{:?}", d.kind), d.rarity as u8])).collect();
                 json!({ "god": self.player.god, "onehit": self.player.one_hit, "speed": self.player.speed_cheat,
                         "net": self.net, "level": g.level, "gold": g.gold, "items": items,
+                        "infammo": self.player.inf_ammo, "nocd": self.player.no_cd, "invis": self.player.invis, "timescale": self.time_scale,
                         "x": (self.player.x / world::TILE) as i32, "y": (self.player.y / world::TILE) as i32 })
             }
             "profile" => {
                 let c = g.character;
                 json!({
-                    "name": g.name, "level": g.level, "xp": g.xp, "xp_next": progress::xp_to_next(g.level), "points": g.points,
+                    "name": g.name, "level": g.level, "xp": g.xp, "xp_next": progress::xp_to_next(g.level), "points": g.tree_points(),
                     "gold": g.gold, "gems": g.gems, "character": c, "char_name": CHARACTERS[c].name, "char_class": CHARACTERS[c].class,
                     "char_level": g.char_level[c], "frame": g.frame, "tag": g.tag,
                     "tag_name": COSMETICS.iter().find(|x| x.id == g.tag).map_or("", |x| x.name),
@@ -307,6 +331,10 @@ impl Game {
                 Ok("Yeniden doğdun".into())
             }
             "cheat" => self.cheat(v["text"].as_str().unwrap_or("")),
+            "tree_unlock" => self.progress.tree_unlock(v["id"].as_u64().unwrap_or(0) as u16),
+            "tree_reset" => self.progress.tree_reset(),
+            "dog_buy" => self.dog_buy(),
+            "dog_up" => self.dog_upgrade(int("stat")),
             "set_rules" => {
                 self.hardcore = v["hardcore"].as_bool().unwrap_or(false);
                 Ok(String::new())
@@ -401,7 +429,7 @@ impl Game {
         }
     }
 
-    fn use_slot(&mut self, slot: usize) -> Result<String, String> {
+    pub fn use_slot(&mut self, slot: usize) -> Result<String, String> {
         let s = self
             .progress
             .inv
@@ -459,6 +487,22 @@ impl Game {
                     return Err("Zehirlenmedin".into());
                 }
                 p.poison_t = 0.0;
+            }
+            "potion_heal" | "potion_speed" | "potion_power" => {
+                let (k, cd) = match d.id { "potion_heal" => (0usize, 30.0), "potion_speed" => (1, 60.0), _ => (2, 60.0) };
+                if p.pot_cd[k] > 0.0 {
+                    return Err(format!("Bekleme: {:.0} sn", p.pot_cd[k]));
+                }
+                p.pot_cd[k] = if p.no_cd { 0.0 } else { cd };
+                match k {
+                    0 => {
+                        p.heal_t = 10.0;
+                        p.heal_rate = 5.0;
+                    }
+                    1 => p.speed_t = 30.0,
+                    _ => p.power_t = 20.0,
+                }
+                self.events.push(Event::Potion { kind: k as u8 });
             }
             "fuel" => {}
             _ => return Err("Bu eşya kullanılamaz".into()),
@@ -915,8 +959,8 @@ impl Game {
                 Ok("Her mermiden 200 eklendi".into())
             }
             "points" | "puan" => {
-                self.progress.points += num(1, 10.0) as u32;
-                Ok(format!("Yetenek puanı: {}", self.progress.points))
+                self.progress.extra_points += num(1, 10.0) as u32;
+                Ok(format!("Skill puanı: {}", self.progress.tree_points()))
             }
             "fuel" | "yakit" => {
                 for v in self.vehicles.iter_mut() {
@@ -932,6 +976,35 @@ impl Game {
                 }
                 Ok("Çanta boşaltıldı".into())
             }
+            "infammo" | "sonsuzmermi" => {
+                self.player.inf_ammo = !self.player.inf_ammo;
+                Ok(format!("Sonsuz mermi {}", if self.player.inf_ammo { "AÇIK" } else { "KAPALI" }))
+            }
+            "nocd" | "beklemesiz" => {
+                self.player.no_cd = !self.player.no_cd;
+                Ok(format!("Beklemesiz takla/iksir {}", if self.player.no_cd { "AÇIK" } else { "KAPALI" }))
+            }
+            "invis" | "gorunmez" => {
+                self.player.invis = !self.player.invis;
+                Ok(format!("Zombilere görünmezlik {}", if self.player.invis { "AÇIK" } else { "KAPALI" }))
+            }
+            "timescale" | "zaman" => {
+                self.time_scale = num(1, 1.0).clamp(0.1, 4.0);
+                Ok(format!("Zaman ×{}", self.time_scale))
+            }
+            "dog" | "kopek" => {
+                self.progress.dog_owned = true;
+                let l = (num(1, 10.0) as u8).min(crate::rpg::DOG_MAX);
+                self.progress.dog_lv = [l; 3];
+                self.dog = None;
+                Ok(format!("Köpek seviye {l}"))
+            }
+            "potions" | "iksirler" => {
+                for id in ["potion_heal", "potion_speed", "potion_power"] {
+                    self.progress.inv.add_id(id, 5);
+                }
+                Ok("Her iksirden 5 eklendi".into())
+            }
             "reset" | "sifirla" => {
                 self.progress = progress::Progress::default();
                 self.respawn(false);
@@ -939,7 +1012,7 @@ impl Game {
             }
             _ => Err("Komutlar: gold N, gem N, item id N, items, weapons, set basic|police|military|titan, level N, xp N, charlevel N, \
                       god, onehit, speed X, time H, day, night, heal, spawn tür N lvl, boss, killall, tp city|camp|boss|swamp|downtown|deep|x y, \
-                      unlock, pass N, pass buy [elite], vehicle bike|moto|car|suv, ammo, points N, fuel, clearbag, reset"
+                      unlock, pass N, pass buy [elite], vehicle bike|moto|car|suv, ammo, points N, fuel, clearbag, infammo, nocd, invis, timescale X, dog N, potions, reset"
                 .into()),
         }
     }
@@ -975,7 +1048,7 @@ mod cheat_tests {
     fn all_panel_cheats_work() {
         let mut g = Game::new(7, Progress::default(), 1);
         let cmds = [
-            "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "ammo", "points 10",
+            "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "ammo", "points 10", "infammo", "infammo", "nocd", "nocd", "invis", "invis", "timescale 2", "timescale 1", "dog 5", "potions",
             "set basic", "set police", "set military", "set titan", "item w_ak47 1", "item medkit 5", "god", "god", "onehit", "onehit",
             "speed 2", "speed 1", "heal", "day", "night", "time 18", "spawn walker 3", "spawn runner 2", "spawn dog 2",
             "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle bike", "vehicle moto",
@@ -996,5 +1069,59 @@ mod cheat_tests {
         assert!(g.cheat("gold 5").is_ok());
         let v: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
         assert!(v["items"].as_array().unwrap().len() > 40);
+    }
+}
+
+#[cfg(test)]
+mod v4_tests {
+    use crate::game::{Game, Input};
+    use crate::progress::Progress;
+
+    fn tick(g: &mut Game, n: usize) {
+        for _ in 0..n {
+            g.step(1.0 / 30.0, Input::default());
+        }
+    }
+
+    #[test]
+    fn roll_moves_and_protects() {
+        let mut g = Game::new(7, Progress::default(), 1);
+        g.cheat("tp deep").unwrap();
+        g.player.dir = 2;
+        let (x0, y0) = (g.player.x, g.player.y);
+        assert!(g.use_ability().is_ok());
+        assert!(g.player_invulnerable());
+        let hp = g.player.hp;
+        g.damage_player(50.0);
+        assert_eq!(g.player.hp, hp, "takla sırasında hasar alınmaz");
+        tick(&mut g, 15);
+        assert!((g.player.x - x0).hypot(g.player.y - y0) > 60.0, "takla oyuncuyu taşımalı");
+        assert!(g.player.ability_cd > 3.0, "takla 5 sn bekler");
+        assert!(g.use_ability().is_err());
+    }
+
+    #[test]
+    fn potions_and_dog() {
+        let mut g = Game::new(7, Progress::default(), 1);
+        g.cheat("potions").unwrap();
+        let slot = |g: &Game, id: &str| {
+            g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == id)).unwrap()
+        };
+        let s = slot(&g, "potion_speed");
+        assert!(g.use_slot(s).is_ok());
+        assert!(g.player.speed_t > 0.0);
+        let s = slot(&g, "potion_speed");
+        assert!(g.use_slot(s).is_err(), "bekleme süresi");
+        // köpek: tüccar dışında alınamaz, hileyle verilir ve oyuncuyu takip eder
+        g.progress.gold = 10_000;
+        assert!(g.dog_buy().is_err());
+        g.cheat("dog 3").unwrap();
+        g.cheat("tp deep").unwrap();
+        tick(&mut g, 60);
+        let d = g.dog.as_ref().expect("köpek doğmalı");
+        assert!((d.x - g.player.x).hypot(d.y - g.player.y) < 400.0);
+        g.cheat("spawn walker 2 1").unwrap();
+        tick(&mut g, 200);
+        assert!(g.progress.kills > 0 || g.zombies.iter().any(|z| z.hp < z.max_hp), "köpek saldırmalı");
     }
 }
