@@ -179,3 +179,18 @@ crimson moon, warm orange window light`
 3. W silah + iksir simgeleri, U1–U3 arayüz.
 4. T zemin/nesne/bina/araç.
 5. S sahneler, L1, I1.
+
+---
+
+## Ek: Benim kullandığım ücretsiz yapay zekâ yolu (Stable Horde)
+
+`tools/ai/horde.py` Stable Horde'a (gönüllü GPU ağı, anahtarsız da çalışır) istek atar. En iyi sonuç:
+**AlbedoBase XL (SDXL) + Pixel Art XL LoRA (civitai 120096)**. Örnek: `art/v4/hero_ref_ai_*.webp` (kahraman referansı).
+
+```
+/opt/bvenv/bin/python tools/ai/horde.py --model "AlbedoBase XL (SDXL)" --lora 120096 --w 832 --h 1216 --n 2 \
+  --out /home/user/zx_ai/ab "pixel art game character sprite, full body, ..." "blurry, photo, text, ..."
+```
+Notlar: anonim sırada bekleme 5–10 dk; koyu görseller bazen yanlışlıkla sansürlenir (prompt'a "fully clothed" eklemek yardımcı).
+Tek görsel kaliteli ama 8 yön × animasyon tutarlılığı vermez; bu yüzden oyundaki kareler kod hattından gelir:
+`tools/blender/warrior_b.py` (model) → `tools/blender/render_warrior.py` (2× render) → `tools/pixel/pixelize.py` (palet, kontur, ışık kenarı).

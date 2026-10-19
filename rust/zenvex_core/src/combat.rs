@@ -723,6 +723,7 @@ impl Game {
                 self.player.x = nx;
                 self.player.y = ny;
                 self.player.hurt_t = 1.1;
+                self.player.knocked = true;
                 self.player.atk_active = false;
                 self.events.push(Event::Knockdown);
             }

@@ -29,9 +29,11 @@ PAD = 2
 
 HERO_ANIMS = {"idle": (6, 6, 1), "walk": (8, 10, 1), "run": (8, 14, 1), "punch": (8, 14, 1), "melee": (6, 12, 1),
               "pistol_idle": (2, 3, 1), "pistol_walk": (8, 10, 1), "rifle_idle": (2, 3, 1), "rifle_walk": (8, 10, 1),
-              "cast": (6, 12, 0), "hurt": (2, 10, 0), "death": (6, 9, 0), "ride": (1, 1, 1)}
+              "cast": (6, 12, 0), "hurt": (2, 10, 0), "death": (6, 9, 0), "ride": (1, 1, 1),
+              "roll": (6, 18, 0), "knockdown": (5, 10, 0), "getup": (5, 10, 0)}
+PIX = os.environ.get("ZX_PIX", "/home/user/zx_pix")
 ZOMBIE_ANIMS = {"idle": (4, 4, 1), "walk": (8, 7, 1), "attack": (6, 10, 1), "hurt": (2, 10, 0), "death": (6, 8, 0)}
-HEROES = ["kaan", "nova", "rady", "elif"]
+HEROES = ["kaan"]  # V4: tek kahraman
 ZOMBIES = ["walker", "runner", "dog", "toxic", "dark", "tank", "mystery", "titan"]
 
 
@@ -217,6 +219,36 @@ def collect_actor(group_dir, kind, prefix, anims, attach_out, items, fixed_ancho
     return n
 
 
+def collect_pixel_hero(prefix, items, attach_out=None):
+    """V4 piksel kahraman: <anim>_<yön>_<kare>.png (yön 0-4), 5-7 aynadan. Renk/kontur dokunulmaz (zaten piksel)."""
+    d = os.path.join(PIX, "hero")
+    meta = jload(os.path.join(d, "meta.json")) or {}
+    ax0, ay0 = meta.get("anchor", [150, 262])
+    att = jload(os.path.join(d, "attach.json")) or {}
+    rel = {}
+    n = 0
+    for f in sorted(os.listdir(d)):
+        if not f.endswith(".png"):
+            continue
+        anim, dr, fr = f[:-4].rsplit("_", 2)
+        im = Image.open(os.path.join(d, f)).convert("RGBA")
+        variants = [(int(dr), im, ax0)]
+        if dr in ("1", "2", "3"):
+            variants.append((8 - int(dr), im.transpose(Image.FLIP_LEFT_RIGHT), im.width - ax0))
+        for dd, img, ax in variants:
+            t, x0, y0 = trim(img)
+            items.append((f"{prefix}/{anim}_{dd}_{fr}", t, ax - x0, ay0 - y0))
+            pts = att.get(f"{anim}_{dr}_{fr}")
+            if pts:
+                mir = dd != int(dr)
+                rel[f"{anim}_{dd}_{fr}"] = {k: [round(((ax0 - v[0]) if mir else (v[0] - ax0)) * K3, 1), round((v[1] - ay0) * K3, 1)]
+                                           for k, v in pts.items()}
+            n += 1
+    if attach_out is not None and rel:
+        attach_out[prefix] = rel
+    return n
+
+
 def has3(*p):
     return os.path.isdir(os.path.join(SRC3, *p))
 
@@ -256,13 +288,25 @@ def main():
         it = []
         r3 = SRC3 if has3("heroes", h) else None
         kk = K3 if r3 else 1.0
-        n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
+        if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
+            kk = K3  # piksel karesi 0.0107 m
+            n = collect_pixel_hero(f"h/{h}", it, attach)
+        else:
+            n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
         if it:
             P.pack_group(f"hero_{h}", it, kk)
         print("hero", h, n)
         lob = []
         d = os.path.join(SRC3 if has3("lobby", h) else SRC, "lobby", h)
-        if os.path.isdir(d):
+        if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
+            # lobi: piksel idle kareleri (8 yön)
+            for key, im, ax, ay in it:
+                a = key.split("/")[-1]
+                if a.startswith("idle_"):
+                    _, dd, ff = a.split("_")
+                    lob.append((f"l/{h}/{dd}_{ff}", im, ax, ay))
+            d = ""
+        if d and os.path.isdir(d):
             anc = (180, 400) if d.startswith(SRC3) else (180, 392)
             for f in sorted(os.listdir(d)):
                 if f.endswith(".png"):

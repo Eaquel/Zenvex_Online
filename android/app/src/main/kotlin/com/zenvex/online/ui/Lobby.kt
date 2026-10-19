@@ -184,7 +184,7 @@ private fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
         }
         if (img != null) {
             val dark = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToScale(0.12f, 0.12f, 0.15f, 1f) }) }
-            Image(img, null, Modifier.fillMaxSize().padding(bottom = 26.dp), filterQuality = FilterQuality.High, colorFilter = if (unlocked) null else dark)
+            Image(img, null, Modifier.fillMaxSize().padding(bottom = 26.dp), filterQuality = FilterQuality.None, colorFilter = if (unlocked) null else dark)
         }
         if (!unlocked) Icon("lock", 44.dp, Color.White.copy(alpha = 0.85f), Modifier.align(Alignment.Center))
     }

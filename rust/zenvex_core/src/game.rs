@@ -21,6 +21,9 @@ pub const A_CAST: u8 = 9;
 pub const A_HURT: u8 = 10;
 pub const A_DEATH: u8 = 11;
 pub const A_RIDE: u8 = 12;
+pub const A_ROLL: u8 = 13;
+pub const A_KNOCK: u8 = 14;
+pub const A_GETUP: u8 = 15;
 // zombi animasyonları
 pub const Z_IDLE: u8 = 0;
 pub const Z_WALK: u8 = 1;
@@ -231,6 +234,8 @@ pub struct Player {
     pub inf_ammo: bool,
     pub no_cd: bool,
     pub invis: bool,
+    /// Titan dalgasıyla yere düştü (kalkma animasyonu için)
+    pub knocked: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -670,6 +675,20 @@ impl Game {
             self.pickup_drops();
             return;
         }
+        if self.player.knocked {
+            // yere düşme → kalkma
+            self.player.hurt_t -= dt;
+            let a = if self.player.hurt_t > 0.5 { A_KNOCK } else { A_GETUP };
+            if self.player.anim != a {
+                self.player.anim = a;
+                self.player.anim_t = 0.0;
+            }
+            if self.player.hurt_t <= 0.0 {
+                self.player.knocked = false;
+                self.player.hurt_t = 0.0;
+            }
+            return;
+        }
         if self.player.hurt_t > 0.0 {
             self.player.hurt_t -= dt;
             if self.player.anim != A_HURT {
@@ -1028,7 +1047,7 @@ impl Game {
         p.atk_active = false;
         p.hurt_t = 0.0;
         p.ability_cd = if p.no_cd { 0.0 } else { self.progress.roll_cd() };
-        p.anim = A_RUN;
+        p.anim = A_ROLL;
         p.anim_t = 0.0;
         let (x, y) = (p.x, p.y);
         self.events.push(Event::Roll { x, y });
@@ -1043,7 +1062,7 @@ impl Game {
         let p = &mut self.player;
         p.x = x;
         p.y = y;
-        p.anim_t += dt * 1.6; // koşu karesini hızlı oynat
+        p.anim_t += dt;
         p.roll_t -= dt;
         if p.roll_t <= 0.0 {
             p.roll_t = 0.0;

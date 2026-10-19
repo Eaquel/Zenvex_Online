@@ -107,6 +107,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     // ------------------------------------------------------------------ boyalar
     private val density = resources.displayMetrics.density
     private val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+    /** piksel sanat (kahraman): yumuşatmasız, keskin pikseller */
+    private val pixelPaint = Paint().apply { isFilterBitmap = false; isAntiAlias = false }
     private val alphaPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     private val flashPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = PorterDuffColorFilter(0xB0FFFFFF.toInt(), PorterDuff.Mode.SRC_ATOP) }
     private val tintPaint = Paint(Paint.FILTER_BITMAP_FLAG)
@@ -656,7 +658,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val lightSources = ArrayList<FloatArray>()
 
     private val heroIds = arrayOf("kaan", "nova", "rady", "elif")
-    private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride")
+    private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride", "roll", "knockdown", "getup")
     private val zAnimNames = arrayOf("idle", "walk", "attack", "hurt", "death")
     private val tiers = arrayOf("", "basic", "police", "military", "titan")
     private val keyBuf = StringBuilder(48)
@@ -711,6 +713,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val paint = when {
             flash == 1f -> flashPaint
             flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            prefix.startsWith("h/") -> pixelPaint
             else -> bmpPaint
         }
         // ekipman kodları
