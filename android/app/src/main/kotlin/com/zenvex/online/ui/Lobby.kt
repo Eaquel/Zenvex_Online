@@ -74,12 +74,12 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     val chars = remember(epoch, tick) { GameSession.ui("characters") }
     var dialog by remember { mutableStateOf(if (!Account.loggedIn && !GameSession.prefs().getBoolean("guest_ok", false)) "welcome" else "") }
     var devTaps by remember { mutableIntStateOf(0) }
-    var sel by remember(prof) { mutableIntStateOf(prof.optInt("character")) }
+    val sel = 0
     var dir by remember { mutableIntStateOf(1) }
     LaunchedEffect(Unit) { Account.servers(); if (Account.loggedIn) Account.refresh() }
     val ch = chars.optJSONArray("chars")?.optJSONObject(sel) ?: JSONObject()
     val unlocked = ch.optBoolean("unlocked", sel == 0)
-    val col = HERO_COLORS[sel]
+    val col = Color(0xFFB277FF)
 
     MapBackground(t, dim = 0.38f) {
         // ---- sol: karakter vitrini (sürükleyerek döndür)
@@ -95,14 +95,11 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
                 drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color.Transparent), c, size.height * 0.45f), size.height * 0.45f, c)
             }
             Box(Modifier.align(Alignment.Center).padding(top = 30.dp).size(330.dp, 380.dp)) { HeroSprite(sel, dir, t, unlocked) }
-            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                PxIcon("back", size = 42.dp) { sel = (sel + 3) % 4 }
-                Column(Modifier.width(230.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    PT(ch.optString("name").uppercase(), 26.sp, col, outline = true)
-                    PT(ch.optString("class") + " · Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 13.sp, Px.Text)
-                    PT(ch.optString("ability"), 12.sp, Px.Sub)
-                }
-                PxIcon("next", size = 42.dp) { sel = (sel + 1) % 4 }
+            // tek kahraman: Savaşçı (karakter seviyesi oyunda dolar)
+            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                PT(ch.optString("name").uppercase(), 28.sp, Color(0xFFB277FF), outline = true)
+                PT(ch.optString("class") + " · Karakter Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 13.sp, Px.Text)
+                PT("Takla: bakılan yöne yuvarlan, hasardan kaç", 12.sp, Px.Sub)
             }
         }
         // ---- sol üst: logo

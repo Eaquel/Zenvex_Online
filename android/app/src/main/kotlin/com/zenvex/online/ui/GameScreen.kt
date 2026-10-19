@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat,
+    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog,
 }
 
 /**
@@ -109,7 +109,8 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Merchant -> ShopScreen(close)
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)
-            Overlay.Skills -> SkillsScreen(close)
+            Overlay.Skills -> TreeScreen(close)
+            Overlay.Dog -> DogDialog(close)
             Overlay.Profile -> ProfileScreen(close) {}
             Overlay.Characters -> CharacterScreen(close)
             Overlay.Cosmetics -> CosmeticsScreen(close)
@@ -159,8 +160,8 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxIcon("map", size = 46.dp) { open(Overlay.Map) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
-        PxIcon("star", size = 46.dp, tint = Px.Orange, color = Color(0xCC6A4A1A)) { open(Overlay.Pass) }
-        PxIcon("magic", size = 46.dp, badge = points) { open(Overlay.Skills) }
+        PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
+        PxIcon("paw", size = 46.dp, tint = Color(0xFFE0B070)) { open(Overlay.Dog) }
         PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)
@@ -173,7 +174,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val slots = inv.optJSONArray("slots") ?: JSONArray()
             // aynı türden ilk yığın: bandaj, ilk yardım, yiyecek, enerji
-            val quick = listOf("medkit", "bandage", "food", "energy", "antidote")
+            val quick = listOf("potion_heal", "potion_speed", "potion_power", "medkit", "bandage", "food", "energy", "antidote")
             val shown = ArrayList<Pair<Int, JSONObject>>()
             for (want in quick) {
                 if (shown.size >= 4) break
@@ -234,9 +235,9 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
                 if (Online.online.value) Px.Name else Px.Sub, Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(10.dp))
             val items = listOf(
-                Triple("Devam Et", "play", Overlay.None), Triple("Karakterler", "user", Overlay.Characters),
+                Triple("Devam Et", "play", Overlay.None), Triple("Gelişim", "magic", Overlay.Skills),
                 Triple("Oyuncular", "radio", Overlay.Players), Triple("Klan", "people", Overlay.Clan),
-                Triple("Profil", "profile", Overlay.Profile), Triple("Kozmetik", "hanger", Overlay.Cosmetics),
+                Triple("Profil", "profile", Overlay.Profile), Triple("Köpek", "paw", Overlay.Dog),
                 Triple("Sıralama", "trophy", Overlay.Top), Triple("Hile Paneli", "dev", Overlay.Cheat), Triple("Ayarlar", "gear", Overlay.Settings),
             )
             // iki sütun: küçük ekranda da taşmaz
@@ -360,7 +361,7 @@ private fun MailDialog(close: () -> Unit) {
                 else -> for (i in 0 until l.length()) {
                     val m = l.getJSONObject(i)
                     val items = m.optJSONArray("items") ?: JSONArray()
-                    val gift = m.optInt("gold") > 0 || items.length() > 0
+                    val gift = m.optInt("gold") > 0 || m.optInt("xp") > 0 || items.length() > 0
                     Column(Modifier.fillMaxWidth().background(Px.Row).padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             PT(m.optString("title"), 17.sp, if (m.optBoolean("read")) Px.Text else Px.Clan, Modifier.weight(1f))
@@ -369,6 +370,7 @@ private fun MailDialog(close: () -> Unit) {
                         if (m.optString("body").isNotEmpty()) PT(m.optString("body"), 14.sp, Px.Text, maxLines = 4)
                         if (gift) Row(verticalAlignment = Alignment.CenterVertically) {
                             if (m.optInt("gold") > 0) { Icon("coin", 20.dp, Pal.Gold); PT(" ${m.optInt("gold")}  ", 14.sp, Px.Clan) }
+                            if (m.optInt("xp") > 0) PT("${m.optInt("xp")} XP  ", 14.sp, Color(0xFF8CE0FF))
                             for (k in 0 until items.length()) {
                                 val it = items.getJSONObject(k)
                                 SpriteImage("i/${it.optString("id")}", Modifier.size(26.dp)); PT("x${it.optInt("n")} ", 13.sp)
@@ -378,7 +380,7 @@ private fun MailDialog(close: () -> Unit) {
                             else PxButton("Al", height = 34.dp, size = 15.sp) {
                                 Account.claimMail(m.optLong("id")) { r ->
                                     r.onSuccess { g ->
-                                        val res = GameSession.cmd("mail_claim", "gold" to g.optInt("gold"), "items" to (g.optJSONArray("items") ?: JSONArray()))
+                                        val res = GameSession.cmd("mail_claim", "gold" to g.optInt("gold"), "xp" to g.optInt("xp"), "items" to (g.optJSONArray("items") ?: JSONArray()))
                                         Toaster.show(res.msg, res.ok); GameSession.save(cloud = true); tick++
                                     }.onFailure { Toaster.show(it.message ?: "Hata", false) }
                                 }
@@ -433,5 +435,49 @@ private fun PlayersDialog(close: () -> Unit) {
             }
         }
         PT("Takas için oyuncuya yaklaş, takas tuşu çıkar.", 12.sp, Px.Sub)
+    }
+}
+
+// =========================================================================== köpek
+@Composable
+private fun DogDialog(close: () -> Unit) {
+    var tick by remember { mutableIntStateOf(0) }
+    val d = remember(tick) { GameSession.ui("dog") }
+    PxDialog("Köpek", close, 520.dp) {
+        val near = d.optBoolean("near")
+        if (!d.optBoolean("owned")) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SpriteImage("z/dog/idle_0_0", Modifier.size(90.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    PT("Sadık bir yol arkadaşı", 18.sp)
+                    PT("Seni takip eder, yakındaki zombilere saldırır. Bayılırsa 30 sn sonra döner.", 13.sp, Px.Sub, maxLines = 3)
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            PxButton("Satın al · ${fmt(d.optInt("price"))} altın", Modifier.fillMaxWidth(), if (near) Px.Green else Px.Dark, icon = "paw", size = 17.sp, enabled = near) {
+                val r = GameSession.cmd("dog_buy"); Toaster.show(r.msg, r.ok); tick++
+            }
+            if (!near) PT("Köpeği tüccardan alabilirsin (haritada sarı noktalar).", 13.sp, Px.Clan, maxLines = 2)
+            return@PxDialog
+        }
+        val dead = d.optDouble("dead")
+        PT(if (dead > 0) "Baygın · ${dead.toInt()} sn sonra döner" else "Can: ${d.optDouble("hp").toInt()}", 15.sp, if (dead > 0) Color(0xFFFF8A6A) else Px.Name)
+        Spacer(Modifier.height(8.dp))
+        val stats = d.optJSONArray("stats").objs()
+        for ((i, s) in stats.withIndex()) {
+            Row(Modifier.fillMaxWidth().background(Px.Row).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    PT("${s.optString("name")} · Sv ${s.optInt("lv")}/${s.optInt("max")}", 16.sp)
+                    PT(when (i) { 0 -> "Isırık hasarı ${s.optDouble("val").toInt()}"; 1 -> "En fazla can ${s.optDouble("val").toInt()}"; else -> "Saniyede +${"%.1f".format(s.optDouble("val"))} can" }, 13.sp, Px.Sub)
+                    PxBar(s.optInt("lv") / s.optInt("max", 10).toFloat(), Color(0xFFE0B070), Modifier.width(180.dp), 8.dp)
+                }
+                if (s.optInt("lv") < s.optInt("max")) PxButton("${fmt(s.optInt("cost"))} altın", color = if (near) Px.Green else Px.Dark, size = 14.sp, height = 38.dp, enabled = near) {
+                    val r = GameSession.cmd("dog_up", "stat" to i); Toaster.show(r.msg, r.ok); tick++
+                } else PT("EN YÜKSEK", 14.sp, Px.Clan)
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+        PT(if (near) "Altın: ${fmt(d.optInt("gold"))}" else "Geliştirme tüccarda yapılır.", 13.sp, Px.Clan)
     }
 }

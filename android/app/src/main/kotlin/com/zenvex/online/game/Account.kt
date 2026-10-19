@@ -27,6 +27,8 @@ object Account {
     val clan = mutableStateOf<Clan?>(null)
     val levels = mutableStateMapOf<String, Int>()
     val unread = mutableIntStateOf(0)
+    /** sunucuda is_admin: hile panelinden oyunculara posta gönderebilir */
+    val admin = mutableStateOf(false)
     val online = mutableStateMapOf<String, Int>()
     val status = mutableStateOf("")
     var key = ""
@@ -53,6 +55,7 @@ object Account {
         clan.value = p.optJSONObject("clan")?.let { Clan(it.optLong("id"), it.optString("name"), it.optInt("color"), it.optBoolean("owner")) }
         p.optJSONObject("chars")?.let { c -> levels.clear(); for (k in c.keys()) levels[k] = c.optInt(k) }
         unread.intValue = p.optInt("unread")
+        admin.value = p.optBoolean("admin")
         persist()
     }
 
@@ -130,6 +133,12 @@ object Account {
 
     fun claimMail(mailId: Long, done: (Result<JSONObject>) -> Unit) =
         Supa.rpc("zx_mail_claim", auth().put("p_mail", mailId)) { r -> done(r.map { JSONObject(it) }) }
+
+    /** Yönetici postası: to = oyuncu adı ya da "*" (herkes). items = [{"id":..,"n":..}] */
+    fun adminMail(to: String, title: String, body: String, gold: Int, xp: Int, items: JSONArray, done: (Result<Int>) -> Unit) =
+        Supa.rpc("zx_admin_mail", auth().put("p_to", to).put("p_title", title).put("p_body", body).put("p_gold", gold).put("p_xp", xp).put("p_items", items)) { r ->
+            done(r.map { JSONObject(it).optInt("sent") })
+        }
 
     fun sendMail(to: String, title: String, body: String, done: (String?) -> Unit) =
         Supa.rpc("zx_mail_send", auth().put("p_to", to).put("p_title", title).put("p_body", body)) { r -> done(r.exceptionOrNull()?.message) }

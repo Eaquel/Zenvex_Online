@@ -347,6 +347,12 @@ impl Game {
                 if g > 0 {
                     got.push(format!("{g} altın"));
                 }
+                let xp = v["xp"].as_u64().unwrap_or(0) as u32;
+                if xp > 0 {
+                    let (x, y) = (self.player.x, self.player.y);
+                    self.give_xp(x, y, xp);
+                    got.push(format!("{xp} XP"));
+                }
                 for it in v["items"].as_array().cloned().unwrap_or_default() {
                     let id = it["id"].as_str().unwrap_or("");
                     let n = it["n"].as_u64().unwrap_or(1) as u32;

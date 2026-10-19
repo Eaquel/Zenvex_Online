@@ -55,6 +55,8 @@ interface GameUi {
  */
 @SuppressLint("ViewConstructor")
 private const val CLAN_COLOR = 0xFFF6E05A.toInt()
+/** rust pet.rs D_PET */
+private const val D_PET = 8
 
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
@@ -184,6 +186,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val btnRide = Btn("ride")
     @Volatile private var rideUid: String? = null
     private var nearCache: Online.Near? = null
+    private var abilityCdMax = 5f
     private val buttons = listOf(btnAbility, btnWeapon, btnReload, btnVehicle, btnInteract, btnTrade, btnRide)
 
     // ------------------------------------------------------------------ efektler
@@ -404,6 +407,20 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val y = e.optDouble("y", 0.0).toFloat()
             when (e.getString("t")) {
                 "zhit", "rdmg", "nkill" -> Online.onEvent(e)
+                "roll" -> {
+                    fx("dust", x, y, 120f)
+                    burst(x, y, 10, 0xFF9A8A70.toInt(), 160f, 4f)
+                    Audio.play("swing", 0.6f, 0.8f); vibrate(20, 80)
+                }
+                "dodge" -> floaters += Floater(x, y, "KAÇTI", 0xFFB8F0FF.toInt(), 20f)
+                "potion" -> {
+                    val k = e.optInt("kind")
+                    val (txt, col) = when (k) { 0 -> "Can İksiri" to 0xFFFF6A6A.toInt(); 1 -> "Hız İksiri" to 0xFF6AE0FF.toInt(); else -> "Güç İksiri" to 0xFFFFA040.toInt() }
+                    floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, txt, col, 20f, 1.4f, 1.4f)
+                    fx(if (k == 0) "heal" else "glow", 0f, 0f, 220f, follow = true)
+                    Audio.play("pickup", 0.9f, 1.3f)
+                }
+                "knock" -> { shake(12f, 0.35f); vibrate(120, 255); floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, "YERE DÜŞTÜN", 0xFFFF8A50.toInt(), 22f) }
                 "dmg" -> {
                     fx("blood", x, y + 50, 90f, (Math.random() * 360).toFloat())
                     if (s.damageNumbers) floaters += Floater(x, y, e.getInt("v").toString(),
@@ -424,11 +441,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "invfull" -> ui.onToast("Çanta dolu!")
                 "lvl" -> {
                     fx("levelup", 0f, 0f, 340f, follow = true)
-                    setBanner("SEVİYE ${e.getInt("level")}", "+${e.getInt("points")} yetenek puanı", 0xFFFFD34A.toInt())
+                    setBanner("SEVİYE ${e.getInt("level")}", "+1 skill puanı · skill ağacından bir yol seç", 0xFFFFD34A.toInt())
                     Audio.play("levelup"); vibrate(120, 200)
                     burst(hud[Native.PX], hud[Native.PY], 40, 0xFFFFE070.toInt(), 300f, 5f, 1, 1.2f)
                 }
-                "clvl" -> setBanner("KARAKTER SEVİYESİ ${e.getInt("level")}", "Yetenek güçlendi", 0xFF7FE0FF.toInt())
+                "clvl" -> {
+                    val lv = e.getInt("level")
+                    val perk = GameSession.ui("tree").optJSONArray("perks")?.optString(lv - 1).orEmpty()
+                    setBanner("SAVAŞÇI SEVİYE $lv", perk, 0xFFB277FF.toInt())
+                }
                 "hit" -> {
                     val kind = e.getInt("kind")
                     fx("spark", x, y, 85f, (Math.random() * 360).toFloat())
@@ -548,6 +569,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 Native.D_VEHICLE -> drawVehicle(c, o)
                 Native.D_DRONE -> drawDrone(c, o)
                 Native.D_AREA -> drawArea(c, o)
+                D_PET -> drawPet(c, o)
             }
         }
         drawFx(c)
@@ -662,6 +684,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x)
         var sy = wy(y)
         if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 500) return
+        // aura karakterin altında, zeminde
+        if (who == -1f && hud[Native.CHAR_LEVEL] >= 10 && hud[Native.DEAD] < 0.5f) drawAura(c, sx, sy)
         val prefix: String
         var anim: String
         var actor: String
@@ -746,6 +770,37 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
         }
     }
+
+    /** Savaşçı Sv10 karanlık aura: zeminde dönen mor halka + yükselen kıvılcımlar */
+    private fun drawAura(c: Canvas, sx: Float, sy: Float) {
+        val r = 190f * scale
+        val pulse = 0.75f + 0.25f * sin(time * 3f)
+        fill.shader = RadialGradient(sx, sy, r, intArrayOf(0x00000000, alphaC(0xFF6A2AC0.toInt(), 0.28f * pulse), 0x00000000), floatArrayOf(0.2f, 0.85f, 1f), Shader.TileMode.CLAMP)
+        c.save(); c.scale(1f, 0.55f, sx, sy); c.drawCircle(sx, sy, r, fill); c.restore(); fill.shader = null
+        stroke.color = alphaC(0xFFB070FF.toInt(), 0.5f * pulse); stroke.strokeWidth = 2f * density
+        c.save(); c.scale(1f, 0.55f, sx, sy)
+        for (k in 0 until 3) { val a = time * 70f + k * 120f; c.drawArc(sx - r * 0.9f, sy - r * 0.9f, sx + r * 0.9f, sy + r * 0.9f, a, 60f, false, stroke) }
+        c.restore()
+        if (Settings.current.particles && Math.random() < 0.35)
+            particles += Particle(hud[Native.PX] + ((Math.random() - 0.5) * 300).toFloat(), hud[Native.PY] + ((Math.random() - 0.5) * 160).toFloat(), 10f, 0f, 0f, 70f, 0.9f, 0.9f, 0xFFB070FF.toInt(), 4f, 3)
+    }
+
+    /** Köpek yardımcı: köpek zombi görselleriyle, sıcak tonda ve "Köpek" etiketiyle. */
+    private fun drawPet(c: Canvas, o: Int) {
+        val x = drawBuf[o + 2]; val y = drawBuf[o + 3]
+        val dir = drawBuf[o + 4].toInt()
+        val anim = zAnimNames.getOrElse(drawBuf[o + 5].toInt()) { "idle" }
+        val t = drawBuf[o + 6]
+        val sx = wx(x); val sy = wy(y)
+        if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 400) return
+        val f = frameOf(atlas.zombieAnims, anim, t)
+        val sp = atlas[spriteKey("z/dog", anim, dir, f)] ?: atlas[spriteKey("z/dog", "idle", dir, 0)]
+        if (sp == null) { placeholder(c, sx, sy, 0xFFC08A40.toInt()); return }
+        val paint = if (drawBuf[o + 7] > 0) flashPaint else { tintPaint.colorFilter = petTint; tintPaint }
+        atlas.draw(c, sp, sx, sy, scale, paint)
+        plates += Plate(sx, sy - sp.ay * scale - 2 * density, "Köpek Sv ${drawBuf[o + 9].toInt()}", 0xFF9BE07A.toInt(), drawBuf[o + 8], false, null)
+    }
+    private val petTint = android.graphics.PorterDuffColorFilter(0x40FFB060, PorterDuff.Mode.SRC_ATOP)
 
     private fun drawZombie(c: Canvas, o: Int) {
         val kind = drawBuf[o + 1].toInt()
@@ -1346,7 +1401,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         btnRide.visible = rideUid != null || (nr != null && nr.vehicle >= 2 && hud[Native.IN_VEHICLE] < 0.5f)
         btnReload.visible = hud[Native.AMMO] >= 0
         val cd = hud[Native.ABILITY_CD]
-        roundBtn(c, btnAbility, "ability", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF7A4AE0.toInt(), cd > 0)
+        if (cd > abilityCdMax || cd <= 0f) abilityCdMax = max(cd, 0.1f)
+        roundBtn(c, btnAbility, "roll", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF5A3A8A.toInt(), cd > 0)
         val ammo = hud[Native.AMMO]
         val wlabel = if (ammo >= 0) "${hud[Native.MAG].toInt()}/${ammo.toInt()}" else null
         roundBtn(c, btnWeapon, "weapon", wlabel, 0xFF3A6AA0.toInt(), false)
@@ -1366,10 +1422,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         stroke.color = alphaC(0xFFFFFFFF.toInt(), 0.35f * op + b.flash * 0.5f); stroke.strokeWidth = 2 * density
         c.drawCircle(cx, cy, r, stroke)
         drawIcon(c, icon, cx, cy - (if (label != null && !dim) r * 0.12f else 0f), r * 0.55f, alphaC(Color.WHITE, if (dim) 0.4f else 1f))
-        if (icon == "ability" && dim) {
+        if (icon == "roll" && dim) {
             fill.color = 0x80000000.toInt()
             val cd = hud[Native.ABILITY_CD]
-            c.drawArc(cx - r, cy - r, cx + r, cy + r, -90f, 360f * (cd / 40f).coerceIn(0f, 1f), true, fill)
+            c.drawArc(cx - r, cy - r, cx + r, cy + r, -90f, 360f * (cd / abilityCdMax).coerceIn(0f, 1f), true, fill)
         }
         if (label != null) drawText(c, label, cx, if (dim) cy + r * 0.2f else cy + r * 0.62f, r * (if (dim) 0.62f else 0.36f), Color.WHITE, true)
     }
@@ -1383,6 +1439,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "attack" -> { // kılıç
                 c.drawLine(cx - s * 0.6f, cy + s * 0.6f, cx + s * 0.6f, cy - s * 0.6f, stroke)
                 c.drawLine(cx - s * 0.55f, cy + s * 0.15f, cx - s * 0.15f, cy + s * 0.55f, stroke)
+            }
+            "roll" -> { // takla: kıvrık ok
+                rect.set(cx - s * 0.7f, cy - s * 0.7f, cx + s * 0.7f, cy + s * 0.7f)
+                c.drawArc(rect, 200f, 280f, false, stroke)
+                val a = Math.toRadians(120.0)
+                val ex = cx + cos(a).toFloat() * s * 0.7f; val ey = cy + sin(a).toFloat() * s * 0.7f
+                path.moveTo(ex - s * 0.35f, ey - s * 0.05f); path.lineTo(ex, ey); path.lineTo(ex + s * 0.05f, ey - s * 0.38f)
+                c.drawPath(path, stroke)
             }
             "ability" -> { // yıldız / güç
                 for (k in 0 until 10) {

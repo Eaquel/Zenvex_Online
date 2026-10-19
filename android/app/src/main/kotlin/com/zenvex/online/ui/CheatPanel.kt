@@ -67,7 +67,7 @@ fun DevMenu(onClose: () -> Unit) {
             if (st.optInt("net") == 2) PT("Çevrimiçi katılımcısın: zombi hileleri yalnız ev sahibinde çalışır.", 12.sp, Color(0xFFFFB070), maxLines = 2)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Oyuncu", "Eşya", "Dünya", "Zombi", "Araç/Işınlan", "Konsol").forEachIndexed { i, n ->
+                listOf("Oyuncu", "Eşya", "Dünya", "Zombi", "Araç/Işın", "Posta", "Konsol").forEachIndexed { i, n ->
                     PxButton(n, Modifier.weight(1f), if (tab == i) Px.Green else Px.Dark, size = 13.sp, height = 36.dp) { tab = i }
                 }
             }
@@ -81,8 +81,12 @@ fun DevMenu(onClose: () -> Unit) {
                                 (if (st.optBoolean("god")) "Ölümsüzlük: AÇIK" else "Ölümsüzlük: kapalı") to "god",
                                 (if (st.optBoolean("onehit")) "Tek vuruş: AÇIK" else "Tek vuruş: kapalı") to "onehit",
                                 "Can + enerji doldur" to "heal",
+                                (if (st.optBoolean("infammo")) "Sonsuz mermi: AÇIK" else "Sonsuz mermi: kapalı") to "infammo",
+                                (if (st.optBoolean("nocd")) "Beklemesiz takla/iksir: AÇIK" else "Beklemesiz takla/iksir: kapalı") to "nocd",
+                                (if (st.optBoolean("invis")) "Zombilere görünmez: AÇIK" else "Zombilere görünmez: kapalı") to "invis",
                             ),
-                            ::run, highlight = setOf("god".takeIf { st.optBoolean("god") }, "onehit".takeIf { st.optBoolean("onehit") }),
+                            ::run, highlight = setOf("god".takeIf { st.optBoolean("god") }, "onehit".takeIf { st.optBoolean("onehit") },
+                                "infammo".takeIf { st.optBoolean("infammo") }, "nocd".takeIf { st.optBoolean("nocd") }, "invis".takeIf { st.optBoolean("invis") }),
                         )
                         Section("Hız (şu an ×${"%.1f".format(st.optDouble("speed", 1.0))})")
                         Buttons(listOf("×1" to "speed 1", "×1.5" to "speed 1.5", "×2" to "speed 2", "×3" to "speed 3"), ::run)
@@ -91,11 +95,12 @@ fun DevMenu(onClose: () -> Unit) {
                             listOf(
                                 "+10.000 altın" to "gold 10000", "+100.000 altın" to "gold 100000", "+1.000 elmas" to "gem 1000",
                                 "Seviye 10" to "level 10", "Seviye 30" to "level 30", "Seviye 50" to "level 50", "+5.000 XP" to "xp 5000",
-                                "+10 yetenek puanı" to "points 10", "Karakter Sv 10" to "charlevel 10",
+                                "+10 skill puanı" to "points 10", "Savaşçı Sv 5" to "charlevel 5", "Savaşçı Sv 10" to "charlevel 10",
+                                "Köpek Sv 5" to "dog 5", "Köpek Sv 10" to "dog 10",
                             ), ::run,
                         )
                         Section("Kilitler")
-                        Buttons(listOf("Tüm karakter/kozmetik aç" to "unlock", "Sezon kademesi 30" to "pass 30", "Pass al" to "pass buy", "Elit pass al" to "pass buy elite"), ::run)
+                        Buttons(listOf("Kozmetikleri aç" to "unlock"), ::run)
                     }
                     1 -> {
                         Section("Hazır paketler")
@@ -103,7 +108,7 @@ fun DevMenu(onClose: () -> Unit) {
                             listOf(
                                 "Tüm silahlar" to "weapons", "Mermi ×200" to "ammo", "Tüm malzemeler ×20" to "items",
                                 "Temel set" to "set basic", "Polis seti" to "set police", "Asker seti" to "set military", "Titan seti" to "set titan",
-                                "İlk yardım ×10" to "item medkit 10", "Bandaj ×20" to "item bandage 20", "Çantayı boşalt" to "clearbag",
+                                "İksirler ×5" to "potions", "İlk yardım ×10" to "item medkit 10", "Bandaj ×20" to "item bandage 20", "Çantayı boşalt" to "clearbag",
                             ), ::run,
                         )
                         Section("Tek tek eşya (dokun: 1 adet, uzun liste kaydırılır)")
@@ -112,6 +117,8 @@ fun DevMenu(onClose: () -> Unit) {
                     2 -> {
                         Section("Zaman")
                         Buttons(listOf("Gündüz" to "day", "Gece" to "night", "Saat 06" to "time 6", "Saat 12" to "time 12", "Saat 18" to "time 18", "Saat 22" to "time 22"), ::run)
+                        Section("Zaman hızı (şu an ×${"%.2f".format(st.optDouble("timescale", 1.0))})")
+                        Buttons(listOf("×0.25" to "timescale 0.25", "×0.5" to "timescale 0.5", "×1" to "timescale 1", "×2" to "timescale 2", "×4" to "timescale 4"), ::run)
                     }
                     3 -> {
                         Section("Yanına zombi çağır")
@@ -136,6 +143,7 @@ fun DevMenu(onClose: () -> Unit) {
                             ), ::run,
                         )
                     }
+                    5 -> AdminMail { m, good -> ok = good; log = m }
                     else -> Console(::run)
                 }
             }
@@ -178,6 +186,46 @@ private fun ItemGrid(items: JSONArray, pick: (String) -> Unit) {
             }
         }
     }
+}
+
+/** Yönetici postası: oyuncuya (ya da * ile herkese) altın, XP ve eşya gönder. */
+@Composable
+private fun AdminMail(report: (String, Boolean) -> Unit) {
+    var to by remember { mutableStateOf("") }
+    var title by remember { mutableStateOf("Hediye") }
+    var body by remember { mutableStateOf("") }
+    var gold by remember { mutableStateOf("0") }
+    var xp by remember { mutableStateOf("0") }
+    var item by remember { mutableStateOf("") }
+    var count by remember { mutableStateOf("1") }
+    var busy by remember { mutableStateOf(false) }
+    if (!com.zenvex.online.game.Account.loggedIn) { PT("Önce hesabınla giriş yap.", 14.sp, Px.Sub); return }
+    if (!com.zenvex.online.game.Account.admin.value) { PT("Bu hesapta yönetici yetkisi yok.", 14.sp, Px.Sub); return }
+    PT("Alıcı: oyuncu adı ya da herkese göndermek için *", 13.sp, Px.Sub)
+    Field(to, { to = it.take(16) }, "oyuncu adı / *", Modifier.fillMaxWidth())
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Field(title, { title = it.take(40) }, "konu", Modifier.weight(1f))
+        Field(body, { body = it.take(300) }, "mesaj", Modifier.weight(1.4f))
+    }
+    Spacer(Modifier.height(6.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Field(gold, { gold = it.filter(Char::isDigit).take(7) }, "altın", Modifier.weight(1f))
+        Field(xp, { xp = it.filter(Char::isDigit).take(7) }, "XP", Modifier.weight(1f))
+        Field(item, { item = it.trim().take(24) }, "eşya kimliği (örn medkit)", Modifier.weight(1.6f))
+        Field(count, { count = it.filter(Char::isDigit).take(4) }, "adet", Modifier.weight(0.6f))
+    }
+    Spacer(Modifier.height(8.dp))
+    PxButton(if (busy) "Gönderiliyor…" else "Gönder", Modifier.fillMaxWidth(), Px.Blue, icon = "mail", enabled = !busy && to.isNotBlank()) {
+        val items = JSONArray()
+        if (item.isNotBlank()) items.put(org.json.JSONObject().put("id", item).put("n", count.toIntOrNull() ?: 1))
+        busy = true
+        com.zenvex.online.game.Account.adminMail(to, title.ifBlank { "Hediye" }, body, gold.toIntOrNull() ?: 0, xp.toIntOrNull() ?: 0, items) { r ->
+            busy = false
+            r.onSuccess { report("$it oyuncuya posta gönderildi", true) }.onFailure { report(it.message ?: "Hata", false) }
+        }
+    }
+    PT("Eşya kimlikleri Eşya sekmesindeki listededir (ör. w_ak47, potion_heal, titan_shard).", 12.sp, Px.Sub, maxLines = 2)
 }
 
 @Composable

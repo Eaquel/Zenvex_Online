@@ -213,6 +213,10 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawPath(path(0.15f, 0.38f, 0.85f, 0.38f, 0.66f, 0.2f, close = false), c, style = st)
             drawPath(path(0.85f, 0.62f, 0.15f, 0.62f, 0.34f, 0.8f, close = false), c, style = st)
         }
+        "paw" -> {
+            drawOval(c, p(0.3f, 0.5f), Size(w * 0.4f, w * 0.34f))
+            for ((x, y) in listOf(0.22f to 0.36f, 0.38f to 0.22f, 0.6f to 0.22f, 0.76f to 0.36f)) drawCircle(c, w * 0.09f, p(x, y))
+        }
         "mail" -> {
             drawRoundRect(c, p(0.1f, 0.22f), Size(w * 0.8f, w * 0.56f), CornerRadius(w * 0.06f))
             drawPath(path(0.12f, 0.26f, 0.5f, 0.56f, 0.88f, 0.26f, close = false), Color.Black.copy(alpha = 0.55f), style = thin)
