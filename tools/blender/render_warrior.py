@@ -25,7 +25,7 @@ from character2 import hero_pose, skeleton  # noqa: E402
 from pixelize import pixelize  # noqa: E402
 
 OUT = os.environ.get("ZX_PIX", "/home/user/zx_pix")
-MPP2 = 0.00535  # 2× render; yerel piksel = 0.0107 m (karakter ~165 px, örnek görsellerdeki detay seviyesi)
+MPP2 = 0.0045  # 2× render; yerel piksel = 0.009 m (karakter ~190 px)
 RES = (600, 600)
 ANCHOR = (300, 524)
 # animasyon: (kare, hero_pose adı)
@@ -43,19 +43,19 @@ def pixel_lights(sc):
             o.hide_render = True
     L = bpy.data.lights
     if "Sun" in L:
-        L["Sun"].energy = 5.5
+        L["Sun"].energy = 6.0
         L["Sun"].color = (1.0, 0.92, 0.82)
     if "Fill" in L:
         L["Fill"].energy = 0.2
         L["Fill"].color = (0.6, 0.7, 1.0)
     if "Rim" in L:
-        L["Rim"].energy = 2.8
+        L["Rim"].energy = 3.2
         L["Rim"].color = (0.75, 0.85, 1.0)
     sc.view_settings.view_transform = "Standard"
     sc.view_settings.look = "None"
     bg = sc.world.node_tree.nodes.get("Background")
     if bg:
-        bg.inputs[1].default_value = 0.12
+        bg.inputs[1].default_value = 0.06
 
 
 _BASE = {}
@@ -129,7 +129,7 @@ def render_frame(actor, anim, d, f, frames, path):
     raw = os.path.join(OUT, "raw", os.path.basename(path))
     os.makedirs(os.path.dirname(raw), exist_ok=True)
     B.render_to(raw)
-    pixelize(Image.open(raw)).save(path)
+    pixelize(Image.open(raw), gamma=1.0).save(path)
 
 
 def main(mode):
@@ -143,7 +143,7 @@ def main(mode):
         return
     jobs = []
     if mode == "test":
-        jobs = [("idle", 0, 0), ("idle", 1, 0), ("roll", 1, 0), ("roll", 1, 1), ("roll", 1, 2), ("roll", 1, 3), ("roll", 1, 4), ("knockdown", 2, 4), ("walk", 2, 1), ("run", 2, 3)]
+        jobs = [tuple(int(x) if x.isdigit() else x for x in j.split(":")) for j in os.environ.get("ZX_JOBS", "idle:0:0,idle:1:0,idle:3:0,walk:2:1,run:2:3,punch:1:3").split(",")]
     else:
         for anim, (frames, _) in ANIMS.items():
             for d in DIRS:
@@ -157,7 +157,7 @@ def main(mode):
         render_frame(actor, anim, d, f, ANIMS[anim][0], p)
         if n % 10 == 0:
             print(f"{n + 1}/{len(jobs)} {(time.time() - t0) / (n + 1):.2f} sn/kare", flush=True)
-    json.dump({"anchor": [ANCHOR[0] // 2, ANCHOR[1] // 2], "frames": {a: v[0] for a, v in ANIMS.items()}},
+    json.dump({"anchor": [ANCHOR[0] // 2, ANCHOR[1] // 2], "mpp": MPP2 * 2, "frames": {a: v[0] for a, v in ANIMS.items()}},
               open(os.path.join(OUT, "hero", "meta.json"), "w"))
 
 

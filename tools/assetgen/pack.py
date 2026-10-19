@@ -224,6 +224,7 @@ def collect_pixel_hero(prefix, items, attach_out=None):
     d = os.path.join(PIX, "hero")
     meta = jload(os.path.join(d, "meta.json")) or {}
     ax0, ay0 = meta.get("anchor", [150, 262])
+    kp = meta.get("mpp", 0.0107) / 0.016  # yerel piksel → dünya pikseli
     att = jload(os.path.join(d, "attach.json")) or {}
     rel = {}
     n = 0
@@ -241,7 +242,7 @@ def collect_pixel_hero(prefix, items, attach_out=None):
             pts = att.get(f"{anim}_{dr}_{fr}")
             if pts:
                 mir = dd != int(dr)
-                rel[f"{anim}_{dd}_{fr}"] = {k: [round(((ax0 - v[0]) if mir else (v[0] - ax0)) * K3, 1), round((v[1] - ay0) * K3, 1)]
+                rel[f"{anim}_{dd}_{fr}"] = {k: [round(((ax0 - v[0]) if mir else (v[0] - ax0)) * kp, 1), round((v[1] - ay0) * kp, 1)]
                                            for k, v in pts.items()}
             n += 1
     if attach_out is not None and rel:
@@ -289,7 +290,7 @@ def main():
         r3 = SRC3 if has3("heroes", h) else None
         kk = K3 if r3 else 1.0
         if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
-            kk = K3  # piksel karesi 0.0107 m
+            kk = (jload(os.path.join(PIX, "hero", "meta.json")) or {}).get("mpp", 0.0107) / 0.016  # piksel karesi (m) → dünya
             n = collect_pixel_hero(f"h/{h}", it, attach)
         else:
             n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)

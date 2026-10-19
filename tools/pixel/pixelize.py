@@ -76,7 +76,7 @@ def grade(rgb, gamma=0.78, contrast=1.18, sat=1.3):
     return np.clip(c, 0, 1) * 255.0
 
 
-def pixelize(img, factor=2, dither=0.0, outline=True, selout=True, alpha_cut=0.5, light=True):
+def pixelize(img, factor=2, dither=0.0, outline=True, selout=True, alpha_cut=0.5, light=True, gamma=0.78):
     im = img.convert("RGBA")
     a = np.asarray(im).astype(np.float32)
     h, w = a.shape[0] // factor, a.shape[1] // factor
@@ -86,7 +86,7 @@ def pixelize(img, factor=2, dither=0.0, outline=True, selout=True, alpha_cut=0.5
     wgt = a[..., 3:4] / 255.0
     rgb = (a[..., :3] * wgt).sum(axis=(1, 3)) / np.maximum(wgt.sum(axis=(1, 3)), 1e-6)
     mask = alpha >= alpha_cut
-    rgb = grade(rgb)
+    rgb = grade(rgb, gamma)
     idx = quantize(rgb, dither)
     idx = despeckle(idx, mask)
     out_rgb = PALETTE[idx].astype(np.uint8)
