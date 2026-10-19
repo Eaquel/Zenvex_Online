@@ -5,7 +5,7 @@
 3) her hücre ortanca renge indirilir (JPEG gürültüsü gider),
 4) arka plan (yeşil #00FF00 ya da macenta #FF00FF) ve kenardaki renk sızıntısı şeffaf yapılır.
 
-python3 tools/pixel/ai_clean.py giriş.jpg çıkış.png green|magenta [piksel_boyu]
+python3 tools/pixel/ai_clean.py giriş.jpg çıkış.png auto|green|magenta [piksel_boyu]
 """
 import sys
 
@@ -57,7 +57,37 @@ def clean(src, dst, bg="green", s=None):
             x0, x1 = int(round(ox + i * s + 1)), int(round(ox + (i + 1) * s - 1))
             out[j, i] = np.median(a[y0:max(y1, y0 + 1), x0:max(x1, x0 + 1)].reshape(-1, 3), 0)
     r, g, b = out[..., 0], out[..., 1], out[..., 2]
-    if bg == "magenta":
+    if bg == "auto":
+        # köşelerden arka plan rengi; kenardan taşma doldurma (iç kısımdaki benzer renkler korunur) +
+        # arka plana çok yakın kapalı boşluklar (kol-gövde arası)
+        from collections import deque
+        corners = np.concatenate([out[:3, :3].reshape(-1, 3), out[:3, -3:].reshape(-1, 3), out[-3:, :3].reshape(-1, 3), out[-3:, -3:].reshape(-1, 3)])
+        bgc = np.median(corners, 0)
+        dist = np.sqrt(((out - bgc) ** 2).sum(-1))
+        near = dist < 40
+        hh, ww = near.shape
+        seen = np.zeros_like(near)
+        q = deque([(y, x) for y in range(hh) for x in (0, ww - 1) if near[y, x]] + [(y, x) for x in range(ww) for y in (0, hh - 1) if near[y, x]])
+        for y, x in q:
+            seen[y, x] = True
+        while q:
+            y, x = q.popleft()
+            for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                Y, X = y + dy, x + dx
+                if 0 <= Y < hh and 0 <= X < ww and near[Y, X] and not seen[Y, X]:
+                    seen[Y, X] = True
+                    q.append((Y, X))
+        key = seen | (dist < 14)
+        # kenar sızıntısı: arka plana komşu ve arka plan rengine kayan pikseller → koyu kontur
+        edge = np.zeros_like(key)
+        for dy, dx in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            edge |= np.roll(np.roll(key, dy, 0), dx, 1)
+        edge &= ~key
+        tint = (out - out.mean(-1, keepdims=True)) @ ((bgc - bgc.mean()) / (np.linalg.norm(bgc - bgc.mean()) + 1e-6))
+        fringe = edge & (tint > 12)
+        out[fringe] = out[fringe].mean(-1, keepdims=True) * np.array([0.55, 0.5, 0.55])
+        spill = np.zeros_like(key)
+    elif bg == "magenta":
         key = (r > 150) & (b > 150) & (g < 120)
         spill = (r > g + 60) & (b > g + 60)
     else:

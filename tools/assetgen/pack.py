@@ -71,10 +71,11 @@ def trim(im):
 class Packer:
     def __init__(self):
         self.pages = []  # [Image]
+        self.pixel_pages = set()  # piksel sanat sayfaları: kayıpsız paletli PNG-8
         self.groups = {}
         self.sprites = {}
 
-    def pack_group(self, name, items, k=1.0):
+    def pack_group(self, name, items, k=1.0, pixel=False):
         """items: [(anahtar, Image, ax, ay)] — büyükten küçüğe raf yerleşimi."""
         items = sorted(items, key=lambda t: (-t[1].height, -t[1].width))
         page_ids = []
@@ -93,6 +94,8 @@ class Packer:
                 page = Image.new("RGBA", (PAGE, PAGE), (0, 0, 0, 0))
                 self.pages.append(page)
                 page_ids.append(len(self.pages) - 1)
+                if pixel:
+                    self.pixel_pages.add(len(self.pages) - 1)
                 x = y = shelf = 0
             page.paste(im, (x, y))
             self.sprites[key] = [len(self.pages) - 1, int(x), int(y), int(im.width), int(im.height), round(float(ax), 1), round(float(ay), 1)]
@@ -107,7 +110,7 @@ class Packer:
         for f in os.listdir(out):
             if f.startswith("page_"):
                 os.remove(os.path.join(out, f))
-        jobs = [(i, p, out) for i, p in enumerate(self.pages)]
+        jobs = [(i, p, out, i in self.pixel_pages) for i, p in enumerate(self.pages)]
         from multiprocessing import Pool
         with Pool(os.cpu_count() or 2) as pool:
             names = pool.map(_save_page, jobs)
@@ -115,13 +118,18 @@ class Packer:
 
 
 def _save_page(job):
-    i, p, out = job
+    i, p, out, pixel = job
     # son sayfayı gereksiz boşluktan kırp
     bb = p.getbbox()
     if bb:
         h = min(PAGE, ((bb[3] + 63) // 64) * 64)
         w = min(PAGE, ((bb[2] + 63) // 64) * 64)
         p = p.crop((0, 0, w, h))
+    if pixel:
+        # piksel sanat: 256 renkli palet + kayıpsız PNG (WebP'den küçük, kenarlarda leke yok)
+        fn = f"page_{i:02d}.png"
+        p.quantize(colors=256, method=Image.FASTOCTREE).save(os.path.join(out, fn), "PNG", optimize=True)
+        return fn
     fn = f"page_{i:02d}.webp"
     p.save(os.path.join(out, fn), "WEBP", quality=90, method=4)
     return fn
@@ -300,7 +308,7 @@ def main():
         else:
             n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
         if it:
-            P.pack_group(f"hero_{h}", it, kk)
+            P.pack_group(f"hero_{h}", it, kk, pixel=h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")))
         print("hero", h, n)
         lob = []
         d = os.path.join(SRC3 if has3("lobby", h) else SRC, "lobby", h)
@@ -319,7 +327,7 @@ def main():
                     im, ax, ay = load(os.path.join(d, f), anc, True)
                     lob.append((f"l/{h}/{f[:-4]}", im, ax, ay))
         if lob:
-            P.pack_group(f"lobby_{h}", lob)
+            P.pack_group(f"lobby_{h}", lob, pixel=not d)
     for z in ZOMBIES:
         it = []
         r3 = SRC3 if has3("zombies", z) else None
@@ -331,14 +339,14 @@ def main():
         else:
             n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed, root=r3, k=kk)
         if it:
-            P.pack_group(f"zombie_{z}", it, kk)
+            P.pack_group(f"zombie_{z}", it, kk, pixel=z == "dog" and os.path.isdir(os.path.join(PIX, "zdog")))
         print("zombie", z, n)
     # evcil köpek: seviye görünümleri (1-4, 5-9, 10)
     for sub in ("dog0", "dog5", "dog10"):
         if os.path.isdir(os.path.join(PIX, sub)):
             it = []
             n = collect_pixel_hero(f"p/{sub}", it, None, sub=sub)
-            P.pack_group(f"pet_{sub}", it, pixel_k(sub))
+            P.pack_group(f"pet_{sub}", it, pixel_k(sub), pixel=True)
             print("pet", sub, n)
     # efektler
     fx = []
