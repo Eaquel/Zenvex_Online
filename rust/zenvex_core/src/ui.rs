@@ -818,7 +818,7 @@ impl Game {
         let p = &mut self.progress;
         if premium {
             if !(p.pass.normal || p.pass.elite) {
-                return Err("Premium ödüller için Sezon Pass gerekli".into());
+                return Err("Elit ödüller için Sezon Bileti gerekli".into());
             }
             if p.pass.claimed_premium.contains(&t) {
                 return Err("Zaten alındı".into());
@@ -1101,12 +1101,12 @@ impl Game {
             "pass" => match arg(1) {
                 "buy" | "al" => {
                     self.activate_pass(arg(2) == "elite" || arg(2) == "yuksek");
-                    Ok("Pass etkinleştirildi (test)".into())
+                    Ok("Sezon Bileti etkinleştirildi (test)".into())
                 }
                 _ => {
                     let t = (num(1, 30.0) as u32).min(data::PASS_TIERS);
                     self.progress.pass.xp = t * data::PASS_XP_PER_TIER;
-                    Ok(format!("Pass kademesi {t}"))
+                    Ok(format!("Sezon Bileti kademesi {t}"))
                 }
             },
             "vehicle" | "arac" => {

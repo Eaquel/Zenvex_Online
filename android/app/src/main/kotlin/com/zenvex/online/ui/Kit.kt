@@ -113,7 +113,7 @@ fun T(
     glow: Color? = null,
 ) {
     Text(
-        text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        if (maxLines == 1) text.titleTr() else text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
             fontFamily = if (display) Display else Body, fontSize = size,
             fontWeight = if (bold || display) FontWeight.Bold else FontWeight.Normal,
@@ -341,7 +341,7 @@ fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composa
                 Spacer(Modifier.width(14.dp))
                 Icon(icon, 26.dp, Pal.Gold)
                 Spacer(Modifier.width(8.dp))
-                T(title, 26.sp, Pal.Text, display = true)
+                T(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), 26.sp, Pal.Text, display = true)
                 Spacer(Modifier.weight(1f))
                 right()
             }
@@ -427,7 +427,7 @@ fun ToastPlate(text: String, accent: Color, icon: String) {
         Box(Modifier.size(26.dp).clip(RoundedCornerShape(3.dp)).background(accent.copy(alpha = 0.22f)).border(1.5.dp, accent, RoundedCornerShape(3.dp)),
             contentAlignment = Alignment.Center) { Icon(icon, 16.dp, accent) }
         Spacer(Modifier.width(10.dp))
-        PT(text, 15.sp, Px.Text, maxLines = 2)
+        PT(text.titleTr(), 15.sp, Px.Text, maxLines = 2)
     }
 }
 

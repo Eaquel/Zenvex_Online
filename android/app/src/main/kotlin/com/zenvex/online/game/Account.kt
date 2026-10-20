@@ -124,6 +124,8 @@ object Account {
         Supa.rpc("zx_mail_favorite", auth().put("p_mail", mailId).put("p_on", on)) { r -> done(r.exceptionOrNull()?.message) }
     fun removeMail(mailId: Long, done: (String?) -> Unit) = Supa.rpc("zx_mail_remove", auth().put("p_mail", mailId)) { r -> done(r.exceptionOrNull()?.message) }
 
+    fun requestDelete(done: (String?) -> Unit) = Supa.rpc("zx_request_delete", auth()) { r -> done(r.exceptionOrNull()?.message) }
+
     // ------------------------------------------------------------------ yönetici işlem kuyruğu (oyuncu tarafı)
     fun actionsPull(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_actions_pull", auth()) { r -> done(arr(r)) }
     fun actionsDone(ids: List<Long>) = Supa.rpc("zx_actions_done", auth().put("p_ids", JSONArray(ids))) { }

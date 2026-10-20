@@ -190,3 +190,15 @@ grant execute on function public.zx_actions_pull(bigint, text) to anon, authenti
 grant execute on function public.zx_actions_done(bigint, text, bigint[]) to anon, authenticated;
 grant execute on function public.zx_admin_action(bigint, text, bigint, jsonb) to anon, authenticated;
 grant execute on function public.zx_admin_player(bigint, text, bigint) to anon, authenticated;
+
+-- hesap silme talebi (Ayarlar → Yasal); yönetici 30 gün içinde siler
+alter table public.accounts add column if not exists delete_requested_at timestamptz;
+create or replace function public.zx_request_delete(p_id bigint, p_key text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare a public.accounts := public._zx_auth(p_id, p_key);
+begin
+  update public.accounts set delete_requested_at = now() where id = a.id;
+  perform public._zx_log(a.id, 'delete', 'Hesap silme talebi');
+  return true;
+end $$;
+grant execute on function public.zx_request_delete(bigint, text) to anon, authenticated;

@@ -82,7 +82,23 @@ object Px {
     val Hard = Color(0xFFE8A060)
 }
 
-/** Piksel yazı: sert (bulanıksız) gölge. */
+private val TR = java.util.Locale("tr", "TR")
+
+/**
+ * Türkçe "Her Kelimenin İlk Harfi Büyük": yalnız küçük harfle başlayan kelimelerin ilk harfi büyütülür
+ * (i → İ doğru çevrilir; XP, Sv, rakamlar ve simgeler olduğu gibi kalır).
+ */
+fun String.titleTr(): String {
+    val sb = StringBuilder(length)
+    var start = true
+    for (ch in this) {
+        if (start && ch.isLetter() && ch.isLowerCase()) sb.append(ch.toString().uppercase(TR)) else sb.append(ch)
+        start = ch.isWhitespace() || ch == '(' || ch == '/' || ch == '"' || ch == '·' || ch == '-' || ch == '→'
+    }
+    return sb.toString()
+}
+
+/** Piksel yazı: sert (bulanıksız) gölge. Tek satırlık yazılar (başlık, tuş, etiket) Her Kelime Büyük yazılır. */
 @Composable
 fun PT(
     text: String,
@@ -94,7 +110,7 @@ fun PT(
     outline: Boolean = false,
 ) {
     Text(
-        text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        if (maxLines == 1) text.titleTr() else text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
             fontFamily = PixelFont, fontSize = size,
             shadow = Shadow(Color(0xE6000000), Offset(if (outline) 3f else 2f, if (outline) 3f else 2f), 0f),

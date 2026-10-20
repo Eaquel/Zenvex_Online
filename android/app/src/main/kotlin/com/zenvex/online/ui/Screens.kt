@@ -495,7 +495,7 @@ fun PassScreen(back: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     val p = remember(tick) { GameSession.ui("pass") }
     val t = rememberTime()
-    ScreenFrame("SEZON PASS", "crown", back) {
+    ScreenFrame("Sezon Bileti", "crown", back) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 T(p.optString("season"), 22.sp, Pal.Gold, display = true, glow = Pal.Gold.copy(alpha = 0.4f))
@@ -506,7 +506,7 @@ fun PassScreen(back: () -> Unit) {
                 }
                 T("Sezon sonu ödülü: Tanrı Pelerini — ölümcül anda 3 sn ölümsüzlük, +%20 hız, +%25 hasar", 11.sp, Pal.Sub)
             }
-            PassBuy("SEZON PASS", p.optString("price_normal"), p.optBoolean("normal"), Tone.Blue, "Tüm premium ödüller")
+            PassBuy("Sezon Bileti", p.optString("price_normal"), p.optBoolean("normal"), Tone.Blue, "Tüm elit ödüller")
             Spacer(Modifier.width(10.dp))
             PassBuy("ELİT PASS", p.optString("price_elite"), p.optBoolean("elite"), Tone.Gold, "+10 kademe, özel çerçeve ve etiket")
         }
@@ -607,7 +607,7 @@ fun CosmeticsScreen(back: () -> Unit) {
                     Spacer(Modifier.height(6.dp))
                     if (owned) GButton(if (eq) "ÇIKAR" else "KUŞAN", Modifier.fillMaxWidth(), if (eq) Tone.Dark else Tone.Green, height = 34.dp, size = 12.sp) {
                         val r = GameSession.cmd("equip_cosmetic", "id" to c.optString("id")); Toaster.show(r.msg, r.ok); tick++
-                    } else T("Sezon Pass ödülü", 11.sp, Pal.Sub)
+                    } else T("Sezon Bileti ödülü", 11.sp, Pal.Sub)
                 }
             }
         }
