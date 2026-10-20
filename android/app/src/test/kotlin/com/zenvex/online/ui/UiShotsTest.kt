@@ -52,4 +52,10 @@ class UiShotsTest {
         val data = sample("tree")
         paparazzi.snapshot { TreeView(data) {} }
     }
+
+    @Test
+    fun bagScreen() {
+        val data = sample("inventory")
+        paparazzi.snapshot { BagView(data, 0, true, {}, { _, _ -> com.zenvex.online.game.GameSession.Reply(true, "") }) {} }
+    }
 }

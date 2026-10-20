@@ -154,7 +154,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         while (true) {
             inv = GameSession.ui("inventory")
             points = GameSession.ui("profile").optInt("points")
-            delay(700)
+            delay(400)
         }
     }
     // sol üst (portre/barların altı): harita, görevler, sezon, yetenekler
@@ -174,24 +174,14 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
     Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val slots = inv.optJSONArray("slots") ?: JSONArray()
-            // aynı türden ilk yığın: bandaj, ilk yardım, yiyecek, enerji
-            val quick = listOf("potion_heal", "potion_speed", "potion_power", "medkit", "bandage", "food", "energy", "antidote")
-            val shown = ArrayList<Pair<Int, JSONObject>>()
-            for (want in quick) {
-                if (shown.size >= 4) break
-                for (i in 0 until slots.length()) {
-                    val o = slots.optJSONObject(i) ?: continue
-                    if (o.optString("id") == want) { shown += i to o; break }
-                }
-            }
-            for (k in 0 until 4) {
-                val p = shown.getOrNull(k)
-                QuickSlot(p?.second) {
-                    if (p != null) {
-                        val r = GameSession.cmd("use", "slot" to p.first)
-                        if (r.msg.isNotEmpty()) Toaster.show(r.msg, r.ok)
-                        inv = GameSession.ui("inventory")
-                    }
+            // cepler (çantada sol sütun): basınca kullanılır, bekleme süresi tuşun üstünde
+            for (k in 0 until inv.optInt("pockets", 4)) {
+                val o = slots.optJSONObject(k)
+                PocketButton(o, k) {
+                    if (o == null) { open(Overlay.Bag); return@PocketButton }
+                    val r = GameSession.cmd("use", "slot" to k)
+                    if (r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) Toaster.show(r.msg, r.ok)
+                    inv = GameSession.ui("inventory")
                 }
             }
             PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }

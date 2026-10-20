@@ -473,7 +473,7 @@ impl Progress {
             return Err("Zaten boş");
         }
         let id = target.clone();
-        let used = self.inv.slots.iter().filter(|s| s.is_some()).count();
+        let used = self.inv.slots.iter().skip(crate::inventory::POCKETS).filter(|s| s.is_some()).count();
         if used + 1 > cap_after {
             return Err("Envanterde yer yok");
         }

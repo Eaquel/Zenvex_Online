@@ -440,6 +440,7 @@ impl Game {
     pub fn new(seed: u64, mut progress: Progress, day_index: u32) -> Game {
         progress.character = 0;
         let world = World::generate(seed);
+        progress.inv.migrate();
         let cap = progress.inventory_cap();
         progress.inv.resize(cap);
         progress.ensure_dailies(day_index);

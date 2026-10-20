@@ -37,6 +37,9 @@ fn skin_weapon(cos: &str) -> Option<&'static str> {
     })
 }
 
+/// Bandaj ve ilk yardım çantası arası bekleme (sn)
+const HEAL_ITEM_CD: f32 = 4.0;
+
 impl Game {
     pub fn near_bench(&self) -> bool {
         let (px, py) = (self.player.x, self.player.y);
@@ -173,8 +176,13 @@ impl Game {
                     .iter()
                     .map(|s| match s {
                         Some(s) => {
-                            let mut v = item_json(ITEMS[s.item as usize].id);
+                            let id = ITEMS[s.item as usize].id;
+                            let mut v = item_json(id);
                             v["count"] = json!(s.count);
+                            if let Some((left, max)) = self.item_cd(id) {
+                                v["cd"] = json!(left);
+                                v["cdmax"] = json!(max);
+                            }
                             v
                         }
                         None => Value::Null,
@@ -182,7 +190,7 @@ impl Game {
                     .collect();
                 let e = &g.eq;
                 json!({
-                    "slots": slots, "cap": g.inventory_cap(),
+                    "slots": slots, "cap": g.inventory_cap(), "pockets": crate::inventory::POCKETS,
                     "eq": { "weapon": item_json(&e.weapon), "helmet": item_json(&e.helmet), "jacket": item_json(&e.jacket),
                             "boots": item_json(&e.boots), "bag": item_json(&e.bag), "cloak": item_json(&e.cloak) },
                     "armor": g.armor(), "max_hp": g.max_hp(), "dmg": g.damage_mult(), "speed": g.move_mult(),
@@ -340,6 +348,7 @@ impl Game {
             "unequip" => self.progress.unequip(v["slot"].as_str().unwrap_or("")).map(|_| "Çıkarıldı".into()).map_err(String::from),
             "use" => self.use_slot(int("slot")),
             "drop" => self.drop_slot(int("slot")),
+            "move" => self.progress.inv.move_slot(int("from"), int("to")).map(|_| String::new()).map_err(String::from),
             "sort" => {
                 self.progress.inv.sort();
                 Ok("Sıralandı".into())
@@ -492,6 +501,18 @@ impl Game {
         }
     }
 
+    /// Eşyanın bekleme süresi (kalan, toplam); beklemesi olmayan eşyada None.
+    pub fn item_cd(&self, id: &str) -> Option<(f32, f32)> {
+        let p = &self.player.pot_cd;
+        match id {
+            "potion_heal" => Some((p[0], 30.0)),
+            "potion_speed" => Some((p[1], 60.0)),
+            "potion_power" => Some((p[2], 60.0)),
+            "bandage" | "medkit" => Some((p[3], HEAL_ITEM_CD)),
+            _ => None,
+        }
+    }
+
     pub fn use_slot(&mut self, slot: usize) -> Result<String, String> {
         let s = self
             .progress
@@ -532,6 +553,10 @@ impl Game {
                 if p.hp >= max_hp {
                     return Err("Canın zaten dolu".into());
                 }
+                if p.pot_cd[3] > 0.0 {
+                    return Err(format!("Bekleme: {:.0} sn", p.pot_cd[3]));
+                }
+                p.pot_cd[3] = if p.no_cd { 0.0 } else { HEAL_ITEM_CD };
                 p.hp = (p.hp + d.bonus).min(max_hp);
                 let (x, y) = (p.x, p.y);
                 self.events.push(Event::Heal {
@@ -1158,7 +1183,19 @@ mod v4_tests {
                 }
             }
         }
-        for v in ["tree", "dog", "bag"] {
+        // çanta: ceplerde iksirler (biri beklemede), çantada karışık eşyalar
+        g.cheat("potions").unwrap();
+        g.cheat("item medkit 6").unwrap();
+        g.cheat("item wood 30").unwrap();
+        g.cheat("item cloth 12").unwrap();
+        g.cheat("item w_katana 1").unwrap();
+        for (k, id) in ["potion_heal", "potion_speed", "medkit"].iter().enumerate() {
+            let from = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == *id)).unwrap();
+            g.progress.inv.move_slot(from, k).unwrap();
+        }
+        g.use_slot(1).unwrap();
+        g.step(1.0 / 30.0, crate::game::Input::default());
+        for v in ["tree", "dog", "bag", "inventory"] {
             std::fs::write(format!("{dir}/{v}.json"), g.ui_json(v)).unwrap();
         }
     }
