@@ -103,7 +103,8 @@ object GameSession {
         val now = System.currentTimeMillis()
         if (cloud || now - lastCloud > 60_000) {
             lastCloud = now
-            Account.saveCloud(server.value.id, level, json)
+            val p = ui("profile")
+            Account.saveCloud(server.value.id, level, json, p.optJSONObject("stats")?.optInt("kills") ?: 0, p.optLong("xp_total"))
         }
     }
     private val hudTmp = FloatArray(Native.HUD_SIZE)

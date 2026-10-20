@@ -18,17 +18,17 @@ sleep 8
 adb exec-out screencap -p > artifacts/00_lobby_b.png
 adb shell am force-stop com.zenvex.online
 
-# 2) otomatik gösterim: oyun içi ekranlar (uygulama kendi görüntüsünü alır)
+# 2) otomatik gösterim: uygulama "ZXDEMO: ready <ad>" yazınca ekranı yakala
+adb logcat -c
 adb shell am start -W -n com.zenvex.online/.MainActivity --es screen Loading --ez demo true
-DIR=/sdcard/Android/data/com.zenvex.online/files/demo
-for i in $(seq 1 90); do
-  sleep 2
-  if adb shell "test -f $DIR/done && echo yes" | grep -q yes; then break; fi
-  # uygulama çöktüyse beklemeyi bırak
-  if ! adb shell pidof com.zenvex.online > /dev/null; then echo "UYGULAMA KAPANDI"; break; fi
+mkdir -p artifacts/demo
+timeout 240 adb logcat -v brief -s ZXDEMO:I | while read -r line; do
+  case "$line" in
+    *"ready "*) n=$(echo "$line" | sed 's/.*ready //' | tr -d '\r'); adb exec-out screencap -p > "artifacts/demo/$n.png" < /dev/null ;;
+    *" done"*) break ;;
+  esac
 done
 adb exec-out screencap -p > artifacts/99_last.png
-adb pull "$DIR" artifacts/demo || true
 adb logcat -d > artifacts/logcat.txt
 grep -E "ZXDEMO|FATAL|AndroidRuntime|libzenvex|panicked" artifacts/logcat.txt > artifacts/summary.txt || true
 ls -la artifacts artifacts/demo || true

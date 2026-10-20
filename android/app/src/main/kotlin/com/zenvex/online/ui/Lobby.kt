@@ -103,14 +103,18 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
                 PT("Takla: bakılan yöne yuvarlan, hasardan kaç", 12.sp, Px.Sub)
             }
         }
-        // ---- sol üst: logo
-        Column(Modifier.align(Alignment.TopStart).padding(start = 18.dp, top = 12.dp)) {
-            PT("ZENVEX", 46.sp, Px.Orange, outline = true)
-            PT("O N L I N E", 17.sp, Px.Clan, outline = true)
+        // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
+        val pp = if (Account.loggedIn) Account.profile.value else JSONObject().put("name", prof.optString("name")).put("level", prof.optInt("level", 1))
+        ProfileBadge(pp, !Account.loggedIn, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp)) {
+            dialog = if (Account.loggedIn) "profile" else "welcome"
+        }
+        // ---- üst orta: logo
+        Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            PT("ZENVEX", 40.sp, Px.Orange, outline = true)
+            PT("O N L I N E", 15.sp, Px.Clan, outline = true)
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            AccountCard(Modifier) { if (Account.loggedIn) go(Screen.Settings) else dialog = "welcome" }
             PxIcon("trophy", size = 48.dp, tint = Px.Clan) { dialog = "top" }
             PxIcon("people", size = 48.dp) { dialog = "clans" }
             PxIcon("info", size = 48.dp) { dialog = "news" }
@@ -164,9 +168,11 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         when (dialog) {
             "welcome" -> AccountDialog(first = true) { dialog = ""; tick++ }
             "top" -> TopDialog { dialog = "" }
-            "clans" -> ClanDialog { dialog = "" }
+            "clans" -> ClanScreen({ dialog = "" })
             "news" -> NewsDialog { dialog = "" }
             "dev" -> DevMenu(onClose = { dialog = ""; tick++ })
+            "profile" -> ProfileEditor({ dialog = "" }) { dialog = "rename" }
+            "rename" -> RenameDialog { dialog = "profile" }
         }
     }
 }
@@ -348,69 +354,6 @@ fun TopDialog(close: () -> Unit) {
 }
 
 @Composable
-fun ClanDialog(close: () -> Unit) {
-    var list by remember { mutableStateOf<JSONArray?>(null) }
-    var members by remember { mutableStateOf<JSONArray?>(null) }
-    var err by remember { mutableStateOf("") }
-    var newName by remember { mutableStateOf("") }
-    var tick by remember { mutableIntStateOf(0) }
-    val my = Account.clan.value
-    LaunchedEffect(tick, my?.id) {
-        if (my != null) Account.clanMembers(my.id) { r -> r.onSuccess { members = it }.onFailure { err = it.message ?: "" } }
-        else Account.clans { r -> r.onSuccess { list = it }.onFailure { err = it.message ?: "" } }
-    }
-    PxDialog(if (my != null) "Klan: ${my.name}" else "Klanlar", close, 520.dp) {
-        if (!Account.loggedIn) { PT("Klanlar için önce hesap aç (lobi → sol alt).", 15.sp, Px.Sub, maxLines = 3); return@PxDialog }
-        if (my != null) {
-            Column(Modifier.height(220.dp).verticalScroll(rememberScrollState())) {
-                val m = members
-                if (m == null) PT(err.ifEmpty { "Yükleniyor…" }, 15.sp, Px.Sub)
-                else for (i in 0 until m.length()) {
-                    val o = m.getJSONObject(i)
-                    Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(10.dp).clip(CircleShape).background(if (o.optBoolean("online")) Px.Name else Px.Sub))
-                        Spacer(Modifier.width(8.dp))
-                        PT(o.optString("name") + if (o.optBoolean("owner")) "  (Lider)" else "", 15.sp, modifier = Modifier.weight(1f))
-                        PT("Sv ${o.optInt("level")}", 15.sp, Px.Level)
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            PxButton("Klandan ayrıl", Modifier.fillMaxWidth(), Px.Red, size = 15.sp, height = 38.dp) {
-                Account.leaveClan { e -> if (e != null) Toaster.show(e, false) else { members = null; tick++ } }
-            }
-        } else {
-            Column(Modifier.height(180.dp).verticalScroll(rememberScrollState())) {
-                val l = list
-                if (l == null) PT(err.ifEmpty { "Yükleniyor…" }, 15.sp, Px.Sub, maxLines = 3)
-                else if (l.length() == 0) PT("Henüz klan yok. İlkini sen kur!", 15.sp, Px.Sub)
-                else for (i in 0 until l.length()) {
-                    val o = l.getJSONObject(i)
-                    Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        PT(o.optString("name"), 16.sp, Px.Clan, modifier = Modifier.weight(1f))
-                        PT("${o.optInt("members")}/30", 14.sp, Px.Sub)
-                        Spacer(Modifier.width(8.dp))
-                        PxButton("Katıl", height = 32.dp, size = 13.sp) {
-                            Account.joinClan(o.optLong("id")) { e -> if (e != null) Toaster.show(e, false) else tick++ }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Field(newName, { newName = it.take(20) }, "Yeni klan adı", Modifier.weight(1f))
-                Spacer(Modifier.width(8.dp))
-                PxButton("Kur", height = 44.dp) {
-                    Account.createClan(newName, 0) { e -> if (e != null) Toaster.show(e, false) else tick++ }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun NewsDialog(close: () -> Unit) {
     PxDialog("Haberler", close, 520.dp) {
         Column(Modifier.height(240.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -448,5 +391,18 @@ fun Avatar(ch: Int, frame: Color, size: Dp) {
             }
         }
         FrameRing(frame, Modifier.size(size))
+    }
+}
+
+/** İsim değiştirme (profil düzenleyiciden). */
+@Composable
+fun RenameDialog(close: () -> Unit) {
+    var nick by remember { mutableStateOf(Account.name.value) }
+    PxDialog("İsim Değiştir", close) {
+        Field(nick, { if (it.length <= 16) nick = it }, "Yeni İsim (3-16)", Modifier.fillMaxWidth())
+        Spacer(Modifier.height(10.dp))
+        PxButton("Kaydet", Modifier.fillMaxWidth(), height = 44.dp) {
+            Account.rename(nick) { e -> if (e != null) Toaster.show(e, false) else { Toaster.show("İsim Değişti"); Account.refresh(); close() } }
+        }
     }
 }

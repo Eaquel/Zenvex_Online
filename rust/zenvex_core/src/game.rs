@@ -424,6 +424,8 @@ pub struct Game {
     pub dog: Option<crate::pet::Dog>,
     /// hile: zaman ölçeği
     pub time_scale: f32,
+    /// klan güçlendirmeleri (sunucudan): hasar, tecrübe, hız seviyeleri
+    pub clan_boost: [u8; 3],
     pub events: Vec<Event>,
     pub time: f32,
     pub day_t: f32,
@@ -529,6 +531,7 @@ impl Game {
             hardcore: false,
             dog: None,
             time_scale: 1.0,
+            clan_boost: [0; 3],
             events: Vec::new(),
             time: 0.0,
             day_t: 0.3,
@@ -798,7 +801,7 @@ impl Game {
             } else {
                 m(1.6) * (0.45 + 0.55 * (mlen / 0.6).min(1.0))
             };
-            speed *= self.progress.move_mult() * self.player.speed_cheat;
+            speed *= self.progress.move_mult() * self.player.speed_cheat * (1.0 + 0.02 * self.clan_boost[2] as f32);
             if self.player.speed_t > 0.0 {
                 speed *= 1.25;
             }
@@ -951,7 +954,8 @@ impl Game {
     }
 
     pub fn damage_mult(&self) -> f32 {
-        let mut k = self.progress.damage_mult();
+        // klan hasar güçlendirmesi: seviye başı %2
+        let mut k = self.progress.damage_mult() * (1.0 + 0.02 * self.clan_boost[0] as f32);
         if self.player.power_t > 0.0 {
             k *= 1.2;
         }

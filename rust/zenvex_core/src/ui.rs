@@ -162,6 +162,7 @@ impl Game {
                     "name": g.name, "level": g.level, "xp": g.xp, "xp_next": progress::xp_to_next(g.level), "points": g.tree_points(),
                     "gold": g.gold, "gems": g.gems, "character": c, "char_name": CHARACTERS[c].name, "char_class": CHARACTERS[c].class,
                     "char_level": g.char_level[c], "frame": g.frame, "tag": g.tag,
+                    "xp_total": (1..g.level).map(|l| progress::xp_to_next(l) as u64).sum::<u64>() + g.xp as u64,
                     "tag_name": COSMETICS.iter().find(|x| x.id == g.tag).map_or("", |x| x.name),
                     "costume": g.costume[c], "pass_tier": g.pass_tier(), "pass_normal": g.pass.normal, "pass_elite": g.pass.elite,
                     "city": g.level >= progress::CITY_LEVEL, "zone": world::ZONES_ALL[self.player.zone as usize].name(),
@@ -362,6 +363,35 @@ impl Game {
                 }
                 r
             }
+            // klan deposuna verilen altın / eşya (sunucu kabul ettikten sonra çağrılır)
+            "spend_gold" => {
+                let n = int("n") as u32;
+                if self.progress.gold < n {
+                    Err("Yetersiz altın".into())
+                } else {
+                    self.progress.gold -= n;
+                    Ok(String::new())
+                }
+            }
+            "remove_item" => {
+                let (slot, n) = (int("slot"), int("n") as u16);
+                match self.progress.inv.slots.get_mut(slot) {
+                    Some(Some(s)) if s.count >= n => {
+                        s.count -= n;
+                        if s.count == 0 {
+                            self.progress.inv.slots[slot] = None;
+                        }
+                        Ok(String::new())
+                    }
+                    _ => Err("Eşya bulunamadı".into()),
+                }
+            }
+            "clan_boost" => {
+                for (i, k) in ["dmg", "xp", "speed"].iter().enumerate() {
+                    self.clan_boost[i] = v[*k].as_u64().unwrap_or(0).min(5) as u8;
+                }
+                Ok(String::new())
+            }
             "talk" => {
                 let k = int("npc") as u8;
                 if !self.near_npc(k) && k != 0 {
@@ -433,6 +463,11 @@ impl Game {
                 let mut got = Vec::new();
                 if g > 0 {
                     got.push(format!("{g} altın"));
+                }
+                let gems = v["gems"].as_u64().unwrap_or(0) as u32;
+                if gems > 0 {
+                    self.progress.gems = self.progress.gems.saturating_add(gems);
+                    got.push(format!("{gems} elmas"));
                 }
                 let xp = v["xp"].as_u64().unwrap_or(0) as u32;
                 if xp > 0 {

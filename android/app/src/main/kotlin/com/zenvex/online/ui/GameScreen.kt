@@ -101,6 +101,11 @@ fun GameScreen(toLobby: () -> Unit) {
         overlay = when (overlay) { Overlay.None -> Overlay.Menu; Overlay.Dead -> Overlay.Dead; Overlay.Settings -> Overlay.Menu; else -> Overlay.None }
     }
     val close = { overlay = Overlay.None }
+    // klan güçlendirmeleri oyuna uygulanır (hasar, tecrübe, hız)
+    LaunchedEffect(Account.clan.value) {
+        val b = Account.clan.value?.json?.optJSONObject("boosts")
+        GameSession.cmd("clan_boost", "dmg" to (b?.optInt("dmg") ?: 0), "xp" to (b?.optInt("xp") ?: 0), "speed" to (b?.optInt("speed") ?: 0))
+    }
     // test gösterimi: ekranları sırayla aç ve görüntüle (Demo.kt)
     if (Demo.on) LaunchedEffect(Unit) {
         val act = ctx as android.app.Activity
@@ -154,8 +159,8 @@ fun GameScreen(toLobby: () -> Unit) {
             }
             Overlay.Map -> WorldMapScreen(close)
             Overlay.Trade -> TradeScreen(close)
-            Overlay.Mail -> MailDialog(close)
-            Overlay.Clan -> ClanDialog { overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }
+            Overlay.Mail -> MailScreen(close)
+            Overlay.Clan -> ClanScreen({ overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }, inGame = true)
             Overlay.Top -> TopDialog(close)
             Overlay.Players -> PlayersDialog(close)
             Overlay.Cheat -> DevMenu(close)
@@ -305,78 +310,6 @@ private fun DeadDialog(respawned: () -> Unit, toLobby: () -> Unit) {
 // =========================================================================== harita + seyahat
 
 // =========================================================================== posta
-@Composable
-private fun MailDialog(close: () -> Unit) {
-    var list by remember { mutableStateOf<JSONArray?>(null) }
-    var err by remember { mutableStateOf("") }
-    var tick by remember { mutableIntStateOf(0) }
-    var compose by remember { mutableStateOf(false) }
-    LaunchedEffect(tick) {
-        if (Account.loggedIn) Account.mail { r -> r.onSuccess { list = it }.onFailure { err = it.message ?: "" } }
-    }
-    PxDialog("Posta Kutusu", close, 560.dp) {
-        if (!Account.loggedIn) { PT("Posta için hesap gerekli (Lobi → sol alt → Hesap aç).", 15.sp, Px.Sub, maxLines = 3); return@PxDialog }
-        if (compose) { MailCompose { compose = false }; return@PxDialog }
-        Column(Modifier.height(250.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val l = list
-            when {
-                l == null -> PT(err.ifEmpty { "Yükleniyor…" }, 15.sp, Px.Sub, maxLines = 3)
-                l.length() == 0 -> PT("Posta kutun boş.", 15.sp, Px.Sub)
-                else -> for (i in 0 until l.length()) {
-                    val m = l.getJSONObject(i)
-                    val items = m.optJSONArray("items") ?: JSONArray()
-                    val gift = m.optInt("gold") > 0 || m.optInt("xp") > 0 || items.length() > 0
-                    Column(Modifier.fillMaxWidth().background(Px.Row).padding(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PT(m.optString("title"), 17.sp, if (m.optBoolean("read")) Px.Text else Px.Clan, Modifier.weight(1f))
-                            PT(m.optString("from"), 13.sp, Px.Sub)
-                        }
-                        if (m.optString("body").isNotEmpty()) PT(m.optString("body"), 14.sp, Px.Text, maxLines = 4)
-                        if (gift) Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (m.optInt("gold") > 0) { Icon("coin", 20.dp, Pal.Gold); PT(" ${m.optInt("gold")}  ", 14.sp, Px.Clan) }
-                            if (m.optInt("xp") > 0) PT("${m.optInt("xp")} XP  ", 14.sp, Color(0xFF8CE0FF))
-                            for (k in 0 until items.length()) {
-                                val it = items.getJSONObject(k)
-                                SpriteImage("i/${it.optString("id")}", Modifier.size(26.dp)); PT("x${it.optInt("n")} ", 13.sp)
-                            }
-                            Spacer(Modifier.weight(1f))
-                            if (m.optBoolean("claimed")) PT("Alındı", 14.sp, Px.Sub)
-                            else PxButton("Al", height = 34.dp, size = 15.sp) {
-                                Account.claimMail(m.optLong("id")) { r ->
-                                    r.onSuccess { g ->
-                                        val res = GameSession.cmd("mail_claim", "gold" to g.optInt("gold"), "xp" to g.optInt("xp"), "items" to (g.optJSONArray("items") ?: JSONArray()))
-                                        Toaster.show(res.msg, res.ok); GameSession.save(cloud = true); tick++
-                                    }.onFailure { Toaster.show(it.message ?: "Hata", false) }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.height(8.dp))
-        PxButton("Mektup Yaz", Modifier.fillMaxWidth(), Px.Blue, icon = "mail", size = 16.sp, height = 40.dp) { compose = true }
-    }
-}
-
-@Composable
-private fun MailCompose(done: () -> Unit) {
-    var to by remember { mutableStateOf("") }
-    var title by remember { mutableStateOf("") }
-    var body by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Field(to, { to = it.take(16) }, "Alıcı oyuncu adı", Modifier.fillMaxWidth())
-        Field(title, { title = it.take(40) }, "Konu", Modifier.fillMaxWidth())
-        Field(body, { body = it.take(500) }, "Mesaj", Modifier.fillMaxWidth())
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PxButton("Vazgeç", Modifier.weight(1f), Px.Dark, height = 40.dp, size = 16.sp) { done() }
-            PxButton("Gönder", Modifier.weight(1f), height = 40.dp, size = 16.sp) {
-                Account.sendMail(to, title.ifEmpty { "Mektup" }, body) { e -> if (e != null) Toaster.show(e, false) else { Toaster.show("Gönderildi"); done() } }
-            }
-        }
-    }
-}
-
 // =========================================================================== oyuncular
 @Composable
 private fun PlayersDialog(close: () -> Unit) {

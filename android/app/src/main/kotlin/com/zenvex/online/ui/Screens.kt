@@ -677,35 +677,41 @@ fun ProfileScreen(back: () -> Unit, reset: () -> Unit) {
 fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     var msg by remember { mutableStateOf("") }
-    val channels = listOf("global", "local", "system")
+    val channels = listOf("global", "local", "clan", "dm", "system")
     val lines = Online.chat.filter { it.channel == channels[tab] }
     val state = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) state.animateScrollToItem(lines.size - 1) }
-    Column(modifier.glass(20.dp).padding(12.dp)) {
+    Column(modifier.pxPanel(Color(0xE81E1D19)).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Tabs(listOf("globe" to "Genel", "pin" to "Yakın", "info" to "Sistem"), tab) { tab = it }
+            listOf("Genel", "Yakın", "Klan", "Özel", "Sistem").forEachIndexed { i, n ->
+                Box(Modifier.background(if (i == tab) Px.Panel else Px.PanelDark).clickable { tab = i }.padding(horizontal = 9.dp, vertical = 6.dp)) {
+                    PT(n, 14.sp, if (i == tab) Px.Text else Px.Sub)
+                }
+            }
             Spacer(Modifier.weight(1f))
-            T(if (Online.online.value) "● Çevrimiçi" else "○ Çevrimdışı", 11.sp, if (Online.online.value) Pal.Green else Pal.Sub)
+            Box(Modifier.size(9.dp).clip(CircleShape).background(if (Online.online.value) Px.Name else Px.Sub))
             Spacer(Modifier.width(8.dp))
-            RoundIcon("close", size = 36.dp) { onClose() }
+            PxIcon("close", size = 34.dp) { onClose() }
         }
         Spacer(Modifier.height(8.dp))
+        if (channels[tab] == "dm") { FriendsPanel(Modifier.weight(1f).fillMaxWidth()); return@Column }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state) {
             items(lines) { l ->
-                Row(Modifier.padding(vertical = 3.dp)) {
-                    if (l.tag.isNotEmpty()) T(l.tag + " ", 13.sp, Pal.Gold, bold = true)
-                    T(l.name + ": ", 13.sp, if (l.mine) Pal.Green else if (l.channel == "system") Pal.Orange else Pal.Blue, bold = true)
-                    T(l.text, 13.sp)
+                Row(Modifier.padding(vertical = 2.dp)) {
+                    if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
+                    PT(l.name + ": ", 13.sp, if (l.mine) Px.Name else if (l.channel == "system") Px.Orange else Color(0xFF8CC8FF))
+                    PT(l.text, 13.sp, maxLines = 4)
                 }
             }
         }
-        if (tab != 2 && Online.chatLocked()) {
+        val needClan = channels[tab] == "clan" && Account.clan.value == null
+        if (tab != 4 && (Online.chatLocked() || needClan)) {
             Row(Modifier.fillMaxWidth().pxPanel(Px.PanelDark).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon("lock", 18.dp, Px.Sub)
                 Spacer(Modifier.width(8.dp))
-                PT("Sohbet ${Online.CHAT_LEVEL}. Seviyede Açılır", 14.sp, Px.Sub)
+                PT(if (needClan) "Klan Sohbeti İçin Bir Klana Katıl" else "Sohbet ${Online.CHAT_LEVEL}. Seviyede Açılır", 14.sp, Px.Sub)
             }
-        } else if (tab != 2) Row(verticalAlignment = Alignment.CenterVertically) {
+        } else if (tab != 4) Row(verticalAlignment = Alignment.CenterVertically) {
             var wait by remember { mutableLongStateOf(0L) }
             LaunchedEffect(wait) { if (wait > 0) { delay(200); wait = Online.chatWait() } }
             fun go() {
@@ -713,10 +719,10 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
                 if (err == null) msg = "" else Toaster.show(err, false)
                 wait = Online.chatWait()
             }
-            Field(msg, { if (it.length <= 140) msg = it }, if (tab == 0) "Herkese Yaz…" else "Yakındakilere Yaz…", Modifier.weight(1f)) { go() }
+            Field(msg, { if (it.length <= 140) msg = it }, when (tab) { 0 -> "Herkese Yaz…"; 1 -> "Yakındakilere Yaz…"; else -> "Klanına Yaz…" }, Modifier.weight(1f)) { go() }
             Spacer(Modifier.width(8.dp))
             if (wait > 0) Box(Modifier.size(44.dp).pxPanel(Px.PanelDark), contentAlignment = Alignment.Center) { PT("${(wait + 999) / 1000}", 16.sp, Px.Sub) }
-            else GButton("", tone = Tone.Blue, icon = "play", height = 44.dp) { go() }
+            else PxButton("", height = 44.dp, icon = "play", color = Px.Blue) { go() }
         }
     }
 }

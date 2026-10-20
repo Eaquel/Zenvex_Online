@@ -38,6 +38,7 @@ object Supa {
     /** Eşzamanlı çağrı (arka plan iş parçacığında kullan). Dönen gövde ham JSON metnidir. */
     fun rpcSync(fn: String, args: JSONObject = JSONObject()): String {
         if (!configured) throw RpcError("Sunucu ayarlanmadı")
+        if (!com.zenvex.online.game.Integrity.ok) throw RpcError(com.zenvex.online.game.Integrity.reason)
         val req = Request.Builder()
             .url("${BuildConfig.SB_URL}/rest/v1/rpc/$fn")
             .header("apikey", BuildConfig.SB_KEY)

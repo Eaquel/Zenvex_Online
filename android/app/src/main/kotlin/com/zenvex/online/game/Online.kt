@@ -80,6 +80,7 @@ object Online {
     /** Seçili sunucunun kanalına bağlanır (zaten bağlıysa yalnızca kimliği günceller). */
     fun start(playerName: String, playerTag: String) {
         name = playerName; tag = playerTag
+        if (!Integrity.ok) { status.value = Integrity.reason; return }
         val sid = GameSession.server.value.id
         val me = if (Account.loggedIn) "a${Account.id.value}" else guestId()
         if (channel != null && sid == serverId && me == uid) { trackMe(); return }
@@ -174,6 +175,8 @@ object Online {
             "c" -> {
                 val ch = p.optString("ch", "global")
                 if (ch == "local" && hypot(p.optDouble("x").toFloat() - myX, p.optDouble("y").toFloat() - myY) > 1500f) return
+                // klan sohbeti yalnız aynı klanın üyelerine
+                if (ch == "clan" && (p.optLong("cid") != (Account.clan.value?.id ?: -1L))) return
                 addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), p.optString("g"), false, System.currentTimeMillis()))
             }
             "treq" -> if (p.optString("to") == me) main.post { tradeRequest.value = p.optString("u") to p.optString("n", "Oyuncu") }
@@ -196,6 +199,9 @@ object Online {
     /** Kalan bekleme (ms); 0 ise yazılabilir. */
     fun chatWait(): Long = (CHAT_COOLDOWN_MS - (SystemClock.elapsedRealtime() - lastSend)).coerceAtLeast(0L)
 
+    /** Özel mesaj gönderildi: aynı 3 sn bekleme */
+    fun markSent() { lastSend = SystemClock.elapsedRealtime() }
+
     fun chatLocked(): Boolean = GameSession.hud()[Native.LEVEL] < CHAT_LEVEL
 
     /** Gönderir; olmazsa nedenini döner. */
@@ -203,6 +209,12 @@ object Online {
         val t = text.trim().take(140)
         if (t.isEmpty()) return null
         if (chatLocked()) return "Sohbet $CHAT_LEVEL. Seviyede Açılır"
+        if (channelName == "clan") {
+            val c = Account.clan.value ?: return "Bir Klanda Değilsin"
+            val mu = c.json.optString("muted_until")
+            if (mu.isNotEmpty() && mu != "null" && runCatching { java.time.OffsetDateTime.parse(mu).toInstant().toEpochMilli() > System.currentTimeMillis() }.getOrDefault(false))
+                return "Klan Sohbetinde Susturuldun"
+        }
         val w = chatWait()
         if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
         lastSend = SystemClock.elapsedRealtime()
@@ -211,6 +223,7 @@ object Online {
         val c = channel ?: return null
         val m = JSONObject().put("u", uid).put("n", name).put("g", g).put("m", t).put("ch", channelName)
         if (channelName == "local") m.put("x", myX.toDouble()).put("y", myY.toDouble())
+        if (channelName == "clan") m.put("cid", Account.clan.value?.id ?: 0)
         c.send("c", m)
         if (channelName == "global") Account.postChat(serverId, t)
         return null

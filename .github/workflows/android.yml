@@ -30,7 +30,7 @@ jobs:
       - name: Android NDK kur
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;${NDK_VERSION}" "platforms;android-36" "build-tools;35.0.0" > /dev/null
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
       - uses: dtolnay/rust-toolchain@stable
@@ -91,6 +91,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        # Android 9 (en eski desteklenen) ve Android 15 (16 KB sayfa / kenardan kenara)
+        api: [28, 35]
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +113,7 @@ jobs:
       - name: Emülatörde aç ve gez
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 30
+          api-level: ${{ matrix.api }}
           arch: x86_64
           target: google_apis
           profile: pixel_6
@@ -119,5 +124,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ui-shots
+          name: ui-shots-api${{ matrix.api }}
           path: artifacts/

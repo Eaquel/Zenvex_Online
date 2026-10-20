@@ -46,6 +46,7 @@ class MainActivity : ComponentActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+        com.zenvex.online.game.Integrity.check(this)
         Settings.load(this)
         Account.init(this)
         GameSession.init(this)
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Game -> GameScreen(toLobby = { go(Screen.Lobby) })
                     }
                 }
+                com.zenvex.online.ui.GateHost()
                 ToastHost()
             }
         }

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Yalnız şifreli (HTTPS/WSS) bağlantı; kullanıcı tarafından eklenen sertifikalara güvenilmez (araya girme saldırısına karşı). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

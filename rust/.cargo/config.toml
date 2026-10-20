@@ -1,0 +1,9 @@
+# Android 15+ (16 KB bellek sayfalı cihazlar, Android 17 dahil): yerel kütüphane 16 KB hizalı olmalı.
+[target.aarch64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.x86_64-linux-android]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]
+
+[target.armv7-linux-androideabi]
+rustflags = ["-C", "link-arg=-Wl,-z,max-page-size=16384"]

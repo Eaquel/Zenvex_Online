@@ -640,6 +640,8 @@ impl Game {
 
     pub fn give_xp(&mut self, x: f32, y: f32, xp: u32) {
         let xp = if self.hardcore { xp + xp / 2 } else { xp };
+        // klan tecrübe güçlendirmesi: seviye başı %3
+        let xp = (xp as f32 * (1.0 + 0.03 * self.clan_boost[1] as f32)).round() as u32;
         self.events.push(Event::Xp {
             x,
             y: y - 140.0,

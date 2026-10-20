@@ -10,13 +10,14 @@ plugins {
 
 android {
     namespace = "com.zenvex.online"
-    compileSdk = 35
+    // Android 9 (API 28) ve sonrası; Android 16 (API 36) hedeflenir, Android 17 (API 37) cihazlarda da çalışır
+    compileSdk = 36
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "com.zenvex.online"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
         versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
@@ -47,7 +48,10 @@ android {
             signingConfig = signingConfigs.getByName("shared")
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // R8: kod küçültme + karartma (tersine mühendisliği zorlaştırır, APK küçülür)
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.getByName("shared")
         }
     }
@@ -62,6 +66,10 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    packaging {
+        // 16 KB sayfa hizası: yerel kütüphaneler sıkıştırılmadan, hizalı paketlenir (Android 15-17)
+        jniLibs { useLegacyPackaging = false }
     }
     androidResources {
         noCompress += listOf("png", "json", "wav", "webp", "ogg")

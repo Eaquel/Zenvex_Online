@@ -20,7 +20,7 @@ fun serverById(id: String) = SERVERS.firstOrNull { it.id == id } ?: SERVERS[0]
  * Hesap yoksa oyun çevrimdışı/misafir olarak çalışır; ilerleme cihazda kalır.
  */
 object Account {
-    data class Clan(val id: Long, val name: String, val color: Int, val owner: Boolean)
+    data class Clan(val id: Long, val name: String, val color: Int, val owner: Boolean, val rank: Int = 0, val json: JSONObject = JSONObject())
 
     val id = mutableStateOf(0L)
     val name = mutableStateOf("")
@@ -31,6 +31,10 @@ object Account {
     val admin = mutableStateOf(false)
     val online = mutableStateMapOf<String, Int>()
     val status = mutableStateOf("")
+    /** sunucudaki tam profil (avatar, çerçeve, VIP, etiketler, seviye, öldürme, bildirim sayıları) */
+    val profile = mutableStateOf(JSONObject())
+    /** yasaklıysa: "tarih|neden" */
+    val banned = mutableStateOf<String?>(null)
     var key = ""
         private set
     private lateinit var prefs: android.content.SharedPreferences
@@ -52,7 +56,8 @@ object Account {
     private fun applyProfile(p: JSONObject) {
         id.value = p.optLong("id", id.value)
         name.value = p.optString("name", name.value)
-        clan.value = p.optJSONObject("clan")?.let { Clan(it.optLong("id"), it.optString("name"), it.optInt("color"), it.optBoolean("owner")) }
+        clan.value = p.optJSONObject("clan")?.let { Clan(it.optLong("id"), it.optString("name"), it.optInt("color"), it.optBoolean("owner"), it.optInt("rank"), it) }
+        if (p.has("avatar")) profile.value = p
         p.optJSONObject("chars")?.let { c -> levels.clear(); for (k in c.keys()) levels[k] = c.optInt(k) }
         unread.intValue = p.optInt("unread")
         admin.value = p.optBoolean("admin")
@@ -61,12 +66,82 @@ object Account {
 
     private fun auth() = JSONObject().put("p_id", id.value).put("p_key", key)
 
+    /** Sunucu "BAN|tarih|neden" hatası verirse yasak ekranı gösterilir. */
+    fun checkBan(msg: String?) {
+        if (msg != null && msg.contains("BAN|")) banned.value = msg.substringAfter("BAN|")
+    }
+
+    private fun obj(r: Result<String>) = r.mapCatching { JSONObject(it) }
+    private fun arr(r: Result<String>) = r.mapCatching { JSONArray(it) }
+    private fun txt(r: Result<String>) = r.mapCatching { runCatching { JSONArray("[$it]").optString(0) }.getOrDefault(it) }
+
+    // ------------------------------------------------------------------ bakım
+    /** Bakım durumu: {"on":bool,"msg":".."} (giriş gerekmez) */
+    fun status(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_status") { r -> done(obj(r).map { it.optJSONObject("maintenance") ?: JSONObject() }) }
+
+    // ------------------------------------------------------------------ profil
+    fun setProfile(avatar: Int, frame: String, done: (String?) -> Unit) =
+        Supa.rpc("zx_profile_set", auth().put("p_avatar", avatar).put("p_frame", frame)) { r ->
+            r.onSuccess { applyProfile(JSONObject(it)) }; done(r.exceptionOrNull()?.message)
+        }
+
+    fun viewProfile(name: String, done: (Result<JSONObject>) -> Unit) =
+        Supa.rpc("zx_profile_view", JSONObject().put("p_name", name)) { r -> done(obj(r)) }
+
+    fun topPlayers(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_top2", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
+
+    // ------------------------------------------------------------------ arkadaşlar + özel mesaj
+    fun friends(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_friends", auth()) { r -> done(obj(r)) }
+    fun friendRequest(name: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_friend_request", auth().put("p_name", name)) { r -> done(txt(r)) }
+    fun friendRespond(from: Long, accept: Boolean, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_friend_respond", auth().put("p_from", from).put("p_accept", accept)) { r -> done(txt(r)) }
+    fun friendRemove(other: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_friend_remove", auth().put("p_other", other)) { r -> done(txt(r)) }
+    fun dmSend(to: Long, text: String, done: (Result<JSONObject>) -> Unit) =
+        Supa.rpc("zx_dm_send", auth().put("p_to", to).put("p_text", text)) { r -> done(obj(r)) }
+    fun dmList(with: Long, after: Long, done: (Result<JSONArray>) -> Unit) =
+        Supa.rpc("zx_dm_list", auth().put("p_with", with).put("p_after", after)) { r -> done(arr(r)) }
+
+    // ------------------------------------------------------------------ klan v2
+    fun clanInfo(clanId: Long, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_clan_info", JSONObject().put("p_clan", clanId)) { r -> done(obj(r)) }
+    fun clanInvites(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_clan_invites", auth()) { r -> done(arr(r)) }
+    fun clanInvite(name: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_clan_invite", auth().put("p_name", name)) { r -> done(txt(r)) }
+    fun clanRank(member: Long, rank: Int, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_clan_set_rank", auth().put("p_member", member).put("p_rank", rank)) { r -> done(txt(r)) }
+    fun clanKick(member: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_clan_kick", auth().put("p_member", member)) { r -> done(txt(r)) }
+    fun clanMute(member: Long, minutes: Int, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_clan_mute", auth().put("p_member", member).put("p_minutes", minutes)) { r -> done(txt(r)) }
+    fun clanDeposit(item: String, n: Int, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_clan_deposit", auth().put("p_item", item).put("p_n", n)) { r -> done(txt(r)) }
+    fun clanSend(member: Long, item: String, n: Int, note: String, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_clan_send", auth().put("p_member", member).put("p_item", item).put("p_n", n).put("p_note", note)) { r -> done(txt(r)) }
+    fun clanSettings(officerSend: Boolean, motto: String, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_clan_settings", auth().put("p_officer_send", officerSend).put("p_motto", motto)) { r -> done(txt(r)) }
+    fun clanBoost(kind: String, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_clan_boost", auth().put("p_kind", kind)) { r -> done(obj(r)) }
+    fun clanRanking(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_clan_ranking", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
+
+    // ------------------------------------------------------------------ posta
+    fun favoriteMail(mailId: Long, on: Boolean, done: (String?) -> Unit) =
+        Supa.rpc("zx_mail_favorite", auth().put("p_mail", mailId).put("p_on", on)) { r -> done(r.exceptionOrNull()?.message) }
+    fun removeMail(mailId: Long, done: (String?) -> Unit) = Supa.rpc("zx_mail_remove", auth().put("p_mail", mailId)) { r -> done(r.exceptionOrNull()?.message) }
+
+    // ------------------------------------------------------------------ yönetici
+    fun adminMaintenance(on: Boolean, msg: String, done: (Result<JSONObject>) -> Unit) =
+        Supa.rpc("zx_admin_maintenance", auth().put("p_on", on).put("p_msg", msg)) { r -> done(obj(r)) }
+    fun adminFind(name: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_admin_find", auth().put("p_name", name)) { r -> done(arr(r)) }
+    fun adminBan(target: Long, hours: Int, reason: String, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_admin_ban", auth().put("p_target", target).put("p_hours", hours).put("p_reason", reason)) { r -> done(txt(r)) }
+    fun adminVip(target: Long, days: Int, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_admin_vip", auth().put("p_target", target).put("p_days", days)) { r -> done(txt(r)) }
+    fun adminMail2(to: String, title: String, body: String, gold: Int, gems: Int, xp: Int, items: JSONArray, kind: String, done: (Result<Int>) -> Unit) =
+        Supa.rpc("zx_admin_mail2", auth().put("p_to", to).put("p_title", title).put("p_body", body).put("p_gold", gold).put("p_gems", gems)
+            .put("p_xp", xp).put("p_items", items).put("p_kind", kind)) { r -> done(obj(r).map { it.optInt("sent") }) }
+
     fun refresh(done: (String?) -> Unit = {}) {
         if (!loggedIn) { done("Hesap yok"); return }
         status.value = "Bağlanıyor…"
         Supa.rpc("zx_login", auth()) { r ->
-            r.onSuccess { applyProfile(JSONObject(it)); status.value = "Çevrimiçi"; done(null) }
-                .onFailure { status.value = it.message ?: "Hata"; done(it.message) }
+            r.onSuccess { applyProfile(JSONObject(it)); status.value = "Çevrimiçi"; banned.value = null; done(null) }
+                .onFailure { e -> checkBan(e.message); status.value = e.message ?: "Hata"; done(e.message) }
         }
         servers()
     }
@@ -138,10 +213,14 @@ object Account {
         return runCatching { JSONArray("[$s]").optString(0, "") }.getOrNull()?.takeIf { it.isNotBlank() && it != "null" }
     }
 
-    fun saveCloud(server: String, level: Int, data: String) {
+    /** Kayıt + öldürme ve toplam XP (klan katkısı ve sıralamalar sunucuda bundan hesaplanır). */
+    fun saveCloud(server: String, level: Int, data: String, kills: Int = 0, xpTotal: Long = 0) {
         if (!loggedIn) return
         levels[server] = level
-        Supa.bg { Supa.rpcSync("zx_save", auth().put("p_server", server).put("p_level", level).put("p_data", data)) }
+        Supa.bg {
+            runCatching { Supa.rpcSync("zx_save2", auth().put("p_server", server).put("p_level", level).put("p_data", data).put("p_kills", kills).put("p_xp", xpTotal)) }
+                .onFailure { checkBan(it.message) }
+        }
     }
 
     // ------------------------------------------------------------------ posta
@@ -157,9 +236,6 @@ object Account {
         Supa.rpc("zx_admin_mail", auth().put("p_to", to).put("p_title", title).put("p_body", body).put("p_gold", gold).put("p_xp", xp).put("p_items", items)) { r ->
             done(r.map { JSONObject(it).optInt("sent") })
         }
-
-    fun sendMail(to: String, title: String, body: String, done: (String?) -> Unit) =
-        Supa.rpc("zx_mail_send", auth().put("p_to", to).put("p_title", title).put("p_body", body)) { r -> done(r.exceptionOrNull()?.message) }
 
     // ------------------------------------------------------------------ klan
     fun clans(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_clans") { r -> done(r.map { JSONArray(it) }) }
