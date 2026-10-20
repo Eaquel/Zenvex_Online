@@ -206,6 +206,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     /** kule askerinin fırlattığı mızrak: (x1,y1)→(x2,y2) yay çizerek dur sn'de uçar */
     private class Spear(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val dur: Float) { var t = 0f }
     private val spears = ArrayList<Spear>()
+    /** takla art görüntüsü: kahramanın son karelerinden mor, sönen kopyalar */
+    private class Ghost(val x: Float, val y: Float, val key: String, val flip: Boolean, var life: Float)
+    private val ghosts = ArrayList<Ghost>()
+    private var ghostT = 0f
+    private val ghostPaint = Paint().apply { colorFilter = PorterDuffColorFilter(0xFFB09AFF.toInt(), PorterDuff.Mode.SRC_ATOP) }
     /** tanrıların yıldırımı: zikzak çizgi noktaları + ömür */
     private class Bolt(val x: Float, val y: Float, val pts: FloatArray) { var life = 0.45f }
     private val bolts = ArrayList<Bolt>()
@@ -381,6 +386,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         spears.removeAll { s -> s.t += dt; if (s.t >= s.dur) { burst(s.x2, s.y2 + 50, 6, 0xFF9A8A70.toInt(), 120f, 4f); Audio.play("hit", near(s.x2, s.y2) * 0.7f, 0.8f) }; s.t >= s.dur }
         bolts.removeAll { it.life -= dt; it.life <= 0 }
+        ghosts.removeAll { it.life -= dt; it.life <= 0 }
         whiteFlash = max(0f, whiteFlash - dt * 3f)
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
         for (b in buttons) b.flash = max(0f, b.flash - dt * 3)
@@ -787,6 +793,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (isHero && !back) {
             if (cloak) gear("cloak", "neck")
             if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
+        }
+        if (who == -1f) {
+            // takla: her 35 ms'de bir art görüntü bırak, eskileri sönerek çiz
+            if (anim == "roll" && time - ghostT > 0.035f) { ghosts += Ghost(x, y, key, flip, 0.32f); ghostT = time }
+            for (g in ghosts) {
+                val gs = atlas[g.key] ?: continue
+                ghostPaint.alpha = (g.life / 0.32f * 150).toInt().coerceIn(0, 255)
+                atlas.draw(c, gs, wx(g.x), wy(g.y), scale, ghostPaint, g.flip)
+            }
         }
         atlas.draw(c, sp, sx, sy, scale, paint, flip)
         if (isHero) {
@@ -1896,7 +1911,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "ability" -> { val r = GameSession.cmd("ability"); if (!r.ok && r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) ui.onToast(r.msg) }
             "weapon" -> { val r = GameSession.cmd("cycle_weapon"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
             "reload" -> GameSession.cmd("reload")
-            "vehicle" -> { val r = GameSession.cmd("vehicle"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
+            "vehicle" -> {
+                val wasIn = hud[Native.IN_VEHICLE] > 0.5f
+                val r = GameSession.cmd("vehicle")
+                if (r.ok) {
+                    // binme / inme geçişi: kapı tozu, kısa titreşim, motor ya da kapı sesi
+                    val px = hud[Native.PX]; val py = hud[Native.PY]
+                    fx("dust", px, py, 160f); burst(px, py, 12, 0xFF9A8A70.toInt(), 180f, 4f)
+                    vibrate(25, 120); shake(3f, 0.12f)
+                    Audio.play(if (wasIn) "crate" else "engine", 0.7f, if (wasIn) 1.3f else 1.15f)
+                }
+                if (r.msg.isNotEmpty()) ui.onToast(r.msg)
+            }
             "interact" -> when {
                 nearNpc >= 5 -> ui.onOpen("npc:${nearNpc - 4}")
                 hud[Native.NEAR_MERCHANT] > 0 -> ui.onOpen("npc:1")
