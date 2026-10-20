@@ -87,6 +87,14 @@ pub const STATIC_NAMES: &[&str] = &[
     "fence",
     "trash",
     "cone", // 57-64
+    "quest_board",
+    "med_station",
+    "kennel",
+    "fuel_pump",
+    "anvil",
+    "mailbox",
+    "barricade",
+    "charger", // 65-72 (V6 kamp nesneleri)
 ];
 pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
@@ -336,6 +344,23 @@ impl World {
 
     pub fn ground_at(&self, tx: usize, ty: usize) -> u8 {
         self.ground[ty.min(MAP_TILES - 1) * MAP_TILES + tx.min(MAP_TILES - 1)]
+    }
+
+    /// Tüccarın çevresindeki NPC'lerin yanına iş nesneleri: görev panosu, sağlık masası, köpek kulübesi, benzin pompası.
+    /// (NPC'ler game.rs'de tüccara göre metre cinsinden yerleşir: görevci +2.6/+1.2, doktor -2.6/+1.2, tamirci +4.8/+2.8,
+    /// eğitmen -4.8/+2.8; nesneler onların arkasında.)
+    fn camp_props(&mut self, mx: f32, my: f32) {
+        let u = crate::data::PX_PER_M;
+        for (name, ox, oy, w, h) in [
+            ("quest_board", 2.6, -0.2, 0.6, 0.2),
+            ("med_station", -2.6, -0.1, 0.4, 0.25),
+            ("kennel", -5.6, 1.9, 0.55, 0.4),
+            ("fuel_pump", 5.8, 1.9, 0.3, 0.3),
+            ("charger", 4.0, 1.7, 0.35, 0.25),
+            ("mailbox", 1.2, 2.6, 0.12, 0.12),
+        ] {
+            self.push(name, Kind::Prop, mx + ox * u, my + oy * u, Shape::Rect(w * u, h * u), 0.0, 0.0);
+        }
     }
 
     fn push(&mut self, name: &str, kind: Kind, x: f32, y: f32, shape: Shape, hp: f32, phase: f32) {
@@ -661,6 +686,7 @@ impl World {
             0.0,
         );
         self.merchants.push((172.0 * t, 129.5 * t));
+        self.camp_props(172.0 * t, 129.5 * t);
         self.push(
             "workbench",
             Kind::Bench,
@@ -1057,6 +1083,7 @@ impl World {
             0.0,
         );
         self.merchants.push((cx - 4.0 * t, cy - 1.6 * t));
+        self.camp_props(cx - 4.0 * t, cy - 1.6 * t);
         self.push(
             "workbench",
             Kind::Bench,

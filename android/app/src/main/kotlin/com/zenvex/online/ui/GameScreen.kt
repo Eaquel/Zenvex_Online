@@ -74,7 +74,8 @@ fun GameScreen(toLobby: () -> Unit) {
                 v.post {
                     overlay = when (panel) {
                         "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
-                        "chat" -> Overlay.Chat; "map" -> Overlay.Map; "trade" -> Overlay.Trade; else -> Overlay.Menu
+                        "chat" -> Overlay.Chat; "map" -> Overlay.Map; "trade" -> Overlay.Trade
+                        "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; else -> Overlay.Menu
                     }
                 }
             }

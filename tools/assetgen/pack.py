@@ -79,12 +79,14 @@ class Packer:
         self.sprites = {}
 
     def pack_group(self, name, items, k=1.0, pixel=False):
-        """items: [(anahtar, Image, ax, ay)] — büyükten küçüğe raf yerleşimi."""
+        """items: [(anahtar, Image, ax, ay[, k])] — büyükten küçüğe raf yerleşimi; k öğe başına ölçek (yoksa grup k'si)."""
         items = sorted(items, key=lambda t: (-t[1].height, -t[1].width))
         page_ids = []
         page = None
         x = y = shelf = 0
-        for key, im, ax, ay in items:
+        gk = k
+        for key, im, ax, ay, *kk in items:
+            k = kk[0] if kk else gk
             w, h = im.width + PAD, im.height + PAD
             if w > PAGE or h > PAGE:
                 im = im.resize((min(im.width, PAGE - PAD), min(im.height, PAGE - PAD)))
@@ -266,6 +268,21 @@ def collect_pixel_hero(prefix, items, attach_out=None, sub="hero"):
     return n
 
 
+V6 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v6")
+PX_PER_M = 62.5
+# kamp nesneleri: (genişlik m) — piksel görsel bu dünya genişliğine ölçeklenir, çapa alt orta
+V6_PROPS = {"crate": ("crate", 0.9), "crate_mil": ("milbox", 1.0), "campfire": ("campfire", 1.3), "workbench": ("workbench", 1.7),
+            "quest_board": ("quest_board", 1.5), "med_station": ("med_station", 0.95), "kennel": ("kennel", 1.3),
+            "fuel_pump": ("fuel_pump", 0.75), "charger": ("charger", 0.8), "mailbox": ("mailbox", 0.55),
+            "anvil": ("anvil", 0.8), "barricade": ("barricade", 2.0)}
+# NPC'ler: (görsel, boy m)
+V6_NPCS = {"merchant": 1.85, "soldier": 1.75, "quest": 1.72, "doctor": 1.75, "mechanic": 1.78, "trainer": 1.8}
+
+
+def v6_img(*p):
+    return Image.open(os.path.join(V6, *p)).convert("RGBA")
+
+
 def has3(*p):
     return os.path.isdir(os.path.join(SRC3, *p))
 
@@ -277,14 +294,42 @@ def main():
     world = []
     collect_static("nature", "s", world)
     collect_static("buildings", "s", world)
+    # V6 piksel kamp nesneleri eskilerin yerine (ayrı paletli grup)
+    props = []
+    for key, (fn, w_m) in V6_PROPS.items():
+        f = os.path.join(V6, "objects", fn + ".png")
+        if os.path.exists(f):
+            im = v6_img("objects", fn + ".png")
+            props.append((f"s/{key}", im, im.width / 2, im.height - 1, w_m * PX_PER_M / im.width))
+    keys = {t[0] for t in props}
+    world = [t for t in world if t[0] not in keys]
     P.pack_group("world", world)
     print("world", len(world))
+    P.pack_group("props", props, pixel=True)
+    print("props", len(props))
+    # V6 NPC'ler (tek görünüm; oyun nefes/sallanma hareketini çizerken verir)
+    npcs6 = []
+    for name, h_m in V6_NPCS.items():
+        f = os.path.join(V6, "npc", name + ".png")
+        if os.path.exists(f):
+            im = v6_img("npc", name + ".png")
+            npcs6.append((f"npc/{name}", im, im.width / 2, im.height - 1, h_m * PX_PER_M / im.height))
+    P.pack_group("npc6", npcs6, pixel=True)
     # eşya simgeleri: yeni (yüksek çözünürlük) varsa onu kullan
     items = []
     collect_static("items", "i", items, root=SRC3 if has3("items") else SRC)
     # oyundan kaldırılan eşyalar (ateşli silahlar, mermiler, setler, düşen para) atlasa girmez
     items = [t for t in items if not t[0].split("/", 1)[1].startswith(DROPPED_ITEMS)]
-    P.pack_group("items", items)
+    # V6 piksel simgeler eskilerin yerine
+    d6 = os.path.join(V6, "items")
+    if os.path.isdir(d6):
+        new = {}
+        for f in sorted(os.listdir(d6)):
+            if f.endswith(".png"):
+                im = v6_img("items", f)
+                new[f"i/{f[:-4]}"] = (f"i/{f[:-4]}", im, im.width / 2, im.height - 1)
+        items = [t for t in items if t[0] not in new] + list(new.values())
+    P.pack_group("items", items, pixel=os.path.isdir(d6))
     gear = []
     if not KEEP_GEAR:
         print("gear: atlandı (silah/set parçaları kullanılmıyor)")
@@ -300,11 +345,13 @@ def main():
     collect_dirs("vehicles", "v", veh, actor=True)
     P.pack_group("vehicles", veh)
     r3 = SRC3 if has3("npcs") else None
+    old_npcs = not os.path.isdir(os.path.join(V6, "npc"))  # V6 piksel NPC'ler varsa eski 3D kareler atlasa girmez
     kk = K3 if r3 else 1.0
     npc = []
-    collect_actor("npcs", "soldier", "n/soldier", {"rifle_idle": (2, 3, 1)}, attach, npc, root=r3, k=kk)
-    collect_actor("npcs", "merchant", "n/merchant", {"idle": (6, 5, 1)}, attach, npc, root=r3, k=kk)
-    P.pack_group("npcs", npc, kk)
+    if old_npcs:
+        collect_actor("npcs", "soldier", "n/soldier", {"rifle_idle": (2, 3, 1)}, attach, npc, root=r3, k=kk)
+        collect_actor("npcs", "merchant", "n/merchant", {"idle": (6, 5, 1)}, attach, npc, root=r3, k=kk)
+        P.pack_group("npcs", npc, kk)
     for h in HEROES:
         it = []
         r3 = SRC3 if has3("heroes", h) else None

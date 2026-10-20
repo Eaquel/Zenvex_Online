@@ -356,7 +356,7 @@ pub struct Vehicle {
 
 #[derive(Clone, Debug)]
 pub struct Npc {
-    pub kind: u8, // 0 keskin nişancı, 1 tüccar
+    pub kind: u8, // 0 keskin nişancı, 1 tüccar, 2 görevci, 3 doktor, 4 tamirci, 5 köpek eğitmeni
     pub x: f32,
     pub y: f32,
     pub dir: u8,
@@ -463,14 +463,17 @@ impl Game {
                 anim_t: 0.0,
             })
             .collect();
-        npcs.extend(world.merchants.iter().map(|&(x, y)| Npc {
-            kind: 1,
-            x,
-            y,
-            dir: 0,
-            cd: 0.0,
-            anim_t: 0.0,
-        }));
+        // her pazarda tüccar ve çevresinde kamp NPC'leri (görevci, doktor, tamirci, köpek eğitmeni)
+        let mut scratch = Vec::new();
+        for &(mx, my) in &world.merchants {
+            for (kind, ox, oy) in [(1u8, 0.0, 0.0), (2, 2.6, 1.2), (3, -2.6, 1.2), (4, 4.8, 2.8), (5, -4.8, 2.8)] {
+                let (mut x, mut y) = (mx + m(ox), my + m(oy));
+                if kind != 1 {
+                    world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
+                }
+                npcs.push(Npc { kind, x, y, dir: 0, cd: 0.0, anim_t: (kind as f32) * 0.7 });
+            }
+        }
         Game {
             world,
             progress,

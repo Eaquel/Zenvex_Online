@@ -139,8 +139,8 @@ impl Game {
         if self.progress.dog_owned {
             return Err("Zaten bir köpeğin var".into());
         }
-        if !self.near_merchant() {
-            return Err("Köpeği tüccardan alabilirsin".into());
+        if !self.near_merchant_wide() {
+            return Err("Köpeği kamptaki eğitmenden alabilirsin".into());
         }
         if self.progress.gold < rpg::DOG_PRICE {
             return Err(format!("{} altın gerekli", rpg::DOG_PRICE));
@@ -152,10 +152,10 @@ impl Game {
 
     pub fn dog_upgrade(&mut self, stat: usize) -> Result<String, String> {
         if !self.progress.dog_owned {
-            return Err("Önce tüccardan bir köpek al".into());
+            return Err("Önce kamptaki eğitmenden bir köpek al".into());
         }
-        if !self.near_merchant() {
-            return Err("Geliştirme tüccarda yapılır".into());
+        if !self.near_merchant_wide() {
+            return Err("Geliştirme kamptaki köpek eğitmeninde yapılır".into());
         }
         let lv = *self.progress.dog_lv.get(stat).ok_or("Geçersiz")?;
         if lv >= rpg::DOG_MAX {

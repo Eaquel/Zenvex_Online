@@ -8,6 +8,8 @@ use crate::world;
 use serde_json::{json, Value};
 
 const NEAR: f32 = 150.0;
+const DOCTOR_PRICE: u32 = 20;
+const MECHANIC_PRICE: u32 = 30;
 
 fn item_json(id: &str) -> Value {
     match data::item_index(id) {
@@ -50,6 +52,59 @@ impl Game {
             .merchants
             .iter()
             .any(|&(x, y)| (x - px).hypot(y - py) < NEAR)
+    }
+
+    /// Kamp doktoru: 20 altına canı doldurur, zehri temizler.
+    fn npc_doctor(&mut self) -> Result<String, String> {
+        if !self.near_merchant_wide() {
+            return Err("Doktor kampta".into());
+        }
+        let max = self.progress.max_hp();
+        if self.player.hp >= max - 0.5 && self.player.poison_t <= 0.0 {
+            return Err("Sağlığın yerinde".into());
+        }
+        if self.progress.gold < DOCTOR_PRICE {
+            return Err(format!("{DOCTOR_PRICE} altın gerekli"));
+        }
+        self.progress.gold -= DOCTOR_PRICE;
+        self.player.hp = max;
+        self.player.poison_t = 0.0;
+        Ok(format!("Doktor yaralarını sardı (-{DOCTOR_PRICE} altın)"))
+    }
+
+    /// Kamp tamircisi: 12 m içindeki araçları onarır ve yakıtı 100'e tamamlar (30 altın).
+    fn npc_mechanic(&mut self) -> Result<String, String> {
+        if !self.near_merchant_wide() {
+            return Err("Tamirci kampta".into());
+        }
+        let (px, py) = (self.player.x, self.player.y);
+        let r = crate::game::m(12.0);
+        let near: Vec<usize> = (0..self.vehicles.len())
+            .filter(|&i| {
+                let v = &self.vehicles[i];
+                (v.x - px).hypot(v.y - py) < r && (v.hp < data::VEHICLES[v.kind].hp || v.fuel < 100.0 || v.wrecked)
+            })
+            .collect();
+        if near.is_empty() {
+            return Err("Yakında tamir edilecek araç yok".into());
+        }
+        if self.progress.gold < MECHANIC_PRICE {
+            return Err(format!("{MECHANIC_PRICE} altın gerekli"));
+        }
+        self.progress.gold -= MECHANIC_PRICE;
+        for i in near.iter().copied() {
+            let v = &mut self.vehicles[i];
+            v.hp = data::VEHICLES[v.kind].hp;
+            v.fuel = 100.0;
+            v.wrecked = false;
+        }
+        Ok(format!("{} araç onarıldı (-{MECHANIC_PRICE} altın)", near.len()))
+    }
+
+    /// Kamp NPC'leri tüccarın çevresinde ~6 m içinde durur.
+    pub(crate) fn near_merchant_wide(&self) -> bool {
+        let (px, py) = (self.player.x, self.player.y);
+        self.world.merchants.iter().any(|&(x, y)| (x - px).hypot(y - py) < crate::game::m(6.4))
     }
 
     fn buy_price(&self, base: u32) -> u32 {
@@ -334,6 +389,8 @@ impl Game {
             "tree_unlock" => self.progress.tree_unlock(v["id"].as_u64().unwrap_or(0) as u16),
             "tree_reset" => self.progress.tree_reset(),
             "dog_buy" => self.dog_buy(),
+            "doctor" => self.npc_doctor(),
+            "mechanic" => self.npc_mechanic(),
             "dog_up" => self.dog_upgrade(int("stat")),
             "set_rules" => {
                 self.hardcore = v["hardcore"].as_bool().unwrap_or(false);
@@ -1087,6 +1144,22 @@ mod v4_tests {
     }
 
     #[test]
+    fn camp_npcs_serve() {
+        let mut g = Game::new(7, Progress::default(), 1);
+        assert!(g.npcs.iter().any(|n| n.kind == 3) && g.npcs.iter().any(|n| n.kind == 5), "kamp NPC'leri");
+        g.progress.gold = 100;
+        g.player.hp = 10.0;
+        assert!(g.command(r#"{"cmd":"doctor"}"#).contains("ok"));
+        assert!(g.player.hp >= g.progress.max_hp() - 0.5);
+        assert_eq!(g.progress.gold, 80);
+        g.cheat("vehicle bike").unwrap();
+        g.vehicles.last_mut().unwrap().fuel = 10.0;
+        g.command(r#"{"cmd":"mechanic"}"#);
+        assert_eq!(g.vehicles.last().unwrap().fuel, 100.0);
+        assert_eq!(g.progress.gold, 50);
+    }
+
+    #[test]
     fn roll_moves_and_protects() {
         let mut g = Game::new(7, Progress::default(), 1);
         g.cheat("tp deep").unwrap();
@@ -1115,11 +1188,11 @@ mod v4_tests {
         assert!(g.player.speed_t > 0.0);
         let s = slot(&g, "potion_speed");
         assert!(g.use_slot(s).is_err(), "bekleme süresi");
-        // köpek: tüccar dışında alınamaz, hileyle verilir ve oyuncuyu takip eder
+        // köpek: kamptaki eğitmen dışında alınamaz, hileyle verilir ve oyuncuyu takip eder
         g.progress.gold = 10_000;
+        g.cheat("tp deep").unwrap();
         assert!(g.dog_buy().is_err());
         g.cheat("dog 3").unwrap();
-        g.cheat("tp deep").unwrap();
         tick(&mut g, 60);
         let d = g.dog.as_ref().expect("köpek doğmalı");
         assert!((d.x - g.player.x).hypot(d.y - g.player.y) < 400.0);

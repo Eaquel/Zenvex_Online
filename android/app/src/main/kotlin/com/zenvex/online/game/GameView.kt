@@ -559,6 +559,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         drawGround(c)
         plates.clear()
+        nearNpc = -1; nearNpcD = Float.MAX_VALUE
         val px = hud[Native.PX]; val py = hud[Native.PY]
         for (i in 0 until drawN) {
             val o = i * Native.STRIDE
@@ -622,7 +623,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val w = sp.w * scale; val h = sp.h * scale
         // ekran dışı ise atla
         if (sx + w < 0 || sx - w > sw || sy - h > sh || sy + h * 0.3f < 0) return
-        var paint: Paint = bmpPaint
+        var paint: Paint = if (sp.k != 1f) pixelPaint else bmpPaint  // V6 piksel kamp nesneleri keskin çizilir
         // ağaç / bina arkasında kalan oyuncuyu göstermek için saydamlaştır
         if (Settings.current.treeFade && (kind == 0 || kind == 4 || kind == 11) && py < y - 10) {
             val l = x - sp.ax; val r = x - sp.ax + sp.w
@@ -686,6 +687,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x)
         var sy = wy(y)
         if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 500) return
+        if (ch >= 4 && drawNpc6(c, ch, x, y, sx, if (who <= -3f) sy - 235f * scale else sy, dir, t)) return
         // aura karakterin altında, zeminde
         if (who == -1f && hud[Native.CHAR_LEVEL] >= 10 && hud[Native.DEAD] < 0.5f) drawAura(c, sx, sy)
         val prefix: String
@@ -776,6 +778,55 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
         }
+    }
+
+    // ------------------------------------------------------------------ V6 NPC'ler
+    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer")
+    private val npc6Plate = arrayOf(null, "Tüccar" to "Alışveriş", "Görevci" to "Günlük görevler", "Doktor" to "Tedavi · 20 altın",
+        "Tamirci" to "Araç tamiri · 30 altın", "Köpek Eğitmeni" to "Köpek al / geliştir")
+    private val npc6Bmp = HashMap<String, android.graphics.Bitmap?>()
+    private val meshW = 4
+    private val meshH = 10
+    private val meshVerts = FloatArray((meshW + 1) * (meshH + 1) * 2)
+    /** Yakındaki konuşulabilir NPC (karakter kodu 5-9), her karede çizim sırasında güncellenir. */
+    private var nearNpc = -1
+    private var nearNpcD = Float.MAX_VALUE
+
+    /**
+     * Piksel NPC: tek görsel, çalışma anında ızgara (mesh) ile canlandırılır — göğüs nefesle genişler ve kalkar,
+     * üst gövde hafifçe salınır; ek animasyon karesi yok (APK'ya yük yok). Görseller sağa bakar; oyuncu soldaysa aynalanır.
+     */
+    private fun drawNpc6(c: Canvas, ch: Int, x: Float, y: Float, sx: Float, sy: Float, dir: Int, t: Float): Boolean {
+        val name = npc6Names.getOrNull(ch - 4) ?: return false
+        val key = "npc/$name"
+        val sp = atlas[key] ?: return false
+        val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return false
+        val k = sp.k * scale
+        val w = sp.w * k; val h = sp.h * k
+        val left = sx - sp.ax * k; val top = sy - sp.ay * k
+        val flip = dir in 5..7
+        val ph = ch * 1.7f
+        val breath = sin(t * 2.1f + ph)
+        val sway = sin(t * 1.05f + ph * 0.6f)
+        var i = 0
+        for (j in 0..meshH) {
+            val v = j.toFloat() / meshH
+            val up = ((0.62f - v) / 0.62f).coerceIn(0f, 1f)
+            for (q in 0..meshW) {
+                val u = q.toFloat() / meshW
+                var vx = left + u * w + (u - 0.5f) * w * 0.014f * breath * up + sway * w * 0.012f * (1 - v) * (1 - v)
+                val vy = top + v * h - h * 0.006f * (breath + 1f) * up
+                if (flip) vx = 2 * sx - vx
+                meshVerts[i++] = vx; meshVerts[i++] = vy
+            }
+        }
+        fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
+        c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, pixelPaint)
+        val px = hud[Native.PX]; val py = hud[Native.PY]
+        val d = kotlin.math.hypot(px - x, py - y)
+        if (ch >= 6 && d < 170f && d < nearNpcD) { nearNpc = ch; nearNpcD = d }
+        npc6Plate.getOrNull(ch - 4)?.let { (n, sub) -> plates += Plate(sx, top - 4 * density, n, 0xFFFFD34A.toInt(), -1f, false, sub) }
+        return true
     }
 
     /** Savaşçı Sv10 karanlık aura: zeminde dönen mor halka + yükselen kıvılcımlar */
@@ -884,7 +935,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         val sp = itemSprites.getOrNull(item)
         rect.set(sx - sz / 2, sy - sz + bob, sx + sz / 2, sy + bob)
-        if (sp != null) atlas.drawFit(c, sp, rect, bmpPaint) else { fill.color = col; c.drawCircle(sx, sy - sz / 2 + bob, sz / 3, fill) }
+        if (sp != null) atlas.drawFit(c, sp, rect, pixelPaint) else { fill.color = col; c.drawCircle(sx, sy - sz / 2 + bob, sz / 3, fill) }
+        // nadir eşyalarda yükselen ışık zerreleri
+        if (rarity >= 2 && Settings.current.particles && Math.random() < 0.08)
+            particles += Particle(x + ((Math.random() - 0.5) * 30).toFloat(), y, 12f, 0f, 0f, 45f, 0.9f, 0.9f, col, 3f, 3)
         if (count > 1) drawText(c, "x$count", sx + sz * 0.35f, sy + bob, 11 * density, Color.WHITE)
     }
 
@@ -1425,7 +1479,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         // hızlı tuşlar
         btnVehicle.visible = hud[Native.NEAR_VEHICLE] > 0 || hud[Native.IN_VEHICLE] > 0
-        btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0
+        btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0 || nearNpc >= 6
         nearCache = Online.nearest(220f)
         val nr = nearCache
         btnTrade.visible = nr != null && nr.dist < 170f && hud[Native.IN_VEHICLE] < 0.5f && rideUid == null
@@ -1441,7 +1495,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (btnVehicle.visible) roundBtn(c, btnVehicle, if (hud[Native.IN_VEHICLE] > 0) "exit" else "car", null, 0xFF2E8A5A.toInt(), false)
         if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
         if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", null, 0xFF8A5AC0.toInt(), false)
-        if (btnInteract.visible) roundBtn(c, btnInteract, if (hud[Native.NEAR_MERCHANT] > 0) "shop" else "craft", null, 0xFFC08A20.toInt(), false)
+        if (btnInteract.visible) {
+            if (nearNpc >= 6 && hud[Native.NEAR_MERCHANT] <= 0) roundBtn(c, btnInteract, "chat", "Konuş", 0xFFC08A20.toInt(), false)
+            else roundBtn(c, btnInteract, if (hud[Native.NEAR_MERCHANT] > 0) "shop" else "craft", null, 0xFFC08A20.toInt(), false)
+        }
     }
 
     private fun roundBtn(c: Canvas, b: Btn, icon: String, label: String?, color: Int, dim: Boolean, small: Boolean = false) {
@@ -1613,7 +1670,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "weapon" -> { val r = GameSession.cmd("cycle_weapon"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
             "reload" -> GameSession.cmd("reload")
             "vehicle" -> { val r = GameSession.cmd("vehicle"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
-            "interact" -> ui.onOpen(if (hud[Native.NEAR_MERCHANT] > 0) "merchant" else "craft")
+            "interact" -> when {
+                hud[Native.NEAR_MERCHANT] > 0 -> ui.onOpen("merchant")
+                nearNpc == 6 -> ui.onOpen("quests")
+                nearNpc == 7 -> { val r = GameSession.cmd("doctor"); ui.onToast(r.msg) }
+                nearNpc == 8 -> { val r = GameSession.cmd("mechanic"); ui.onToast(r.msg) }
+                nearNpc == 9 -> ui.onOpen("dog")
+                else -> ui.onOpen("craft")
+            }
             "trade" -> nearCache?.let { Online.requestTrade(it.uid); ui.onOpen("trade") }
             "ride" -> {
                 if (rideUid != null) {

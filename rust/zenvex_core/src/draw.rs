@@ -234,10 +234,11 @@ impl Game {
                 continue;
             }
             // keskin nişancı kulede: kule yüksekliği kadar yukarıda çizilir
+            // karakter kodu: 4 asker, 5 tüccar, 6 görevci, 7 doktor, 8 tamirci, 9 köpek eğitmeni
             let (ch, anim, lift) = if n.kind == 0 {
                 (4.0, A_RIFLE_IDLE as f32, 1.0)
             } else {
-                (5.0, A_IDLE as f32, 0.0)
+                (4.0 + n.kind as f32, A_IDLE as f32, 0.0)
             };
             self.draw_tmp.push((
                 n.y + 2.0,
