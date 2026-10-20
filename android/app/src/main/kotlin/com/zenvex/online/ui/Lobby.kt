@@ -242,6 +242,19 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                 }
                 return@PxPanel
             }
+            // Google ile tek dokunuşla giriş (yoksa hesap açılır)
+            PxButton(if (busy) "Bekle…" else "Google ile devam et", Modifier.fillMaxWidth(), Color(0xFFE8E4D4), icon = "user",
+                textColor = Color(0xFF1E1D19), enabled = !busy) {
+                val act = ctx as? android.app.Activity ?: return@PxButton
+                busy = true; err = ""
+                com.zenvex.online.net.GoogleSignIn.start(act, link = false) { e ->
+                    if (e != null) { busy = false; err = e } else {
+                        GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
+                        GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
             PxTabs(listOf("Yeni hesap", "Giriş yap"), mode) { mode = it; err = "" }
             Spacer(Modifier.height(10.dp))
             if (mode == 0) {

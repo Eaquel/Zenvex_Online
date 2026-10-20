@@ -26,6 +26,8 @@ android {
         rootProject.file("supabase.properties").takeIf { it.exists() }?.inputStream()?.use { sb.load(it) }
         fun sbv(k: String, d: String) = (System.getenv(k)?.takeIf { it.isNotBlank() } ?: sb.getProperty(k) ?: d).replace("\"", "")
         buildConfigField("String", "SB_URL", "\"${sbv("SB_URL", "https://blvstsvmvmdydyrnecpo.supabase.co")}\"")
+        // Google ile giriş: OAuth "Web application" istemci kimliği (ortam değişkeni / supabase.properties / GitHub secret)
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${sbv("GOOGLE_WEB_CLIENT_ID", "")}\"")
         buildConfigField("String", "SB_KEY", "\"${sbv("SB_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsdnN0c3Ztdm1keWR5cm5lY3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzY2ODcsImV4cCI6MjEwNzkxMjY4N30.DVhL21Y_iaEdhwf_bBsJ2Fv8O1ej-1f8RxW-8wFw40k")}\"")
     }
 
@@ -85,6 +87,9 @@ val cargoBuild by tasks.registering(Exec::class) {
 tasks.named("preBuild") { dependsOn(cargoBuild) }
 
 dependencies {
+    implementation("androidx.credentials:credentials:1.3.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")

@@ -54,6 +54,7 @@ jobs:
           # Supabase (isteğe bağlı): başka bir projeye geçmek için Secrets'a SB_URL / SB_KEY eklenebilir
           SB_URL: ${{ secrets.SB_URL }}
           SB_KEY: ${{ secrets.SB_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           ./gradlew assembleRelease --console=plain
           mkdir -p ../dist

@@ -98,6 +98,24 @@ object Account {
         }
     }
 
+    /**
+     * Google ile giriş (link = false) ya da açık hesabı Google'a bağlama (link = true).
+     * Google ID jetonu sunucuda (zx-google edge function) doğrulanır; girişte yeni anahtar döner ve saklanır.
+     */
+    fun google(idToken: String, link: Boolean, done: (String?) -> Unit) {
+        val body = JSONObject().put("id_token", idToken).put("action", if (link) "link" else "login")
+        if (link) body.put("id", id.value).put("key", key)
+        Supa.fn("zx-google", body) { r ->
+            r.onSuccess {
+                val o = JSONObject(it)
+                if (!link) key = o.optString("key")
+                applyProfile(o)
+                status.value = "Çevrimiçi"
+                done(null)
+            }.onFailure { done(it.message) }
+        }
+    }
+
     fun changeKey(done: (String?) -> Unit) = Supa.rpc("zx_change_key", auth()) { r ->
         r.onSuccess { key = JSONObject(it).optString("key"); persist(); done(null) }.onFailure { done(it.message) }
     }

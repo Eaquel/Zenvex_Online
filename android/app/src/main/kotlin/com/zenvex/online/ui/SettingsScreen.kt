@@ -248,6 +248,12 @@ private fun AccountSettings() {
                 confirmKey = false
                 Account.changeKey { e -> if (e != null) Toaster.show(e, false) else { showKey = true; Toaster.show("Yeni anahtar oluşturuldu, not et!") } }
             }
+            GButton("Google'a Bağla", tone = Tone.Green, height = 40.dp, size = 13.sp) {
+                val act = ctx as? android.app.Activity ?: return@GButton
+                com.zenvex.online.net.GoogleSignIn.start(act, link = true) { e ->
+                    when { e == null -> Toaster.show("Hesabın Google'a bağlandı"); e.isNotEmpty() -> Toaster.show(e, false) }
+                }
+            }
             GButton("Başka Hesaba Gir", tone = Tone.Dark, height = 40.dp, size = 13.sp) { dialog = true }
             GButton("Çıkış", tone = Tone.Dark, height = 40.dp, size = 13.sp) {
                 GameSession.save(cloud = true); Account.logout(); GameSession.reload { Toaster.show("Misafir moduna geçildi") }

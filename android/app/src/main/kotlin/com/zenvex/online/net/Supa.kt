@@ -65,6 +65,37 @@ object Supa {
         return body
     }
 
+    /** Edge function çağrısı (ör. zx-google). Hata gövdesindeki "error" mesajı istisnaya taşınır. */
+    fun fnSync(name: String, args: JSONObject): String {
+        if (!configured) throw RpcError("Sunucu ayarlanmadı")
+        val req = Request.Builder()
+            .url("${BuildConfig.SB_URL}/functions/v1/$name")
+            .header("apikey", BuildConfig.SB_KEY)
+            .header("Authorization", "Bearer ${BuildConfig.SB_KEY}")
+            .post(args.toString().toRequestBody(json))
+            .build()
+        val body: String
+        val code: Int
+        try {
+            http.newCall(req).execute().use { r: Response -> code = r.code; body = r.body?.string().orEmpty() }
+        } catch (e: Exception) {
+            throw RpcError("Sunucuya ulaşılamadı")
+        }
+        if (code !in 200..299) {
+            val m = runCatching { JSONObject(body).optString("error") }.getOrNull()
+            Log.w("zenvex", "fn $name $code $body")
+            throw RpcError(if (!m.isNullOrBlank()) m else "Sunucu hatası ($code)")
+        }
+        return body
+    }
+
+    fun fn(name: String, args: JSONObject, done: (Result<String>) -> Unit) {
+        io.execute {
+            val r = runCatching { fnSync(name, args) }
+            main.post { done(r) }
+        }
+    }
+
     /** Arka planda çağırır, sonucu ana iş parçacığında verir. */
     fun rpc(fn: String, args: JSONObject = JSONObject(), done: (Result<String>) -> Unit) {
         io.execute {

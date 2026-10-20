@@ -24,3 +24,25 @@ Tablolarda RLS açık ve politika yok: istemci tablolara doğrudan erişemez, ya
 ## Ücretsiz plan sınırları (özet)
 200 eşzamanlı bağlantı, saniyede ~100 Realtime mesajı. Oyun konumu 5 Hz, zombileri 5 Hz yollar; bu, aynı sunucuda
 birkaç düzine oyuncuya kadar yeter. Daha fazlası için ücretli plan ya da kendi oyun sunucumuz gerekir.
+
+## Google ile giriş
+
+Akış:
+1. Uygulama Android Credential Manager ile Google hesabını seçtirir ve Google ID jetonunu alır.
+2. Jeton `zx-google` edge function'ına gönderilir.
+3. Function Google'ın `tokeninfo` ucuyla jetonu doğrular: alıcı (`aud`), veren (`iss`), süre ve e-posta doğrulaması kontrol edilir.
+4. Ardından yalnızca `service_role`'ün çağırabildiği `zx_google_login` ya da `zx_google_link` fonksiyonu çalışır.
+5. Girişte hesap yoksa açılır. Her girişte yeni anahtar üretilir ve cihaza kaydedilir.
+
+**Tek seferlik kurulum (Google Cloud Console → APIs & Services → Credentials):**
+
+1. **OAuth consent screen**: External, uygulama adı "Zenvex Online".
+2. **Create credentials → OAuth client ID → Android**:
+   - Paket: `com.zenvex.online`
+   - SHA-1: `75:9C:94:A2:22:72:F6:3C:C5:F0:3F:86:35:8D:84:F9:10:95:DF:E3`. Bu, `android/keystore/zenvex-dev.jks` dosyasının, yani CI'daki imza anahtarının SHA-1'i.
+3. **Create credentials → OAuth client ID → Web application**. Bu istemcinin kimliği (`…apps.googleusercontent.com`) gerekli.
+4. Web istemci kimliğini iki yere yaz:
+   - **Supabase → Edge Functions → Secrets**: `GOOGLE_WEB_CLIENT_ID`.
+   - **Uygulama**: `android/app/build.gradle.kts` içindeki `GOOGLE_WEB_CLIENT_ID` varsayılanı, ya da GitHub Secret `GOOGLE_WEB_CLIENT_ID`. Kimlik gizli değildir.
+
+Kimlik girilmeden önce düğme "Google girişi henüz ayarlanmadı" der, function da 503 döner.
