@@ -27,7 +27,7 @@ android {
         fun sbv(k: String, d: String) = (System.getenv(k)?.takeIf { it.isNotBlank() } ?: sb.getProperty(k) ?: d).replace("\"", "")
         buildConfigField("String", "SB_URL", "\"${sbv("SB_URL", "https://blvstsvmvmdydyrnecpo.supabase.co")}\"")
         // Google ile giriş: OAuth "Web application" istemci kimliği (ortam değişkeni / supabase.properties / GitHub secret)
-        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${sbv("GOOGLE_WEB_CLIENT_ID", "")}\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${sbv("GOOGLE_WEB_CLIENT_ID", "145695347343-afg8kme2oe2ir1hlie4f36pi1f7ilf3m.apps.googleusercontent.com")}\"")
         buildConfigField("String", "SB_KEY", "\"${sbv("SB_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJsdnN0c3Ztdm1keWR5cm5lY3BvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzMzY2ODcsImV4cCI6MjEwNzkxMjY4N30.DVhL21Y_iaEdhwf_bBsJ2Fv8O1ej-1f8RxW-8wFw40k")}\"")
     }
 

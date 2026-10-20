@@ -1,8 +1,10 @@
 // Google ile giriş: istemciden gelen Google ID jetonunu doğrular, Zenvex hesabını bulur/açar ya da var olan hesaba bağlar.
-// Gizli ayar: GOOGLE_WEB_CLIENT_ID (Google Cloud → OAuth "Web application" istemci kimliği; jetonun "aud" alanı buna eşit olmalı).
+// İstemci kimliği: WEB_CLIENT_ID (Google Cloud → OAuth "Web application"); jetonun "aud" alanı buna eşit olmalı.
 // İstek: { "id_token": "...", "action": "login" }  ya da  { "id_token": "...", "action": "link", "id": 1000001, "key": "ABC..." }
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+
+const WEB_CLIENT_ID = "145695347343-afg8kme2oe2ir1hlie4f36pi1f7ilf3m.apps.googleusercontent.com";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -16,8 +18,8 @@ function json(body: unknown, status = 200): Response {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "Yalnızca POST" }, 405);
-  const clientId = Deno.env.get("GOOGLE_WEB_CLIENT_ID");
-  if (!clientId) return json({ error: "Google girişi henüz yapılandırılmadı (GOOGLE_WEB_CLIENT_ID)" }, 503);
+  // OAuth "Web application" istemci kimliği gizli değildir; ortam değişkeniyle değiştirilebilir
+  const clientId = Deno.env.get("GOOGLE_WEB_CLIENT_ID") || WEB_CLIENT_ID;
 
   let body: { id_token?: string; action?: string; id?: number; key?: string };
   try {

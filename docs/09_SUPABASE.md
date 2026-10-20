@@ -45,4 +45,6 @@ Akış:
    - **Supabase → Edge Functions → Secrets**: `GOOGLE_WEB_CLIENT_ID`.
    - **Uygulama**: `android/app/build.gradle.kts` içindeki `GOOGLE_WEB_CLIENT_ID` varsayılanı, ya da GitHub Secret `GOOGLE_WEB_CLIENT_ID`. Kimlik gizli değildir.
 
-Kimlik girilmeden önce düğme "Google girişi henüz ayarlanmadı" der, function da 503 döner.
+Kurulum tamamlandı (20 Ekim 2026): proje "Zenvex Online", yayın durumu "In production", Web istemci kimliği
+`145695347343-afg8kme2oe2ir1hlie4f36pi1f7ilf3m.apps.googleusercontent.com` (zx-google ve build.gradle.kts varsayılanı).
+Gizlilik/ana sayfa bağlantıları: `zx-legal` function'ı (`?p=home|privacy|terms`).
