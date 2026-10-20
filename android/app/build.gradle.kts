@@ -4,6 +4,8 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    // arayüz ekran görüntüsü testleri (emülatörsüz, JVM'de layoutlib ile): ./gradlew :app:recordPaparazziDebug
+    id("app.cash.paparazzi")
 }
 
 android {
@@ -83,6 +85,8 @@ val cargoBuild by tasks.registering(Exec::class) {
 tasks.named("preBuild") { dependsOn(cargoBuild) }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.15.0")

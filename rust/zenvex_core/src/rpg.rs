@@ -12,10 +12,10 @@ pub enum Stat {
     Crit,
     Stun,
     Lifesteal,
-    BulletPct,
-    Reload,
-    FireRate,
-    AmmoSave,
+    BladePct,
+    Reach,
+    AtkSpeed,
+    CritDmg,
     HpFlat,
     DmgTaken,
     Reflect,
@@ -39,10 +39,10 @@ pub fn stat_text(s: Stat, v: f32) -> String {
         Stat::Crit => format!("Kritik vuruş şansı +%{p}"),
         Stat::Stun => format!("Sersemletme şansı +%{p}"),
         Stat::Lifesteal => format!("Yakın dövüş hasarının %{p}'i kadar can çalar"),
-        Stat::BulletPct => format!("Mermi hasarı +%{p}"),
-        Stat::Reload => format!("Şarjör değiştirme %{p} daha hızlı"),
-        Stat::FireRate => format!("Atış hızı +%{p}"),
-        Stat::AmmoSave => format!("%{p} şansla mermi harcamaz"),
+        Stat::BladePct => format!("Bıçak ve katana hasarı +%{p}"),
+        Stat::Reach => format!("Silah menzili +%{p}"),
+        Stat::AtkSpeed => format!("Silah saldırı hızı +%{p}"),
+        Stat::CritDmg => format!("Kritik vuruş hasarı +%{p}"),
         Stat::HpFlat => format!("Can +{v:.0}"),
         Stat::DmgTaken => format!("Alınan hasar −%{p}"),
         Stat::Reflect => format!("Alınan hasarın %{p}'ini saldırana yansıtır"),
@@ -60,7 +60,7 @@ pub fn stat_text(s: Stat, v: f32) -> String {
 #[derive(Clone, Debug, Serialize)]
 pub struct Node {
     pub id: u16,
-    /// 0 yakın dövüş, 1 ateşli silah, 2 dayanıklılık, 3 çeviklik, 255 merkez
+    /// 0 yakın dövüş, 1 silah ustalığı (bıçak/katana), 2 dayanıklılık, 3 çeviklik, 255 merkez
     pub branch: u8,
     pub x: f32,
     pub y: f32,
@@ -73,7 +73,7 @@ pub struct Node {
     pub links: Vec<u16>,
 }
 
-pub const BRANCHES: [&str; 4] = ["Yakın Dövüş", "Ateşli Silah", "Dayanıklılık", "Çeviklik"];
+pub const BRANCHES: [&str; 4] = ["Yakın Dövüş", "Silah Ustalığı", "Dayanıklılık", "Çeviklik"];
 
 struct BranchDef {
     dir: (f32, f32),
@@ -91,9 +91,9 @@ const DEFS: [BranchDef; 4] = [
     },
     BranchDef {
         dir: (1.0, 0.0),
-        small: &[(Stat::BulletPct, 0.05), (Stat::Reload, 0.05), (Stat::Crit, 0.01), (Stat::BulletPct, 0.05), (Stat::FireRate, 0.03)],
-        notable: ("Nişancı", Stat::BulletPct, 0.10),
-        keys: [("Tutumlu", Stat::AmmoSave, 0.20), ("Hızlı Tetik", Stat::FireRate, 0.15), ("Ölüm Makinesi", Stat::BulletPct, 0.20)],
+        small: &[(Stat::BladePct, 0.05), (Stat::Reach, 0.04), (Stat::Crit, 0.01), (Stat::BladePct, 0.05), (Stat::AtkSpeed, 0.03)],
+        notable: ("Usta Kılıç", Stat::BladePct, 0.10),
+        keys: [("Kanlı Kenar", Stat::CritDmg, 0.30), ("Rüzgâr Kesik", Stat::AtkSpeed, 0.15), ("Ölüm Ustası", Stat::BladePct, 0.20)],
     },
     BranchDef {
         dir: (0.0, 1.0),
@@ -185,10 +185,10 @@ pub struct Bonus {
     pub crit: f32,
     pub stun: f32,
     pub lifesteal: f32,
-    pub bullet_pct: f32,
-    pub reload: f32,
-    pub fire_rate: f32,
-    pub ammo_save: f32,
+    pub blade_pct: f32,
+    pub reach: f32,
+    pub atk_speed: f32,
+    pub crit_dmg: f32,
     pub hp_flat: f32,
     pub dmg_taken: f32,
     pub reflect: f32,
@@ -257,10 +257,10 @@ pub fn bonus(p: &Progress) -> Bonus {
             Stat::Crit => b.crit += v,
             Stat::Stun => b.stun += v,
             Stat::Lifesteal => b.lifesteal += v,
-            Stat::BulletPct => b.bullet_pct += v,
-            Stat::Reload => b.reload += v,
-            Stat::FireRate => b.fire_rate += v,
-            Stat::AmmoSave => b.ammo_save += v,
+            Stat::BladePct => b.blade_pct += v,
+            Stat::Reach => b.reach += v,
+            Stat::AtkSpeed => b.atk_speed += v,
+            Stat::CritDmg => b.crit_dmg += v,
             Stat::HpFlat => b.hp_flat += v,
             Stat::DmgTaken => b.dmg_taken += v,
             Stat::Reflect => b.reflect += v,
@@ -278,7 +278,8 @@ pub fn bonus(p: &Progress) -> Bonus {
     b.dodge = b.dodge.min(0.5);
     b.roll_cd = b.roll_cd.min(0.6);
     b.blast_res = b.blast_res.min(0.8);
-    b.ammo_save = b.ammo_save.min(0.5);
+    b.crit_dmg = b.crit_dmg.min(1.5);
+    b.reach = b.reach.min(0.6);
     b
 }
 

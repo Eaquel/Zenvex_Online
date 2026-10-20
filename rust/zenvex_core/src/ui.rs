@@ -126,7 +126,7 @@ impl Game {
                 let nodes: Vec<Value> = t.iter().map(|n| {
                     let owned = n.id == 0 || g.tree.contains(&n.id);
                     let avail = !owned && n.links.iter().any(|&l| l == 0 || g.tree.contains(&l));
-                    json!({ "id": n.id, "x": n.x, "y": n.y, "b": n.branch, "k": n.kind, "name": n.name, "desc": n.desc,
+                    json!({ "id": n.id, "x": n.x, "y": n.y, "b": n.branch, "k": n.kind, "s": format!("{:?}", n.stat), "name": n.name, "desc": n.desc,
                             "links": n.links, "own": owned, "av": avail })
                 }).collect();
                 json!({ "points": g.tree_points(), "level": g.level, "reset_cost": g.tree_reset_cost(), "branches": crate::rpg::BRANCHES,
@@ -1140,6 +1140,26 @@ mod v4_tests {
     fn tick(g: &mut Game, n: usize) {
         for _ in 0..n {
             g.step(1.0 / 30.0, Input::default());
+        }
+    }
+
+    /// Arayüz ekran görüntüsü testleri için örnek görünüm verisi (ZX_DUMP_UI=dizin ile çalıştırılınca yazar).
+    #[test]
+    fn dump_ui_samples() {
+        let Ok(dir) = std::env::var("ZX_DUMP_UI") else { return };
+        let mut g = Game::new(7, Progress::default(), 1);
+        g.cheat("level 30").unwrap();
+        // birkaç dalda ilerlemiş bir ağaç
+        for _ in 0..3 {
+            for id in 1..crate::rpg::tree().len() as u16 {
+                let n = &crate::rpg::tree()[id as usize];
+                if (n.branch == 0 || n.branch == 2) && n.x.abs() + n.y.abs() < 9.0 {
+                    let _ = g.command(&format!(r#"{{"cmd":"tree_unlock","id":{id}}}"#));
+                }
+            }
+        }
+        for v in ["tree", "dog", "bag"] {
+            std::fs::write(format!("{dir}/{v}.json"), g.ui_json(v)).unwrap();
         }
     }
 

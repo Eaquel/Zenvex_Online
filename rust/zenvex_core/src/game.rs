@@ -869,8 +869,10 @@ impl Game {
     }
 
     fn update_melee(&mut self, _dt: f32, wants: bool, w: &'static data::WeaponDef) {
+        let b = self.progress.bonus();
+        let (dmg, reach) = (w.damage * (1.0 + b.blade_pct), m(w.range_m) * (1.0 + b.reach));
         let p = &mut self.player;
-        let period = 1.0 / w.rate;
+        let period = 1.0 / (w.rate * (1.0 + b.atk_speed));
         if wants && !p.atk_active {
             p.atk_active = true;
             p.hit_done = false;
@@ -891,7 +893,7 @@ impl Game {
                 (self.player.stamina - 5.0 * self.progress.stamina_cost_mult()).max(0.0);
             self.player.stamina_delay = 0.8;
             self.events.push(Event::Swing);
-            self.melee_hit(w.damage, m(w.range_m), 0.9, w.stun);
+            self.melee_hit(dmg, reach, if w.pierce > 0 { 1.2 } else { 0.9 }, w.stun);
         }
         let p = &mut self.player;
         if ct + 0.02 >= period * 0.98 {

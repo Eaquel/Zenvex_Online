@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -386,19 +387,47 @@ object Toaster {
     fun show(m: String, ok: Boolean = true) { if (m.isBlank()) return; message = m; good = ok; serial++ }
 }
 
+/**
+ * Bildirim: piksel demir plaka, solda renkli şerit + simge karesi; yukarıdan kayarak gelir, 2,2 sn sonra çekilir.
+ * Yeşil başarı, kırmızı hata; altın/ödül içeren mesajlar altın şeritle.
+ */
 @Composable
 fun BoxScope.ToastHost() {
     val msg = Toaster.message
     val serial = Toaster.serial
-    LaunchedEffect(serial) { if (msg != null) { delay(2000); Toaster.message = null } }
-    if (msg != null) Row(
-        Modifier.align(Alignment.TopCenter).padding(top = 70.dp).glass(22.dp, if (Toaster.good) Pal.Green else Pal.Red)
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+    var shown by remember { mutableStateOf<String?>(null) }
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(serial) {
+        if (msg != null) { shown = msg; visible = true; delay(2200); visible = false; delay(250); Toaster.message = null }
+    }
+    val text = shown ?: return
+    val reward = Toaster.good && (text.contains("altın") || text.contains("XP") || text.contains("kazandın") || text.contains("eklendi"))
+    val accent = when { !Toaster.good -> Color(0xFFE0483C); reward -> Px.Clan; else -> Px.Name }
+    val icon = when { !Toaster.good -> "close"; reward -> "coin"; else -> "check" }
+    androidx.compose.animation.AnimatedVisibility(
+        visible, Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+        enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut(),
+    ) { ToastPlate(text, accent, icon) }
+}
+
+@Composable
+fun ToastPlate(text: String, accent: Color, icon: String) {
+    Row(
+        Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xF21E1D19))
+            .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
+            .drawBehind {
+                drawRect(accent, Offset.Zero, Size(5.dp.toPx(), size.height))
+                drawRect(Color.White.copy(alpha = 0.08f), Offset(5.dp.toPx(), 0f), Size(size.width, 2.dp.toPx()))
+                drawRect(Color.Black.copy(alpha = 0.35f), Offset(5.dp.toPx(), size.height - 3.dp.toPx()), Size(size.width, 3.dp.toPx()))
+            }
+            .padding(start = 14.dp, end = 16.dp, top = 8.dp, bottom = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(if (Toaster.good) "check" else "close", 18.dp, if (Toaster.good) Pal.Green else Pal.Red)
-        Spacer(Modifier.width(8.dp))
-        T(msg, 14.sp)
+        Box(Modifier.size(26.dp).clip(RoundedCornerShape(3.dp)).background(accent.copy(alpha = 0.22f)).border(1.5.dp, accent, RoundedCornerShape(3.dp)),
+            contentAlignment = Alignment.Center) { Icon(icon, 16.dp, accent) }
+        Spacer(Modifier.width(10.dp))
+        PT(text, 15.sp, Px.Text, maxLines = 2)
     }
 }
 

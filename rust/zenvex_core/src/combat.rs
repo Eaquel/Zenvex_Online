@@ -29,7 +29,7 @@ impl Game {
             let crit = self.rng.chance(self.progress.crit_chance());
             let mut dmg = base * mult * self.rng.range(0.9, 1.1);
             if crit {
-                dmg *= 1.75;
+                dmg *= 1.75 + self.progress.bonus().crit_dmg;
             }
             if self.player.one_hit {
                 dmg = 1e6;
@@ -219,10 +219,10 @@ impl Game {
             return;
         }
         let b = self.progress.bonus();
-        let keep = self.player.inf_ammo || (b.ammo_save > 0.0 && self.rng.chance(b.ammo_save));
+        let keep = self.player.inf_ammo;
         let mag = if keep { mag + 1 } else { mag };
         self.progress.set_mag(w.item, mag - 1);
-        self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.fire_rate));
+        self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.atk_speed));
         self.player.combat_t = 0.0;
         let (px, py) = (self.player.x, self.player.y);
         let spread = w.spread * self.rng.range(-1.0, 1.0);
@@ -240,7 +240,7 @@ impl Game {
         let dmg = if self.player.one_hit {
             1e6
         } else {
-            w.damage * mult * (1.0 + b.bullet_pct) * if crit { 1.75 } else { 1.0 }
+            w.damage * mult * (1.0 + b.blade_pct) * if crit { 1.75 + b.crit_dmg } else { 1.0 }
         };
         // namlu: karakterin önünde, el yüksekliğinde
         let mx = px + dx * 40.0;
@@ -277,7 +277,7 @@ impl Game {
         if self.player.reload_t > 0.0 {
             return;
         }
-        self.player.reload_t = w.reload * (1.0 - self.progress.bonus().reload).max(0.3);
+        self.player.reload_t = w.reload;
         self.events.push(Event::Reload);
     }
 

@@ -36,6 +36,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
@@ -112,7 +113,10 @@ fun PxPanel(modifier: Modifier = Modifier, color: Color = Px.Panel, pad: Dp = 10
     Column(modifier.pxPanel(color).padding(pad), content = content)
 }
 
-/** Piksel buton: düz renk, alt kenarda koyu şerit (kabartma). */
+/**
+ * Piksel buton: perçinli metal plaka. Üstte ışık şeridi, altta kalın gölge şeridi (kabartma), köşelerde perçin;
+ * basılınca plaka gölge kadar aşağı iner (gömülme), devre dışıyken çapraz çizgili.
+ */
 @Composable
 fun PxButton(
     text: String,
@@ -127,26 +131,42 @@ fun PxButton(
 ) {
     val src = remember { MutableInteractionSource() }
     val pressed by src.collectIsPressedAsState()
-    val sc by animateFloatAsState(if (pressed) 0.95f else 1f, spring(0.5f, 900f), label = "px")
+    val sink by animateFloatAsState(if (pressed && enabled) 1f else 0f, spring(0.6f, 1400f), label = "px")
     val c = if (enabled) color else Px.Dark
     Box(
-        modifier.scale(sc).height(height).clip(RoundedCornerShape(3.dp)).background(c)
+        modifier.height(height).clip(RoundedCornerShape(3.dp))
             .drawBehind {
-                val e = 3.dp.toPx()
-                drawRect(Color.Black.copy(alpha = 0.32f), Offset(0f, this.size.height - e), Size(this.size.width, e))
-                drawRect(Color.White.copy(alpha = 0.16f), Offset(0f, 0f), Size(this.size.width, e * 0.7f))
+                val e = 4.dp.toPx(); val down = e * sink
+                val w = this.size.width; val h = this.size.height
+                // gövde gölgesi (kabartma alt kenarı)
+                drawRect(Px.Edge, Offset(0f, 0f), Size(w, h))
+                drawRect(Color(c.red * 0.55f, c.green * 0.55f, c.blue * 0.55f, 1f), Offset(2f, down + 2f), Size(w - 4f, h - 4f - down))
+                // yüz
+                drawRect(c, Offset(2f, down + 2f), Size(w - 4f, h - 4f - e))
+                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent), down, down + h * 0.6f),
+                    Offset(2f, down + 2f), Size(w - 4f, (h - 4f - e) * 0.6f))
+                drawRect(Color.White.copy(alpha = 0.3f), Offset(2f, down + 2f), Size(w - 4f, 2.dp.toPx()))
+                if (!enabled) {
+                    val st = 8.dp.toPx(); var x = -h
+                    while (x < w) { drawLine(Color.Black.copy(alpha = 0.18f), Offset(x, h), Offset(x + h, 0f), 2.dp.toPx()); x += st }
+                }
+                // perçinler
+                val rv = 1.6.dp.toPx(); val ins = 5.dp.toPx()
+                for ((rx, ry) in listOf(ins to ins + down, w - ins to ins + down, ins to h - e - ins + down, w - ins to h - e - ins + down)) {
+                    drawCircle(Color.Black.copy(alpha = 0.45f), rv, Offset(rx + 0.6f, ry + 0.6f))
+                    drawCircle(Color.White.copy(alpha = 0.45f), rv, Offset(rx, ry))
+                }
             }
-            .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
             .clickable(interactionSource = src, indication = null) {
                 Audio.play("click", bus = Audio.Bus.Ui, pitch = if (enabled) 1f else 0.7f)
                 if (enabled) onClick()
             }
-            .padding(horizontal = 14.dp),
+            .padding(start = 14.dp, end = 14.dp, top = (2 + 4 * sink).dp, bottom = (6 - 4 * sink).dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
-                Icon(icon, (height.value * 0.5f).dp, textColor)
+                Icon(icon, (height.value * 0.45f).dp, textColor)
                 if (text.isNotEmpty()) Spacer(Modifier.width(10.dp))
             }
             if (text.isNotEmpty()) PT(text, size, if (enabled) textColor else Px.Sub)
