@@ -7,6 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxWidth
 import org.json.JSONObject
 import androidx.compose.ui.graphics.asImageBitmap
 import org.junit.Rule
@@ -93,6 +96,29 @@ class UiShotsTest {
             androidx.compose.foundation.layout.Box {
                 QuestsView(q) {}
                 QuestTracker(q.getJSONArray("story"), androidx.compose.ui.Modifier.padding(start = 300.dp, top = 300.dp)) {}
+            }
+        }
+    }
+
+    @Test
+    fun kitScreen() {
+        paparazzi.snapshot {
+            ScreenFrame("ÜRETİM", "craft", {}, right = { Chip("coin", "1.250", Pal.Gold) }) {
+                Tabs(listOf("shop" to "satın al", "coin" to "sat", "gem" to "elmas"), 0) {}
+                androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(8.dp))
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    Panel(androidx.compose.ui.Modifier.width(360.dp)) {
+                        SectionTitle("Malzemeler")
+                        T("Kumaş ve bant ile bandaj yapılır.", 14.sp, maxLines = 2)
+                        Bar(0.6f, Pal.Green, androidx.compose.ui.Modifier.fillMaxWidth(), 14.dp, "3 / 5")
+                        androidx.compose.foundation.layout.Row { ItemSlot("bandage", 3, 0, 56.dp); ItemSlot(null, 0, 0, 56.dp, label = "Boş") }
+                    }
+                    androidx.compose.foundation.layout.Column {
+                        GButton("ÜRET", tone = Tone.Green, icon = "craft") {}
+                        GButton("×5", tone = Tone.Blue) {}
+                        GButton("Kilitli", enabled = false) {}
+                    }
+                }
             }
         }
     }

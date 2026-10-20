@@ -25,7 +25,7 @@ object Demo {
     suspend fun shot(act: Activity, name: String) {
         // CI betiği bu satırı görünce adb screencap alır; ekran bu sırada sabit tutulur
         Log.i("ZXDEMO", "ready $name")
-        kotlinx.coroutines.delay(1500)
+        kotlinx.coroutines.delay(4000)
         val v = act.window.decorView
         if (v.width == 0) return
         val bmp = Bitmap.createBitmap(v.width, v.height, Bitmap.Config.ARGB_8888)

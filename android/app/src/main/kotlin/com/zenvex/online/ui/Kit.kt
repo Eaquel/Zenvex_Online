@@ -115,21 +115,20 @@ fun T(
     Text(
         if (maxLines == 1) text.titleTr() else text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
-            fontFamily = if (display) Display else Body, fontSize = size,
-            fontWeight = if (bold || display) FontWeight.Bold else FontWeight.Normal,
-            letterSpacing = if (display) 1.2.sp else 0.sp,
-            shadow = Shadow(glow ?: Color(0xCC000000), Offset(0f, if (glow != null) 0f else 2f), if (glow != null) 18f else 4f),
+            // tüm arayüz piksel yazı tipiyle (eski cam görünüm kaldırıldı)
+            fontFamily = PixelFont, fontSize = size,
+            shadow = Shadow(glow ?: Color(0xE6000000), Offset(if (glow != null) 0f else 2f, if (glow != null) 0f else 2f), if (glow != null) 14f else 0f),
         ),
     )
 }
 
 // =========================================================================== paneller
-/** Koyu cam panel: degrade dolgu, ince parlak kenar, yumuşak gölge. */
+/** Eski cam panelin yerine piksel panel: koyu zemin, sert kenar, isteğe bağlı renkli iç çizgi. */
 fun Modifier.glass(radius: Dp = 18.dp, accent: Color? = null, alpha: Float = 1f): Modifier = this
-    .shadow(14.dp, RoundedCornerShape(radius), clip = false, ambientColor = Color.Black, spotColor = Color.Black)
-    .clip(RoundedCornerShape(radius))
-    .background(Brush.verticalGradient(listOf(Color(0xF01A2638).copy(alpha = 0.94f * alpha), Color(0xF00C121E).copy(alpha = 0.96f * alpha))))
-    .border(1.dp, Brush.verticalGradient(listOf((accent ?: Color.White).copy(alpha = 0.35f), Color.White.copy(alpha = 0.05f))), RoundedCornerShape(radius))
+    .clip(RoundedCornerShape(3.dp))
+    .background(Px.Panel.copy(alpha = Px.Panel.alpha * alpha))
+    .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
+    .then(if (accent != null) Modifier.padding(2.dp).border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(2.dp)) else Modifier)
 
 @Composable
 fun Panel(modifier: Modifier = Modifier, accent: Color? = null, pad: Dp = 14.dp, content: @Composable ColumnScope.() -> Unit) {
@@ -159,99 +158,52 @@ fun GButton(
     sub: String? = null,
     onClick: () -> Unit,
 ) {
-    val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val sc by animateFloatAsState(if (pressed) 0.94f else 1f, spring(0.5f, 900f), label = "btn")
-    val t = if (enabled) tone else Tone.Dark
-    Box(modifier.scale(sc)) {
-        Box(
-            Modifier
-                .height(height)
-                .then(if (t.glow.alpha > 0 && enabled) Modifier.shadow(10.dp, RoundedCornerShape(height / 2.6f), ambientColor = t.glow, spotColor = t.glow) else Modifier)
-                .clip(RoundedCornerShape(height / 2.6f))
-                .background(Brush.verticalGradient(listOf(t.top, t.bottom)))
-                .drawBehind {
-                    // üst parlama
-                    drawRoundRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.35f), Color.Transparent), 0f, this.size.height * 0.55f),
-                        Offset(3f, 3f), Size(this.size.width - 6f, this.size.height * 0.5f), CornerRadius(this.size.height / 3f))
-                }
-                .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(height / 2.6f))
-                .clickable(interactionSource = src, indication = null) {
-                    Audio.play("click", bus = Audio.Bus.Ui, pitch = if (enabled) 1f else 0.7f)
-                    if (enabled) onClick()
-                }
-                .padding(horizontal = 18.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (icon != null) {
-                    Icon(icon, (height.value * 0.46f).dp, if (enabled) t.text else Pal.Sub)
-                    if (text.isNotEmpty()) Spacer(Modifier.width(8.dp))
-                }
-                if (text.isNotEmpty()) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(text, color = if (enabled) t.text else Pal.Sub, maxLines = 1,
-                        style = TextStyle(fontFamily = Body, fontWeight = FontWeight.Bold, fontSize = size))
-                    if (sub != null) Text(sub, color = (if (enabled) t.text else Pal.Sub).copy(alpha = 0.8f), maxLines = 1,
-                        style = TextStyle(fontFamily = Body, fontSize = (size.value * 0.7f).sp))
-                }
-            }
-        }
+    // piksel perçinli plaka (PxButton); ton → renk
+    val col = when (tone) {
+        Tone.Gold -> Color(0xFFB08A2A); Tone.Blue -> Px.Blue; Tone.Green -> Px.Green; Tone.Red -> Px.Red
+        Tone.Purple -> Color(0xFF6A4AA0); Tone.Dark -> Px.Dark
+    }
+    // boyut verilmezse içeriği kadar, verilirse (fillMaxWidth / weight / width) o kadar geniş
+    Box(modifier.width(androidx.compose.foundation.layout.IntrinsicSize.Max)) {
+        PxButton(if (sub != null) "$text · $sub" else text, Modifier.fillMaxWidth(), col, icon, size, height, enabled, onClick = onClick)
         if (badge > 0) Box(
-            Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).clip(CircleShape).background(Pal.Red)
+            Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).clip(CircleShape).background(Color(0xFFE02828))
                 .border(1.5.dp, Color.White, CircleShape),
             contentAlignment = Alignment.Center,
-        ) { T(if (badge > 9) "9+" else "$badge", 10.sp, bold = true) }
+        ) { PT(if (badge > 9) "9+" else "$badge", 10.sp) }
     }
 }
 
-/** Yuvarlak ikon butonu (üst çubuk vb.) */
+/** İkon butonu (piksel kare) */
 @Composable
 fun RoundIcon(icon: String, modifier: Modifier = Modifier, size: Dp = 44.dp, tint: Color = Pal.Text, badge: Int = 0, ring: Color = Color.White.copy(alpha = 0.2f), onClick: () -> Unit) {
-    val src = remember { MutableInteractionSource() }
-    val pressed by src.collectIsPressedAsState()
-    val sc by animateFloatAsState(if (pressed) 0.9f else 1f, spring(0.5f, 900f), label = "ri")
-    Box(modifier.scale(sc)) {
-        Box(
-            Modifier.size(size).shadow(8.dp, CircleShape).clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(Color(0xFF26344A), Color(0xFF111A28))))
-                .border(1.dp, ring, CircleShape)
-                .clickable(interactionSource = src, indication = null) { Audio.play("click", bus = Audio.Bus.Ui); onClick() },
-            contentAlignment = Alignment.Center,
-        ) { Icon(icon, size * 0.5f, tint) }
-        if (badge > 0) Box(
-            Modifier.align(Alignment.TopEnd).offset(3.dp, (-3).dp).size(17.dp).clip(CircleShape).background(Pal.Red).border(1.5.dp, Color.White, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) { T(if (badge > 9) "9+" else "$badge", 9.sp, bold = true) }
-    }
+    PxIcon(icon, modifier, size, badge, tint, onClick = onClick)
 }
 
 // =========================================================================== küçük parçalar
 @Composable
 fun Chip(icon: String, value: String, color: Color, modifier: Modifier = Modifier, plus: (() -> Unit)? = null) {
     Row(
-        modifier.height(34.dp).clip(RoundedCornerShape(17.dp)).background(Color(0xCC0A101A))
-            .border(1.dp, color.copy(alpha = 0.4f), RoundedCornerShape(17.dp)).padding(start = 4.dp, end = if (plus != null) 4.dp else 12.dp),
+        modifier.height(34.dp).pxPanel(Px.PanelDark).padding(start = 4.dp, end = if (plus != null) 4.dp else 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icon, 26.dp, color)
+        Icon(icon, 24.dp, color)
         Spacer(Modifier.width(6.dp))
-        T(value, 14.sp, Pal.Text, bold = true)
+        PT(value, 14.sp, color)
         if (plus != null) {
             Spacer(Modifier.width(8.dp))
-            Box(Modifier.size(24.dp).clip(CircleShape).background(Brush.verticalGradient(listOf(Color(0xFF7CF0A0), Color(0xFF1E9A52))))
-                .clickable { plus() }, contentAlignment = Alignment.Center) { Icon("plus", 14.dp, Color.White) }
+            Box(Modifier.size(24.dp).background(Px.Green).border(2.dp, Px.Edge).clickable { plus() }, contentAlignment = Alignment.Center) {
+                Icon("plus", 14.dp, Color.White)
+            }
         }
     }
 }
 
 @Composable
 fun Bar(value: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 10.dp, label: String? = null, back: Color = Color(0xCC060A12)) {
-    Box(modifier.height(height).clip(RoundedCornerShape(height / 2)).background(back), contentAlignment = Alignment.CenterStart) {
-        Box(
-            Modifier.fillMaxHeight().fillMaxWidth(value.coerceIn(0f, 1f)).clip(RoundedCornerShape(height / 2))
-                .background(Brush.verticalGradient(listOf(color.copy(alpha = 1f).lighten(1.35f), color)))
-        )
-        if (label != null) T(label, (height.value * 0.68f).sp, Color.White, Modifier.align(Alignment.Center), bold = true)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        PxBar(value, color, Modifier.fillMaxWidth(), height)
+        if (label != null) PT(label, (height.value * 0.7f).sp, Color.White)
     }
 }
 
@@ -259,19 +211,17 @@ fun Color.lighten(k: Float) = Color((red * k).coerceAtMost(1f), (green * k).coer
 
 @Composable
 fun Tabs(items: List<Pair<String, String>>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
-    Row(modifier.clip(RoundedCornerShape(14.dp)).background(Color(0xAA060A12)).padding(4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, (icon, label) ->
             val on = i == selected
             Row(
-                Modifier.clip(RoundedCornerShape(10.dp))
-                    .background(if (on) Brush.verticalGradient(listOf(Color(0xFF3A6AB0), Color(0xFF1E3A70))) else Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent)))
+                Modifier.background(if (on) Px.Panel else Px.PanelDark).border(2.dp, Px.Edge)
                     .clickable { Audio.play("click", bus = Audio.Bus.Ui); onSelect(i) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(icon, 18.dp, if (on) Color.White else Pal.Sub)
-                Spacer(Modifier.width(6.dp))
-                T(label, 13.sp, if (on) Color.White else Pal.Sub, bold = on)
+                if (icon != "dot") { Icon(icon, 18.dp, if (on) Px.Clan else Px.Sub); Spacer(Modifier.width(6.dp)) }
+                PT(label, 14.sp, if (on) Px.Text else Px.Sub)
             }
         }
     }
@@ -301,21 +251,10 @@ fun SpriteImage(key: String, modifier: Modifier = Modifier) {
 /** Eşya kutusu: nadirlik çerçevesi + simge + adet. */
 @Composable
 fun ItemSlot(id: String?, count: Int = 0, rarity: Int = 0, size: Dp = 64.dp, selected: Boolean = false, label: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    val col = Pal.rarity(rarity)
-    Box(
-        modifier.size(size).clip(RoundedCornerShape(12.dp))
-            .background(
-                if (id == null) Brush.verticalGradient(listOf(Color(0x88202C3E), Color(0x88101722)))
-                else Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color(0xEE0E1520)))
-            )
-            .border(if (selected) 2.5.dp else 1.dp, if (selected) Color.White else if (id == null) Pal.Line else col.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
-            .then(if (onClick != null) Modifier.clickable { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); onClick() } else Modifier),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (id != null) SpriteImage("i/$id", Modifier.padding(size * 0.1f).fillMaxSize())
-        else if (label != null) T(label, (size.value * 0.16f).sp, Pal.Sub, align = TextAlign.Center)
-        if (count > 1) T("$count", (size.value * 0.2f).sp, Color.White, Modifier.align(Alignment.BottomEnd).padding(end = 5.dp, bottom = 2.dp), bold = true)
-    }
+    // piksel eşya kutusu (PxSlot ile aynı görünüm)
+    val item = id?.let { org.json.JSONObject().put("id", it).put("count", count).put("rarity", rarity) }
+    PxSlot(item, size, selected, hint = label,
+        modifier = modifier.then(if (onClick != null) Modifier.clickable { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); onClick() } else Modifier))
 }
 
 /** Tam ekran karartma + ortada içerik (diyaloglar). */
@@ -333,22 +272,7 @@ fun Dim(onDismiss: (() -> Unit)? = null, content: @Composable BoxScope.() -> Uni
 /** Ekran iskeleti: arka plan + başlık + geri. */
 @Composable
 fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF16243A), Color(0xFF070B14)), radius = 1800f))) {
-        AmbientParticles(Modifier.fillMaxSize(), Color(0x55FFC070), 26)
-        Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 10.dp)) {
-            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                RoundIcon("back", onClick = onBack)
-                Spacer(Modifier.width(14.dp))
-                Icon(icon, 26.dp, Pal.Gold)
-                Spacer(Modifier.width(8.dp))
-                T(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), 26.sp, Pal.Text, display = true)
-                Spacer(Modifier.weight(1f))
-                right()
-            }
-            Spacer(Modifier.height(8.dp))
-            content()
-        }
-    }
+    PxFrame(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), icon, onBack, right, content)
 }
 
 /** Yavaş yükselen parıltı/kor parçacıkları (arka plan canlılığı). */
@@ -439,9 +363,9 @@ fun Divider(modifier: Modifier = Modifier) {
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Row(modifier.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(4.dp, 16.dp).clip(RoundedCornerShape(2.dp)).background(Pal.Gold))
+        Box(Modifier.size(6.dp, 16.dp).background(Px.Clan))
         Spacer(Modifier.width(8.dp))
-        T(text.uppercase(), 13.sp, Pal.Sub, bold = true)
+        PT(text, 15.sp, Px.Clan)
     }
 }
 

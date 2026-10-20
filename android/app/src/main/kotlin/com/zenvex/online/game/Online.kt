@@ -93,7 +93,7 @@ object Online {
             r.onSuccess { arr ->
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
-                    chat += ChatLine("global", o.optString("n"), o.optString("m"), o.optString("g"), "a${o.optLong("u")}" == uid, o.optLong("ts"))
+                    chat += ChatLine("global", o.optString("n"), o.optString("m"), (if (o.isNull("g")) "" else o.optString("g")), "a${o.optLong("u")}" == uid, o.optLong("ts"))
                 }
             }
         }
@@ -140,7 +140,7 @@ object Online {
                 if (k == uid) continue
                 val meta = joins.optJSONObject(k)?.optJSONArray("metas")?.optJSONObject(0) ?: continue
                 val r = remotes.getOrPut(k) { Remote("") }
-                r.name = meta.optString("n", "Oyuncu"); r.clan = meta.optString("g"); r.present = true
+                r.name = meta.optString("n", "Oyuncu"); r.clan = if (meta.isNull("g")) "" else meta.optString("g"); r.present = true
             }
             for (k in leaves.keys()) remotes.remove(k)
             if (full) remotes.values.removeAll { !it.present }
@@ -177,7 +177,8 @@ object Online {
                 if (ch == "local" && hypot(p.optDouble("x").toFloat() - myX, p.optDouble("y").toFloat() - myY) > 1500f) return
                 // klan sohbeti yalnız aynı klanın üyelerine
                 if (ch == "clan" && (p.optLong("cid") != (Account.clan.value?.id ?: -1L))) return
-                addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), p.optString("g"), false, System.currentTimeMillis()))
+                val g = p.optString("g").takeUnless { it == "null" } ?: ""
+                addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), g, false, System.currentTimeMillis()))
             }
             "treq" -> if (p.optString("to") == me) main.post { tradeRequest.value = p.optString("u") to p.optString("n", "Oyuncu") }
             "tr" -> if (p.optString("to") == me) main.post { onTradeMsg(p) }

@@ -8,6 +8,12 @@ adb install -r -g "$APK" || exit 1
 adb shell settings put global window_animation_scale 0
 adb shell settings put global transition_animation_scale 0
 adb shell settings put global animator_duration_scale 0
+# sistem uyarıları görüntüyü kapatmasın: tam ekran ipucu ve yavaş başlatıcının "yanıt vermiyor" penceresi
+adb shell settings put secure immersive_mode_confirmations confirmed
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put global anr_show_background 0
+sleep 20
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS || true
 adb logcat -c
 
 # 1) normal açılış: açılış ekranı + lobi
