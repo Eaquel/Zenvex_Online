@@ -40,6 +40,7 @@ class UiShotsTest {
                     PxButton("Kilitli", enabled = false) {}
                     PxButton("Harita", icon = "map", color = Px.Dark) {}
                     PxIcon("mail", badge = 3) {}
+                    PxIcon("bag", size = 54.dp) {}
                 }
                 ToastPlate("Doktor yaralarını sardı (-20 altın)", Px.Clan, "coin")
                 ToastPlate("Yeni dostun seninle! Köpek seni takip edecek.", Px.Name, "check")

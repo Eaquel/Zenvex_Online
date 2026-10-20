@@ -1756,10 +1756,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 path.close(); c.drawPath(path, fill)
             }
-            "weapon" -> { // tabanca silueti
-                path.moveTo(cx - s * 0.8f, cy - s * 0.35f); path.lineTo(cx + s * 0.8f, cy - s * 0.35f); path.lineTo(cx + s * 0.8f, cy)
-                path.lineTo(cx - s * 0.05f, cy); path.lineTo(cx - s * 0.2f, cy + s * 0.7f); path.lineTo(cx - s * 0.6f, cy + s * 0.7f)
-                path.lineTo(cx - s * 0.5f, cy); path.lineTo(cx - s * 0.8f, cy); path.close(); c.drawPath(path, fill)
+            "weapon" -> { // çapraz bıçak ve katana (silah değiştir)
+                for (side in listOf(-1f, 1f)) {
+                    c.save(); c.rotate(45f * side, cx, cy)
+                    val long = if (side > 0) 0.95f else 0.6f
+                    path.reset()
+                    path.moveTo(cx - s * 0.09f, cy + s * 0.2f); path.lineTo(cx - s * 0.09f, cy - s * long + s * 0.15f)
+                    path.lineTo(cx, cy - s * long); path.lineTo(cx + s * 0.09f, cy - s * long + s * 0.15f); path.lineTo(cx + s * 0.09f, cy + s * 0.2f); path.close()
+                    c.drawPath(path, fill)
+                    c.drawRect(cx - s * 0.25f, cy + s * 0.2f, cx + s * 0.25f, cy + s * 0.3f, fill)  // siper
+                    c.drawRect(cx - s * 0.07f, cy + s * 0.3f, cx + s * 0.07f, cy + s * 0.7f, fill)  // kabza
+                    c.restore()
+                }
             }
             "reload" -> {
                 c.drawArc(cx - s * 0.6f, cy - s * 0.6f, cx + s * 0.6f, cy + s * 0.6f, -60f, 280f, false, stroke)

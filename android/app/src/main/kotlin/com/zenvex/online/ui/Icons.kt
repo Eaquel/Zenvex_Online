@@ -62,10 +62,13 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawLine(c, p(0.18f, 0.55f), p(0.45f, 0.82f), w * 0.11f, StrokeCap.Round)
             drawLine(c, p(0.12f, 0.88f), p(0.25f, 0.75f), w * 0.13f, StrokeCap.Round)
         }
-        "bag" -> {
-            drawRoundRect(c, p(0.16f, 0.32f), Size(w * 0.68f, w * 0.56f), CornerRadius(w * 0.14f))
-            drawArc(c, 200f, 140f, false, p(0.32f, 0.12f), Size(w * 0.36f, w * 0.36f), style = st)
-            drawRoundRect(Color.Black.copy(alpha = 0.3f), p(0.34f, 0.52f), Size(w * 0.32f, w * 0.14f), CornerRadius(w * 0.05f))
+        "bag" -> { // sırt çantası: kapak, ön cep, askılar
+            drawRoundRect(c, p(0.2f, 0.22f), Size(w * 0.6f, w * 0.68f), CornerRadius(w * 0.16f))
+            drawRoundRect(Color.Black.copy(alpha = 0.28f), p(0.2f, 0.22f), Size(w * 0.6f, w * 0.24f), CornerRadius(w * 0.16f))
+            drawRoundRect(Color.Black.copy(alpha = 0.3f), p(0.3f, 0.56f), Size(w * 0.4f, w * 0.24f), CornerRadius(w * 0.06f))
+            drawLine(c.copy(alpha = 0.9f), p(0.36f, 0.6f), p(0.64f, 0.6f), w * 0.05f)
+            drawArc(c, 180f, 180f, false, p(0.36f, 0.08f), Size(w * 0.28f, w * 0.26f), style = thin)
+            drawRect(Color.Black.copy(alpha = 0.45f), p(0.46f, 0.4f), Size(w * 0.08f, w * 0.1f))
         }
         "craft", "hammer" -> {
             drawLine(c, p(0.25f, 0.82f), p(0.6f, 0.42f), w * 0.11f, StrokeCap.Round)
