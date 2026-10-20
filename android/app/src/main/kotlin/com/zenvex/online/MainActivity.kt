@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
         Account.init(this)
         GameSession.init(this)
         Audio.init(this)
+        com.zenvex.online.ui.Demo.on = intent?.getBooleanExtra("demo", false) == true
 
         setContent {
             // Kısayol: adb shell am start -n com.zenvex.online/.MainActivity --es screen Game

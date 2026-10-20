@@ -1,0 +1,61 @@
+# APK derlemesi bittikten sonra: emülatörde uygulamayı açıp ekranları gezer, görüntüleri yükler.
+# Sonuç: Actions → "UI Test" → artifacts "ui-shots" (ekran görüntüleri + logcat).
+name: UI Test
+
+on:
+  workflow_run:
+    workflows: ["Android APK"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "APK'nın alınacağı Android APK çalıştırma kimliği"
+        required: true
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: ui-test
+  cancel-in-progress: true
+
+jobs:
+  emulator:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ZenvexOnline-apk
+          path: apk
+          run-id: ${{ github.event.workflow_run.id || inputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: KVM aç
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Emülatörde aç ve gez
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          script: bash .github/scripts/ui_smoke.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-shots
+          path: artifacts/

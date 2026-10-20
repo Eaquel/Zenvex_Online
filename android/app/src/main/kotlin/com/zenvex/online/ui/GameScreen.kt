@@ -101,6 +101,34 @@ fun GameScreen(toLobby: () -> Unit) {
         overlay = when (overlay) { Overlay.None -> Overlay.Menu; Overlay.Dead -> Overlay.Dead; Overlay.Settings -> Overlay.Menu; else -> Overlay.None }
     }
     val close = { overlay = Overlay.None }
+    // test gösterimi: ekranları sırayla aç ve görüntüle (Demo.kt)
+    if (Demo.on) LaunchedEffect(Unit) {
+        val act = ctx as android.app.Activity
+        fun cheat(t: String) = GameSession.cmd("cheat", "text" to t)
+        suspend fun step(name: String, o: Overlay, wait: Long = 1800) { overlay = o; kotlinx.coroutines.delay(wait); Demo.shot(act, name) }
+        kotlinx.coroutines.delay(4000)
+        Demo.shot(act, "01_spawn")
+        for (t in listOf("level 6", "potions", "item medkit 4", "item cloth 6", "item tape 4", "item w_katana 1", "dog 3", "points 5")) cheat(t)
+        val inv = GameSession.ui("inventory").optJSONArray("slots")
+        for (i in 4 until (inv?.length() ?: 0)) if (inv!!.optJSONObject(i)?.optString("id") == "potion_heal") { GameSession.cmd("move", "from" to i, "to" to 0); break }
+        step("02_bag", Overlay.Bag)
+        step("03_map", Overlay.Map)
+        npcKind = 6; step("04_npc_guide", Overlay.Npc, 2500)
+        step("05_quests", Overlay.Quests)
+        step("06_skills", Overlay.Skills)
+        step("07_craft", Overlay.Craft)
+        step("08_dog", Overlay.Dog)
+        step("09_menu", Overlay.Menu)
+        step("10_settings", Overlay.Settings)
+        step("11_chat", Overlay.Chat)
+        overlay = Overlay.None
+        cheat("tp deep"); cheat("spawn walker 4 3"); cheat("spawn dog 2 3")
+        kotlinx.coroutines.delay(3500)
+        Demo.shot(act, "12_combat")
+        cheat("night"); kotlinx.coroutines.delay(1500)
+        Demo.shot(act, "13_night")
+        Demo.done(act)
+    }
     Box(Modifier.fillMaxSize()) {
         AndroidView({ view }, Modifier.fillMaxSize())
         if (overlay == Overlay.None) Hud { overlay = it }
