@@ -186,7 +186,7 @@ object Online {
 
     private fun addLine(l: ChatLine) = main.post {
         chat += l
-        while (chat.size > 80) chat.removeAt(0)
+        while (chat.size > 300) chat.removeAt(0)
         onChat?.invoke(l)
     }
 

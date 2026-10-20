@@ -366,9 +366,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (questPollT <= 0f) {
             questPollT = 1f
             questMarks.clear()
+            questTargets.clear()
+            guideStep = ""
             val st = GameSession.ui("quests").optJSONArray("story")
             for (i in 0 until (st?.length() ?: 0)) {
                 val q = st!!.getJSONObject(i)
+                if (q.has("x")) questTargets += QuestTarget(q.getDouble("x").toFloat(), q.getDouble("y").toFloat(),
+                    if (q.optBoolean("ready") || !q.optBoolean("on")) q.optString("giver") else q.optString("title"), q.optBoolean("guide"))
+                if (q.optBoolean("guide") && q.optBoolean("on") && !q.optBoolean("ready")) guideStep = q.optString("id")
                 val ch = 4 + q.optInt("giver_kind")
                 if (q.optBoolean("ready")) questMarks[ch] = "?"
                 else if (!q.optBoolean("on") && q.has("x")) questMarks.putIfAbsent(ch, "!")
@@ -390,8 +395,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     fun addChat(line: String) = synchronized(chatLines) {
-        chatLines += line to 9f
-        if (chatLines.size > 6) chatLines.removeAt(0)
+        chatLines += line to 20f
+        if (chatLines.size > 8) chatLines.removeAt(0)
     }
 
     private fun vibrate(ms: Long, amp: Int) {
@@ -626,6 +631,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.restore()
         drawHud(c)
         drawControls(c)
+        drawTutorial(c)
         if (s.showFps) drawText(c, "${fps.roundToInt()} FPS", 12 * density, sh - 10 * density, 12 * density, 0xFF9AFF9A.toInt())
     }
 
@@ -827,6 +833,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier")
     private val npc6Plate = arrayOf(null, "Tüccar Selim" to "Tüccar", "Yaşlı Hüseyin" to "Görevci", "Doktor Leyla" to "Doktor",
         "Tamirci Rıza" to "Tamirci", "Eğitmen Kerem" to "Köpek Eğitmeni", "Rehber Deniz" to "Rehber")
+    /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
+    private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
+    private val questTargets = ArrayList<QuestTarget>()
+    @Volatile var guideStep = ""
+        private set
     /** NPC başı görev işareti: ch → "!" (görev var) / "?" (teslim) */
     private val questMarks = HashMap<Int, String>()
     private var questPollT = 0f
@@ -1593,6 +1604,61 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (dx * dx + dy * dy > 4f) faceAng = Math.toDegrees(atan2(dx.toDouble(), -dy.toDouble())).toFloat()
         lastPx = x; lastPy = y
         return faceAng
+    }
+
+    // ------------------------------------------------------------------ öğretici okları
+    /** Zıplayan piksel ok: (tx, ty) noktasını gösterir; ok gövdesi [from] yönünden gelir. Üstünde kısa yazı. */
+    private fun tutArrow(c: Canvas, tx: Float, ty: Float, ang: Float, label: String) {
+        val d = density
+        val bob = sin(time * 6f) * 8 * d
+        val ux = kotlin.math.cos(ang); val uy = kotlin.math.sin(ang)
+        val hx = tx - ux * (18 * d + bob); val hy = ty - uy * (18 * d + bob)
+        val len = 46 * d
+        c.save(); c.rotate(Math.toDegrees(ang.toDouble()).toFloat(), hx, hy)
+        path.reset()
+        path.moveTo(hx, hy); path.lineTo(hx - 18 * d, hy - 14 * d); path.lineTo(hx - 18 * d, hy - 6 * d); path.lineTo(hx - len, hy - 6 * d)
+        path.lineTo(hx - len, hy + 6 * d); path.lineTo(hx - 18 * d, hy + 6 * d); path.lineTo(hx - 18 * d, hy + 14 * d); path.close()
+        fill.color = 0xFFFFD34A.toInt(); c.drawPath(path, fill)
+        stroke.color = 0xFF15140F.toInt(); stroke.strokeWidth = 3 * d; c.drawPath(path, stroke)
+        c.restore()
+        if (label.isNotEmpty()) {
+            val lx = hx - ux * (len + 14 * d); val ly = hy - uy * (len + 14 * d)
+            val w = text.apply { typeface = fontBold; textSize = 15 * d }.measureText(label) + 16 * d
+            fill.color = 0xE015140F.toInt(); c.drawRect(lx - w / 2, ly - 16 * d, lx + w / 2, ly + 8 * d, fill)
+            drawText(c, label, lx, ly + 2 * d, 15 * d, 0xFFFFD34A.toInt(), true, fontBold)
+        }
+    }
+
+    private fun drawTutorial(c: Canvas) {
+        if (hud[Native.DEAD] > 0.5f) return
+        val d = density
+        // rehber adımına göre kontrol okları
+        when (guideStep) {
+            "g1" -> {
+                tutArrow(c, atkStick.homeX, atkStick.homeY - stickR * 0.9f, (PI / 2).toFloat(), "Saldırmak İçin Çevir")
+                tutArrow(c, moveStick.homeX, moveStick.homeY - stickR * 0.9f, (PI / 2).toFloat(), "Yürü")
+            }
+            "g2" -> if (btnAbility.visible) tutArrow(c, btnAbility.r.centerX(), btnAbility.r.top, (PI / 2).toFloat(), "Takla At")
+            "g3" -> tutArrow(c, sw / 2f, sh / 2f - 70 * d, (PI / 2).toFloat(), "Yerdeki Eşyaların Üstünden Geç")
+        }
+        // görev hedefi: ekran dışındaysa kenarda yön oku + mesafe, ekrandaysa üstünde zıplayan işaret
+        val tgt = questTargets.firstOrNull { it.guide } ?: questTargets.firstOrNull() ?: return
+        val px = hud[Native.PX]; val py = hud[Native.PY]
+        val sx = wx(tgt.x); val sy = wy(tgt.y) - 120 * scale
+        val m = 70 * d
+        val inside = sx in m..(sw - m) && sy in m..(sh - m)
+        val dist = (kotlin.math.hypot(tgt.x - px, tgt.y - py) / 62.5f).toInt()
+        if (inside) {
+            if (dist > 3) tutArrow(c, sx, sy, (PI / 2).toFloat(), tgt.label)
+        } else {
+            val cx = sw / 2f; val cy = sh / 2f
+            val ang = atan2(sy - cy, sx - cx)
+            // ekran kenarına kırp
+            val kx = (sw / 2f - m) / kotlin.math.abs(kotlin.math.cos(ang)).coerceAtLeast(0.001f)
+            val ky = (sh / 2f - m) / kotlin.math.abs(kotlin.math.sin(ang)).coerceAtLeast(0.001f)
+            val r = min(kx, ky)
+            tutArrow(c, cx + kotlin.math.cos(ang) * r, cy + kotlin.math.sin(ang) * r, ang, "${tgt.label} · $dist m")
+        }
     }
 
     // ------------------------------------------------------------------ kontroller

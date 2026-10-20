@@ -166,3 +166,20 @@ fun QuestTracker(story: JSONArray, modifier: Modifier = Modifier, onClick: () ->
         }
     }
 }
+
+/** Öğretici oku (Compose): yukarıdan aşağı zıplayan sarı ok + yazı; hedef öğenin üstüne yerleştirilir. */
+@Composable
+fun TutArrow(label: String, modifier: Modifier = Modifier) {
+    val t = rememberTime()
+    Column(modifier.offset(y = (-78 + sin(t * 6f) * 6).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.background(Color(0xE015140F)).padding(horizontal = 8.dp, vertical = 3.dp)) { PT(label, 13.sp, Color(0xFFFFD34A)) }
+        androidx.compose.foundation.Canvas(Modifier.size(26.dp, 22.dp)) {
+            val p = androidx.compose.ui.graphics.Path().apply {
+                moveTo(size.width / 2, size.height); lineTo(0f, size.height * 0.45f); lineTo(size.width * 0.3f, size.height * 0.45f)
+                lineTo(size.width * 0.3f, 0f); lineTo(size.width * 0.7f, 0f); lineTo(size.width * 0.7f, size.height * 0.45f); lineTo(size.width, size.height * 0.45f); close()
+            }
+            drawPath(p, Color(0xFFFFD34A))
+            drawPath(p, Color(0xFF15140F), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
+        }
+    }
+}

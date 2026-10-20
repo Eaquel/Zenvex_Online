@@ -127,13 +127,13 @@ private class DragState {
 }
 
 @Composable
-fun InventoryScreen(back: () -> Unit, inGame: Boolean = false) {
+fun InventoryScreen(back: () -> Unit, inGame: Boolean = false, onCraft: (() -> Unit)? = null) {
     var tick by remember { mutableIntStateOf(0) }
     val inv = remember(tick) { GameSession.ui("inventory") }
     val hero = remember(tick / 20) { GameSession.ui("profile").optInt("character") }
     // bekleme süreleri akarken cepleri tazele
     LaunchedEffect(Unit) { while (true) { delay(500); tick++ } }
-    BagView(inv, hero, inGame, back, { name, kv -> GameSession.cmd(name, *kv) }) { tick++ }
+    BagView(inv, hero, inGame, back, { name, kv -> GameSession.cmd(name, *kv) }, onCraft = onCraft) { tick++ }
 }
 
 /** Çanta görünümü (veri dışarıdan: ekran görüntüsü testinde örnek JSON ile çizilir). */
@@ -141,7 +141,7 @@ fun InventoryScreen(back: () -> Unit, inGame: Boolean = false) {
 @Composable
 internal fun BagView(
     inv: JSONObject, hero: Int, inGame: Boolean, back: () -> Unit,
-    cmd: (String, Array<Pair<String, Any>>) -> GameSession.Reply, refresh: () -> Unit,
+    cmd: (String, Array<Pair<String, Any>>) -> GameSession.Reply, onCraft: (() -> Unit)? = null, refresh: () -> Unit,
 ) {
     var sel by remember { mutableStateOf<Int?>(null) }
     var selEq by remember { mutableStateOf<String?>(null) }
@@ -184,6 +184,10 @@ internal fun BagView(
         PxFrame("Çanta", "bag", back, right = {
             Icon("coin", 18.dp, Px.Clan); Spacer(Modifier.width(4.dp)); PT(fmt(inv.optInt("gold")), 16.sp, Px.Clan)
             Spacer(Modifier.width(12.dp))
+            if (onCraft != null) {
+                PxButton("Üret", height = 38.dp, size = 14.sp, color = Px.Blue, icon = "craft") { onCraft() }
+                Spacer(Modifier.width(8.dp))
+            }
             PxButton("Sırala", height = 38.dp, size = 14.sp, color = Px.Dark, icon = "refresh") { cmd("sort", emptyArray()); refresh() }
         }) {
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

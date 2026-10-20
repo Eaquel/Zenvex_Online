@@ -681,7 +681,7 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
     val lines = Online.chat.filter { it.channel == channels[tab] }
     val state = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) state.animateScrollToItem(lines.size - 1) }
-    Column(modifier.pxPanel(Color(0xE81E1D19)).padding(10.dp)) {
+    Column(modifier.pxPanel(Color(0x9C141310)).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             listOf("Genel", "Yakın", "Klan", "Özel", "Sistem").forEachIndexed { i, n ->
                 Box(Modifier.background(if (i == tab) Px.Panel else Px.PanelDark).clickable { tab = i }.padding(horizontal = 9.dp, vertical = 6.dp)) {
@@ -700,7 +700,7 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
                 Row(Modifier.padding(vertical = 2.dp)) {
                     if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
                     PT(l.name + ": ", 13.sp, if (l.mine) Px.Name else if (l.channel == "system") Px.Orange else Color(0xFF8CC8FF))
-                    PT(l.text, 13.sp, maxLines = 4)
+                    PT(l.text, 14.sp, maxLines = 6, outline = true)
                 }
             }
         }

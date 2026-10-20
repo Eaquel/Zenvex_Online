@@ -161,7 +161,7 @@ fun GameScreen(toLobby: () -> Unit) {
         when (overlay) {
             Overlay.Menu -> SideMenu(close, { overlay = it }) { GameSession.save(cloud = true); toLobby() }
             Overlay.Settings -> SettingsScreen(back = { overlay = Overlay.Menu; view.post { view.requestLayout() } }, inGame = true)
-            Overlay.Bag -> InventoryScreen(close, inGame = true)
+            Overlay.Bag -> InventoryScreen(close, inGame = true) { overlay = Overlay.Craft }
             Overlay.Craft -> CraftScreen(close)
             Overlay.Merchant -> ShopScreen(close)
             Overlay.Quests -> QuestsScreen(close)
@@ -175,8 +175,9 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Characters -> CharacterScreen(close)
             Overlay.Cosmetics -> CosmeticsScreen(close)
             // imePadding: klavye açılınca sohbet paneli klavyenin üstüne kayar
-            Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(12.dp)) {
-                ChatPanel(Modifier.width(460.dp).fillMaxHeight().align(Alignment.CenterStart), close)
+            // sohbet: oyun arkada görünür ve oynanır (karartma yok); panel yarı saydam, ekranın yüksekliği boyunca
+            Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(start = 8.dp, top = 8.dp, bottom = 8.dp)) {
+                ChatPanel(Modifier.width(520.dp).fillMaxHeight().align(Alignment.CenterStart), close)
             }
             Overlay.Map -> WorldMapScreen(close)
             Overlay.Trade -> TradeScreen(close)
@@ -246,7 +247,13 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
                     inv = GameSession.ui("inventory")
                 }
             }
-            PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }
+            Box {
+                PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }
+                // öğretici: üretim ve cep adımlarında çantayı göster
+                val step = (0 until story.length()).map { story.getJSONObject(it) }
+                    .firstOrNull { it.optBoolean("guide") && it.optBoolean("on") && !it.optBoolean("ready") }?.optString("id")
+                if (step == "g4" || step == "g5") TutArrow(if (step == "g4") "Çantayı Aç → Üret" else "Çantayı Aç", Modifier.align(Alignment.TopCenter))
+            }
         }
         Spacer(Modifier.height(6.dp))
         Row(
