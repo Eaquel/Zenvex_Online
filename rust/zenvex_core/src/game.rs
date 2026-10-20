@@ -143,8 +143,14 @@ pub enum Event {
     },
     #[serde(rename = "locked")]
     CityLocked,
-    #[serde(rename = "sniper")]
-    Sniper { x1: f32, y1: f32, x2: f32, y2: f32 },
+    /// kule askeri mızrak fırlattı (t: uçuş süresi)
+    #[serde(rename = "spear")]
+    Spear { x1: f32, y1: f32, x2: f32, y2: f32, dur: f32 },
+    /// güvenli bölgeye yaklaşan yaratığa tanrıların yıldırımı
+    #[serde(rename = "bolt")]
+    Lightning { x: f32, y: f32 },
+    #[serde(rename = "doghit")]
+    DogHit { x: f32, y: f32, v: i32 },
     #[serde(rename = "drone")]
     DroneShot { x: f32, y: f32 },
     #[serde(rename = "shield")]
@@ -283,6 +289,13 @@ pub struct Zombie {
     pub summoned: bool,
     pub enraged: bool,
     pub boss: bool,
+    /// doğduğu yer: bölgesinden fazla uzaklaşınca buraya döner
+    pub home_x: f32,
+    pub home_y: f32,
+    /// eve dönüyor (bu sırada kimseyi görmez, canı dolar)
+    pub ret: bool,
+    /// köpek ısırdıysa bir süre köpeğe odaklanır
+    pub dog_aggro: f32,
 }
 
 #[derive(Clone, Debug)]
@@ -362,6 +375,9 @@ pub struct Npc {
     pub dir: u8,
     pub cd: f32,
     pub anim_t: f32,
+    /// kule askeri: havadaki mızrağın çarpmasına kalan süre ve hedef zombi kimliği
+    pub hit_t: f32,
+    pub hit_id: u32,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -461,6 +477,8 @@ impl Game {
                 dir: 0,
                 cd: 0.0,
                 anim_t: 0.0,
+                hit_t: 0.0,
+                hit_id: 0,
             })
             .collect();
         // her pazarda tüccar ve çevresinde kamp NPC'leri (görevci, doktor, tamirci, köpek eğitmeni)
@@ -471,7 +489,7 @@ impl Game {
                 if kind != 1 {
                     world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
                 }
-                npcs.push(Npc { kind, x, y, dir: 0, cd: 0.0, anim_t: (kind as f32) * 0.7 });
+                npcs.push(Npc { kind, x, y, dir: 0, cd: 0.0, anim_t: (kind as f32) * 0.7, hit_t: 0.0, hit_id: 0 });
             }
         }
         Game {
@@ -558,10 +576,10 @@ impl Game {
         self.time += dt;
         self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
+        self.tick_timers(dt);
         if self.passenger {
-            // yolcu: konumu ağ katmanı verir; sadece zamanlayıcılar
+            // yolcu: konumu ağ katmanı verir
             self.player.anim_t += dt;
-            self.player.ability_cd = (self.player.ability_cd - dt).max(0.0);
         } else if self.player.vehicle.is_some() {
             self.update_vehicle_drive(dt, input);
         } else {
@@ -605,6 +623,43 @@ impl Game {
         }
     }
 
+    /// Süreli etkiler (iksir, skill, bekleme) her durumda işler: yürürken, araçta ya da yolcuyken.
+    fn tick_timers(&mut self, dt: f32) {
+        let p = &mut self.player;
+        p.flash_t = (p.flash_t - dt).max(0.0);
+        p.last_breath_cd = (p.last_breath_cd - dt).max(0.0);
+        p.combat_t += dt;
+        p.ability_cd = (p.ability_cd - dt).max(0.0);
+        p.cloak_cd = (p.cloak_cd - dt).max(0.0);
+        p.noammo_t = (p.noammo_t - dt).max(0.0);
+        p.locked_t = (p.locked_t - dt).max(0.0);
+        for t in [
+            &mut p.rage_t,
+            &mut p.cloak_t,
+            &mut p.energy_t,
+            &mut p.shield_t,
+            &mut p.cast_t,
+            &mut p.iframe_t,
+            &mut p.speed_t,
+            &mut p.power_t,
+        ] {
+            *t = (*t - dt).max(0.0);
+        }
+        for c in p.pot_cd.iter_mut() {
+            *c = (*c - dt).max(0.0);
+        }
+        if p.no_cd {
+            p.ability_cd = 0.0;
+            p.pot_cd = [0.0; 4];
+        }
+        if p.heal_t > 0.0 {
+            p.heal_t = (p.heal_t - dt).max(0.0);
+            if !p.dead {
+                p.hp = (p.hp + p.heal_rate * dt).min(self.progress.max_hp());
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ oyuncu
     fn update_player(&mut self, dt: f32, input: Input) {
         let max_hp = self.progress.max_hp();
@@ -613,32 +668,6 @@ impl Game {
         {
             let p = &mut self.player;
             p.anim_t += dt;
-            p.flash_t = (p.flash_t - dt).max(0.0);
-            p.last_breath_cd = (p.last_breath_cd - dt).max(0.0);
-            p.combat_t += dt;
-            p.ability_cd = (p.ability_cd - dt).max(0.0);
-            p.cloak_cd = (p.cloak_cd - dt).max(0.0);
-            p.noammo_t = (p.noammo_t - dt).max(0.0);
-            p.locked_t = (p.locked_t - dt).max(0.0);
-            for t in [
-                &mut p.rage_t,
-                &mut p.cloak_t,
-                &mut p.energy_t,
-                &mut p.shield_t,
-                &mut p.cast_t,
-                &mut p.iframe_t,
-                &mut p.speed_t,
-                &mut p.power_t,
-            ] {
-                *t = (*t - dt).max(0.0);
-            }
-            for c in p.pot_cd.iter_mut() {
-                *c = (*c - dt).max(0.0);
-            }
-            if p.no_cd {
-                p.ability_cd = 0.0;
-                p.pot_cd = [0.0; 4];
-            }
             if p.shield_t <= 0.0 {
                 p.shield = 0.0;
             }
@@ -648,10 +677,6 @@ impl Game {
             if p.food_t > 0.0 {
                 p.food_t -= dt;
                 p.hp = (p.hp + 3.0 * dt).min(max_hp);
-            }
-            if p.heal_t > 0.0 {
-                p.heal_t -= dt;
-                p.hp = (p.hp + p.heal_rate * dt).min(max_hp);
             }
             if p.poison_t > 0.0 {
                 p.poison_t -= dt;
@@ -1364,6 +1389,19 @@ impl Game {
                 }
                 continue;
             }
+            // havadaki mızrak hedefe vardı
+            if npc.hit_t > 0.0 {
+                npc.hit_t -= dt;
+                if npc.hit_t <= 0.0 {
+                    let id = npc.hit_id;
+                    if let Some(i) = self.zombies.iter().position(|z| z.id == id && z.state != ZState::Dead) {
+                        let dmg = 60.0 + self.zombies[i].max_hp * 0.25;
+                        let (kx, ky) = dir_vec(self.npcs[ni].dir);
+                        self.hurt_zombie(i, dmg, false, kx, ky, false, false);
+                    }
+                }
+                continue;
+            }
             if npc.cd > 0.0 {
                 continue;
             }
@@ -1379,18 +1417,15 @@ impl Game {
                     best = Some((i, d));
                 }
             }
-            if let Some((i, _)) = best {
-                let (zx, zy) = (self.zombies[i].x, self.zombies[i].y);
-                self.npcs[ni].dir = dir_from_vec(zx - nx, zy - ny);
-                self.npcs[ni].cd = 1.2;
-                self.events.push(Event::Sniper {
-                    x1: nx,
-                    y1: ny - 300.0,
-                    x2: zx,
-                    y2: zy - 60.0,
-                });
-                let dmg = 60.0 + self.zombies[i].max_hp * 0.25;
-                self.hurt_zombie(i, dmg, false, 0.0, 0.0, false, false);
+            if let Some((i, d)) = best {
+                let (zx, zy, id) = (self.zombies[i].x, self.zombies[i].y, self.zombies[i].id);
+                let t = (d / m(16.0)).clamp(0.2, 0.75);
+                let npc = &mut self.npcs[ni];
+                npc.dir = dir_from_vec(zx - nx, zy - ny);
+                npc.cd = 1.6;
+                npc.hit_t = t;
+                npc.hit_id = id;
+                self.events.push(Event::Spear { x1: nx, y1: ny - 300.0, x2: zx, y2: zy - 50.0, dur: t });
             }
         }
     }

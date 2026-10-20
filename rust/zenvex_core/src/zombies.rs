@@ -7,6 +7,9 @@ use std::f32::consts::TAU;
 const ACTIVE_R: f32 = 1700.0;
 const MAX_ACTIVE: usize = 26;
 
+/// Bölge sınırı: yaratık doğduğu yerden bu kadar uzaklaşınca takibi bırakıp geri döner.
+const LEASH: f32 = 15.0 * crate::data::PX_PER_M;
+
 impl Game {
     pub fn make_zombie(&mut self, kind: ZKind, level: u32, x: f32, y: f32) -> Zombie {
         let def = &ZOMBIES[kind as usize];
@@ -44,6 +47,10 @@ impl Game {
             summoned: false,
             enraged: false,
             boss: kind == ZKind::Titan,
+            home_x: x,
+            home_y: y,
+            ret: false,
+            dog_aggro: 0.0,
         }
     }
 
@@ -186,6 +193,13 @@ impl Game {
         } else {
             Vec::new()
         };
+        // köpek de hedef olabilir (araçtayken içeride)
+        let dog_t = self
+            .dog
+            .as_ref()
+            .filter(|d| d.dead_t <= 0.0 && !l_in_vehicle)
+            .map(|d| (d.x, d.y, self.world.zone(d.x, d.y).safe()));
+        let mut dog_damage = 0.0f32;
         let mut remote_hits: Vec<(usize, f32, bool)> = Vec::new();
         let mut player_damage = 0.0f32;
         let mut blast_damage = 0.0f32;
@@ -226,6 +240,7 @@ impl Game {
             z.bar_t = (z.bar_t - dt).max(0.0);
             z.attack_cd = (z.attack_cd - dt).max(0.0);
             z.special_cd -= dt;
+            z.dog_aggro = (z.dog_aggro - dt).max(0.0);
             // geri itilme
             if z.kx != 0.0 || z.ky != 0.0 {
                 let (mut x, mut y) = (z.x + z.kx * dt, z.y + z.ky * dt);
@@ -264,8 +279,25 @@ impl Game {
                     tanim = t.6;
                 }
             }
+            // köpek: yakınsa ya da zombiyi ısırdıysa önce ona saldırır (ti = -2)
+            if let Some((qx, qy, qsafe)) = dog_t {
+                let d = (qx - z.x).hypot(qy - z.y);
+                let w = if z.dog_aggro > 0.0 { d * 0.35 } else { d };
+                if !qsafe && w < best && (d < 300.0 || z.dog_aggro > 0.0) {
+                    best = w;
+                    ti = -2;
+                    px = qx;
+                    py = qy;
+                    pdead = false;
+                    p_safe = false;
+                    in_vehicle = false;
+                    tdir = 0;
+                    tanim = 0;
+                }
+            }
             let (dx, dy) = (px - z.x, py - z.y);
             let dist = dx.hypot(dy);
+            let from_home = (z.x - z.home_x).hypot(z.y - z.home_y);
             // tür efektleri (sürekli)
             match z.kind {
                 ZKind::Dark => {
@@ -297,6 +329,7 @@ impl Game {
             }
             let sees = !pdead
                 && !p_safe
+                && !z.ret
                 && (dist < 300.0
                     || (dist < 460.0 && (tanim == A_RUN || (ti < 0 && self.player.atk_cd > 0.0)))
                     || z.boss && dist < 900.0);
@@ -324,6 +357,23 @@ impl Game {
                         z.state = ZState::Wander;
                     }
                 }
+                ZState::Wander if z.ret => {
+                    // bölgesine dönüyor: canı dolar, kimseyi kovalamaz
+                    z.hp = (z.hp + z.max_hp * 0.25 * dt).min(z.max_hp);
+                    let (mx, my) = (z.home_x - z.x, z.home_y - z.y);
+                    let md = mx.hypot(my);
+                    if md < 50.0 {
+                        z.ret = false;
+                        z.anim = Z_IDLE;
+                        z.timer = 1.0;
+                    } else {
+                        self.move_zombie(&mut z, mx / md, my / md, dt, def.chase);
+                        if z.anim != Z_WALK {
+                            z.anim = Z_WALK;
+                            z.anim_t = 0.0;
+                        }
+                    }
+                }
                 ZState::Wander => {
                     z.timer -= dt;
                     if sees {
@@ -348,8 +398,10 @@ impl Game {
                         } else {
                             let a = self.rng.range(0.0, TAU);
                             let r = self.rng.range(60.0, 220.0);
-                            z.tx = z.x + a.cos() * r;
-                            z.ty = z.y + a.sin() * r;
+                            // bölgesinin içinde dolaşır
+                            let (cx, cy) = if from_home > m(5.0) { (z.home_x, z.home_y) } else { (z.x, z.y) };
+                            z.tx = cx + a.cos() * r;
+                            z.ty = cy + a.sin() * r;
                             if z.boss {
                                 z.tx = world::BOSS.0 + a.cos() * r;
                                 z.ty = world::BOSS.1 + a.sin() * r;
@@ -380,8 +432,18 @@ impl Game {
                 }
                 ZState::Chase => {
                     let reach = def.radius + if z.boss { 70.0 } else { 26.0 };
-                    if pdead || p_safe || dist > 1100.0 {
+                    if p_safe && ti == -1 && !z.boss && dist < 650.0 && self.rng.chance(0.4) {
+                        // oyuncu güvenli bölgeye kaçtı: tanrılar peşindeki yaratığı çarpabilir
+                        z.hp = 0.0;
+                        z.state = ZState::Dead;
+                        z.anim = Z_DEATH;
+                        z.anim_t = 0.0;
+                        z.timer = 3.0;
+                        self.events.push(Event::Lightning { x: z.x, y: z.y });
+                    } else if pdead || p_safe || dist > 1100.0 || (!z.boss && from_home > LEASH) {
+                        // takibi bırakır ve bölgesine döner
                         z.state = ZState::Wander;
+                        z.ret = !z.boss && from_home > m(4.0);
                         z.anim = Z_IDLE;
                         z.timer = 1.0;
                     } else if z.kind == ZKind::Mystery && z.hp < z.max_hp * 0.4 && !z.decoy {
@@ -456,7 +518,9 @@ impl Game {
                             }
                             ZKind::Titan => {
                                 if dist < def.radius + 110.0 {
-                                    if ti < 0 {
+                                    if ti == -2 {
+                                        dog_damage += lvl_dmg;
+                                    } else if ti < 0 {
                                         player_damage += lvl_dmg;
                                     } else {
                                         remote_hits.push((ti as usize, lvl_dmg, false));
@@ -466,7 +530,9 @@ impl Game {
                             _ => {
                                 if dist < def.radius + 40.0 && facing > 0.2 && !in_vehicle {
                                     let poison = z.kind == ZKind::Toxic;
-                                    if ti < 0 {
+                                    if ti == -2 {
+                                        dog_damage += lvl_dmg;
+                                    } else if ti < 0 {
                                         player_damage += lvl_dmg;
                                         if poison {
                                             self.player.poison_t = self.player.poison_t.max(4.0);
@@ -535,6 +601,9 @@ impl Game {
                     remote_hits.push((k, d, false));
                 }
             }
+            if dog_t.is_some_and(|(qx, qy, _)| (qx - x).hypot(qy - y) < r) {
+                dog_damage += d;
+            }
             if (self.player.x - x).hypot(self.player.y - y) < r {
                 blast_damage += d;
                 let (dx, dy) = (self.player.x - x, self.player.y - y);
@@ -561,6 +630,9 @@ impl Game {
         }
         if player_damage > 0.0 {
             self.damage_player(player_damage);
+        }
+        if dog_damage > 0.0 {
+            self.hurt_dog(dog_damage);
         }
         if blast_damage > 0.0 && !self.player_invulnerable() {
             self.damage_player_blast(blast_damage);

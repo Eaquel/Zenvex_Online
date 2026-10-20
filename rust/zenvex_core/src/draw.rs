@@ -3,6 +3,9 @@ use crate::data::{self, VEHICLES, ZOMBIES};
 use crate::game::*;
 use crate::world::{Kind, Shape, STATIC_NAMES};
 
+/// HUD dizisinin uzunluğu (Kotlin Native.HUD_SIZE)
+pub const HUD_N: usize = 40;
+
 /// Ekipman kodları (Kotlin ile ortak): 0 yok, 1 basit, 2 polis, 3 askerî, 4 titan
 pub fn tier_code(id: &str) -> f32 {
     if id.is_empty() {
@@ -341,7 +344,7 @@ impl Game {
     }
 
     /// HUD dizisi (Kotlin Native.HUD_* ile aynı sıra)
-    pub fn hud(&self) -> [f32; 32] {
+    pub fn hud(&self) -> [f32; HUD_N] {
         let p = &self.player;
         let g = &self.progress;
         let w = self.weapon();
@@ -405,6 +408,14 @@ impl Game {
             bmax,
             p.poison_t,
             p.zone as f32,
+            p.speed_t,
+            p.power_t,
+            p.heal_t,
+            p.pot_cd[0],
+            p.pot_cd[1],
+            p.pot_cd[2],
+            p.food_t.max(0.0),
+            p.energy_t,
         ]
     }
 

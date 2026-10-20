@@ -203,6 +203,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val particles = ArrayList<Particle>()
     private val flashes = ArrayList<Light>()
     private val tracers = ArrayList<Tracer>()
+    /** kule askerinin fırlattığı mızrak: (x1,y1)→(x2,y2) yay çizerek dur sn'de uçar */
+    private class Spear(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val dur: Float) { var t = 0f }
+    private val spears = ArrayList<Spear>()
+    /** tanrıların yıldırımı: zikzak çizgi noktaları + ömür */
+    private class Bolt(val x: Float, val y: Float, val pts: FloatArray) { var life = 0.45f }
+    private val bolts = ArrayList<Bolt>()
+    private var whiteFlash = 0f
     private var banner = ""
     private var bannerSub = ""
     private var bannerT = 0f
@@ -355,6 +362,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         flashes.removeAll { it.life -= dt; it.life <= 0 }
         tracers.removeAll { it.life -= dt; it.life <= 0 }
+        spears.removeAll { s -> s.t += dt; if (s.t >= s.dur) { burst(s.x2, s.y2 + 50, 6, 0xFF9A8A70.toInt(), 120f, 4f); Audio.play("hit", near(s.x2, s.y2) * 0.7f, 0.8f) }; s.t >= s.dur }
+        bolts.removeAll { it.life -= dt; it.life <= 0 }
+        whiteFlash = max(0f, whiteFlash - dt * 3f)
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
         for (b in buttons) b.flash = max(0f, b.flash - dt * 3)
 
@@ -419,7 +429,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val k = e.optInt("kind")
                     val (txt, col) = when (k) { 0 -> "Can İksiri" to 0xFFFF6A6A.toInt(); 1 -> "Hız İksiri" to 0xFF6AE0FF.toInt(); else -> "Güç İksiri" to 0xFFFFA040.toInt() }
                     floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, txt, col, 20f, 1.4f, 1.4f)
-                    fx(if (k == 0) "heal" else "glow", 0f, 0f, 220f, follow = true)
+                    burst(hud[Native.PX], hud[Native.PY] - 60, 14, col, 140f, 5f, 1, 1f)
                     Audio.play("pickup", 0.9f, 1.3f)
                 }
                 "knock" -> { shake(12f, 0.35f); vibrate(120, 255); floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, "YERE DÜŞTÜN", 0xFFFF8A50.toInt(), 22f) }
@@ -510,10 +520,27 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         if (e.optBoolean("safe")) 0xFF7FE0A0.toInt() else 0xFFFFE9A8.toInt())
                 }
                 "locked" -> ui.onToast("Şehir kapısı kilitli: Seviye 10 gerekli")
-                "sniper" -> {
-                    tracers += Tracer(e.getDouble("x1").toFloat(), e.getDouble("y1").toFloat(), e.getDouble("x2").toFloat(), e.getDouble("y2").toFloat(), 0xFFFFF0B0.toInt(), 0.12f, 3f)
-                    Audio.play("shot_sniper", near(e.getDouble("x2").toFloat(), e.getDouble("y2").toFloat()) * 0.6f, 1.1f)
+                "spear" -> {
+                    val x1 = e.getDouble("x1").toFloat(); val y1 = e.getDouble("y1").toFloat()
+                    spears += Spear(x1, y1, e.getDouble("x2").toFloat(), e.getDouble("y2").toFloat(), e.getDouble("dur").toFloat())
+                    Audio.play("swing", near(x1, y1) * 0.7f, 0.7f)
                 }
+                "bolt" -> {
+                    // gökten zikzak: 9 kırık nokta, hedefte toz ve ışık
+                    val pts = FloatArray(20)
+                    for (k in 0..9) {
+                        val f = k / 9f
+                        pts[k * 2] = x + if (k in 1..8) ((Math.random() - 0.5) * 70).toFloat() else 0f
+                        pts[k * 2 + 1] = y - 900f * (1f - f)
+                    }
+                    bolts += Bolt(x, y, pts)
+                    whiteFlash = 0.55f
+                    flashes += Light(x, y, 420f, 0xFFC8E0FF.toInt(), 0.4f, 0.4f)
+                    burst(x, y, 18, 0xFFE0F0FF.toInt(), 260f, 5f, 1, 1f)
+                    shake(10f, 0.3f)
+                    Audio.play("thunder", near(x, y).coerceAtLeast(0.5f))
+                }
+                "doghit" -> floaters += Floater(x, y - 70, "-" + e.getInt("v"), 0xFFFFA060.toInt(), 18f)
                 "drone" -> Audio.play("drone", near(x, y) * 0.5f, 1.3f)
                 "shield" -> { Audio.play("shield"); floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, "+" + e.getInt("v") + " KALKAN", 0xFF70C8FF.toInt(), 20f) }
                 "heal" -> { Audio.play("heal", 0.6f); floaters += Floater(x, y - 140, "+" + e.getInt("v"), 0xFF60FF80.toInt(), 22f); burst(x, y, 10, 0xFF70FF90.toInt(), 80f, 5f, 1, 1f) }
@@ -578,6 +605,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawFx(c)
         drawParticles(c)
         drawTracers(c)
+        drawSpears(c)
+        drawBolts(c)
         drawLighting(c)
         drawPlates(c)
         drawFloaters(c)
@@ -1152,7 +1181,28 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         paint.alpha = 255
     }
 
+    /** İksir etkileri: süre HUD'dan gelir; bitince ya da araçtayken çizilmez. */
+    private fun drawBuffs(c: Canvas) {
+        if (hud[Native.IN_VEHICLE] > 0.5f || hud[Native.DEAD] > 0.5f) return
+        val px = hud[Native.PX]; val py = hud[Native.PY] - 60
+        val hl = hud[Native.HEAL_T]
+        if (hl > 0f) drawFxSprite(c, "heal", px, py, 220f, time, alpha = (230 * (hl / 1.2f).coerceIn(0f, 1f)).toInt())
+        // hız (mavi) ve güç (turuncu): ayak altında nabız gibi atan halka
+        fun ring(left: Float, col: Int, ph: Float) {
+            if (left <= 0f) return
+            val a = (left / 1.2f).coerceIn(0f, 1f) * (0.55f + 0.25f * kotlin.math.sin(time * 6f + ph))
+            val sx = wx(px); val sy = wy(py + 60)
+            val r = 70f * scale
+            fill.shader = RadialGradient(sx, sy, r, alphaC(col, a), 0, Shader.TileMode.CLAMP)
+            c.save(); c.scale(1f, 0.45f, sx, sy); c.drawCircle(sx, sy, r, fill); c.restore()
+            fill.shader = null
+        }
+        ring(hud[Native.SPEED_T], 0xFF6AE0FF.toInt(), 0f)
+        ring(hud[Native.POWER_T], 0xFFFFA040.toInt(), 1.6f)
+    }
+
     private fun drawFx(c: Canvas) {
+        drawBuffs(c)
         for (f in fxs) {
             if (f.follow) { f.x = hud[Native.PX]; f.y = hud[Native.PY] - 60 }
             val fade = if (f.dur > 0) ((f.dur - f.t) / 0.4f).coerceIn(0f, 1f) else 1f
@@ -1171,6 +1221,42 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     c.drawCircle(sx, sy, p.size * scale * density * (1.6f - k), fill)
                 }
                 3 -> { fill.color = alphaC(p.color, k); c.drawCircle(sx, sy, p.size * scale * density * 0.5f, fill) }
+            }
+        }
+    }
+
+    private fun drawSpears(c: Canvas) {
+        for (s in spears) {
+            val f = (s.t / s.dur).coerceIn(0f, 1f)
+            val arc = 160f * 4f * f * (1f - f)
+            val x = s.x1 + (s.x2 - s.x1) * f; val y = s.y1 + (s.y2 - s.y1) * f - arc
+            // yönelim: yayın türevi
+            val dx = s.x2 - s.x1; val dy = (s.y2 - s.y1) - 160f * 4f * (1f - 2f * f)
+            val l = max(1f, kotlin.math.hypot(dx, dy))
+            val ux = dx / l; val uy = dy / l
+            val len = 70f
+            val sx = wx(x); val sy = wy(y)
+            val tx = sx + ux * len * 0.5f * scale; val ty = sy + uy * len * 0.5f * scale
+            val bx = sx - ux * len * 0.5f * scale; val by = sy - uy * len * 0.5f * scale
+            stroke.color = 0xFF6A4424.toInt(); stroke.strokeWidth = 3.2f * density
+            c.drawLine(bx, by, tx, ty, stroke)
+            stroke.color = 0xFF3A2414.toInt(); stroke.strokeWidth = 1.2f * density
+            c.drawLine(bx, by, tx, ty, stroke)
+            // demir uç
+            val px = -uy; val py = ux; val h = 9f * scale; val w = 4f * scale
+            val path = android.graphics.Path()
+            path.moveTo(tx + ux * h, ty + uy * h); path.lineTo(tx + px * w, ty + py * w); path.lineTo(tx - px * w, ty - py * w); path.close()
+            fill.color = 0xFFD8DDE2.toInt(); c.drawPath(path, fill)
+        }
+    }
+
+    private fun drawBolts(c: Canvas) {
+        for (b in bolts) {
+            val a = (b.life / 0.45f).coerceIn(0f, 1f)
+            for (pass in 0..1) {
+                stroke.color = if (pass == 0) alphaC(0xFF7FB0FF.toInt(), a * 0.55f) else alphaC(0xFFFFFFFF.toInt(), a)
+                stroke.strokeWidth = (if (pass == 0) 12f else 4f) * density
+                for (k in 0 until 9) c.drawLine(wx(b.pts[k * 2]), wy(b.pts[k * 2 + 1]), wx(b.pts[k * 2 + 2]), wy(b.pts[k * 2 + 3]), stroke)
             }
         }
     }
@@ -1307,6 +1393,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val hp = hud[Native.HP]; val maxHp = max(1f, hud[Native.MAXHP])
         // kırmızı vinyet (hasar / düşük can)
         val low = ((0.3f - hp / maxHp) / 0.3f).coerceIn(0f, 1f) * (0.5f + 0.5f * sin(time * 5f))
+        if (whiteFlash > 0.01f) { fill.color = alphaC(0xFFE8F0FF.toInt(), whiteFlash * 0.6f); c.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), fill) }
         val vr = max(vignetteRed, low * 0.6f)
         if (vr > 0.01f) {
             fill.shader = RadialGradient(sw / 2f, sh / 2f, max(sw, sh) * 0.7f, intArrayOf(0, 0, alphaC(0xFFB00010.toInt(), vr)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)

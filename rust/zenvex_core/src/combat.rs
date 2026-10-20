@@ -491,9 +491,7 @@ impl Game {
             z.anim = Z_DEATH;
             z.anim_t = 0.0;
             z.timer = 3.0;
-            // NPC/dron öldürmeleri de ganimet bırakır
-            let _ = by_player;
-            self.on_zombie_killed(i);
+            self.on_zombie_killed(i, by_player);
         } else if !heavy && z.state != ZState::Flee {
             z.state = ZState::Hurt;
             z.anim = Z_HURT;
@@ -502,7 +500,7 @@ impl Game {
         }
     }
 
-    fn on_zombie_killed(&mut self, i: usize) {
+    fn on_zombie_killed(&mut self, i: usize, by_player: bool) {
         let z = self.zombies[i].clone();
         if z.decoy {
             return;
@@ -510,6 +508,11 @@ impl Game {
         if self.kill_credit >= 0 {
             // uzak oyuncu öldürdü: ödül ona gider
             self.events.push(Event::NetKill { k: self.kill_credit, kind: z.kind as u8, level: z.level, x: z.x, y: z.y });
+            self.events.push(Event::Kill { x: z.x, y: z.y, z: z.kind as u8 });
+            return;
+        }
+        if !by_player {
+            // kule askeri öldürdü: XP, görev ve ganimet oyuncuya yazılmaz
             self.events.push(Event::Kill { x: z.x, y: z.y, z: z.kind as u8 });
             return;
         }

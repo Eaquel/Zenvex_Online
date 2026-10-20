@@ -41,7 +41,15 @@ impl Game {
             return;
         }
         d.hp = (d.hp + rpg::dog_regen(lv[2]) * dt).min(max_hp);
-        if (d.x - px).hypot(d.y - py) > 900.0 || self.player.vehicle.is_some() {
+        if self.player.vehicle.is_some() || self.passenger {
+            // araçta oyuncuyla birlikte oturur; inince yanında belirir
+            d.x = px + 50.0;
+            d.y = py + 30.0;
+            d.anim = Z_IDLE;
+            self.dog = Some(d);
+            return;
+        }
+        if (d.x - px).hypot(d.y - py) > 900.0 {
             d.x = px + 50.0;
             d.y = py + 30.0;
         }
@@ -77,6 +85,10 @@ impl Game {
                     let (kx, ky) = ((zx - d.x) / dist.max(1.0), (zy - d.y) / dist.max(1.0));
                     let dmg = rpg::dog_damage(lv[0]) * self.rng.range(0.9, 1.1);
                     self.hurt_zombie(i, dmg, false, kx, ky, false, true);
+                    // ısırılan zombi köpeğe döner
+                    if let Some(z) = self.zombies.get_mut(i) {
+                        z.dog_aggro = 4.0;
+                    }
                 } else if d.anim == Z_ATTACK && d.anim_t > 0.45 {
                     d.anim = Z_IDLE;
                 }
@@ -104,29 +116,33 @@ impl Game {
             d.y = ny;
             d.dir = dir_from_vec(mx, my);
         }
-        // yakındaki saldıran zombiler köpeğe de vurur
-        let mut taken = 0.0;
-        for z in &self.zombies {
-            if z.state == ZState::Attack && (z.x - d.x).hypot(z.y - d.y) < ZOMBIES[z.kind as usize].radius + 30.0 {
-                taken += (4.0 + 0.4 * z.level as f32) * dt;
-            }
-        }
-        if taken > 0.0 && !self.player.god {
-            d.hp -= taken;
-            d.flash_t = 0.1;
-            if d.hp <= 0.0 {
-                d.dead_t = 30.0;
-                d.hp = 0.0;
-                self.msg("Köpeğin bayıldı, 30 sn sonra döner");
-            }
-        }
         self.dog = Some(d);
+    }
+
+    /// Zombilerin köpeğe vurduğu hasar (update_zombies toplar).
+    pub fn hurt_dog(&mut self, dmg: f32) {
+        if self.player.god {
+            return;
+        }
+        let Some(d) = self.dog.as_mut() else { return };
+        if d.dead_t > 0.0 {
+            return;
+        }
+        d.hp -= dmg;
+        d.flash_t = 0.12;
+        let (x, y) = (d.x, d.y);
+        self.events.push(Event::DogHit { x, y, v: dmg.round() as i32 });
+        if d.hp <= 0.0 {
+            d.dead_t = 30.0;
+            d.hp = 0.0;
+            self.msg("Köpeğin bayıldı, 30 sn sonra döner");
+        }
     }
 
     /// Çizim listesi kaydı (zombi düzeniyle aynı; tür alanı köpek)
     pub fn dog_draw(&self) -> Option<(f32, [f32; STRIDE])> {
         let d = self.dog.as_ref()?;
-        if d.dead_t > 0.0 {
+        if d.dead_t > 0.0 || self.player.vehicle.is_some() || self.passenger {
             return None;
         }
         let lv = self.progress.dog_lv;

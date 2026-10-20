@@ -1220,4 +1220,52 @@ mod v4_tests {
         tick(&mut g, 200);
         assert!(g.progress.kills > 0 || g.zombies.iter().any(|z| z.hp < z.max_hp), "köpek saldırmalı");
     }
+
+    #[test]
+    fn buffs_tick_and_dog_fights() {
+        let mut g = Game::new(9, Progress::default(), 1);
+        g.cheat("potions").unwrap();
+        let s = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "potion_speed")).unwrap();
+        g.use_slot(s).unwrap();
+        // süre her durumda işler ve biter
+        tick(&mut g, 31 * 30);
+        assert_eq!(g.player.speed_t, 0.0);
+        assert!(g.hud()[32] == 0.0);
+        // zombiler köpeğe de saldırır
+        g.cheat("tp deep").unwrap();
+        g.cheat("god").ok();
+        g.player.god = false;
+        g.cheat("dog 1").unwrap();
+        tick(&mut g, 30);
+        let max = g.dog.as_ref().unwrap().hp;
+        g.player.invis = true; // oyuncu görünmez: hedef yalnız köpek
+        let (dx, dy) = (g.dog.as_ref().unwrap().x, g.dog.as_ref().unwrap().y);
+        for k in 0..3 {
+            g.spawn_zombie_at(crate::data::ZKind::Walker, 3, dx + 60.0 + k as f32 * 20.0, dy);
+        }
+        let mut hit = false;
+        for _ in 0..300 {
+            tick(&mut g, 1);
+            if g.dog.as_ref().is_some_and(|d| d.hp < max || d.dead_t > 0.0) {
+                hit = true;
+                break;
+            }
+        }
+        assert!(hit, "zombiler köpekle dövüşmeli");
+    }
+
+    #[test]
+    fn zombies_leash_home() {
+        let mut g = Game::new(11, Progress::default(), 1);
+        g.cheat("tp deep").unwrap();
+        g.zombies.clear();
+        let (px, py) = (g.player.x, g.player.y);
+        g.spawn_zombie_at(crate::data::ZKind::Walker, 1, px + 200.0, py);
+        let z = &mut g.zombies[0];
+        z.state = crate::game::ZState::Chase;
+        // evinden çok uzağa sürüklenmiş gibi
+        z.home_x = px + 200.0 + crate::data::PX_PER_M * 20.0;
+        tick(&mut g, 2);
+        assert!(g.zombies[0].ret, "bölge sınırını aşan yaratık geri dönmeli");
+    }
 }
