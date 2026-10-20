@@ -1753,7 +1753,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         Audio.play("click", 0.6f, bus = Audio.Bus.Ui)
         vibrate(15, 90)
         when (b.id) {
-            "ability" -> { val r = GameSession.cmd("ability"); if (!r.ok && r.msg.isNotEmpty()) ui.onToast(r.msg) }
+            // bekleme süresi tuşun üstünde gösterilir; ayrıca bildirim çıkmaz
+            "ability" -> { val r = GameSession.cmd("ability"); if (!r.ok && r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) ui.onToast(r.msg) }
             "weapon" -> { val r = GameSession.cmd("cycle_weapon"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
             "reload" -> GameSession.cmd("reload")
             "vehicle" -> { val r = GameSession.cmd("vehicle"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }

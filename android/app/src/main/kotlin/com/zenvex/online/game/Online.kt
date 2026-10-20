@@ -188,16 +188,32 @@ object Online {
     }
 
     // =========================================================== sohbet
-    fun send(channelName: String, text: String) {
+    /** Sohbet 5. seviyede açılır; iki mesaj arasında 3 sn beklenir (sunucu da denetler). */
+    const val CHAT_LEVEL = 5
+    const val CHAT_COOLDOWN_MS = 3000L
+    private var lastSend = 0L
+
+    /** Kalan bekleme (ms); 0 ise yazılabilir. */
+    fun chatWait(): Long = (CHAT_COOLDOWN_MS - (SystemClock.elapsedRealtime() - lastSend)).coerceAtLeast(0L)
+
+    fun chatLocked(): Boolean = GameSession.hud()[Native.LEVEL] < CHAT_LEVEL
+
+    /** Gönderir; olmazsa nedenini döner. */
+    fun send(channelName: String, text: String): String? {
         val t = text.trim().take(140)
-        if (t.isEmpty()) return
+        if (t.isEmpty()) return null
+        if (chatLocked()) return "Sohbet $CHAT_LEVEL. Seviyede Açılır"
+        val w = chatWait()
+        if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
+        lastSend = SystemClock.elapsedRealtime()
         val g = Account.clan.value?.name ?: tag
         addLine(ChatLine(channelName, name, t, g, true, System.currentTimeMillis()))
-        val c = channel ?: return
+        val c = channel ?: return null
         val m = JSONObject().put("u", uid).put("n", name).put("g", g).put("m", t).put("ch", channelName)
         if (channelName == "local") m.put("x", myX.toDouble()).put("y", myY.toDouble())
         c.send("c", m)
         if (channelName == "global") Account.postChat(serverId, t)
+        return null
     }
 
     fun system(text: String) = addLine(ChatLine("system", "Sistem", text, "", false, System.currentTimeMillis()))

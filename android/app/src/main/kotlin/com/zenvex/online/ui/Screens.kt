@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -91,11 +92,13 @@ fun SplashScreen(done: () -> Unit) {
 
 @Composable
 fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, onDone: (() -> Unit)? = null) {
-    Box(modifier.height(44.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xCC060A12)).border(1.dp, Pal.Line, RoundedCornerShape(12.dp)).padding(horizontal = 12.dp),
+    // siyah yarı saydam zemin, beyaz yazı, piksel kenar
+    Box(modifier.height(44.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x99000000)).border(2.dp, Color(0xFF15140F), RoundedCornerShape(3.dp))
+        .padding(2.dp).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(2.dp)).padding(horizontal = 10.dp),
         contentAlignment = Alignment.CenterStart) {
-        if (value.isEmpty()) T(hint, 14.sp, Pal.Sub)
-        BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(color = Pal.Text, fontSize = 15.sp, fontFamily = Body),
-            cursorBrush = SolidColor(Pal.Gold), modifier = Modifier.fillMaxWidth(),
+        if (value.isEmpty()) PT(hint, 14.sp, Color(0x99FFFFFF))
+        BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(color = Color.White, fontSize = 15.sp, fontFamily = PixelFont),
+            cursorBrush = SolidColor(Color.White), modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }))
     }
 }
@@ -754,12 +757,24 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
                 }
             }
         }
-        if (tab != 2) Row(verticalAlignment = Alignment.CenterVertically) {
-            Field(msg, { if (it.length <= 140) msg = it }, if (tab == 0) "Herkese yaz…" else "Yakındakilere yaz…", Modifier.weight(1f)) {
-                Online.send(channels[tab], msg); msg = ""
+        if (tab != 2 && Online.chatLocked()) {
+            Row(Modifier.fillMaxWidth().pxPanel(Px.PanelDark).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon("lock", 18.dp, Px.Sub)
+                Spacer(Modifier.width(8.dp))
+                PT("Sohbet ${Online.CHAT_LEVEL}. Seviyede Açılır", 14.sp, Px.Sub)
             }
+        } else if (tab != 2) Row(verticalAlignment = Alignment.CenterVertically) {
+            var wait by remember { mutableLongStateOf(0L) }
+            LaunchedEffect(wait) { if (wait > 0) { delay(200); wait = Online.chatWait() } }
+            fun go() {
+                val err = Online.send(channels[tab], msg)
+                if (err == null) msg = "" else Toaster.show(err, false)
+                wait = Online.chatWait()
+            }
+            Field(msg, { if (it.length <= 140) msg = it }, if (tab == 0) "Herkese Yaz…" else "Yakındakilere Yaz…", Modifier.weight(1f)) { go() }
             Spacer(Modifier.width(8.dp))
-            GButton("", tone = Tone.Blue, icon = "play", height = 44.dp) { Online.send(channels[tab], msg); msg = "" }
+            if (wait > 0) Box(Modifier.size(44.dp).pxPanel(Px.PanelDark), contentAlignment = Alignment.Center) { PT("${(wait + 999) / 1000}", 16.sp, Px.Sub) }
+            else GButton("", tone = Tone.Blue, icon = "play", height = 44.dp) { go() }
         }
     }
 }
