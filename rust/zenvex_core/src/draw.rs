@@ -419,7 +419,7 @@ impl Game {
         ]
     }
 
-    /// Radar: [x, y, tür, ...] — tür: 0 zombi, 1 boss, 2 araç, 3 tüccar, 4 uzak oyuncu
+    /// Radar: [x, y, tür, ...] — tür: 0 zombi, 1 boss, 2 araç, 3 tüccar, 4 uzak oyuncu, 5 görev hedefi
     pub fn radar(&self, out: &mut [f32]) -> usize {
         let mut k = 0;
         let mut push = |x: f32, y: f32, t: f32, out: &mut [f32]| {
@@ -446,6 +446,9 @@ impl Game {
         }
         for r in &self.remotes {
             push(r.x, r.y, 4.0, out);
+        }
+        for (x, y) in self.story_targets() {
+            push(x, y, 5.0, out);
         }
         let _ = (STATIC_NAMES.len(), ZOMBIES.len());
         k / 3

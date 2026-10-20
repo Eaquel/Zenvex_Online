@@ -369,7 +369,7 @@ pub struct Vehicle {
 
 #[derive(Clone, Debug)]
 pub struct Npc {
-    pub kind: u8, // 0 keskin nişancı, 1 tüccar, 2 görevci, 3 doktor, 4 tamirci, 5 köpek eğitmeni
+    pub kind: u8, // 0 kule askeri, 1 tüccar, 2 görevci, 3 doktor, 4 tamirci, 5 köpek eğitmeni, 6 rehber
     pub x: f32,
     pub y: f32,
     pub dir: u8,
@@ -482,11 +482,24 @@ impl Game {
                 hit_id: 0,
             })
             .collect();
-        // her pazarda tüccar ve çevresinde kamp NPC'leri (görevci, doktor, tamirci, köpek eğitmeni)
+        // NPC'ler: ormandaki kampta tüccar, görevci ve rehber; doktor sahra hastanesinde, tamirci benzinlikte,
+        // köpek eğitmeni barınakta. Şehirdeki pazarda hepsi tüccarın çevresinde.
         let mut scratch = Vec::new();
         for &(mx, my) in &world.merchants {
-            for (kind, ox, oy) in [(1u8, 0.0, 0.0), (2, 2.6, 1.2), (3, -2.6, 1.2), (4, 4.8, 2.8), (5, -4.8, 2.8)] {
-                let (mut x, mut y) = (mx + m(ox), my + m(oy));
+            let forest = world.zone(mx, my) == world::Zone::Camp;
+            let mut spots: Vec<(u8, f32, f32)> = vec![(1, mx, my), (2, mx + m(2.6), my + m(1.2))];
+            if forest {
+                spots.push((6, mx - m(2.6), my + m(1.2)));
+                for (kind, id, ox, oy) in [(3u8, "clinic", 0.0, 0.6), (4, "gas", 0.0, 2.2), (5, "kennel", 0.0, 0.8)] {
+                    let (lx, ly) = world::landmark(id).pos();
+                    spots.push((kind, lx + m(ox), ly + m(oy)));
+                }
+            } else {
+                for (kind, ox, oy) in [(3u8, -2.6, 1.2), (4, 4.8, 2.8), (5, -4.8, 2.8)] {
+                    spots.push((kind, mx + m(ox), my + m(oy)));
+                }
+            }
+            for (kind, mut x, mut y) in spots {
                 if kind != 1 {
                     world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
                 }
@@ -578,6 +591,7 @@ impl Game {
         self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
         self.tick_timers(dt);
+        self.story_tick();
         if self.passenger {
             // yolcu: konumu ağ katmanı verir
             self.player.anim_t += dt;
@@ -1087,6 +1101,7 @@ impl Game {
         p.anim_t = 0.0;
         let (x, y) = (p.x, p.y);
         self.events.push(Event::Roll { x, y });
+        self.story_event(crate::story::Ev::Roll);
         Ok(String::new())
     }
 
@@ -1336,6 +1351,7 @@ impl Game {
             }
             let left = self.progress.inv.add(item, cnt);
             if left < cnt {
+                self.story_event(crate::story::Ev::Loot);
                 self.events.push(Event::Pickup {
                     x: dx,
                     y: dy - 60.0,

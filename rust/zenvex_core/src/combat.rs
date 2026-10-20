@@ -135,6 +135,7 @@ impl Game {
                     self.spawn_drop_id("resin", 1 + rv, sx, sy);
                 }
                 self.give_xp(sx, sy, 10);
+                self.story_event(crate::story::Ev::Chop);
                 let done = self.progress.quest_event(QuestKind::Chop, 1);
                 self.quests_done(done);
             }
@@ -541,6 +542,7 @@ impl Game {
             y: z.y,
             z: z.kind as u8,
         });
+        self.story_event(crate::story::Ev::Kill { kind: z.kind, x: z.x, y: z.y });
         let mut done = self.progress.quest_event(QuestKind::Kill, 1);
         done.extend(
             self.progress

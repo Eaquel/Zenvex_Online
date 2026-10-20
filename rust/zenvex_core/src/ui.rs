@@ -8,8 +8,8 @@ use crate::world;
 use serde_json::{json, Value};
 
 const NEAR: f32 = 150.0;
-const DOCTOR_PRICE: u32 = 20;
-const MECHANIC_PRICE: u32 = 30;
+pub const DOCTOR_PRICE: u32 = 20;
+pub const MECHANIC_PRICE: u32 = 30;
 
 fn item_json(id: &str) -> Value {
     match data::item_index(id) {
@@ -58,9 +58,9 @@ impl Game {
     }
 
     /// Kamp doktoru: 20 altına canı doldurur, zehri temizler.
-    fn npc_doctor(&mut self) -> Result<String, String> {
-        if !self.near_merchant_wide() {
-            return Err("Doktor kampta".into());
+    pub(crate) fn npc_doctor(&mut self) -> Result<String, String> {
+        if !self.near_npc(3) {
+            return Err("Doktor sahra hastanesinde".into());
         }
         let max = self.progress.max_hp();
         if self.player.hp >= max - 0.5 && self.player.poison_t <= 0.0 {
@@ -76,9 +76,9 @@ impl Game {
     }
 
     /// Kamp tamircisi: 12 m içindeki araçları onarır ve yakıtı 100'e tamamlar (30 altın).
-    fn npc_mechanic(&mut self) -> Result<String, String> {
-        if !self.near_merchant_wide() {
-            return Err("Tamirci kampta".into());
+    pub(crate) fn npc_mechanic(&mut self) -> Result<String, String> {
+        if !self.near_npc(4) {
+            return Err("Tamirci benzin istasyonunda".into());
         }
         let (px, py) = (self.player.x, self.player.y);
         let r = crate::game::m(12.0);
@@ -105,9 +105,10 @@ impl Game {
     }
 
     /// Kamp NPC'leri tüccarın çevresinde ~6 m içinde durur.
-    pub(crate) fn near_merchant_wide(&self) -> bool {
+    /// Belirli türde bir NPC'ye yakın mı (konuşma mesafesi)
+    pub(crate) fn near_npc(&self, kind: u8) -> bool {
         let (px, py) = (self.player.x, self.player.y);
-        self.world.merchants.iter().any(|&(x, y)| (x - px).hypot(y - py) < crate::game::m(6.4))
+        self.npcs.iter().any(|n| n.kind == kind && (n.x - px).hypot(n.y - py) < crate::game::m(4.0))
     }
 
     fn buy_price(&self, base: u32) -> u32 {
@@ -287,7 +288,7 @@ impl Game {
                                      "gold": q.gold, "xp": q.xp, "pass_xp": q.pass_xp }))
                     })
                     .collect();
-                json!({ "main": main, "daily": daily })
+                json!({ "main": main, "daily": daily, "story": self.story_json() })
             }
             "pass" => {
                 let tier = g.pass_tier();
@@ -353,7 +354,22 @@ impl Game {
             "unequip" => self.progress.unequip(v["slot"].as_str().unwrap_or("")).map(|_| "Çıkarıldı".into()).map_err(String::from),
             "use" => self.use_slot(int("slot")),
             "drop" => self.drop_slot(int("slot")),
-            "move" => self.progress.inv.move_slot(int("from"), int("to")).map(|_| String::new()).map_err(String::from),
+            "move" => {
+                let to = int("to");
+                let r = self.progress.inv.move_slot(int("from"), to).map(|_| String::new()).map_err(String::from);
+                if r.is_ok() && crate::inventory::Inventory::is_pocket(to) {
+                    self.story_event(crate::story::Ev::Pocket);
+                }
+                r
+            }
+            "talk" => {
+                let k = int("npc") as u8;
+                if !self.near_npc(k) && k != 0 {
+                    Err("Çok uzaktasın".into())
+                } else {
+                    Ok(self.talk(k, v["opt"].as_str().unwrap_or("")).to_string())
+                }
+            }
             "sort" => {
                 self.progress.inv.sort();
                 Ok("Sıralandı".into())
@@ -601,6 +617,7 @@ impl Game {
             _ => return Err("Bu eşya kullanılamaz".into()),
         }
         self.progress.inv.remove(s.item as usize, 1);
+        self.story_event(crate::story::Ev::Use(d.id));
         Ok(format!("{} kullanıldı", d.name))
     }
 
@@ -645,6 +662,9 @@ impl Game {
             return Err("Malzeme yetersiz".into());
         }
         self.progress.crafted += made;
+        for _ in 0..made {
+            self.story_event(crate::story::Ev::Craft(ITEMS[out].id));
+        }
         let done = self.progress.quest_event(data::QuestKind::Craft, made);
         self.quests_done(done);
         Ok(format!(
@@ -1207,6 +1227,16 @@ mod v4_tests {
         }
         std::fs::write(format!("{dir}/world.json"), crate::world_json(&g)).unwrap();
         std::fs::write(format!("{dir}/player.json"), serde_json::json!({"x": sx, "y": sy}).to_string()).unwrap();
+        // konuşma ve görev örnekleri
+        let mut h = Game::new(5, Progress::default(), 1);
+        let n = h.npcs.iter().rev().find(|n| n.kind == crate::story::N_GUIDE).unwrap();
+        let (nx, ny) = (n.x, n.y + 60.0);
+        h.player.x = nx;
+        h.player.y = ny;
+        std::fs::write(format!("{dir}/talk.json"), h.talk(crate::story::N_GUIDE, "").to_string()).unwrap();
+        h.talk(crate::story::N_GUIDE, "accept");
+        h.story_event(crate::story::Ev::Kill { kind: crate::data::ZKind::Walker, x: 0.0, y: 0.0 });
+        std::fs::write(format!("{dir}/quests.json"), h.ui_json("quests")).unwrap();
         for v in ["tree", "dog", "bag", "inventory", "fog"] {
             std::fs::write(format!("{dir}/{v}.json"), g.ui_json(v)).unwrap();
         }
@@ -1218,9 +1248,17 @@ mod v4_tests {
         assert!(g.npcs.iter().any(|n| n.kind == 3) && g.npcs.iter().any(|n| n.kind == 5), "kamp NPC'leri");
         g.progress.gold = 100;
         g.player.hp = 10.0;
+        let goto = |g: &mut Game, kind: u8| {
+            let n = g.npcs.iter().rev().find(|n| n.kind == kind).unwrap();
+            let (x, y) = (n.x, n.y + 60.0);
+            g.player.x = x;
+            g.player.y = y;
+        };
+        goto(&mut g, 3);
         assert!(g.command(r#"{"cmd":"doctor"}"#).contains("ok"));
         assert!(g.player.hp >= g.progress.max_hp() - 0.5);
         assert_eq!(g.progress.gold, 80);
+        goto(&mut g, 4);
         g.cheat("vehicle bike").unwrap();
         g.vehicles.last_mut().unwrap().fuel = 10.0;
         g.command(r#"{"cmd":"mechanic"}"#);

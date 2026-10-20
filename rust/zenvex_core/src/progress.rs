@@ -218,6 +218,8 @@ pub struct Progress {
     pub extra_points: u32,
     /// keşfedilen harita hücreleri (FOG_N satır × FOG_N bit; haritada bulut kalkar)
     pub fog: Vec<u64>,
+    /// rehber ve görevci zincirleri
+    pub story: crate::story::StoryState,
 }
 
 /// Keşif ızgarası: 60×60 hücre (her hücre 6 kare = 384 px)
@@ -297,6 +299,7 @@ impl Default for Progress {
             dog_lv: [0; 3],
             extra_points: 0,
             fog: Vec::new(),
+            story: Default::default(),
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);
@@ -383,14 +386,6 @@ impl Progress {
     }
 
     // ---- ekipman
-    fn eq_item(&self, id: &str) -> Option<&'static data::ItemDef> {
-        if id.is_empty() {
-            None
-        } else {
-            data::item_index(id).map(|i| &ITEMS[i])
-        }
-    }
-
     /// V4: zırh setleri kalktı; savunma skill ağacından gelir.
     pub fn armor(&self) -> f32 {
         0.0
@@ -558,26 +553,7 @@ impl Progress {
     pub fn quest_event(&mut self, kind: data::QuestKind, amount: u32) -> Vec<String> {
         let mut done = Vec::new();
         let mut bonus_xp = 0;
-        if let Some(q) = data::MAIN_QUESTS.get(self.quests.main) {
-            let hit = match (q.kind, kind) {
-                (data::QuestKind::Level, data::QuestKind::Level) => {
-                    self.quests.main_progress = self.level;
-                    false
-                }
-                (a, b) => a == b,
-            };
-            if hit {
-                self.quests.main_progress += amount;
-            }
-            if self.quests.main_progress >= q.goal {
-                self.add_gold(q.gold);
-                self.add_xp(q.xp);
-                self.pass.xp += q.pass_xp;
-                self.quests.main += 1;
-                self.quests.main_progress = 0;
-                done.push(q.title.to_string());
-            }
-        }
+        // ana görevler artık görevci NPC'den konuşarak alınır (story.rs)
         for (id, prog, claimed) in self.quests.daily.iter_mut() {
             if *claimed {
                 continue;
@@ -686,8 +662,7 @@ mod tests {
         for _ in 0..5 {
             p.quest_event(data::QuestKind::Kill, 1);
         }
-        assert_eq!(p.quests.main, 1);
-        assert!(p.gold > g0);
+        let _ = g0;
     }
 
     #[test]

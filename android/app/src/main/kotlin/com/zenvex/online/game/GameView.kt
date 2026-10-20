@@ -362,6 +362,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         flashes.removeAll { it.life -= dt; it.life <= 0 }
         tracers.removeAll { it.life -= dt; it.life <= 0 }
+        questPollT -= dt
+        if (questPollT <= 0f) {
+            questPollT = 1f
+            questMarks.clear()
+            val st = GameSession.ui("quests").optJSONArray("story")
+            for (i in 0 until (st?.length() ?: 0)) {
+                val q = st!!.getJSONObject(i)
+                val ch = 4 + q.optInt("giver_kind")
+                if (q.optBoolean("ready")) questMarks[ch] = "?"
+                else if (!q.optBoolean("on") && q.has("x")) questMarks.putIfAbsent(ch, "!")
+            }
+        }
         spears.removeAll { s -> s.t += dt; if (s.t >= s.dur) { burst(s.x2, s.y2 + 50, 6, 0xFF9A8A70.toInt(), 120f, 4f); Audio.play("hit", near(s.x2, s.y2) * 0.7f, 0.8f) }; s.t >= s.dur }
         bolts.removeAll { it.life -= dt; it.life <= 0 }
         whiteFlash = max(0f, whiteFlash - dt * 3f)
@@ -587,6 +599,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawGround(c)
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
+        npcBoxes.clear()
         val px = hud[Native.PX]; val py = hud[Native.PY]
         for (i in 0 until drawN) {
             val o = i * Native.STRIDE
@@ -810,9 +823,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     // ------------------------------------------------------------------ V6 NPC'ler
-    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer")
-    private val npc6Plate = arrayOf(null, "Tüccar" to "Alışveriş", "Görevci" to "Günlük görevler", "Doktor" to "Tedavi · 20 altın",
-        "Tamirci" to "Araç tamiri · 30 altın", "Köpek Eğitmeni" to "Köpek al / geliştir")
+    // rehber (tür 6) şimdilik asker görseliyle
+    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier")
+    private val npc6Plate = arrayOf(null, "Tüccar Selim" to "Tüccar", "Yaşlı Hüseyin" to "Görevci", "Doktor Leyla" to "Doktor",
+        "Tamirci Rıza" to "Tamirci", "Eğitmen Kerem" to "Köpek Eğitmeni", "Rehber Deniz" to "Rehber")
+    /** NPC başı görev işareti: ch → "!" (görev var) / "?" (teslim) */
+    private val questMarks = HashMap<Int, String>()
+    private var questPollT = 0f
+    /** dokunarak konuşmak için NPC'lerin ekran kutuları: ch, sol, üst, sağ, alt */
+    private val npcBoxes = ArrayList<FloatArray>()
     private val npc6Bmp = HashMap<String, android.graphics.Bitmap?>()
     private val meshW = 4
     private val meshH = 10
@@ -853,8 +872,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, pixelPaint)
         val px = hud[Native.PX]; val py = hud[Native.PY]
         val d = kotlin.math.hypot(px - x, py - y)
-        if (ch >= 6 && d < 170f && d < nearNpcD) { nearNpc = ch; nearNpcD = d }
+        if (ch >= 5 && d < 170f && d < nearNpcD) { nearNpc = ch; nearNpcD = d }
+        if (ch >= 5) npcBoxes += floatArrayOf(ch.toFloat(), sx - w * 0.4f, top, sx + w * 0.4f, sy, d)
         npc6Plate.getOrNull(ch - 4)?.let { (n, sub) -> plates += Plate(sx, top - 4 * density, n, 0xFFFFD34A.toInt(), -1f, false, sub) }
+        questMarks[ch]?.let { m ->
+            // başın üstünde zıplayan görev işareti
+            val by = top - 34 * density + sin(time * 4f) * 4 * density
+            fill.color = 0xFF15140F.toInt(); c.drawRect(sx - 11 * density, by - 13 * density, sx + 11 * density, by + 11 * density, fill)
+            fill.color = if (m == "?") 0xFFFFD34A.toInt() else 0xFFFF9A2A.toInt()
+            c.drawRect(sx - 9 * density, by - 11 * density, sx + 9 * density, by + 9 * density, fill)
+            drawText(c, m, sx, by + 6 * density, 17 * density, 0xFF15140F.toInt(), true, fontBold)
+        }
         return true
     }
 
@@ -1596,7 +1624,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         // hızlı tuşlar
         btnVehicle.visible = hud[Native.NEAR_VEHICLE] > 0 || hud[Native.IN_VEHICLE] > 0
-        btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0 || nearNpc >= 6
+        btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0 || nearNpc >= 5
         nearCache = Online.nearest(220f)
         val nr = nearCache
         btnTrade.visible = nr != null && nr.dist < 170f && hud[Native.IN_VEHICLE] < 0.5f && rideUid == null
@@ -1613,8 +1641,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
         if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", null, 0xFF8A5AC0.toInt(), false)
         if (btnInteract.visible) {
-            if (nearNpc >= 6 && hud[Native.NEAR_MERCHANT] <= 0) roundBtn(c, btnInteract, "chat", "Konuş", 0xFFC08A20.toInt(), false)
-            else roundBtn(c, btnInteract, if (hud[Native.NEAR_MERCHANT] > 0) "shop" else "craft", null, 0xFFC08A20.toInt(), false)
+            if (nearNpc >= 5 || hud[Native.NEAR_MERCHANT] > 0) roundBtn(c, btnInteract, "chat", "Konuş", 0xFFC08A20.toInt(), false)
+            else roundBtn(c, btnInteract, "craft", null, 0xFFC08A20.toInt(), false)
         }
     }
 
@@ -1727,6 +1755,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val x = e.getX(i); val y = e.getY(i)
                 // mini haritaya dokunma: tam harita
                 if (radarR > 0 && hypot(x - radarCx, y - radarCy) < radarR) { Audio.play("click", 0.7f, bus = Audio.Bus.Ui); ui.onOpen("map"); return true }
+                // NPC'ye dokunma: konuşma (yakındaysa)
+                npcBoxes.firstOrNull { x in it[1]..it[3] && y in it[2]..it[4] }?.let { b ->
+                    if (b[5] < 300f) ui.onOpen("npc:${b[0].toInt() - 4}") else ui.onToast("Konuşmak İçin Yaklaş")
+                    return true
+                }
                 for (b in buttons) {
                     if (!b.visible) continue
                     val r = b.r.width() / 2 * 1.2f
@@ -1791,11 +1824,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             "reload" -> GameSession.cmd("reload")
             "vehicle" -> { val r = GameSession.cmd("vehicle"); if (r.msg.isNotEmpty()) ui.onToast(r.msg) }
             "interact" -> when {
-                hud[Native.NEAR_MERCHANT] > 0 -> ui.onOpen("merchant")
-                nearNpc == 6 -> ui.onOpen("quests")
-                nearNpc == 7 -> { val r = GameSession.cmd("doctor"); ui.onToast(r.msg) }
-                nearNpc == 8 -> { val r = GameSession.cmd("mechanic"); ui.onToast(r.msg) }
-                nearNpc == 9 -> ui.onOpen("dog")
+                nearNpc >= 5 -> ui.onOpen("npc:${nearNpc - 4}")
+                hud[Native.NEAR_MERCHANT] > 0 -> ui.onOpen("npc:1")
                 else -> ui.onOpen("craft")
             }
             "trade" -> nearCache?.let { Online.requestTrade(it.uid); ui.onOpen("trade") }

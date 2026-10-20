@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog,
+    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog, Npc,
 }
 
 /**
@@ -66,12 +66,14 @@ private enum class Overlay {
 fun GameScreen(toLobby: () -> Unit) {
     val ctx = LocalContext.current
     var overlay by remember { mutableStateOf(Overlay.None) }
+    var npcKind by remember { mutableIntStateOf(1) }
     val view = remember {
         lateinit var v: GameView
         v = GameView(ctx, object : GameUi {
             override fun onDeath() { v.post { overlay = Overlay.Dead } }
             override fun onOpen(panel: String) {
                 v.post {
+                    if (panel.startsWith("npc:")) { npcKind = panel.substring(4).toIntOrNull() ?: 1; overlay = Overlay.Npc; return@post }
                     overlay = when (panel) {
                         "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
                         "chat" -> Overlay.Chat; "map" -> Overlay.Map; "trade" -> Overlay.Trade
@@ -112,6 +114,9 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Pass -> PassScreen(close)
             Overlay.Skills -> TreeScreen(close)
             Overlay.Dog -> DogDialog(close)
+            Overlay.Npc -> NpcDialogScreen(npcKind, close) { o ->
+                overlay = when (o) { "merchant" -> Overlay.Merchant; "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; else -> Overlay.None }
+            }
             Overlay.Profile -> ProfileScreen(close) {}
             Overlay.Characters -> CharacterScreen(close)
             Overlay.Cosmetics -> CosmeticsScreen(close)
@@ -150,10 +155,12 @@ fun GameScreen(toLobby: () -> Unit) {
 private fun BoxScope.Hud(open: (Overlay) -> Unit) {
     var inv by remember { mutableStateOf(JSONObject()) }
     var points by remember { mutableIntStateOf(0) }
+    var story by remember { mutableStateOf(JSONArray()) }
     LaunchedEffect(Unit) {
         while (true) {
             inv = GameSession.ui("inventory")
             points = GameSession.ui("profile").optInt("points")
+            story = GameSession.ui("quests").optJSONArray("story") ?: JSONArray()
             delay(400)
         }
     }
@@ -164,6 +171,8 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("paw", size = 46.dp, tint = Color(0xFFE0B070)) { open(Overlay.Dog) }
         PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
+    // görev takipçisi: simge satırının altında
+    QuestTracker(story, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 140.dp)) { open(Overlay.Quests) }
     // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)
     Row(Modifier.align(Alignment.TopEnd).padding(end = 146.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }

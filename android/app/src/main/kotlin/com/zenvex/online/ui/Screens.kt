@@ -426,41 +426,61 @@ fun ShopScreen(back: () -> Unit) {
 @Composable
 fun QuestsScreen(back: () -> Unit) {
     val q = remember { GameSession.ui("quests") }
-    ScreenFrame("GÖREVLER", "quest", back) {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f).fillMaxHeight().glass(20.dp, Pal.Gold).padding(14.dp)) {
-                SectionTitle("Ana Görev")
-                val m = q.optJSONObject("main")
-                if (m == null) T("Tüm ana görevleri tamamladın. Efsanesin!", 15.sp, Pal.Green)
-                else {
-                    T("Bölüm ${m.optInt("index")} / ${m.optInt("total")}", 12.sp, Pal.Sub)
-                    T(m.optString("title"), 20.sp, bold = true)
-                    Spacer(Modifier.height(8.dp))
-                    Bar(m.optInt("progress") / m.optInt("goal", 1).toFloat(), Pal.Gold, Modifier.fillMaxWidth(), 14.dp, "${m.optInt("progress")} / ${m.optInt("goal")}")
-                    Spacer(Modifier.height(12.dp))
-                    SectionTitle("Ödüller")
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Chip("coin", "${m.optInt("gold")}", Pal.Gold)
-                        if (m.optInt("xp") > 0) Chip("star", "${m.optInt("xp")} XP", Pal.Blue)
-                        Chip("crown", "${m.optInt("pass_xp")} Pass", Pal.Purple)
+    QuestsView(q, back)
+}
+
+@Composable
+internal fun QuestsView(q: JSONObject, back: () -> Unit) {
+    PxFrame("Görevler", "quest", back) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            PxPanel(Modifier.weight(1.2f).fillMaxHeight(), pad = 10.dp) {
+                PT("Hikâye", 16.sp, Px.Clan)
+                Spacer(Modifier.height(6.dp))
+                val st = q.optJSONArray("story").objs()
+                if (st.isEmpty()) PT("Tüm Görevleri Tamamladın. Efsanesin!", 15.sp, Px.Name)
+                for (m in st) {
+                    val on = m.optBoolean("on"); val ready = m.optBoolean("ready")
+                    Column(Modifier.fillMaxWidth().padding(bottom = 8.dp).pxPanel(Px.PanelDark).padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(18.dp).background(if (m.optBoolean("guide")) Px.Blue else Color(0xFFB08A2A)), contentAlignment = Alignment.Center) {
+                                PT(if (ready) "?" else "!", 13.sp)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            PT(m.optString("title"), 17.sp, if (ready) Px.Clan else Px.Text, Modifier.weight(1f))
+                            PT(if (m.optBoolean("guide")) "Rehber" else "Görevci", 12.sp, Px.Sub)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        val txt = when {
+                            ready -> "Tamamlandı! ${m.optString("giver")} İle Konuşup Teslim Et."
+                            on -> m.optString("hint")
+                            m.has("x") -> "${m.optString("giver")} İle Konuşarak Görevi Al."
+                            else -> "${m.optInt("min_level")}. Seviyede Açılır."
+                        }
+                        PT(txt, 13.sp, if (ready) Px.Name else Px.Sub, maxLines = 2)
+                        if (on) {
+                            Spacer(Modifier.height(5.dp))
+                            PxBar(m.optInt("n") / m.optInt("goal", 1).toFloat(), if (ready) Px.GreenHi else Px.Orange, Modifier.fillMaxWidth(), 12.dp)
+                            PT("${m.optInt("n")} / ${m.optInt("goal")}", 12.sp, Px.Sub)
+                        }
                     }
                 }
             }
-            Column(Modifier.weight(1f).fillMaxHeight().glass(20.dp, Pal.Blue).padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionTitle("Günlük Görevler (her gün yenilenir)")
+            PxPanel(Modifier.weight(1f).fillMaxHeight(), pad = 10.dp) {
+                PT("Günlük Görevler", 16.sp, Px.Clan)
+                PT("Her Gün Yenilenir", 11.sp, Px.Sub)
+                Spacer(Modifier.height(6.dp))
                 for (d in q.optJSONArray("daily").objs()) {
                     val done = d.optBoolean("done")
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (done) Color(0x332E8A4A) else Color(0x44000000)).padding(10.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).pxPanel(if (done) Color(0xF0243A20) else Px.PanelDark).padding(8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            T(d.optString("title"), 14.sp, if (done) Pal.Green else Pal.Text, Modifier.weight(1f), bold = true)
-                            if (done) Icon("check", 20.dp, Pal.Green)
+                            PT(d.optString("title"), 14.sp, if (done) Px.Name else Px.Text, Modifier.weight(1f))
+                            if (done) Icon("check", 18.dp, Px.Name)
                         }
-                        Bar(d.optInt("progress") / d.optInt("goal", 1).toFloat(), if (done) Pal.Green else Pal.Blue, Modifier.fillMaxWidth().padding(vertical = 4.dp), 9.dp)
+                        PxBar(d.optInt("progress") / d.optInt("goal", 1).toFloat(), if (done) Px.GreenHi else Px.Blue, Modifier.fillMaxWidth().padding(vertical = 3.dp), 9.dp)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            T("${d.optInt("progress")}/${d.optInt("goal")}", 11.sp, Pal.Sub)
-                            T("+${d.optInt("gold")} altın", 11.sp, Pal.Gold)
-                            T("+${d.optInt("xp")} XP", 11.sp, Pal.Blue)
-                            T("+${d.optInt("pass_xp")} Pass", 11.sp, Pal.Purple)
+                            PT("${d.optInt("progress")}/${d.optInt("goal")}", 11.sp, Px.Sub)
+                            PT("+${d.optInt("gold")} Altın", 11.sp, Px.Clan)
+                            PT("+${d.optInt("xp")} XP", 11.sp, Px.Level)
                         }
                     }
                 }

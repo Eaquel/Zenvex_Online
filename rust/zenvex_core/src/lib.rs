@@ -7,6 +7,7 @@ pub mod inventory;
 pub mod progress;
 pub mod rng;
 pub mod rpg;
+pub mod story;
 pub mod pet;
 pub mod ui;
 pub mod world;
@@ -66,6 +67,7 @@ pub fn world_json(g: &Game) -> String {
         "benches": w.benches,
         "camp": world::CAMP,
         "travel": travel,
+        "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y]) }).collect::<Vec<_>>(),
         "boss": world::BOSS,
         "wall_y": world::WALL_Y as f32 * world::TILE,
         "items": items,
@@ -96,12 +98,12 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
         }
     }
     let k = n as f32 / world::MAP_PX;
-    let mut put = |x: i32, y: i32, c: u32, out: &mut [u32]| {
+    let put = |x: i32, y: i32, c: u32, out: &mut [u32]| {
         if x >= 0 && y >= 0 && (x as usize) < n && (y as usize) < n {
             out[y as usize * n + x as usize] = c;
         }
     };
-    let mut disc = |cx: f32, cy: f32, r: f32, c: u32, out: &mut [u32]| {
+    let disc = |cx: f32, cy: f32, r: f32, c: u32, out: &mut [u32]| {
         let ri = r.ceil() as i32;
         for dy in -ri..=ri {
             for dx in -ri..=ri {

@@ -72,4 +72,27 @@ class UiShotsTest {
             WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}, {})
         }
     }
+
+    @Test
+    fun npcDialog() {
+        val d = sample("talk")
+        // son satır + seçenekler görünsün diye tek satırlık örnek
+        d.put("lines", org.json.JSONArray().put(d.getJSONArray("lines").getString(0)))
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF3A5A2A))) {
+                NpcDialogView(d, {}, {}, instant = true)
+            }
+        }
+    }
+
+    @Test
+    fun questsScreen() {
+        val q = sample("quests")
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Box {
+                QuestsView(q) {}
+                QuestTracker(q.getJSONArray("story"), androidx.compose.ui.Modifier.padding(start = 300.dp, top = 300.dp)) {}
+            }
+        }
+    }
 }

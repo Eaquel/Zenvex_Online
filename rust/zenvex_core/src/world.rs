@@ -184,6 +184,36 @@ pub enum Zone {
     Downtown,
     Industrial,
     BossArena,
+    /// kamp dışındaki güvenli karakollar (sahra hastanesi, barınak, benzinlik)
+    Outpost,
+}
+
+/// Haritadaki adlı yer: görev hedefi ya da güvenli karakol (kare koordinatı, yarıçap kare cinsinden).
+pub struct Landmark {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub tx: f32,
+    pub ty: f32,
+    pub r: f32,
+    pub safe: bool,
+}
+
+impl Landmark {
+    pub fn pos(&self) -> (f32, f32) {
+        (self.tx * TILE, self.ty * TILE)
+    }
+}
+
+pub const LANDMARKS: &[Landmark] = &[
+    Landmark { id: "clinic", name: "Sahra Hastanesi", tx: 158.0, ty: 292.0, r: 5.0, safe: true },
+    Landmark { id: "kennel", name: "Köpek Barınağı", tx: 203.0, ty: 309.0, r: 5.0, safe: true },
+    Landmark { id: "gas", name: "Benzin İstasyonu", tx: 188.0, ty: 236.0, r: 6.0, safe: true },
+    Landmark { id: "tree", name: "Gizemli Ağaç", tx: 216.0, ty: 274.0, r: 3.0, safe: false },
+    Landmark { id: "spring", name: "Zehirli Kaynak", tx: 58.0, ty: 302.0, r: 7.0, safe: false },
+];
+
+pub fn landmark(id: &str) -> &'static Landmark {
+    LANDMARKS.iter().find(|l| l.id == id).unwrap_or(&LANDMARKS[0])
 }
 
 impl Zone {
@@ -199,11 +229,12 @@ impl Zone {
             Zone::Downtown => "Şehir Merkezi",
             Zone::Industrial => "Sanayi Bölgesi",
             Zone::BossArena => "Titan Arenası",
+            Zone::Outpost => "Karakol (Güvenli)",
         }
     }
     pub fn level_range(self) -> (u32, u32) {
         match self {
-            Zone::Camp | Zone::SafeCity | Zone::Wall => (1, 1),
+            Zone::Camp | Zone::SafeCity | Zone::Wall | Zone::Outpost => (1, 1),
             Zone::Forest => (1, 5),
             Zone::DeepForest => (5, 10),
             Zone::Swamp => (8, 15),
@@ -214,7 +245,7 @@ impl Zone {
         }
     }
     pub fn safe(self) -> bool {
-        matches!(self, Zone::Camp | Zone::SafeCity)
+        matches!(self, Zone::Camp | Zone::SafeCity | Zone::Outpost)
     }
     pub fn loot_mult(self) -> f32 {
         let (a, b) = self.level_range();
@@ -309,6 +340,12 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
     let d = ((x - CAMP.0).powi(2) + (y - CAMP.1).powi(2)).sqrt();
     if d < CAMP_R {
         return Zone::Camp;
+    }
+    for l in LANDMARKS.iter().filter(|l| l.safe) {
+        let (lx, ly) = l.pos();
+        if (x - lx).hypot(y - ly) < l.r * TILE {
+            return Zone::Outpost;
+        }
     }
     if tx < 100 && ty > 250 {
         return Zone::Swamp;
@@ -450,6 +487,10 @@ impl World {
                         } else {
                             ground::GRASS
                         }
+                    }
+                    Zone::Outpost => {
+                        let near = LANDMARKS.iter().filter(|l| l.safe).map(|l| (fx - l.tx).hypot(fy - l.ty)).fold(99.0f32, f32::min);
+                        if near < 3.0 { ground::GRAVEL } else { ground::DIRT }
                     }
                     Zone::Wall => ground::CONCRETE,
                     Zone::SafeCity => ground::CONCRETE,
@@ -1060,6 +1101,73 @@ impl World {
         }
     }
 
+    /// Karakollar ve görev yerleri: sahra hastanesi, köpek barınağı, benzin istasyonu, gizemli ağaç, zehirli kaynak.
+    fn place_landmarks(&mut self) {
+        let t = TILE;
+        let at = |id: &str, ox: f32, oy: f32| {
+            let (x, y) = landmark(id).pos();
+            (x + ox * t, y + oy * t)
+        };
+        // sahra hastanesi: sağlık istasyonu, çadırlar, kum torbaları
+        let (x, y) = at("clinic", 0.0, -1.2);
+        self.push("med_station", Kind::Prop, x, y, Shape::Rect(0.4 * t, 0.25 * t), 0.0, 0.0);
+        for (ox, oy) in [(-3.2, -1.5), (3.2, -1.5)] {
+            let (x, y) = at("clinic", ox, oy);
+            self.push("tent", Kind::Prop, x, y, Shape::Rect(1.1 * t, 1.1 * t), 0.0, 0.0);
+        }
+        for ox in [-2.0, 2.0] {
+            let (x, y) = at("clinic", ox, 3.4);
+            self.push("sandbags", Kind::Prop, x, y, Shape::Rect(0.9 * t, 0.3 * t), 0.0, 0.0);
+        }
+        let (x, y) = at("clinic", 0.0, 1.8);
+        self.push("campfire", Kind::Fire, x, y, Shape::Circle(0.4 * t), 0.0, 0.0);
+        // köpek barınağı: kulübeler, çit
+        for (ox, oy) in [(-1.8, -1.0), (1.8, -1.0)] {
+            let (x, y) = at("kennel", ox, oy);
+            self.push("kennel", Kind::Prop, x, y, Shape::Rect(0.55 * t, 0.4 * t), 0.0, 0.0);
+        }
+        for ox in [-3.5, -1.2, 1.2, 3.5] {
+            let (x, y) = at("kennel", ox, -3.0);
+            self.push("fence", Kind::Prop, x, y, Shape::Rect(1.1 * t, 0.15 * t), 0.0, 0.0);
+        }
+        // benzin istasyonu: bina, pompalar, enkaz araçlar, barikat
+        let (x, y) = at("gas", 0.0, -2.6);
+        self.push("gas", Kind::Building, x, y, Shape::Rect(1.5 * t, 1.0 * t), 0.0, 0.0);
+        for ox in [-2.6, -0.9, 0.9, 2.6] {
+            let (x, y) = at("gas", ox, 1.0);
+            self.push("fuel_pump", Kind::Prop, x, y, Shape::Rect(0.3 * t, 0.3 * t), 0.0, 0.0);
+        }
+        for (ox, oy, w) in [(-4.6, 2.4, "wreck0"), (4.4, -0.4, "wreck1")] {
+            let (x, y) = at("gas", ox, oy);
+            self.push(w, Kind::Prop, x, y, Shape::Rect(0.9 * t, 2.0 * t), 0.0, 0.0);
+        }
+        for (ox, oy) in [(-3.0, 4.2), (3.0, 4.2)] {
+            let (x, y) = at("gas", ox, oy);
+            self.push("barricade", Kind::Prop, x, y, Shape::Rect(0.8 * t, 0.2 * t), 0.0, 0.0);
+        }
+        let (x, y) = at("gas", 3.4, 2.6);
+        self.push("charger", Kind::Prop, x, y, Shape::Rect(0.35 * t, 0.25 * t), 0.0, 0.0);
+        let (x, y) = at("gas", 1.5, 3.2);
+        self.vehicle_spawns.push((1, x, y, 0.0));
+        // gizemli ağaç: güz meşesi + mantar halkası
+        let (x, y) = at("tree", 0.0, 0.0);
+        self.push("oak_autumn", Kind::Deco, x, y, Shape::Circle(0.5 * t), 0.0, 0.0);
+        for k in 0..8 {
+            let a = k as f32 * std::f32::consts::TAU / 8.0;
+            self.push(["mushrooms0", "mushrooms1"][k % 2], Kind::Deco, x + a.cos() * 1.9 * t, y + a.sin() * 1.2 * t + 0.4 * t, Shape::None, 0.0, 0.0);
+        }
+        // zehirli kaynak: zehir varilleri ve sazlar
+        for (ox, oy) in [(-1.5, -0.8), (1.2, 0.6), (0.0, 2.0)] {
+            let (x, y) = at("spring", ox, oy);
+            self.push("barrel_tox", Kind::Prop, x, y, Shape::Circle(0.35 * t), 0.0, 0.0);
+        }
+        for k in 0..6 {
+            let a = k as f32 * 1.1;
+            let (x, y) = at("spring", a.cos() * 3.5, a.sin() * 2.6);
+            self.push(["reeds0", "reeds1"][k % 2], Kind::Deco, x, y, Shape::None, 0.0, 0.0);
+        }
+    }
+
     fn place_forest(&mut self, rng: &mut Rng) {
         let t = TILE;
         // kamp
@@ -1129,6 +1237,7 @@ impl World {
             .push((0, cx + 7.5 * t, cy - 1.0 * t, 1.57));
         self.vehicle_spawns
             .push((0, cx + 8.5 * t, cy + 0.5 * t, 1.57));
+        self.place_landmarks();
 
         // orman: jitter'lı ızgara
         let cell = 2.6 * t;
@@ -1149,6 +1258,9 @@ impl World {
                 if !(matches!(z, Zone::Forest | Zone::DeepForest | Zone::Swamp)
                     || border && ty > WALL_Y)
                 {
+                    continue;
+                }
+                if LANDMARKS.iter().any(|l| !l.safe && l.id == "tree" && (x - l.tx * t).hypot(y - l.ty * t) < l.r * t) {
                     continue;
                 }
                 let dens = fbm(self.seed ^ 0xF0, x / 900.0, y / 900.0);
@@ -1466,7 +1578,7 @@ impl World {
     }
 }
 
-pub const ZONES_ALL: [Zone; 10] = [
+pub const ZONES_ALL: [Zone; 11] = [
     Zone::Camp,
     Zone::Forest,
     Zone::DeepForest,
@@ -1477,6 +1589,7 @@ pub const ZONES_ALL: [Zone; 10] = [
     Zone::Downtown,
     Zone::Industrial,
     Zone::BossArena,
+    Zone::Outpost,
 ];
 
 #[cfg(test)]

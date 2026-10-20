@@ -116,8 +116,14 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
         out += MapMark(a.getDouble(2).toFloat(), a.getDouble(3).toFloat(), 1, a.getString(1))
     }
     w.optJSONArray("boss")?.let { out += MapMark(it.getDouble(0).toFloat(), it.getDouble(1).toFloat(), 2, "Titan") }
-    quests.optJSONObject("active")?.let { q ->
-        if (q.has("x")) out += MapMark(q.getDouble("x").toFloat(), q.getDouble("y").toFloat(), 3, q.optString("title"))
+    val st = quests.optJSONArray("story") ?: JSONArray()
+    for (i in 0 until st.length()) {
+        val q = st.getJSONObject(i)
+        if (q.has("x")) out += MapMark(q.getDouble("x").toFloat(), q.getDouble("y").toFloat(), 3,
+            if (q.optBoolean("ready")) "${q.optString("title")} · Teslim: ${q.optString("giver")}" else q.optString("title"))
+    }
+    for (l in w.optJSONArray("landmarks").let { it ?: JSONArray() }.let { a -> (0 until a.length()).map { a.getJSONArray(it) } }) {
+        out += MapMark(l.getDouble(1).toFloat(), l.getDouble(2).toFloat(), 4, l.getString(0))
     }
     return out
 }
