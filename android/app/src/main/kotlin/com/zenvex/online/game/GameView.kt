@@ -1447,7 +1447,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         // ---- sağ üst: altın + radar
         val gold = hud[Native.GOLD].toInt()
-        val rr = 58 * d
+        val rr = 64 * d
         val rcx = sw - 16 * d - rr; val rcy = 16 * d + rr
         drawRadar(c, rcx, rcy, rr)
         // altın: radarın hemen altında (sağ üst tuşlarla çakışmaz)
@@ -1507,34 +1507,64 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         stroke.color = 0xFF8A5A08.toInt(); stroke.strokeWidth = r * 0.18f; c.drawCircle(x, y, r * 0.7f, stroke)
     }
 
+    /** Mini harita: dünya görüntüsünden (binalar, ağaçlar) oyuncu çevresi + canlı noktalar. Dokununca tam harita. */
+    private val mapSrc = Rect()
+    private val mapDst = RectF()
+    private val mapClip = Path()
+    private var radarCx = 0f; private var radarCy = 0f; private var radarR = 0f
     private fun drawRadar(c: Canvas, cx: Float, cy: Float, r: Float) {
         val d = density
-        fill.shader = RadialGradient(cx, cy, r, 0xC0182030.toInt(), 0xE0080C14.toInt(), Shader.TileMode.CLAMP)
-        c.drawCircle(cx, cy, r, fill); fill.shader = null
-        stroke.color = 0x40FFFFFF; stroke.strokeWidth = 1 * d
-        c.drawCircle(cx, cy, r * 0.5f, stroke)
-        c.drawLine(cx - r, cy, cx + r, cy, stroke); c.drawLine(cx, cy - r, cx, cy + r, stroke)
-        // tarama
-        val a = (time * 1.6f) % (2 * PI.toFloat())
-        fill.shader = android.graphics.SweepGradient(cx, cy, intArrayOf(0, 0, 0x4060FF90), floatArrayOf(0f, 0.85f, 1f))
-        c.save(); c.rotate(Math.toDegrees(a.toDouble()).toFloat(), cx, cy); c.drawCircle(cx, cy, r, fill); c.restore(); fill.shader = null
+        radarCx = cx; radarCy = cy; radarR = r
         val px = hud[Native.PX]; val py = hud[Native.PY]
-        val range = 1600f
+        val range = 1500f
+        val bmp = com.zenvex.online.ui.WorldMapImage.bitmap()
+        c.save()
+        mapClip.reset(); mapClip.addCircle(cx, cy, r, Path.Direction.CW); c.clipPath(mapClip)
+        fill.color = 0xFF2A3A20.toInt(); c.drawCircle(cx, cy, r, fill)
+        if (bmp != null) {
+            val k = bmp.width / mapPx
+            val sr = range * k
+            mapSrc.set((px * k - sr).toInt(), (py * k - sr).toInt(), (px * k + sr).toInt(), (py * k + sr).toInt())
+            mapDst.set(cx - r, cy - r, cx + r, cy + r)
+            c.drawBitmap(bmp, mapSrc, mapDst, pixelPaint)
+        }
+        // kenar karartması
+        fill.shader = RadialGradient(cx, cy, r, intArrayOf(0, 0, 0x90000000.toInt()), floatArrayOf(0f, 0.7f, 1f), Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, r, fill); fill.shader = null
         for (i in 0 until radarN) {
             val x = radarBuf[i * 3]; val y = radarBuf[i * 3 + 1]; val t = radarBuf[i * 3 + 2].toInt()
             var dx = (x - px) / range; var dy = (y - py) / range
             val l = hypot(dx, dy)
             if (l > 1f) { if (t == 0) continue; dx /= l; dy /= l }
-            val col = when (t) { 0 -> 0xFFFF5040.toInt(); 1 -> 0xFFFF2020.toInt(); 2 -> 0xFF60D0FF.toInt(); 3 -> 0xFFFFD34A.toInt(); else -> 0xFF7FFFE0.toInt() }
-            fill.color = col
-            c.drawCircle(cx + dx * r * 0.92f, cy + dy * r * 0.92f, (if (t == 1) 5f else if (t == 0) 2.4f else 3.5f) * d, fill)
+            val col = when (t) { 0 -> 0xFFFF3A30.toInt(); 1 -> 0xFFFF1010.toInt(); 2 -> 0xFF60D0FF.toInt(); 3 -> 0xFFFFD34A.toInt(); 5 -> 0xFFFF9A2A.toInt(); else -> 0xFF7FFFE0.toInt() }
+            val sx = cx + dx * r * 0.96f; val sy = cy + dy * r * 0.96f
+            val rad = (if (t == 1) 4.5f else if (t == 0) 2.6f else 3.4f) * d
+            fill.color = 0xFF000000.toInt(); c.drawCircle(sx, sy, rad + 1 * d, fill)
+            fill.color = col; c.drawCircle(sx, sy, rad, fill)
+            if (t == 5) drawText(c, "!", sx, sy - 5 * d, 12 * d, 0xFFFF9A2A.toInt(), true, fontBold)
         }
-        // oyuncu oku
+        c.restore()
+        // oyuncu oku (bakış yönü)
+        c.save(); c.rotate(dirAngle(hud[Native.PX], hud[Native.PY]), cx, cy)
         path.reset()
-        path.moveTo(cx, cy - 6 * d); path.lineTo(cx + 4.5f * d, cy + 5 * d); path.lineTo(cx - 4.5f * d, cy + 5 * d); path.close()
+        path.moveTo(cx, cy - 7 * d); path.lineTo(cx + 5 * d, cy + 5 * d); path.lineTo(cx, cy + 2.5f * d); path.lineTo(cx - 5 * d, cy + 5 * d); path.close()
         fill.color = Color.WHITE; c.drawPath(path, fill)
-        stroke.color = 0xFFFFD34A.toInt(); stroke.strokeWidth = 2 * d
-        c.drawCircle(cx, cy, r, stroke)
+        stroke.color = 0xFF15140F.toInt(); stroke.strokeWidth = 1.2f * d; c.drawPath(path, stroke)
+        c.restore()
+        // piksel çerçeve
+        stroke.color = 0xFF15140F.toInt(); stroke.strokeWidth = 4 * d; c.drawCircle(cx, cy, r, stroke)
+        stroke.color = 0xFFB89A5A.toInt(); stroke.strokeWidth = 2 * d; c.drawCircle(cx, cy, r - 1 * d, stroke)
+        // kuzey işareti
+        drawText(c, "K", cx, cy - r + 11 * d, 10 * d, 0xFFFFE6A0.toInt(), true, fontBold)
+    }
+
+    private var lastPx = 0f; private var lastPy = 0f; private var faceAng = 0f
+    /** Oyuncunun hareket yönünden ok açısı (derece, yukarı = 0) */
+    private fun dirAngle(x: Float, y: Float): Float {
+        val dx = x - lastPx; val dy = y - lastPy
+        if (dx * dx + dy * dy > 4f) faceAng = Math.toDegrees(atan2(dx.toDouble(), -dy.toDouble())).toFloat()
+        lastPx = x; lastPy = y
+        return faceAng
     }
 
     // ------------------------------------------------------------------ kontroller
@@ -1695,6 +1725,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val i = e.actionIndex
                 val id = e.getPointerId(i)
                 val x = e.getX(i); val y = e.getY(i)
+                // mini haritaya dokunma: tam harita
+                if (radarR > 0 && hypot(x - radarCx, y - radarCy) < radarR) { Audio.play("click", 0.7f, bus = Audio.Bus.Ui); ui.onOpen("map"); return true }
                 for (b in buttons) {
                     if (!b.visible) continue
                     val r = b.r.width() / 2 * 1.2f

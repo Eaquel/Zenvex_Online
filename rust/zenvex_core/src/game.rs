@@ -599,6 +599,11 @@ impl Game {
     }
 
     fn update_zone(&mut self) {
+        // keşif: oyuncunun çevresindeki bulutlar kalkar
+        if !self.passenger || self.time.fract() < 0.05 {
+            let (x, y) = (self.player.x, self.player.y);
+            self.progress.reveal(x, y, 2);
+        }
         let z = self.world.zone(self.player.x, self.player.y);
         let zi = world::ZONES_ALL.iter().position(|q| *q == z).unwrap_or(0) as u8;
         if zi != self.player.zone {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONObject
+import androidx.compose.ui.graphics.asImageBitmap
 import org.junit.Rule
 import org.junit.Test
 
@@ -57,5 +58,18 @@ class UiShotsTest {
     fun bagScreen() {
         val data = sample("inventory")
         paparazzi.snapshot { BagView(data, 0, true, {}, { _, _ -> com.zenvex.online.game.GameSession.Reply(true, "") }) {} }
+    }
+
+    @Test
+    fun worldMap() {
+        val bmp: android.graphics.Bitmap = android.graphics.BitmapFactory.decodeStream(javaClass.getResourceAsStream("/ui/map.png"))
+        val img = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
+        val w = sample("world")
+        val me = sample("player")
+        val fog = fogMask(sample("fog"))
+        val marks = mapMarks(w, JSONObject()) + MapMark(me.getDouble("x").toFloat() + 900f, me.getDouble("y").toFloat() - 1400f, 3, "Gizemli Ağaç")
+        paparazzi.snapshot {
+            WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}, {})
+        }
     }
 }

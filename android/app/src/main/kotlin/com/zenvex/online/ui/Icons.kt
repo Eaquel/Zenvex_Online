@@ -42,6 +42,7 @@ fun DrawScope.drawIcon(name: String, c: Color) {
         "back" -> drawPath(path(0.62f, 0.2f, 0.32f, 0.5f, 0.62f, 0.8f, close = false), c, style = st)
         "next" -> drawPath(path(0.38f, 0.2f, 0.68f, 0.5f, 0.38f, 0.8f, close = false), c, style = st)
         "plus" -> { drawLine(c, p(0.5f, 0.2f), p(0.5f, 0.8f), w * 0.14f, StrokeCap.Round); drawLine(c, p(0.2f, 0.5f), p(0.8f, 0.5f), w * 0.14f, StrokeCap.Round) }
+        "minus" -> drawLine(c, p(0.2f, 0.5f), p(0.8f, 0.5f), w * 0.14f, StrokeCap.Round)
         "check" -> drawPath(path(0.2f, 0.52f, 0.42f, 0.74f, 0.82f, 0.28f, close = false), c, style = st)
         "close" -> { drawLine(c, p(0.25f, 0.25f), p(0.75f, 0.75f), w * 0.12f, StrokeCap.Round); drawLine(c, p(0.75f, 0.25f), p(0.25f, 0.75f), w * 0.12f, StrokeCap.Round) }
         "coin" -> {

@@ -169,6 +169,11 @@ impl Game {
                     "drone_targets": g.drone_targets,
                 })
             }
+            "fog" => {
+                let n = crate::progress::FOG_N;
+                let rows: Vec<String> = (0..n).map(|y| format!("{:016x}", g.fog.get(y).copied().unwrap_or(0))).collect();
+                json!({ "n": n, "rows": rows })
+            }
             "inventory" => {
                 let slots: Vec<Value> = g
                     .inv
@@ -1195,7 +1200,14 @@ mod v4_tests {
         }
         g.use_slot(1).unwrap();
         g.step(1.0 / 30.0, crate::game::Input::default());
-        for v in ["tree", "dog", "bag", "inventory"] {
+        // harita: başlangıçtan kuzeye bir yol keşfedilmiş
+        let (sx, sy) = (g.player.x, g.player.y);
+        for k in 0..12 {
+            g.progress.reveal(sx, sy - k as f32 * 700.0, 2);
+        }
+        std::fs::write(format!("{dir}/world.json"), crate::world_json(&g)).unwrap();
+        std::fs::write(format!("{dir}/player.json"), serde_json::json!({"x": sx, "y": sy}).to_string()).unwrap();
+        for v in ["tree", "dog", "bag", "inventory", "fog"] {
             std::fs::write(format!("{dir}/{v}.json"), g.ui_json(v)).unwrap();
         }
     }

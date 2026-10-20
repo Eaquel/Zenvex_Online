@@ -216,6 +216,45 @@ pub struct Progress {
     pub dog_lv: [u8; 3],
     /// hile/ödül ile verilen ek skill puanı
     pub extra_points: u32,
+    /// keşfedilen harita hücreleri (FOG_N satır × FOG_N bit; haritada bulut kalkar)
+    pub fog: Vec<u64>,
+}
+
+/// Keşif ızgarası: 60×60 hücre (her hücre 6 kare = 384 px)
+pub const FOG_N: usize = 60;
+
+impl Progress {
+    pub fn explored(&self, cx: usize, cy: usize) -> bool {
+        self.fog.get(cy).is_some_and(|r| r >> cx & 1 == 1)
+    }
+
+    /// (x, y) çevresini keşfedilmiş say; yeni hücre açıldıysa true
+    pub fn reveal(&mut self, x: f32, y: f32, r_cells: i32) -> bool {
+        if self.fog.len() != FOG_N {
+            self.fog.resize(FOG_N, 0);
+        }
+        let cell = crate::world::MAP_PX / FOG_N as f32;
+        let (cx, cy) = ((x / cell) as i32, (y / cell) as i32);
+        let mut new = false;
+        for dy in -r_cells..=r_cells {
+            for dx in -r_cells..=r_cells {
+                if dx * dx + dy * dy > r_cells * r_cells + 1 {
+                    continue;
+                }
+                let (qx, qy) = (cx + dx, cy + dy);
+                if qx < 0 || qy < 0 || qx >= FOG_N as i32 || qy >= FOG_N as i32 {
+                    continue;
+                }
+                let row = &mut self.fog[qy as usize];
+                let bit = 1u64 << qx;
+                if *row & bit == 0 {
+                    *row |= bit;
+                    new = true;
+                }
+            }
+        }
+        new
+    }
 }
 
 impl Default for Progress {
@@ -257,6 +296,7 @@ impl Default for Progress {
             dog_owned: false,
             dog_lv: [0; 3],
             extra_points: 0,
+            fog: Vec::new(),
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);

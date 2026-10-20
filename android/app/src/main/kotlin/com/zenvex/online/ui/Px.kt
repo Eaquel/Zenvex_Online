@@ -229,17 +229,26 @@ fun PxBar(value: Float, color: Color, modifier: Modifier = Modifier, height: Dp 
 
 // =========================================================================== dünya haritası arka planı
 object WorldMapImage {
+    /** Harita çözünürlüğü: 1 piksel ≈ 22 dünya pikseli (binalar, ağaçlar seçilir) */
+    const val SIZE = 1024
+    @Volatile private var bmp: Bitmap? = null
     @Volatile private var img: ImageBitmap? = null
-    private var n = 0
 
-    /** Dünyanın piksel haritası (ilk çağrıda Rust'tan üretilir, önbelleklenir). */
-    fun get(size: Int = 420): ImageBitmap? {
-        img?.let { if (n == size) return it }
+    /** Dünyanın piksel haritası (ilk çağrıda Rust'tan üretilir, önbelleklenir; mini harita da bunu kullanır). */
+    fun bitmap(): Bitmap? {
+        bmp?.let { return it }
         if (GameSession.handle == 0L) return null
-        val px = IntArray(size * size)
-        synchronized(GameSession.lock) { Native.minimap(GameSession.handle, size, px) }
-        val b = Bitmap.createBitmap(px, size, size, Bitmap.Config.ARGB_8888).asImageBitmap()
-        img = b; n = size
+        val px = IntArray(SIZE * SIZE)
+        synchronized(GameSession.lock) { Native.minimap(GameSession.handle, SIZE, px) }
+        val b = Bitmap.createBitmap(px, SIZE, SIZE, Bitmap.Config.ARGB_8888)
+        bmp = b
+        return b
+    }
+
+    fun get(): ImageBitmap? {
+        img?.let { return it }
+        val b = bitmap()?.asImageBitmap() ?: return null
+        img = b
         return b
     }
 }

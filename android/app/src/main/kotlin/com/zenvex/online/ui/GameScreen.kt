@@ -119,7 +119,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(12.dp)) {
                 ChatPanel(Modifier.width(460.dp).fillMaxHeight().align(Alignment.CenterStart), close)
             }
-            Overlay.Map -> TravelMap(close)
+            Overlay.Map -> WorldMapScreen(close)
             Overlay.Trade -> TradeScreen(close)
             Overlay.Mail -> MailDialog(close)
             Overlay.Clan -> ClanDialog { overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }
@@ -159,7 +159,6 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
     }
     // sol üst (portre/barların altı): harita, görevler, sezon, yetenekler
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PxIcon("map", size = 46.dp) { open(Overlay.Map) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
         PxIcon("paw", size = 46.dp, tint = Color(0xFFE0B070)) { open(Overlay.Dog) }
@@ -267,69 +266,6 @@ private fun DeadDialog(respawned: () -> Unit, toLobby: () -> Unit) {
 }
 
 // =========================================================================== harita + seyahat
-@Composable
-private fun TravelMap(close: () -> Unit) {
-    val img = remember { WorldMapImage.get() }
-    val hud = remember { GameSession.hud() }
-    val w = remember { GameSession.world() }
-    val mapPx = w.optDouble("map_px", 23040.0).toFloat()
-    val travel = w.optJSONArray("travel") ?: JSONArray()
-    val prof = remember { GameSession.ui("profile") }
-    val lvl = prof.optInt("level", 1)
-    Box(Modifier.fillMaxSize().background(Color(0xFF2A3A20))) {
-        if (img != null) Canvas(Modifier.fillMaxSize()) {
-            // haritayı ekrana yay (kırp), oyuncu ve noktalar
-            val k = maxOf(size.width, size.height) / img.width
-            val ox = (size.width - img.width * k) / 2; val oy = (size.height - img.height * k) / 2
-            drawImage(img, androidx.compose.ui.unit.IntOffset.Zero, androidx.compose.ui.unit.IntSize(img.width, img.height),
-                androidx.compose.ui.unit.IntOffset(ox.toInt(), oy.toInt()), androidx.compose.ui.unit.IntSize((img.width * k).toInt(), (img.height * k).toInt()),
-                filterQuality = FilterQuality.None)
-            val s = img.width * k / mapPx
-            fun at(x: Float, y: Float) = Offset(ox + x * s, oy + y * s)
-            for (i in 0 until travel.length()) {
-                val a = travel.getJSONArray(i)
-                drawCircle(Color(0xFF15140F), 9.dp.toPx(), at(a.getDouble(2).toFloat(), a.getDouble(3).toFloat()))
-                drawCircle(if (lvl >= a.getInt(4)) Px.Clan else Color(0xFF8A8A80), 6.dp.toPx(), at(a.getDouble(2).toFloat(), a.getDouble(3).toFloat()))
-            }
-            w.optJSONArray("boss")?.let { drawCircle(Color(0xFFE03030), 8.dp.toPx(), at(it.getDouble(0).toFloat(), it.getDouble(1).toFloat())) }
-            val me = at(hud[Native.PX], hud[Native.PY])
-            drawCircle(Color.White, 9.dp.toPx(), me)
-            drawCircle(Color(0xFF3A8AFF), 6.dp.toPx(), me)
-        }
-        // seyahat kartları (sağ sütun)
-        Column(
-            Modifier.align(Alignment.CenterEnd).padding(12.dp).width(300.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            for (i in 0 until travel.length()) {
-                val a = travel.getJSONArray(i)
-                val need = a.getInt(4); val cost = a.getInt(5)
-                val ok = lvl >= need
-                PxPanel(Modifier.fillMaxWidth(), Color(0xE02B2B26), pad = 8.dp) {
-                    PT(a.getString(1), 18.sp, if (ok) Px.Text else Px.Sub)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        PxButton("Seyahat", height = 36.dp, size = 16.sp, enabled = ok) {
-                            val r = GameSession.cmd("travel", "to" to a.getString(0))
-                            Toaster.show(r.msg, r.ok)
-                            if (r.ok) close()
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Column {
-                            PT(if (ok) "Seviye $need+" else "Seviye $need gerekli", 13.sp, if (ok) Px.Level else Color(0xFFE07060))
-                            PT(if (cost > 0) "$cost altın" else "Ücretsiz", 13.sp, Px.Clan)
-                        }
-                    }
-                }
-            }
-        }
-        Row(Modifier.align(Alignment.TopStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            PxIcon("close", size = 44.dp) { close() }
-            Spacer(Modifier.width(10.dp))
-            PT("Dünya Haritası", 26.sp, Px.Orange, outline = true)
-        }
-        PT("● Sen   ● Seyahat noktası   ● Titan", 14.sp, Px.Text, Modifier.align(Alignment.BottomStart).padding(12.dp))
-    }
-}
 
 // =========================================================================== posta
 @Composable

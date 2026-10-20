@@ -79,7 +79,8 @@ pub fn world_json(g: &Game) -> String {
     .to_string()
 }
 
-/// Mini harita için küçültülmüş zemin+bölge görüntüsü (ARGB, `n`x`n`).
+/// Harita görüntüsü (ARGB, `n`x`n`): zemin + binalar (çatı), ağaçlar, kayalar, çalılar.
+/// Mini harita ve tam harita bunu kullanır; 1024 px'te bir piksel ≈ 22 dünya pikseli.
 pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
     const COL: [u32; world::ground::COUNT] = [
         0xFF4E7A34, 0xFF365A26, 0xFF8A8A4A, 0xFF7A5E3E, 0xFF8C8478, 0xFF3A3C40, 0xFF9C9890,
@@ -91,6 +92,55 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
             let ty = py * world::MAP_TILES / n;
             if let Some(o) = out.get_mut(py * n + px) {
                 *o = COL[(g.world.ground_at(tx, ty) as usize).min(world::ground::COUNT - 1)];
+            }
+        }
+    }
+    let k = n as f32 / world::MAP_PX;
+    let mut put = |x: i32, y: i32, c: u32, out: &mut [u32]| {
+        if x >= 0 && y >= 0 && (x as usize) < n && (y as usize) < n {
+            out[y as usize * n + x as usize] = c;
+        }
+    };
+    let mut disc = |cx: f32, cy: f32, r: f32, c: u32, out: &mut [u32]| {
+        let ri = r.ceil() as i32;
+        for dy in -ri..=ri {
+            for dx in -ri..=ri {
+                if (dx * dx + dy * dy) as f32 <= r * r + 0.3 {
+                    put(cx as i32 + dx, cy as i32 + dy, c, out);
+                }
+            }
+        }
+    };
+    use world::{Kind, Shape};
+    // önce zemin nesneleri, sonra binalar (üstte)
+    for pass in 0..2 {
+        for s in &g.world.statics {
+            if s.broken {
+                continue;
+            }
+            let (cx, cy) = (s.x * k, s.y * k);
+            match (pass, s.kind, s.shape) {
+                (0, Kind::Tree, _) => {
+                    disc(cx + 0.6, cy + 0.6, 2.2, 0xFF1E3416, out);
+                    disc(cx, cy, 1.8, 0xFF2E5A22, out);
+                    put(cx as i32 - 1, cy as i32 - 1, 0xFF4A7A34, out);
+                }
+                (0, Kind::Bush, _) => disc(cx, cy, 0.9, 0xFF3A6A2A, out),
+                (0, Kind::Rock, _) => disc(cx, cy, 1.1, 0xFF8A8A88, out),
+                (1, Kind::Building | Kind::Tower | Kind::Stall, Shape::Rect(hw, hh)) => {
+                    let (x0, x1) = ((cx - hw * k) as i32, (cx + hw * k) as i32);
+                    // çatı ön yüzün üstünde: binanın derinliği kadar yukarı uzat
+                    let (y0, y1) = ((cy - hh * k * 3.0) as i32, (cy + hh * k) as i32);
+                    for y in y0..=y1 {
+                        for x in x0..=x1 {
+                            let edge = x == x0 || x == x1 || y == y0 || y == y1;
+                            let c = if edge { 0xFF1E1A16 } else if (y - y0) % 3 == 0 { 0xFF6A4A3A } else { 0xFF7E5A44 };
+                            put(x, y, c, out);
+                        }
+                    }
+                }
+                (1, Kind::Fire, _) => disc(cx, cy, 1.4, 0xFFFFA040, out),
+                _ => {}
             }
         }
     }
@@ -189,5 +239,17 @@ mod tests {
             let _ = g.hud();
             let _ = g.take_events_json();
         }
+    }
+
+    /// Harita görüntüsünü ham ARGB olarak yazar (ZX_DUMP_MAP=dosya; görsel kontrol için).
+    #[test]
+    fn dump_map() {
+        let Ok(path) = std::env::var("ZX_DUMP_MAP") else { return };
+        let g = Game::new(7, Progress::default(), 1);
+        let n = 1024;
+        let mut buf = vec![0u32; n * n];
+        minimap(&g, n, &mut buf);
+        let bytes: Vec<u8> = buf.iter().flat_map(|c| c.to_le_bytes()).collect();
+        std::fs::write(path, bytes).unwrap();
     }
 }

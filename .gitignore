@@ -9,3 +9,4 @@ __pycache__/
 *.pyc
 dist/
 android/firebase.properties
+*.raw
