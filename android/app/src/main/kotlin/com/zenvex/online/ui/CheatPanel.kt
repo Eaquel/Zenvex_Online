@@ -205,6 +205,8 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
     Section("Oyuncu Bul (Ad ya da ID)")
     var q by remember { mutableStateOf("") }
     var found by remember { mutableStateOf(JSONArray()) }
+    var file by remember { mutableStateOf(0L) }
+    if (file > 0) AdminPlayerFile(file) { file = 0 }
     var reason by remember { mutableStateOf("") }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Field(q, { q = it.take(20) }, "Oyuncu", Modifier.weight(1f)) { A.adminFind(q) { r -> r.onSuccess { found = it }.onFailure { report(it.message ?: "", false) } } }
@@ -227,6 +229,7 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
                 PxButton("Yasağı Kaldır", color = Px.Dark, height = 32.dp, size = 11.sp) { A.adminBan(id, 0, "", res) }
                 PxButton("VIP +30 Gün", color = Color(0xFFB08A2A), height = 32.dp, size = 11.sp) { A.adminVip(id, 30, res) }
                 PxButton("VIP Kaldır", color = Px.Dark, height = 32.dp, size = 11.sp) { A.adminVip(id, 0, res) }
+                PxButton("Dosya", color = Px.Blue, height = 32.dp, size = 11.sp, icon = "user") { file = id }
             }
         }
     }

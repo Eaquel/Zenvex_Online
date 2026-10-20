@@ -124,7 +124,19 @@ object Account {
         Supa.rpc("zx_mail_favorite", auth().put("p_mail", mailId).put("p_on", on)) { r -> done(r.exceptionOrNull()?.message) }
     fun removeMail(mailId: Long, done: (String?) -> Unit) = Supa.rpc("zx_mail_remove", auth().put("p_mail", mailId)) { r -> done(r.exceptionOrNull()?.message) }
 
+    // ------------------------------------------------------------------ yönetici işlem kuyruğu (oyuncu tarafı)
+    fun actionsPull(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_actions_pull", auth()) { r -> done(arr(r)) }
+    fun actionsDone(ids: List<Long>) = Supa.rpc("zx_actions_done", auth().put("p_ids", JSONArray(ids))) { }
+    /** Yakın ve klan sohbetinin kaydı (yönetici denetimi için) */
+    fun chatLog(channel: String, text: String) {
+        if (!loggedIn) return
+        Supa.bg { Supa.rpcSync("zx_chat_log", auth().put("p_channel", channel).put("p_text", text)) }
+    }
+
     // ------------------------------------------------------------------ yönetici
+    fun adminPlayer(target: Long, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_admin_player", auth().put("p_target", target)) { r -> done(obj(r)) }
+    fun adminAction(target: Long, action: JSONObject, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_admin_action", auth().put("p_target", target).put("p_action", action)) { r -> done(txt(r)) }
     fun adminMaintenance(on: Boolean, msg: String, done: (Result<JSONObject>) -> Unit) =
         Supa.rpc("zx_admin_maintenance", auth().put("p_on", on).put("p_msg", msg)) { r -> done(obj(r)) }
     fun adminFind(name: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_admin_find", auth().put("p_name", name)) { r -> done(arr(r)) }

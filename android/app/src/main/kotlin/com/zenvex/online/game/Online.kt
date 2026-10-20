@@ -226,6 +226,8 @@ object Online {
         if (channelName == "clan") m.put("cid", Account.clan.value?.id ?: 0)
         c.send("c", m)
         if (channelName == "global") Account.postChat(serverId, t)
+        else if (channelName == "local") Account.chatLog("$serverId:local", t)
+        else if (channelName == "clan") Account.chatLog("clan:${Account.clan.value?.id ?: 0}", t)
         return null
     }
 

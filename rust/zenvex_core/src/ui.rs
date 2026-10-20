@@ -386,6 +386,32 @@ impl Game {
                     _ => Err("Eşya bulunamadı".into()),
                 }
             }
+            // yönetici işlemi (sunucu kuyruğundan): eşya sil, çantayı boşalt, altını ayarla
+            "admin_action" => {
+                let a = &v["a"];
+                match a["t"].as_str().unwrap_or("") {
+                    "remove_item" => {
+                        let it = a["item"].as_u64().unwrap_or(u64::MAX) as usize;
+                        for s in self.progress.inv.slots.iter_mut() {
+                            if s.is_some_and(|x| x.item as usize == it) {
+                                *s = None;
+                            }
+                        }
+                        Ok("Yönetici bir eşyanı kaldırdı".into())
+                    }
+                    "clear_bag" => {
+                        for s in self.progress.inv.slots.iter_mut() {
+                            *s = None;
+                        }
+                        Ok("Yönetici çantanı boşalttı".into())
+                    }
+                    "set_gold" => {
+                        self.progress.gold = a["v"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32;
+                        Ok("Yönetici altınını ayarladı".into())
+                    }
+                    _ => Ok(String::new()),
+                }
+            }
             "clan_boost" => {
                 for (i, k) in ["dmg", "xp", "speed"].iter().enumerate() {
                     self.clan_boost[i] = v[*k].as_u64().unwrap_or(0).min(5) as u8;

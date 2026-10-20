@@ -101,6 +101,27 @@ fun GameScreen(toLobby: () -> Unit) {
         overlay = when (overlay) { Overlay.None -> Overlay.Menu; Overlay.Dead -> Overlay.Dead; Overlay.Settings -> Overlay.Menu; else -> Overlay.None }
     }
     val close = { overlay = Overlay.None }
+    // yönetici işlemleri: 30 sn'de bir kuyruk okunur ve uygulanır (eşya silme, altın, atma, mesaj)
+    LaunchedEffect(Unit) {
+        while (Account.loggedIn) {
+            Account.actionsPull { r ->
+                r.onSuccess { list ->
+                    val ids = ArrayList<Long>()
+                    for (i in 0 until list.length()) {
+                        val o = list.getJSONObject(i); val a = o.getJSONObject("a")
+                        ids += o.optLong("id")
+                        when (a.optString("t")) {
+                            "kick" -> { Toaster.show(a.optString("msg").ifEmpty { "Yönetici seni oyundan çıkardı" }, false); GameSession.save(cloud = true); toLobby() }
+                            "msg" -> { Online.system("Yönetici: " + a.optString("msg")); Toaster.show(a.optString("msg")) }
+                            else -> { val res = GameSession.cmd("admin_action", "a" to a); if (res.msg.isNotEmpty()) Toaster.show(res.msg, false) }
+                        }
+                    }
+                    if (ids.isNotEmpty()) { Account.actionsDone(ids); GameSession.save(cloud = true) }
+                }
+            }
+            delay(30_000)
+        }
+    }
     // klan güçlendirmeleri oyuna uygulanır (hasar, tecrübe, hız)
     LaunchedEffect(Account.clan.value) {
         val b = Account.clan.value?.json?.optJSONObject("boosts")
