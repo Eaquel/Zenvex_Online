@@ -18,7 +18,7 @@ object Native {
     const val D_AREA = 7
 
     // HUD dizisi (rust draw.rs hud())
-    const val HUD_SIZE = 40
+    const val HUD_SIZE = 41
     const val HP = 0; const val MAXHP = 1; const val ST = 2; const val MAXST = 3
     const val XP = 4; const val XPNEXT = 5; const val LEVEL = 6; const val POINTS = 7
     const val GOLD = 8; const val KILLS = 9; const val PX = 10; const val PY = 11
@@ -29,6 +29,8 @@ object Native {
     const val BOSS_HP = 28; const val BOSS_MAX = 29; const val POISON = 30; const val ZONE = 31
     const val SPEED_T = 32; const val POWER_T = 33; const val HEAL_T = 34; const val POT_CD0 = 35
     const val FOOD_T = 38; const val ENERGY_T = 39
+    /** PvP bölgesi (üs çevresi, Askerî Bölge, Donmuş Liman) */
+    const val PVP = 40
 
     const val REMOTE_STRIDE = 10
 

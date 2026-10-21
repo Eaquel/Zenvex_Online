@@ -170,7 +170,7 @@ impl Game {
                                "boss": g.boss_kills, "gold_earned": g.gold_earned, "time": g.play_time as u64 },
                     // etkinlik puanı için sayaçlar (zombi türüne göre öldürme dahil)
                     "ev": { "kills_by": g.kills_by, "boss": g.boss_kills, "soldiers": g.ev.soldier_kills, "caps": g.ev.base_caps,
-                            "dog": g.ev.dog_kills, "danger": g.ev.danger_secs as u64, "trees": g.trees, "crates": g.crates, "crafted": g.crafted },
+                            "dog": g.ev.dog_kills, "danger": g.ev.danger_secs as u64, "pvp": g.ev.pvp_kills, "trees": g.trees, "crates": g.crates, "crafted": g.crafted },
                     "drone_targets": g.drone_targets,
                 })
             }
@@ -637,6 +637,28 @@ impl Game {
             "net_kill" => {
                 let f = |k: &str| v[k].as_f64().unwrap_or(0.0) as f32;
                 self.net_kill(v["kind"].as_u64().unwrap_or(0) as u8, v["level"].as_u64().unwrap_or(1) as u32, f("x"), f("y"));
+                Ok(String::new())
+            }
+            // PvP: düşman oyuncu vuruşu; döner: uygulandı mı
+            "pvp_dmg" => {
+                if self.pvp_damage(v["v"].as_f64().unwrap_or(0.0) as f32) {
+                    Ok("hit".into())
+                } else {
+                    Err("PvP kapalı".into())
+                }
+            }
+            "pvp_kill" => {
+                self.progress.ev.pvp_kills += 1;
+                let (x, y) = (self.player.x, self.player.y);
+                self.give_xp(x, y, 120);
+                Ok("Oyuncu öldürdün".into())
+            }
+            "capture_blocked" => {
+                self.capture_blocked = v["on"].as_bool().unwrap_or(false);
+                Ok(String::new())
+            }
+            "pvp_hostile" => {
+                self.remote_hostile = v["h"].as_array().map(|a| a.iter().map(|b| b.as_bool().unwrap_or(false)).collect()).unwrap_or_default();
                 Ok(String::new())
             }
             "net_pdmg" => {

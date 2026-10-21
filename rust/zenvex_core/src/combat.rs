@@ -7,6 +7,73 @@ use crate::world::{Kind, Zone};
 pub const GATHER_HIT: f32 = 0.4;
 
 impl Game {
+    /// PvP açık mı: devlet üssü çevresi ya da yüksek seviyeli bölge (Askerî Bölge, Donmuş Liman); güvenli bölgede asla.
+    pub fn pvp_at(&self, x: f32, y: f32) -> bool {
+        let z = self.world.zone(x, y);
+        if z.safe() {
+            return false;
+        }
+        if matches!(z, Zone::Military | Zone::Harbor) {
+            return true;
+        }
+        let r = (crate::bases::BASE_HALF + 6.0) * crate::world::TILE;
+        crate::bases::base_defs().iter().any(|b| {
+            let (bx, by) = b.pos();
+            (bx - x).abs() < r && (by - y).abs() < r
+        })
+    }
+
+    /// Yakın dövüş vuruşu düşman oyunculara: olay olarak istemciye gider (hasar hedefin cihazında uygulanır).
+    fn melee_players(&mut self, base: f32, range: f32, arc: f32) -> bool {
+        let (px, py, pdir) = (self.player.x, self.player.y, self.player.dir);
+        if !self.pvp_at(px, py) {
+            return false;
+        }
+        let (fx, fy) = dir_vec(pdir);
+        let mut hit = false;
+        for k in 0..self.remotes.len() {
+            if !self.remote_hostile.get(k).copied().unwrap_or(false) {
+                continue;
+            }
+            let r = &self.remotes[k];
+            if r.vehicle >= 1.0 {
+                continue;
+            }
+            let (rx, ry) = (r.x, r.y);
+            let (dx, dy) = (rx - px, ry - py);
+            let d = dx.hypot(dy);
+            if d > range + 18.0 || !self.pvp_at(rx, ry) {
+                continue;
+            }
+            let ang = ((dx * fx + dy * fy) / d.max(1e-3)).clamp(-1.0, 1.0).acos();
+            if d > 20.0 && ang > arc {
+                continue;
+            }
+            let crit = self.rng.chance(self.progress.crit_chance());
+            let mut v = base * self.rng.range(0.9, 1.1);
+            if crit {
+                v *= 1.75 + self.progress.bonus().crit_dmg;
+            }
+            // oyuncular arası hasar zombilere göre düşük (zırhı hedef cihaz uygular)
+            v *= 0.6;
+            self.events.push(Event::PvpHit { k: k as u32, v, crit });
+            self.events.push(Event::Damage { x: rx, y: ry - 110.0, v: v.round() as i32, crit });
+            hit = true;
+        }
+        hit
+    }
+
+    /// Uzak oyuncunun vuruşu (ağdan): yalnız ikimiz de PvP bölgesindeysek; bir vuruşta en fazla 400.
+    pub fn pvp_damage(&mut self, v: f32) -> bool {
+        if self.player.dead || !self.pvp_at(self.player.x, self.player.y) {
+            return false;
+        }
+        self.pvp_hit_t = 6.0;
+        self.player.combat_t = 0.0;
+        self.damage_player(v.clamp(0.0, 400.0));
+        true
+    }
+
     /// Önündeki yayda zombilere, yoksa ağaç/kaya/sandığa vurur.
     pub fn melee_hit(&mut self, base: f32, range: f32, arc: f32, stun: f32) {
         let (px, py, pdir) = (self.player.x, self.player.y, self.player.dir);
@@ -48,6 +115,8 @@ impl Game {
         // devlet üssü askerleri (düşmansa)
         let sdmg = base * mult * self.rng.range(0.9, 1.1) * if self.player.one_hit { 1e4 } else { 1.0 };
         hit_any |= self.melee_soldiers(sdmg, range, arc);
+        // PvP: üslerde ve yüksek seviyeli bölgelerde düşman oyunculara (klan arkadaşı hariç)
+        hit_any |= self.melee_players(base * mult, range, arc);
         if hit_any {
             self.player.combat_t = 0.0;
             self.events.push(Event::Hit {

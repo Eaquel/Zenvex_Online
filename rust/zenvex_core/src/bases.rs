@@ -796,6 +796,14 @@ impl Game {
             return;
         }
         if inside && alive == 0 {
+            // savunan klan üyesi halkadaysa ele geçirme durur (klan savaşı)
+            if self.capture_blocked {
+                if st.note_t <= 0.0 {
+                    st.note_t = 6.0;
+                    self.events.push(Event::Msg { text: "Savunucular halkada! Önce onları temizle".into() });
+                }
+                return;
+            }
             if self.my_clan <= 0 {
                 if st.note_t <= 0.0 {
                     st.note_t = 10.0;
@@ -904,8 +912,8 @@ impl Game {
         let left = ((st.reward_end_ms - self.base_clock) / 1000.0).max(0.0).round();
         let alive = self.alive_in(i);
         json!({
-            "id": i, "name": b.name(), "level": b.level,
-            "owner": if st.owner == 0 { "Devlet".to_string() } else { st.owner_name.clone() },
+            "id": i, "name": b.name(), "level": b.level, "x": b.pos().0, "y": b.pos().1, "ring": CAPTURE_R,
+            "owner": if st.owner == 0 { "Devlet".to_string() } else { st.owner_name.clone() }, "owned": st.owner != 0,
             "mine": self.my_clan > 0 && st.owner == self.my_clan, "inclan": self.my_clan > 0,
             "alive": alive, "max": GARRISON, "pending": st.pending,
             "cap": if st.cap_sent { 1.0 } else { st.capture_t / CAPTURE_TIME }, "sent": st.cap_sent,

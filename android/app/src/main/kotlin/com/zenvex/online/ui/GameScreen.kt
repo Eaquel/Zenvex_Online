@@ -425,7 +425,7 @@ private fun DogDialog(close: () -> Unit) {
             PxButton("Satın al · ${fmt(d.optInt("price"))} altın", Modifier.fillMaxWidth(), if (near) Px.Green else Px.Dark, icon = "paw", size = 17.sp, enabled = near) {
                 val r = GameSession.cmd("dog_buy"); Toaster.show(r.msg, r.ok); tick++
             }
-            if (!near) PT("Köpek yalnızca barınaktaki Eğitmen Kerem'den alınır. Barınak haritada işaretli.", 13.sp, Px.Clan, maxLines = 2)
+            if (!near) PT("Köpek yalnızca barınaktaki Eğitmen Jack'ten alınır. Barınak haritada işaretli.", 13.sp, Px.Clan, maxLines = 2)
             return@PxDialog
         }
         val dead = d.optDouble("dead")
@@ -445,6 +445,6 @@ private fun DogDialog(close: () -> Unit) {
             }
             Spacer(Modifier.height(6.dp))
         }
-        PT(if (near) "Altın: ${fmt(d.optInt("gold"))}" else "Geliştirme barınaktaki Eğitmen Kerem'de yapılır.", 13.sp, Px.Clan)
+        PT(if (near) "Altın: ${fmt(d.optInt("gold"))}" else "Geliştirme barınaktaki Eğitmen Jack'te yapılır.", 13.sp, Px.Clan)
     }
 }

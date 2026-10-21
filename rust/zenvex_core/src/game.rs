@@ -113,6 +113,9 @@ pub enum Event {
     CharLevel { level: u32 },
     #[serde(rename = "hit")]
     Hit { x: f32, y: f32, kind: u8 },
+    /// PvP: yerel oyuncu uzak oyuncuya (remotes[k]) vurdu; istemci hedefe iletir
+    #[serde(rename = "pvp")]
+    PvpHit { k: u32, v: f32, crit: bool },
     #[serde(rename = "treefall")]
     TreeFall { x: f32, y: f32 },
     #[serde(rename = "kill")]
@@ -437,6 +440,12 @@ pub struct Game {
     pub npcs: Vec<Npc>,
     pub drone: Drone,
     pub remotes: Vec<Remote>,
+    /// PvP: uzak oyuncu düşman mı (başka klan / klansız); istemci her saniye günceller
+    pub remote_hostile: Vec<bool>,
+    /// PvP: öldürülen oyuncu sayısı bu oturumda istemciye bildirilir (sayaç progress.ev.pvp_kills)
+    pub pvp_hit_t: f32,
+    /// klan savaşı: üssün sahibi klandan biri ele geçirme halkasındaysa (istemci bildirir)
+    pub capture_blocked: bool,
     /// 0 tek oyunculu, 1 ev sahibi (zombileri o çalıştırır), 2 istemci
     pub net: u8,
     pub next_zid: u32,
@@ -565,6 +574,9 @@ impl Game {
                 ..Default::default()
             },
             remotes: Vec::new(),
+            remote_hostile: Vec::new(),
+            pvp_hit_t: 0.0,
+            capture_blocked: false,
             net: 0,
             next_zid: 1,
             kill_credit: -1,

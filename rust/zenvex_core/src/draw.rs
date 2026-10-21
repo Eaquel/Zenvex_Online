@@ -4,7 +4,7 @@ use crate::game::*;
 use crate::world::{Kind, Shape, STATIC_NAMES};
 
 /// HUD dizisinin uzunluğu (Kotlin Native.HUD_SIZE)
-pub const HUD_N: usize = 40;
+pub const HUD_N: usize = 41;
 
 /// Ekipman kodları (Kotlin ile ortak): 0 yok, 1 basit, 2 polis, 3 askerî, 4 titan
 pub fn tier_code(id: &str) -> f32 {
@@ -418,6 +418,7 @@ impl Game {
             p.pot_cd[2],
             p.food_t.max(0.0),
             p.energy_t,
+            if self.pvp_at(p.x, p.y) { 1.0 } else { 0.0 },
         ]
     }
 

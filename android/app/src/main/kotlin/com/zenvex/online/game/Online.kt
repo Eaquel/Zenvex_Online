@@ -22,6 +22,8 @@ import kotlin.math.hypot
  *  pd        zombi hasarı → hedef oyuncu
  *  c         sohbet (genel / yakın); genel sohbet ayrıca veritabanına yazılır (geçmiş)
  *  treq, tr  takas isteği ve takas teklifleri
+ *  pvp       oyuncu vuruşu → hedef (hasarı hedefin cihazı, PvP bölgesindeyse uygular)
+ *  pvpk      öldürme bildirimi → öldüren
  * Ev sahibi: kanaldaki oyuncular arasında en küçük kimlik. O ayrılırsa sıradaki devralır.
  */
 object Online {
@@ -174,6 +176,14 @@ object Online {
                     .put("x", p.optDouble("x")).put("y", p.optDouble("y"))
             }
             "pd" -> if (p.optString("to") == me) cmdQ += JSONObject().put("cmd", "net_pdmg").put("v", p.optInt("v")).put("poison", p.optBoolean("p"))
+            "pvp" -> if (p.optString("to") == me) {
+                lastPvpFrom = p.optString("u"); lastPvpName = p.optString("n", "Oyuncu"); lastPvpAt = SystemClock.elapsedRealtime()
+                cmdQ += JSONObject().put("cmd", "pvp_dmg").put("v", p.optDouble("v").coerceIn(0.0, 400.0))
+            }
+            "pvpk" -> if (p.optString("to") == me) {
+                cmdQ += JSONObject().put("cmd", "pvp_kill")
+                main.post { system("${p.optString("n", "Oyuncu")} oyuncusunu öldürdün!") }
+            }
             "c" -> {
                 val ch = p.optString("ch", "global")
                 if (ch == "local" && hypot(p.optDouble("x").toFloat() - myX, p.optDouble("y").toFloat() - myY) > 1500f) return
@@ -358,6 +368,37 @@ object Online {
     }
 
     fun position(u: String): FloatArray? = synchronized(remotes) { remotes[u]?.cur?.copyOf() }
+
+    // =========================================================== PvP
+    @Volatile private var lastPvpFrom = ""
+    @Volatile private var lastPvpName = ""
+    @Volatile private var lastPvpAt = 0L
+
+    /** Yerel vuruş uzak oyuncuya (Rust "pvp" olayı, k = uzak oyuncu sırası). */
+    fun sendPvp(k: Int, v: Float, crit: Boolean) {
+        val to = lastIds.getOrNull(k) ?: return
+        channel?.send("pvp", JSONObject().put("to", to).put("u", uid).put("n", name).put("v", v.toDouble()).put("c", crit))
+    }
+
+    /** Yerel oyuncu öldü: son 8 sn içinde bir oyuncu vurduysa öldürme ona yazılır. */
+    fun onLocalDeath() {
+        if (lastPvpFrom.isEmpty() || SystemClock.elapsedRealtime() - lastPvpAt > 8000) return
+        channel?.send("pvpk", JSONObject().put("to", lastPvpFrom).put("u", uid).put("n", name))
+        system("$lastPvpName seni öldürdü")
+        lastPvpFrom = ""
+    }
+
+    /** Uzak oyuncular düşman mı (klan arkadaşı değilse). */
+    fun hostileFlags(myClan: String): JSONArray {
+        val a = JSONArray()
+        for (c in lastClans) a.put(myClan.isEmpty() || c.isEmpty() || c != myClan)
+        return a
+    }
+
+    /** Ele geçirme halkasında sahip klandan biri var mı (klan savaşı: savunucu varken ele geçirme durur). */
+    fun defenderInRing(owner: String, bx: Float, by: Float, r: Float): Boolean = synchronized(remotes) {
+        remotes.values.any { it.clan == owner && it.present && hypot(it.cur[0] - bx, it.cur[1] - by) < r && it.cur[9] < 1f }
+    }
 
     // =========================================================== takas
     // Ekrandaki teklifler kanal üzerinden eşlenir; eşyalar yalnız sunucu emanetiyle el değiştirir (Trade.kt).

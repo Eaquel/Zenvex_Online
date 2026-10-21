@@ -19,13 +19,13 @@ pub const N_WIZARD: u8 = 7;
 /// NPC adı ve unvanı
 pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
     match kind {
-        N_MERCHANT => ("Tüccar Selim", "Tüccar"),
-        N_QUEST => ("Yaşlı Hüseyin", "Görevci"),
-        N_DOCTOR => ("Doktor Leyla", "Doktor"),
-        N_MECHANIC => ("Tamirci Rıza", "Tamirci"),
-        N_TRAINER => ("Eğitmen Kerem", "Köpek Eğitmeni"),
-        N_GUIDE => ("Rehber Deniz", "Rehber"),
-        N_WIZARD => ("Büyücü Arif", "Büyücü"),
+        N_MERCHANT => ("Tüccar Marco", "Tüccar"),
+        N_QUEST => ("Yaşlı Silas", "Görevci"),
+        N_DOCTOR => ("Doktor Elena", "Doktor"),
+        N_MECHANIC => ("Tamirci Viktor", "Tamirci"),
+        N_TRAINER => ("Eğitmen Jack", "Köpek Eğitmeni"),
+        N_GUIDE => ("Rehber Nova", "Rehber"),
+        N_WIZARD => ("Büyücü Aldric", "Büyücü"),
         _ => ("Kule Askeri", "Muhafız"),
     }
 }
@@ -83,7 +83,7 @@ macro_rules! q {
 /// Rehberin öğretici zinciri: zombi öldürmekten üretime kadar her şeyi öğretir.
 pub const GUIDE: &[Quest] = &[
     q!("g1", N_GUIDE, "İlk Adımlar", "Kamptan Çık, 3 Zombi Öldür",
-       ["Uyandın demek! Ben Deniz, bu kampın rehberiyim. Dünya çöktü ama biz hâlâ ayaktayız.",
+       ["Uyandın demek! Ben Nova, bu kampın rehberiyim. Dünya çöktü ama biz hâlâ ayaktayız.",
         "Sol joystick ile yürürsün; sonuna kadar itersen koşarsın. Sağ joystick saldırıdır: çevirdiğin yöne vurursun.",
         "Kampın dışındaki ormanda aylak zombiler dolaşıyor. Git, 3 tanesini indir ve bana dön."],
        "İşte bu! Kılıcını iyi kullanıyorsun. Ama bir zombi sürüsü seni kolayca köşeye sıkıştırır…",
@@ -109,14 +109,14 @@ pub const GUIDE: &[Quest] = &[
         "Cepteki eşyalar ekranın altında tuş olur: tek dokunuşla kullanırsın."],
        "Artık hazırlıklısın. Ceplerin bekleme süresini de gösterir.",
        Goal::Pocket, 1, 1, 10, 30, &[("potion_heal", 1)], &[]),
-    q!("g6", N_GUIDE, "Tüccarla Tanış", "Tüccar Selim ile Konuş",
-       ["Selim kampın tüccarıdır. Fazla malzemeni satar, ihtiyacın olanı alırsın.",
+    q!("g6", N_GUIDE, "Tüccarla Tanış", "Tüccar Marco ile Konuş",
+       ["Marco kampın tüccarıdır. Fazla malzemeni satar, ihtiyacın olanı alırsın.",
         "Git, onunla bir konuş."],
-       "Selim'le anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
+       "Marco'yla anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
        Goal::Talk(N_MERCHANT), 1, 1, 10, 30, &[], &[]),
     q!("g7", N_GUIDE, "Ayakta Kal", "Seviye 5'e Ulaş",
        ["Sana öğreteceklerim bu kadar. Gerisi tecrübe.",
-        "Yaşlı Hüseyin'in görevlerini yap, ormanda zombi avla. 5. seviyeye ulaşınca gel, seni uğurlayayım.",
+        "Yaşlı Silas'ın görevlerini yap, ormanda zombi avla. 5. seviyeye ulaşınca gel, seni uğurlayayım.",
         "5. seviyede sohbet de açılır; diğer hayatta kalanlarla konuşabilirsin."],
        "Artık benim yardımıma ihtiyacın yok. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
@@ -130,9 +130,9 @@ pub const MAIN: &[Quest] = &[
        "Sağ ol evlat. Bu gece biraz rahat uyuruz.",
        Goal::Kill(Some(Zone::Forest)), 5, 1, 60, 80, &[], &[]),
     q!("q2", N_QUEST, "Sahra Hastanesi", "1 İlk Yardım Kiti Üret",
-       ["Doktor Leyla batıdaki sahra hastanesinde yaralılara bakıyor; malzemesi bitmek üzere.",
+       ["Doktor Elena batıdaki sahra hastanesinde yaralılara bakıyor; malzemesi bitmek üzere.",
         "Sana gereken malzemeyi veriyorum: bandaj, bant ve zehir bezi. Tezgâhta 1 İlk Yardım Kiti üret."],
-       "Bu kit bir hayat kurtaracak. Leyla'ya selamımı söyle.",
+       "Bu kit bir hayat kurtaracak. Elena'ya selamımı söyle.",
        Goal::Craft("medkit"), 1, 2, 80, 100, &[], &[("bandage", 2), ("tape", 1), ("toxic", 1)]),
     q!("q3", N_QUEST, "Gizemli Ağacı Keşfet", "Haritadaki Gizemli Ağaca Git",
        ["Ormanın doğusunda, yaprakları hiç dökülmeyen bir ağaç varmış. Çevresinde mantarlar halka çizermiş.",
@@ -146,13 +146,13 @@ pub const MAIN: &[Quest] = &[
        Goal::Chop, 8, 3, 70, 120, &[("rope", 2)], &[]),
     q!("q5", N_QUEST, "Uluyan Sürü", "5 Zombi Köpek Öldür",
        ["Geceleri uluyan o yaratıklar… Bir zamanlar birinin köpeğiydiler.",
-        "5 zombi köpeği huzura kavuştur. Barınaktaki Kerem'in köpekleri de rahat etsin."],
-       "Uluma kesildi. Kerem sana teşekkür etmek isteyebilir.",
+        "5 zombi köpeği huzura kavuştur. Barınaktaki Jack'in köpekleri de rahat etsin."],
+       "Uluma kesildi. Jack sana teşekkür etmek isteyebilir.",
        Goal::KillKind(ZKind::Dog), 5, 4, 100, 160, &[("bone", 3)], &[]),
-    q!("q6", N_QUEST, "Benzin Kokusu", "Benzin İstasyonundaki Tamirci Rıza'yı Bul",
-       ["Kuzeydeki eski benzin istasyonunda Rıza diye bir tamirci kalıyormuş.",
+    q!("q6", N_QUEST, "Benzin Kokusu", "Benzin İstasyonundaki Tamirci Viktor'u Bul",
+       ["Kuzeydeki eski benzin istasyonunda Viktor diye bir tamirci kalıyormuş.",
         "Araçlarımızı o tamir edebilir. Git, onunla konuş."],
-       "Rıza hâlâ hayatta demek! Artık araçlarımız yolda kalmaz.",
+       "Viktor hâlâ hayatta demek! Artık araçlarımız yolda kalmaz.",
        Goal::Talk(N_MECHANIC), 1, 5, 80, 180, &[("fuel", 2)], &[]),
     q!("q7", N_QUEST, "Derin Ormanın Sessizliği", "Derin Ormanda 15 Zombi Öldür",
        ["Derin ormanda koşucular türedi. Hızlılar ve aç gözlüler.",
@@ -600,22 +600,22 @@ impl Game {
         let lv = self.progress.level;
         if let Some(q) = GUIDE.get(s.guide) {
             if s.guide_on {
-                out.push(format!("Rehber Deniz'in verdiği işi bitir: {}.", q.hint));
+                out.push(format!("Rehber Nova'nın verdiği işi bitir: {}.", q.hint));
             } else if lv >= q.min_level {
-                out.push("Rehber Deniz seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
+                out.push("Rehber Nova seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
             }
         }
         if let Some(q) = MAIN.get(s.main) {
             if s.main_on {
-                out.push(format!("Yaşlı Hüseyin'in görevi: {}.", q.hint));
+                out.push(format!("Yaşlı Silas'ın görevi: {}.", q.hint));
             } else if lv >= q.min_level {
-                out.push(format!("Yaşlı Hüseyin'in sana yeni bir işi var: \"{}\". Kampta onu bul.", q.title));
+                out.push(format!("Yaşlı Silas'ın sana yeni bir işi var: \"{}\". Kampta onu bul.", q.title));
             } else {
-                out.push(format!("Hüseyin'in sıradaki işi için {}. seviyeye ulaşmalısın. Ormanda zombi avla, ağaç kes, tecrübe topla.", q.min_level));
+                out.push(format!("Silas'ın sıradaki işi için {}. seviyeye ulaşmalısın. Ormanda zombi avla, ağaç kes, tecrübe topla.", q.min_level));
             }
         }
         if !self.progress.dog_owned && lv >= 3 {
-            out.push("Henüz köpeğin yok. Barınaktaki Eğitmen Kerem'den bir yol arkadaşı alabilirsin.".into());
+            out.push("Henüz köpeğin yok. Barınaktaki Eğitmen Jack'ten bir yol arkadaşı alabilirsin.".into());
         }
         if lv < 10 {
             out.push(format!("Şehrin kapısı 10. seviyede açılır. Sen şu an {lv}. seviyedesin."));
@@ -636,10 +636,10 @@ impl Game {
 
 fn greeting(kind: u8) -> &'static str {
     match kind {
-        N_MERCHANT => "Hoş geldin yolcu! Selim'in tezgâhında her şey var: iksir, malzeme, yiyecek. Ne lazım?",
-        N_QUEST => "Otur evlat, otur. Yaşlı Hüseyin'in dizleri tutmuyor ama aklı hâlâ yerinde.",
+        N_MERCHANT => "Hoş geldin yolcu! Marco'yun tezgâhında her şey var: iksir, malzeme, yiyecek. Ne lazım?",
+        N_QUEST => "Otur evlat, otur. Yaşlı Silas'ın dizleri tutmuyor ama aklı hâlâ yerinde.",
         N_DOCTOR => "Yaralı mısın? Otur şuraya, bir bakayım. Zehirlendiysen de temizlerim.",
-        N_MECHANIC => "Motor sesi duydum sandım… Aracın mı bozuldu? Rıza'nın elinden kurtulan araç yoktur.",
+        N_MECHANIC => "Motor sesi duydum sandım… Aracın mı bozuldu? Viktor'un elinden kurtulan araç yoktur.",
         N_TRAINER => "Köpekler insanı kokusundan tanır. Seninki iyi bir koku, sana güvenirler.",
         N_GUIDE => "Bir şey sormak istersen buradayım. Kampın etrafında dikkatli ol.",
         N_WIZARD => "Rüzgâr senin geleceğini fısıldadı yolcu. Kapılarım açık: kendi üssüne ya da gördüğün güvenli bir yere.",

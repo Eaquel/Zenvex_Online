@@ -37,11 +37,11 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
         // ------------------------------------------------------------------ tüccar
         (N_MERCHANT, "area") => vec![
             "Burası kampın kalbi. Kamp ateşi, tezgâhlar, çadırlar… Zombiler sınırı geçemez; nöbetçiler ve tanrılar buna izin vermez.",
-            "Batıda Doktor Leyla'nın sahra hastanesi, doğuda Kerem'in köpek barınağı, kuzeyde de Rıza'nın benzinliği var.",
+            "Batıda Doktor Elena'nın sahra hastanesi, doğuda Jack'in köpek barınağı, kuzeyde de Viktor'un benzinliği var.",
             "Hepsi güvenli karakoldur. Bir yere sıkışırsan oralardan birine koş.",
         ],
         (N_MERCHANT, "self") => pick(&[
-            &["Ben Selim. Salgından önce kasabanın en büyük nalbur dükkânı benimdi.",
+            &["Ben Marco. Salgından önce kasabanın en büyük nalbur dükkânı benimdi.",
               "Çivi, ip, bant… Bugün bunlar altından kıymetli. Ben de onları satarak hayatta kalıyorum.",
               "Kimse beni kahraman sanmasın; ben sadece insanlara ihtiyaçlarını veriyorum."],
             &["Karım ve kızım güneydeki kampa kaçtı. Bir gün yollar açılırsa onları bulacağım.",
@@ -68,7 +68,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Kırk yıl köy öğretmenliği yaptım evlat. Çocuklara harita okumayı öğretirdim.",
               "Şimdi haritaları kendim çiziyorum; her kâğıt bir hayat kurtarır.",
               "Bacaklarım artık yürümüyor ama aklım hâlâ yolları hatırlıyor."],
-            &["Bu kampı üç kişi kurduk: ben, Selim ve bir de asker. Adını söylemem; o kuledeki nöbetinden hiç dönmedi.",
+            &["Bu kampı üç kişi kurduk: ben, Marco ve bir de asker. Adını söylemem; o kuledeki nöbetinden hiç dönmedi.",
               "Onun mızrağı hâlâ kulede asılı. Askerler onu uğur sayar."],
         ]),
         (N_QUEST, "tip") => vec![
@@ -129,7 +129,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             "Çevredeki zombi köpekler bir zamanlar bu köpeklerin kardeşiydi. Onlara acı ama dikkatli ol; sürüyle saldırırlar.",
         ],
         (N_TRAINER, "self") => pick(&[
-            &["Ben Kerem. Eskiden polis köpeklerini eğitirdim.",
+            &["Ben Jack. Eskiden polis köpeklerini eğitirdim.",
               "Salgın gecesi köpeklerim beni uyandırdı; havlamasalar şimdi burada olmazdım.",
               "O yüzden onlara borçluyum. Her sahipsiz köpeğe bir yuva bulacağım."],
             &["İlk köpeğimin adı Karabaş'tı.", "Şimdi bu barınaktaki her yavru onun torunu sayılır."],
@@ -151,7 +151,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             "Haritayı açınca keşfetmediğin yerler bulutla kaplı görünür; gezdikçe açılır.",
         ],
         (N_GUIDE, "self") => pick(&[
-            &["Benim adım Deniz. Bu kampa ilk gelenlere yol gösteriyorum.",
+            &["Benim adım Nova. Bu kampa ilk gelenlere yol gösteriyorum.",
               "Ben de bir zamanlar senin gibi uyandım; kimse bana bir şey anlatmadı.",
               "Kimse aynı korkuyu yaşamasın diye buradayım."],
             &["Üniversitede coğrafya okuyordum. Haritayı ezbere bilirim.", "Ama haritada olmayan şeyler de var; onları sen keşfedeceksin."],
@@ -190,7 +190,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             "İstersen öldüğünde orada uyanırsın. Bunu bana üssünde söyle, ayarlarım.",
         ],
         (N_WIZARD, "self") => pick(&[
-            &["Adım Arif. Salgından önce şehrin rasathanesinde yıldızları sayardım.",
+            &["Adım Aldric. Salgından önce şehrin rasathanesinde yıldızları sayardım.",
               "Gökyüzü değişince ben de değiştim. Artık yıldızlar değil, kapılar sayıyorum.",
               "Her kapı bir yeri hatırlar. Sen bir yeri görmeden ben seni oraya götüremem."],
             &["Bu kapıları bana kim öğretti diye sorma. Rüyamda yaşlı bir kadın vardı; gizemli ağacın altında oturuyordu.",

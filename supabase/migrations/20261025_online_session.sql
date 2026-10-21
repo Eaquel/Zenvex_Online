@@ -240,6 +240,7 @@ begin
   update public.sessions set seq = p_seq, last_save = now(), last_beat = now() where account_id = a.id;
   r := public.zx_save2(p_id, p_key, s.server, p_level, p_data, p_kills, p_xp);
   update public.characters set play_seconds = greatest(play_seconds, pt) where account_id = a.id and server = s.server;
+  perform public._zx_char_counters(a.id, s.server, d);
   return r;
 end $$;
 

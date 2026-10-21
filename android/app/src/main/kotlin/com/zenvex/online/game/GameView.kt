@@ -186,6 +186,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
     private val btnAbility = Btn("ability")
     private val btnWeapon = Btn("weapon")
+    private var pvpSyncT = 0f
     private val btnReload = Btn("reload")
     private val btnVehicle = Btn("vehicle")
     private val btnInteract = Btn("interact")
@@ -410,7 +411,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
         for (b in buttons) b.flash = max(0f, b.flash - dt * 3)
 
-        if (hud[Native.DEAD] > 0.5f && !deadNotified) { deadNotified = true; ui.onDeath() }
+        if (hud[Native.DEAD] > 0.5f && !deadNotified) { deadNotified = true; Online.onLocalDeath(); ui.onDeath() }
+        // PvP / klan savaşı: saniyede bir düşman bayrakları ve üs savunucusu kontrolü Rust'a
+        pvpSyncT -= dt
+        if (pvpSyncT <= 0f) {
+            pvpSyncT = 1f
+            val myClan = Account.clan.value?.name ?: ""
+            val base = if (hud[Native.PVP] > 0f) GameSession.ui("base_near") else null
+            val blocked = base != null && base.optBoolean("owned") && !base.optBoolean("mine") &&
+                Online.defenderInRing(base.optString("owner"), base.optDouble("x").toFloat(), base.optDouble("y").toFloat(), base.optDouble("ring").toFloat())
+            synchronized(GameSession.lock) {
+                val h = GameSession.handle
+                Native.command(h, org.json.JSONObject().put("cmd", "pvp_hostile").put("h", Online.hostileFlags(myClan)).toString())
+                Native.command(h, org.json.JSONObject().put("cmd", "capture_blocked").put("on", blocked).toString())
+            }
+        }
         if (hud[Native.DEAD] < 0.5f) deadNotified = false
         val lvl = hud[Native.LEVEL].toInt()
         if (lastLevel in 1 until lvl) ui.onLevelUp(lvl)
@@ -525,6 +540,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val perk = GameSession.ui("tree").optJSONArray("perks")?.optString(lv - 1).orEmpty()
                     setBanner("SAVAŞÇI SEVİYE $lv", perk, 0xFFB277FF.toInt())
                 }
+                // PvP: vuruşu hedef oyuncuya ilet (hasarı onun cihazı uygular)
+                "pvp" -> { Online.sendPvp(e.optInt("k"), e.optDouble("v").toFloat(), e.optBoolean("crit")); Audio.play("hit", 1f, 1.1f) }
                 "hit" -> {
                     val kind = e.getInt("kind")
                     fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
@@ -886,8 +903,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
             }
         }
-        // isim etiketi
-        val top = sy - sp.ay * scale
+        // isim etiketi: kafanın hemen üstü (sabit boy; silah ya da kalkan kare yüksekliğini değiştirmesin)
+        val top = wy(y) - 1.95f * 62.5f * this.scale
         when {
             who == -1f -> {
                 if (localName.isNotEmpty()) plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, localClan.ifEmpty { null }, CLAN_COLOR)
@@ -907,8 +924,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     // ------------------------------------------------------------------ V6 NPC'ler
     // rehber (tür 6) şimdilik asker görseliyle
     private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "quest")
-    private val npc6Plate = arrayOf(null, "Tüccar Selim" to "Tüccar", "Yaşlı Hüseyin" to "Görevci", "Doktor Leyla" to "Doktor",
-        "Tamirci Rıza" to "Tamirci", "Eğitmen Kerem" to "Köpek Eğitmeni", "Rehber Deniz" to "Rehber", "Büyücü Arif" to "Işınlanma")
+    private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
+        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
     private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
     private val questTargets = ArrayList<QuestTarget>()
@@ -1844,8 +1861,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // ---- üst orta: bölge, saat
         val zone = zones.getOrElse(hud[Native.ZONE].toInt()) { "" }
         drawText(c, if (serverTitle.isNotEmpty()) "$serverTitle => $zone" else zone, sw / 2f, 26 * d, 15 * d, 0xFFFFE9A8.toInt(), true, fontDisplay)
-        val light = hud[Native.LIGHT]
-        drawText(c, if (light < 0.6f) "☾ Gece" else "☀ Gündüz", sw / 2f, 42 * d, 11 * d, 0xFFCCD6E0.toInt(), true)
+        if (hud[Native.PVP] > 0f) {
+            val a = 0.65f + 0.35f * kotlin.math.sin(time * 4f)
+            drawText(c, "⚔ PvP Bölgesi · Oyuncular Saldırabilir", sw / 2f, 44 * d, 12 * d, alphaC(0xFFFF5A4A.toInt(), a), true)
+        }
         // boss barı
         if (hud[Native.BOSS_HP] >= 0 && hud[Native.BOSS_MAX] > 0) {
             val w = sw * 0.42f
@@ -1983,7 +2002,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     // ------------------------------------------------------------------ öğretici
     // Doğal yönlendirme: hedefte yerde nabız gibi atan yumuşak halka + üstünde küçük zıplayan işaret, ekran dışındaysa
-    // kenarda küçük yön göstergesi; rehber Deniz yapılacak işi kısa bir konuşma balonuyla söyler ve balon kendiliğinden söner.
+    // kenarda küçük yön göstergesi; rehber Nova yapılacak işi kısa bir konuşma balonuyla söyler ve balon kendiliğinden söner.
     // Adımlar gerçek eylemi bekler (yürüdün mü, saldırdın mı, sayaç ilerledi mi).
     @Volatile private var guideN = 0
     @Volatile private var guideGoal = 0
@@ -2057,7 +2076,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val x0 = sw / 2f - bw / 2; val y0 = 58 * d - (1f - a) * 10 * d
         fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
         stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, "Rehber Deniz", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
+        drawText(c, "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
         for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
     }
 
@@ -2079,8 +2098,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             guideStep == "g3" -> "Yerde parlayan eşyaların üstünden geç, kendiliğinden çantana girer$prog."
             guideStep == "g4" -> "Çantayı aç, Üretim bölümünden Bandaj'ı seç ve üret."
             guideStep == "g5" -> "Çantada bir eşyaya basılı tut ve soldaki ceplerden birine sürükle."
-            guideStep == "g6" -> "Tüccar Selim'i bul ve onunla konuş."
-            guideStep == "g7" -> "5. seviyeye ulaş: Yaşlı Hüseyin'in görevlerini yap, ormanda avlan."
+            guideStep == "g6" -> "Tüccar Marco'yu bul ve onunla konuş."
+            guideStep == "g7" -> "5. seviyeye ulaş: Yaşlı Silas'ın görevlerini yap, ormanda avlan."
             guideOffer && hud[Native.LEVEL] < 5f -> "Buraya gel, sana anlatacaklarım var."
             else -> null
         }
@@ -2121,6 +2140,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val op = s.joystickOpacity
         for (st in listOf(moveStick, atkStick)) {
             val isAtk = st === atkStick
+            if (isAtk && inVehicleNow()) continue // araçta saldırı yok
             fill.shader = RadialGradient(st.cx, st.cy, stickR, intArrayOf(alphaC(0xFF000000.toInt(), 0.1f * op), alphaC(0xFF000000.toInt(), 0.35f * op)), null, Shader.TileMode.CLAMP)
             c.drawCircle(st.cx, st.cy, stickR, fill); fill.shader = null
             stroke.color = alphaC(if (isAtk) 0xFFFF7A5A.toInt() else 0xFFFFFFFF.toInt(), 0.55f * op); stroke.strokeWidth = 2.5f * density
@@ -2153,7 +2173,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         // hızlı tuşlar
         btnVehicle.visible = hud[Native.NEAR_VEHICLE] > 0 || hud[Native.IN_VEHICLE] > 0
-        btnInteract.visible = hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0 || nearNpc >= 5 || nearChest >= 0
+        btnInteract.visible = !inVehicleNow() && (hud[Native.NEAR_MERCHANT] > 0 || hud[Native.NEAR_BENCH] > 0 || nearNpc >= 5 || nearChest >= 0)
         nearCache = Online.nearest(220f)
         val nr = nearCache
         btnTrade.visible = nr != null && nr.dist < 170f && hud[Native.IN_VEHICLE] < 0.5f && rideUid == null
@@ -2161,14 +2181,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         btnReload.visible = hud[Native.AMMO] >= 0
         val cd = hud[Native.ABILITY_CD]
         if (cd > abilityCdMax || cd <= 0f) abilityCdMax = max(cd, 0.1f)
-        roundBtn(c, btnAbility, "roll", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF5A3A8A.toInt(), cd > 0)
-        val ammo = hud[Native.AMMO]
-        val wlabel = if (ammo >= 0) "${hud[Native.MAG].toInt()}/${ammo.toInt()}" else null
-        roundBtn(c, btnWeapon, "weapon", wlabel, 0xFF3A6AA0.toInt(), false)
+        // silah değiştirme tuşu yok (silah çantadan kuşanılır); araçtayken takla ve saldırı kullanılamaz → gizli
+        btnWeapon.visible = false
+        btnAbility.visible = !inVehicleNow()
+        if (btnAbility.visible) roundBtn(c, btnAbility, "roll", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF5A3A8A.toInt(), cd > 0)
         if (btnReload.visible) roundBtn(c, btnReload, "reload", null, 0xFF3A4A5A.toInt(), hud[Native.RELOADING] > 0)
-        if (btnVehicle.visible) roundBtn(c, btnVehicle, if (hud[Native.IN_VEHICLE] > 0) "exit" else "car", null, 0xFF2E8A5A.toInt(), false)
+        if (btnVehicle.visible) roundBtn(c, btnVehicle, if (hud[Native.IN_VEHICLE] > 0) "exit" else "car", if (hud[Native.IN_VEHICLE] > 0) "Araçtan İn" else "Araca Bin", 0xFF2E8A5A.toInt(), false)
         if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
-        if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", null, 0xFF8A5AC0.toInt(), false)
+        if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", if (rideUid != null) "İn" else "Yolcu Ol", 0xFF8A5AC0.toInt(), false)
         if (btnInteract.visible) {
             if (nearNpc >= 5 || hud[Native.NEAR_MERCHANT] > 0) roundBtn(c, btnInteract, "chat", "Konuş", 0xFFC08A20.toInt(), false)
             else if (nearChest >= 0 && hud[Native.NEAR_BENCH] <= 0) roundBtn(c, btnInteract, "bag", "Sandık", 0xFF8A6A3A.toInt(), false)
@@ -2203,15 +2223,22 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val cd = hud[Native.ABILITY_CD]
             c.drawArc(cx - r, cy - r, cx + r, cy + r, -90f, 360f * (cd / abilityCdMax).coerceIn(0f, 1f), true, fill)
         }
-        if (label != null) drawText(c, label, cx, if (dim) cy + r * 0.2f else cy + r * 0.62f, r * (if (dim) 0.62f else 0.36f), Color.WHITE, true)
+        if (label != null) {
+            // görselli tuşta yazı tuşun altına (simgeyi kapatmasın); bekleme sayacı tuşun ortasında
+            if (art != null && !dim) drawText(c, label, cx, cy + r + 13 * density, 12 * density, Color.WHITE, true)
+            else drawText(c, label, cx, if (dim) cy + r * 0.2f else cy + r * 0.62f, r * (if (dim) 0.62f else 0.36f), Color.WHITE, true)
+        }
     }
 
     // HUD tuş görselleri (assets/ui/btn_*.png); bulunamazsa vektör ikon çizilir
     private val artPaint = Paint().apply { isFilterBitmap = false }
     private val artRect = RectF()
     private val dimFilter = android.graphics.ColorMatrixColorFilter(android.graphics.ColorMatrix().apply { setScale(0.45f, 0.45f, 0.45f, 1f) })
+    /** Araçta (sürücü ya da yolcu) */
+    private fun inVehicleNow() = hud[Native.IN_VEHICLE] > 0 || rideUid != null
+
     private fun btnArt(icon: String): Bitmap? = when (icon) {
-        "roll" -> "btn_roll"; "weapon" -> "btn_swap"; "car" -> "btn_drive"; "exit" -> "btn_drive2"
+        "roll" -> "btn_roll"; "weapon" -> "btn_swap"; "car" -> "btn_drive"; "exit" -> "btn_exit"
         "chat", "craft" -> "btn_hand"; "attack" -> "btn_attack"; else -> null
     }?.let { com.zenvex.online.ui.UiArt.bitmap(context, it) }
 
@@ -2328,7 +2355,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val leftSide = x < sw / 2f
                 val moveSide = if (s.leftHanded) !leftSide else leftSide
                 val st = if (moveSide) moveStick else atkStick
-                if (!st.active && y > sh * 0.28f) {
+                if (!st.active && y > sh * 0.28f && !(st === atkStick && inVehicleNow())) {
                     st.pointer = id
                     if (s.moveDynamic || st === atkStick) { st.cx = x; st.cy = y } else { st.cx = st.homeX; st.cy = st.homeY }
                     if (st === atkStick && !s.moveDynamic) { st.cx = st.homeX; st.cy = st.homeY }

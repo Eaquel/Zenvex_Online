@@ -297,6 +297,8 @@ pub struct EventStats {
     pub dog_kills: u32,
     /// tehlikeli (güvenli olmayan) bölgede yaşayarak geçen saniye
     pub danger_secs: f64,
+    /// PvP'de öldürülen oyuncu
+    pub pvp_kills: u32,
 }
 
 /// Keşif ızgarası: 120×120 hücre (her hücre 6 kare = 384 px); satır başına 2 kelime (FOG_W).
