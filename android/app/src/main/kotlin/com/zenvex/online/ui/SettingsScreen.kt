@@ -277,7 +277,7 @@ private fun AccountSettings() {
     var confirmKey by remember { mutableStateOf(false) }
     Head("Zenvex Hesabı")
     if (!Account.loggedIn) {
-        PT("Misafirsin: ilerlemen yalnızca bu cihazda. Hesap açarsan buluta kaydedilir ve her telefondan girebilirsin.", 13.sp, Px.Sub, maxLines = 3)
+        PT("Hesabına girmedin. Zenvex çevrimiçi bir oyundur: oynamak için hesap aç ya da gir.", 13.sp, Px.Sub, maxLines = 3)
         Spacer(Modifier.height(8.dp))
         PxButton("Hesap Aç / Giriş Yap", icon = "user", height = 44.dp, size = 15.sp) { dialog = true }
     } else {
@@ -325,7 +325,7 @@ private fun AccountSettings() {
             }
             PxButton("Başka Hesaba Gir", color = Px.Dark, height = 40.dp, size = 13.sp) { dialog = true }
             PxButton("Çıkış", color = Px.Dark, height = 40.dp, size = 13.sp) {
-                GameSession.save(cloud = true); Account.logout(); GameSession.reload { Toaster.show("Misafir Moduna Geçildi") }
+                GameSession.save(cloud = true); com.zenvex.online.game.Session.end(); Account.logout(); GameSession.reload { Toaster.show("Hesaptan Çıkıldı") }
             }
         }
     }

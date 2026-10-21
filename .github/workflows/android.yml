@@ -56,14 +56,21 @@ jobs:
           SB_KEY: ${{ secrets.SB_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
-          ./gradlew assembleRelease --console=plain
-          mkdir -p ../dist
-          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.2.${{ github.run_number }}.apk
+          ./gradlew assembleRelease assembleDebug --console=plain
+          mkdir -p ../dist ../dist-debug
+          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.3.${{ github.run_number }}-beta.apk
+          # emülatör testi: otomatik gösterim yalnız hata ayıklama sürümünde çalışır (yayın sürümü çevrimdışı oynatmaz)
+          cp app/build/outputs/apk/debug/app-debug.apk ../dist-debug/ZenvexOnline-debug.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: ZenvexOnline-apk
           path: dist/*.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZenvexOnline-debug-apk
+          path: dist-debug/*.apk
 
       - name: latest etiketini bu commit'e taşı
         run: |
@@ -101,7 +108,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: ZenvexOnline-apk
+          name: ZenvexOnline-debug-apk
           path: apk
 
       - name: KVM aç

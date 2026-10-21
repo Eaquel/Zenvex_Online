@@ -31,6 +31,8 @@ object Online {
     data class TradeState(
         val sid: String, val other: String, val otherName: String,
         val mine: List<TradeItem>, val theirs: List<TradeItem>, val myOk: Boolean, val theirOk: Boolean, val done: Boolean,
+        /** sunucudaki emanetli takas numarası (0 = henüz açılmadı) */
+        val tid: Long = 0,
     )
 
     val status = mutableStateOf("Çevrimdışı")
@@ -358,7 +360,7 @@ object Online {
     fun position(u: String): FloatArray? = synchronized(remotes) { remotes[u]?.cur?.copyOf() }
 
     // =========================================================== takas
-    // Her taraf kendi teklifini (eşyalar + onay) karşı tarafa yollar; ikisi de onaylayınca iki taraf da kendi tarafını uygular.
+    // Ekrandaki teklifler kanal üzerinden eşlenir; eşyalar yalnız sunucu emanetiyle el değiştirir (Trade.kt).
     private var myItems: List<TradeItem> = emptyList()
     private var myOk = false
 
@@ -366,16 +368,21 @@ object Online {
 
     fun requestTrade(other: String) {
         val c = channel ?: return
+        if (Session.state.value != Session.State.Live) { system("Takas için çevrimiçi olmalısın"); return }
         c.send("treq", JSONObject().put("to", other).put("u", uid).put("n", name))
         openTrade(other, synchronized(remotes) { remotes[other]?.name ?: "Oyuncu" })
         system("Takas isteği gönderildi")
     }
 
+    /** Kabul eden taraf takası sunucuda açar ve numarayı karşıya yollar. */
     fun acceptTrade() {
         val (u, n) = tradeRequest.value ?: return
         tradeRequest.value = null
         openTrade(u, n)
-        sendOffer()
+        Trade.open(u) { tid ->
+            trade.value = trade.value?.copy(tid = tid)
+            sendOffer()
+        }
     }
 
     fun declineTrade() { tradeRequest.value = null }
@@ -389,48 +396,53 @@ object Online {
         val t = trade.value ?: return
         val items = JSONArray()
         for (it in myItems) items.put(JSONObject().put("id", it.id).put("n", it.n))
-        channel?.send("tr", JSONObject().put("to", t.other).put("u", uid).put("sid", t.sid).put("items", items).put("ok", myOk).put("cancel", cancel))
+        channel?.send("tr", JSONObject().put("to", t.other).put("u", uid).put("sid", t.sid).put("tid", t.tid).put("items", items)
+            .put("ok", myOk).put("cancel", cancel))
     }
 
     private fun onTradeMsg(p: JSONObject) {
         val t = trade.value ?: return
         if (p.optString("sid") != t.sid) return
-        if (p.optBoolean("cancel")) { trade.value = null; system("Takas iptal edildi"); return }
+        if (p.optBoolean("cancel")) { Trade.cancel(t.tid); trade.value = null; system("Takas iptal edildi"); return }
         val arr = p.optJSONArray("items") ?: JSONArray()
         val theirs = (0 until arr.length()).map { arr.getJSONObject(it).let { o -> TradeItem(o.optString("id"), o.optInt("n", 1)) } }
-        // karşı taraf teklifini değiştirdiyse benim onayım düşer
-        if (theirs != t.theirs && myOk) { myOk = false; sendOffer() }
-        val theirOk = p.optBoolean("ok")
-        trade.value = t.copy(mine = myItems, theirs = theirs, myOk = myOk, theirOk = theirOk)
-        if (myOk && theirOk && !t.done) execute()
+        val tid = if (t.tid == 0L) p.optLong("tid") else t.tid
+        trade.value = t.copy(mine = myItems, theirs = theirs, myOk = myOk, theirOk = p.optBoolean("ok"), tid = tid)
     }
 
-    private fun execute() {
+    /** Sunucu takası bitirdi (Trade.apply). */
+    fun tradeFinished(tid: Long) {
         val t = trade.value ?: return
+        if (t.tid != tid) return
         trade.value = t.copy(done = true)
-        for (it in t.mine) cmdQ += JSONObject().put("cmd", "trade_take").put("id", it.id).put("n", it.n)
-        for (it in t.theirs) cmdQ += JSONObject().put("cmd", "trade_give").put("id", it.id).put("n", it.n)
         system("Takas tamamlandı")
-        main.postDelayed({ trade.value = null }, 1500)
-        main.postDelayed({ GameSession.save(cloud = true) }, 400)
+        main.postDelayed({ if (trade.value?.tid == tid) trade.value = null }, 1500)
     }
 
     fun setTradeItems(items: List<TradeItem>) {
-        myItems = items; myOk = false
+        if (myOk) return // emanete alınan teklif değişmez
+        myItems = items
         trade.value = trade.value?.copy(mine = items, myOk = false)
         sendOffer()
     }
 
+    /** "Hazırım": teklif sunucu emanetine girer; geri alınamaz (yalnız iptal). */
     fun setTradeReady(ok: Boolean) {
-        myOk = ok
         val t = trade.value ?: return
-        trade.value = t.copy(myOk = ok)
-        sendOffer()
-        if (ok && t.theirOk && !t.done) execute()
+        if (!ok || myOk) return
+        Trade.ready(t.tid, myItems) { accepted ->
+            if (!accepted) return@ready
+            myOk = true
+            trade.value = trade.value?.copy(myOk = true)
+            sendOffer()
+        }
     }
 
     fun cancelTrade() {
+        val t = trade.value
         sendOffer(cancel = true)
+        if (t != null) Trade.cancel(t.tid)
         trade.value = null
+        myOk = false
     }
 }

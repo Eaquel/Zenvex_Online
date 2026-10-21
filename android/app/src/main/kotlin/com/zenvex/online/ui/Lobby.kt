@@ -74,11 +74,15 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     var tick by remember { mutableIntStateOf(0) }
     val prof = remember(epoch, tick) { GameSession.ui("profile") }
     val chars = remember(epoch, tick) { GameSession.ui("characters") }
-    var dialog by remember { mutableStateOf(if (!Account.loggedIn && !GameSession.prefs().getBoolean("guest_ok", false)) "welcome" else "") }
+    // oyun tamamen çevrimiçi: hesapsız oynanmaz (misafir yok)
+    var dialog by remember { mutableStateOf(if (!Account.loggedIn) "welcome" else "") }
     var devTaps by remember { mutableIntStateOf(0) }
     val sel = 0
     var dir by remember { mutableIntStateOf(1) }
     LaunchedEffect(Unit) { Account.servers(); if (Account.loggedIn) Account.refresh() }
+    // oyundan atıldıysak (başka cihaz, bakım, yasak, bağlantı) nedeni göster
+    val kicked = com.zenvex.online.game.Session.kicked.value
+    LaunchedEffect(kicked) { if (kicked != null) { Toaster.show(kicked, false); com.zenvex.online.game.Session.kicked.value = null } }
     val ch = chars.optJSONArray("chars")?.optJSONObject(sel) ?: JSONObject()
     val unlocked = ch.optBoolean("unlocked", sel == 0)
     val col = Color(0xFFB277FF)
@@ -160,7 +164,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
                 prof.optInt("character") != sel -> PxButton("Bu karakteri seç", Modifier.fillMaxWidth(), Px.Blue, size = 18.sp, height = 52.dp) {
                     val r = GameSession.cmd("select_char", "i" to sel); Toaster.show(r.msg, r.ok); tick++
                 }
-                else -> PxButton("OYNA", Modifier.fillMaxWidth(), Px.Green, icon = "play", size = 32.sp, height = 64.dp) { go(Screen.Loading) }
+                else -> PxButton("OYNA", Modifier.fillMaxWidth(), Px.Green, icon = "play", size = 32.sp, height = 64.dp) { if (Account.loggedIn) go(Screen.Loading) else dialog = "welcome" }
             }
         }
         // ---- sağ alt: sürüm (7 dokunuş → geliştirici menüsü)
@@ -171,7 +175,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
             })
 
         when (dialog) {
-            "welcome" -> AccountDialog(first = true) { dialog = ""; tick++ }
+            "welcome" -> AccountDialog(first = true) { dialog = if (Account.loggedIn) "" else "welcome"; tick++ }
             "top" -> TopDialog { dialog = "" }
             "news" -> NewsDialog { dialog = "" }
             "dev" -> DevMenu(onClose = { dialog = ""; tick++ })
@@ -215,15 +219,15 @@ private fun AccountCard(modifier: Modifier, onClick: () -> Unit) {
                 PT("ID: ${fmtId(Account.id.value)}", 15.sp)
                 PT(Account.status.value.ifEmpty { "Çevrimiçi" }, 12.sp, if (Account.status.value == "Çevrimiçi") Px.Name else Px.Sub)
             } else {
-                PT("Misafir", 15.sp)
-                PT("Hesap aç → ilerlemen kaybolmasın", 12.sp, Px.Clan)
+                PT("Giriş Yapılmadı", 15.sp)
+                PT("Oynamak için hesabına gir", 12.sp, Px.Clan)
             }
         }
     }
 }
 
 // =========================================================================== hesap diyaloğu
-/** Hesap aç / giriş yap. [first]: oyunun ilk açılışı (misafir devam seçeneği var). */
+/** Hesap aç / giriş yap. [first]: hesap yokken açılır ve hesap olmadan kapanmaz (oyun tamamen çevrimiçi). */
 @Composable
 fun AccountDialog(first: Boolean = false, close: () -> Unit) {
     var mode by remember { mutableIntStateOf(0) } // 0 yeni hesap, 1 giriş
@@ -302,9 +306,12 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                 }
             }
             if (err.isNotEmpty()) { Spacer(Modifier.height(6.dp)); PT(err, 14.sp, Color(0xFFFF7A6A), maxLines = 3) }
-            Spacer(Modifier.height(8.dp))
-            PxButton(if (first) "Misafir olarak devam et" else "Kapat", Modifier.fillMaxWidth(), Px.Dark, size = 15.sp, height = 38.dp) {
-                GameSession.prefs().edit().putBoolean("guest_ok", true).apply(); close()
+            if (first) {
+                Spacer(Modifier.height(8.dp))
+                PT("Zenvex tamamen çevrimiçi bir oyundur: ilerlemen sunucuda saklanır, her telefondan devam edersin.", 12.sp, Px.Sub, maxLines = 3)
+            } else {
+                Spacer(Modifier.height(8.dp))
+                PxButton("Kapat", Modifier.fillMaxWidth(), Px.Dark, size = 15.sp, height = 38.dp) { close() }
             }
         }
     }

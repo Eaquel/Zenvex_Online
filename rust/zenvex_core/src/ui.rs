@@ -508,7 +508,18 @@ impl Game {
                 self.respawn(v["city"].as_bool().unwrap_or(false));
                 Ok("Yeniden doğdun".into())
             }
+            "cheat" if !self.cheats_ok => Err("Bu işlem için yönetici yetkisi gerekli".into()),
             "cheat" => self.cheat(v["text"].as_str().unwrap_or("")),
+            // oyuncunun kendi isteğiyle sıfırlama (Ayarlar → Hesap); sunucudaki kayıt da sıfırlanır
+            "reset_progress" => {
+                self.progress = progress::Progress::default();
+                self.respawn(false);
+                Ok("Profil sıfırlandı".into())
+            }
+            "set_admin" => {
+                self.cheats_ok = v["on"].as_bool().unwrap_or(false);
+                Ok(String::new())
+            }
             "tree_unlock" => self.progress.tree_unlock(v["id"].as_u64().unwrap_or(0) as u16),
             "tree_reset" => self.progress.tree_reset(),
             "dog_buy" => self.dog_buy(),

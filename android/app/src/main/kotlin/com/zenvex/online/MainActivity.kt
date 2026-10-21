@@ -51,11 +51,13 @@ class MainActivity : ComponentActivity() {
         Account.init(this)
         GameSession.init(this)
         Audio.init(this)
-        com.zenvex.online.ui.Demo.on = intent?.getBooleanExtra("demo", false) == true
+        // otomatik gösterim yalnız hata ayıklama sürümünde (yayın sürümünde çevrimdışı oynamaya kapı açmasın)
+        com.zenvex.online.ui.Demo.on = BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true
 
         setContent {
-            // Kısayol: adb shell am start -n com.zenvex.online/.MainActivity --es screen Game
-            val start = intent?.getStringExtra("screen")?.let { n -> Screen.entries.firstOrNull { it.name == n } } ?: Screen.Splash
+            // Kısayol (yalnız hata ayıklama sürümü): adb shell am start -n com.zenvex.online/.MainActivity --es screen Lobby
+            val start = intent?.getStringExtra("screen")?.takeIf { BuildConfig.DEBUG }
+                ?.let { n -> Screen.entries.firstOrNull { it.name == n && it != Screen.Game } } ?: Screen.Splash
             var screen by remember { mutableStateOf(start) }
             var settingsFrom by remember { mutableStateOf(Screen.Lobby) }
             var epoch by remember { mutableIntStateOf(0) }
@@ -76,7 +78,7 @@ class MainActivity : ComponentActivity() {
                         Screen.Splash -> SplashScreen { screen = Screen.Lobby }
                         Screen.Lobby -> LobbyScreen(go, epoch)
                         Screen.Settings -> SettingsScreen(back = { go(settingsFrom) }, onReset = reset)
-                        Screen.Loading -> LoadingScreen { screen = Screen.Game }
+                        Screen.Loading -> LoadingScreen(back = { go(Screen.Lobby) }) { screen = Screen.Game }
                         Screen.Game -> GameScreen(toLobby = { go(Screen.Lobby) })
                     }
                 }

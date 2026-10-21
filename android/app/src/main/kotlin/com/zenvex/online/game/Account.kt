@@ -66,6 +66,8 @@ object Account {
     }
 
     private fun auth() = JSONObject().put("p_id", id.value).put("p_key", key)
+    /** Kimlik + anahtar (oturum / takas çağrıları için) */
+    fun authJson(): JSONObject = auth()
 
     /** Sunucu "BAN|tarih|neden" hatası verirse yasak ekranı gösterilir. */
     fun checkBan(msg: String?) {

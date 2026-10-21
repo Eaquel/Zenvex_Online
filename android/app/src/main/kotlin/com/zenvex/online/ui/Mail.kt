@@ -68,6 +68,10 @@ fun MailScreen(close: () -> Unit) {
     }
     MailView(list, err, Account.loggedIn, close,
         claim = { m ->
+            // ekler oyundaki karaktere eklenir: oturum yoksa (lobide) alınmaz, posta kaybolmaz
+            if (com.zenvex.online.game.Session.state.value != com.zenvex.online.game.Session.State.Live) {
+                Toaster.show("Ekleri Almak İçin Oyuna Gir", false); return@MailView
+            }
             Account.claimMail(m.optLong("id")) { r ->
                 r.onSuccess { g ->
                     val res = GameSession.cmd("mail_claim", "gold" to g.optInt("gold"), "gems" to g.optInt("gems"), "xp" to g.optInt("xp"),

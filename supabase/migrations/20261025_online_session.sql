@@ -31,6 +31,7 @@ alter table public.devices enable row level security;
 create table if not exists public.banned_devices (
   device text primary key,
   reason text not null default '',
+  active boolean not null default true,
   created_at timestamptz not null default now()
 );
 alter table public.banned_devices enable row level security;
@@ -135,7 +136,7 @@ begin
   perform public._zx_maint_check(a);
   if p_server not in ('n1', 'n2', 'n3', 'hc') then raise exception 'Geçersiz sunucu'; end if;
   if dev = '' then raise exception 'Cihaz doğrulanamadı'; end if;
-  select * into br from public.banned_devices where device = dev;
+  select * into br from public.banned_devices where device = dev and active;
   if br.device is not null and a.id <> 0 then
     raise exception 'BAN|Kalıcı|Bu cihaz yasaklı: %', br.reason using errcode = '28000';
   end if;
@@ -181,15 +182,15 @@ begin
   update public.sessions set last_beat = now(), game_time = greatest(p_game_time, 0) where account_id = a.id;
   return jsonb_build_object('ok', true, 'time', (extract(epoch from now()) * 1000)::bigint,
     'actions', (select count(*) from public.admin_actions where account_id = a.id and done_at is null),
-    'trade', (select id from public.trades where (a = a.id or b = a.id) and state <> 'cancel'
-               and ((a = a.id and not a_claimed) or (b = a.id and not b_claimed)) and state = 'done' order by id desc limit 1));
+    'trade', (select t.id from public.trades t where ((t.a = a.id and not t.a_claimed) or (t.b = a.id and not t.b_claimed))
+               and t.state in ('done', 'cancel') order by t.id desc limit 1));
 end $$;
 
 create or replace function public.zx_session_end(p_id bigint, p_key text, p_sid uuid) returns boolean
 language plpgsql security definer set search_path = public as $$
 declare a public.accounts := public._zx_auth(p_id, p_key);
 begin
-  delete from public.sessions where account_id = a.id and sid = p_sid;
+  update public.sessions set last_beat = now() - interval '1 hour' where account_id = a.id and sid = p_sid;
   return true;
 end $$;
 
@@ -264,23 +265,23 @@ end $$;
 -- eşyasını bir kez alır (zx_trade_claim). İptalde herkes kendi emanetini geri alır.
 create or replace function public.zx_trade_open(p_id bigint, p_key text, p_sid uuid, p_other bigint) returns bigint
 language plpgsql security definer set search_path = public as $$
-declare a public.accounts := public._zx_auth(p_id, p_key); s public.sessions; o public.sessions; t bigint;
+declare a public.accounts := public._zx_auth(p_id, p_key); s public.sessions; o public.sessions; tid bigint;
 begin
   s := public._zx_session(a, p_sid);
   select * into o from public.sessions where account_id = p_other and last_beat > now() - interval '90 seconds';
   if o.account_id is null or o.server <> s.server then raise exception 'Oyuncu çevrimiçi değil'; end if;
   if p_other = a.id then raise exception 'Kendinle takas yapamazsın'; end if;
-  update public.trades set state = 'cancel', updated_at = now()
-  where state = 'open' and (a = a.id or b = a.id) and not a_ready and not b_ready;
-  insert into public.trades (a, b, server) values (a.id, p_other, s.server) returning id into t;
-  return t;
+  update public.trades t set state = 'cancel', updated_at = now()
+  where t.state = 'open' and (t.a = a.id or t.b = a.id) and not t.a_ready and not t.b_ready;
+  insert into public.trades (a, b, server) values (a.id, p_other, s.server) returning id into tid;
+  return tid;
 end $$;
 
 create or replace function public.zx_trade_ready(p_id bigint, p_key text, p_sid uuid, p_trade bigint, p_items jsonb,
   p_seq bigint, p_sig text, p_level int, p_data text, p_kills int, p_xp bigint) returns jsonb
 language plpgsql security definer set search_path = public, extensions as $$
 declare a public.accounts := public._zx_auth(p_id, p_key); s public.sessions; t public.trades; old public.characters;
-        od jsonb; nd jsonb; it jsonb; idx int; n bigint; side text;
+        od jsonb; nd jsonb; it jsonb; idx int; n bigint; side text; have bigint; now_have bigint;
 begin
   s := public._zx_session(a, p_sid);
   select * into t from public.trades where id = p_trade for update;
@@ -294,16 +295,19 @@ begin
   begin nd := p_data::jsonb; exception when others then raise exception 'Bozuk kayıt'; end;
   for it in select * from jsonb_array_elements(coalesce(p_items, '[]')) loop
     idx := (it ->> 'item')::int; n := (it ->> 'n')::bigint;
-    if idx is null or n is null or n <= 0 or n > 9999 then raise exception 'Geçersiz eşya'; end if;
-    if public._zx_item_total(od, idx) < n then
+    if idx is null or n is null or n <= 0 or n > 9999999 then raise exception 'Geçersiz eşya'; end if;
+    -- -1 = altın
+    if idx = -1 then
+      have := coalesce((od ->> 'gold')::bigint, 0); now_have := coalesce((nd ->> 'gold')::bigint, 0);
+    else
+      have := public._zx_item_total(od, idx); now_have := public._zx_item_total(nd, idx);
+    end if;
+    if have < n then
       perform public._zx_flag(a.id, 'trade', 'Olmayan eşya teklif edildi: #' || idx || ' x' || n);
       raise exception 'Teklif ettiğin eşya çantanda yok';
     end if;
-    if public._zx_item_total(nd, idx) <> public._zx_item_total(od, idx) - n then
-      raise exception 'Eşya emanete alınamadı, tekrar dene';
-    end if;
+    if now_have <> have - n then raise exception 'Eşya emanete alınamadı, tekrar dene'; end if;
   end loop;
-  -- kayıt (imzalı) emanetten sonraki hâli
   perform public.zx_save3(p_id, p_key, p_sid, p_seq, p_sig, p_level, p_data, p_kills, p_xp);
   if side = 'a' then update public.trades set a_items = p_items, a_ready = true, updated_at = now() where id = t.id returning * into t;
   else update public.trades set b_items = p_items, b_ready = true, updated_at = now() where id = t.id returning * into t; end if;
@@ -319,26 +323,28 @@ create or replace function public.zx_trade_cancel(p_id bigint, p_key text, p_tra
 language plpgsql security definer set search_path = public as $$
 declare a public.accounts := public._zx_auth(p_id, p_key);
 begin
-  update public.trades set state = 'cancel', updated_at = now() where id = p_trade and state = 'open' and (a = a.id or b = a.id);
+  update public.trades t set state = 'cancel', updated_at = now() where t.id = p_trade and t.state = 'open' and (t.a = a.id or t.b = a.id);
   return true;
 end $$;
 
 -- Takas sonucu: bitti → karşı tarafın eşyası; iptal → kendi emanetin. Bir kez verilir.
 create or replace function public.zx_trade_claim(p_id bigint, p_key text, p_trade bigint) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare a public.accounts := public._zx_auth(p_id, p_key); t public.trades; out jsonb := '[]';
+declare a public.accounts := public._zx_auth(p_id, p_key); t public.trades; res jsonb := '[]'; g bigint;
 begin
   select * into t from public.trades where id = p_trade for update;
   if t.id is null or (t.a <> a.id and t.b <> a.id) then raise exception 'Takas bulunamadı'; end if;
   if t.state = 'open' then return jsonb_build_object('state', 'open', 'a_ready', t.a_ready, 'b_ready', t.b_ready, 'items', '[]'::jsonb); end if;
   if t.a = a.id and not t.a_claimed then
-    out := case when t.state = 'done' then t.b_items when t.a_ready then t.a_items else '[]' end;
+    res := case when t.state = 'done' then t.b_items when t.a_ready then t.a_items else '[]' end;
     update public.trades set a_claimed = true where id = t.id;
   elsif t.b = a.id and not t.b_claimed then
-    out := case when t.state = 'done' then t.a_items when t.b_ready then t.b_items else '[]' end;
+    res := case when t.state = 'done' then t.a_items when t.b_ready then t.b_items else '[]' end;
     update public.trades set b_claimed = true where id = t.id;
   end if;
-  return jsonb_build_object('state', t.state, 'items', out);
+  select coalesce(sum((e ->> 'n')::bigint), 0) into g from jsonb_array_elements(res) e where (e ->> 'item')::int = -1;
+  if g > 0 then insert into public.grants (account_id, gold, note) values (a.id, g, 'takas ' || t.id); end if;
+  return jsonb_build_object('state', t.state, 'items', res);
 end $$;
 
 -- ================================================================ yönetici: cihaz yasağı, hile kayıtları
@@ -350,7 +356,7 @@ begin
     'flags', coalesce((select jsonb_agg(jsonb_build_object('k', kind, 't', detail, 'ts', (extract(epoch from created_at) * 1000)::bigint) order by id desc)
                        from (select * from public.cheat_flags where account_id = p_target order by id desc limit 100) x), '[]'::jsonb),
     'devices', coalesce((select jsonb_agg(jsonb_build_object('id', device, 'model', model, 'info', info,
-                          'banned', exists (select 1 from public.banned_devices b where b.device = d.device),
+                          'banned', exists (select 1 from public.banned_devices b where b.device = d.device and b.active),
                           'others', (select count(distinct account_id) - 1 from public.devices e where e.device = d.device),
                           'last', (extract(epoch from last_seen) * 1000)::bigint) order by last_seen desc)
                          from public.devices d where account_id = p_target), '[]'::jsonb),
@@ -358,22 +364,21 @@ begin
 end $$;
 
 create or replace function public.zx_admin_ban_device(p_id bigint, p_key text, p_device text, p_on boolean, p_reason text) returns text
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare a public.accounts := public._zx_admin(p_id, p_key);
 begin
+  insert into public.banned_devices (device, reason, active) values (p_device, left(coalesce(p_reason, ''), 120), p_on)
+  on conflict (device) do update set reason = excluded.reason, active = excluded.active;
   if p_on then
-    insert into public.banned_devices (device, reason) values (p_device, left(coalesce(p_reason, ''), 120))
-    on conflict (device) do update set reason = excluded.reason;
-    delete from public.sessions where device = p_device and account_id <> 0;
+    update public.sessions set sid = gen_random_uuid(), last_beat = now() - interval '1 hour' where device = p_device and account_id <> 0;
     return 'Cihaz yasaklandı';
   end if;
-  delete from public.banned_devices where device = p_device;
   return 'Cihaz yasağı kaldırıldı';
 end $$;
 
 -- yasaklanan oyuncunun oturumu hemen düşer (nabız BAN alır)
 create or replace function public.zx_admin_ban(p_id bigint, p_key text, p_target bigint, p_hours int, p_reason text) returns text
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare a public.accounts := public._zx_admin(p_id, p_key); t public.accounts;
 begin
   select * into t from public.accounts where id = p_target;
@@ -381,7 +386,9 @@ begin
   if t.is_admin then raise exception 'Yönetici yasaklanamaz'; end if;
   update public.accounts set banned_until = case when p_hours <= 0 then null else now() + make_interval(hours => p_hours) end,
     ban_reason = left(coalesce(p_reason, ''), 120) where id = t.id;
-  if p_hours > 0 then delete from public.sessions where account_id = t.id; end if;
+  if p_hours > 0 then
+    update public.sessions set sid = gen_random_uuid(), last_beat = now() - interval '1 hour' where account_id = t.id;
+  end if;
   perform public._zx_log(t.id, 'admin', case when p_hours <= 0 then 'Yasak kaldırıldı' else 'Yasaklandı: ' || coalesce(p_reason, '') end);
   return case when p_hours <= 0 then t.name || ' yasağı kaldırıldı' else t.name || ' yasaklandı' end;
 end $$;
@@ -397,5 +404,15 @@ grant execute on function public.zx_trade_cancel(bigint, text, bigint) to anon, 
 grant execute on function public.zx_trade_claim(bigint, text, bigint) to anon, authenticated;
 grant execute on function public.zx_admin_flags(bigint, text, bigint) to anon, authenticated;
 grant execute on function public.zx_admin_ban_device(bigint, text, text, boolean, text) to anon, authenticated;
--- eski kayıt yolu artık kullanılmaz (doğrulamasız)
-revoke execute on function public.zx_save2(bigint, text, text, int, text, int, bigint) from anon, authenticated;
+-- eski doğrulamasız kayıt yolu (zx_save2) yeni sürüm yayılınca kapatılacak (20261026)
+
+-- oyuncunun kendi isteğiyle sunucudaki ilerlemeyi sıfırlaması (Ayarlar → Hesap)
+create or replace function public.zx_char_reset(p_id bigint, p_key text, p_server text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare a public.accounts := public._zx_auth(p_id, p_key);
+begin
+  update public.characters set data = '', level = 1, updated_at = now() where account_id = a.id and server = p_server;
+  perform public._zx_log(a.id, 'reset', 'İlerlemesini sıfırladı (' || p_server || ')');
+  return true;
+end $$;
+grant execute on function public.zx_char_reset(bigint, text, text) to anon, authenticated;

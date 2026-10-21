@@ -50,10 +50,10 @@ object GameSession {
             groundPx?.let { Native.setTextures(handle, groundSize, it) }
             Native.command(handle, JSONObject().put("cmd", "set_rules").put("hardcore", server.value.hardcore).toString())
             if (Account.name.value.isNotEmpty()) Native.command(handle, JSONObject().put("cmd", "set_name").put("name", Account.name.value).toString())
+            // hile komutları yalnız sunucunun yönetici dediği hesapta (ve hata ayıklama gösteriminde) açılır
+            Native.command(handle, JSONObject().put("cmd", "set_admin").put("on", Account.admin.value || com.zenvex.online.ui.Demo.on).toString())
         }
     }
-
-    private fun localLevel(save: String): Int = runCatching { JSONObject(save).optInt("level", 0) }.getOrDefault(0)
 
     /**
      * Sunucu değiştirir: mevcut kaydı yazar, yeni sunucunun kaydını (bulut daha ileriyse buluttan) yükler.
@@ -64,11 +64,9 @@ object GameSession {
         server.value = s
         appCtx.getSharedPreferences("account", Context.MODE_PRIVATE).edit().putString("server", s.id).apply()
         Thread {
-            var data = readLocal(s.id)
-            val cloud = Account.loadCloudSync(s.id)
-            if (cloud != null && (data.isEmpty() || localLevel(cloud) > localLevel(data))) data = cloud
+            // lobide gösterim: buluttaki kayıt (yoksa cihazdaki önbellek); oyunda her zaman oturumla gelen sunucu kaydı kullanılır
+            val data = Account.loadCloudSync(s.id) ?: readLocal(s.id)
             open(data)
-            save()
             android.os.Handler(android.os.Looper.getMainLooper()).post(done)
         }.start()
     }
@@ -91,28 +89,60 @@ object GameSession {
         groundPx = all
     }
 
+    data class Snap(val level: Int, val data: String, val kills: Int, val xp: Long)
+
+    /** Anlık kayıt (sunucuya giden biçim). */
+    fun snapshot(): Snap {
+        val (json, level) = synchronized(lock) { Native.saveJson(handle) to Native.hud(handle, hudTmp).let { hudTmp[Native.LEVEL].toInt() } }
+        val p = ui("profile")
+        return Snap(level, json, p.optJSONObject("stats")?.optInt("kills") ?: 0, p.optLong("xp_total"))
+    }
+
+    /**
+     * Kayıt: cihazda önbellek dosyası (yalnız lobide gösterim için) + oturum açıksa sunucuya imzalı kayıt (30 sn'de bir ya da [cloud]).
+     * Sunucu kaydı reddederse oyun sunucudaki son geçerli kayda döner.
+     */
     fun save(cloud: Boolean = false) {
         if (handle == 0L) return
-        val (json, level) = synchronized(lock) { Native.saveJson(handle) to Native.hud(handle, hudTmp).let { hudTmp[Native.LEVEL].toInt() } }
+        val snap = snapshot()
         val f = saveFile(server.value.id)
         runCatching {
             val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(json)
+            tmp.writeText(snap.data)
             tmp.renameTo(f)
         }
         val now = System.currentTimeMillis()
-        if (cloud || now - lastCloud > 60_000) {
+        if (Session.state.value != Session.State.Off && (cloud || now - lastCloud > 30_000)) {
             lastCloud = now
-            val p = ui("profile")
-            Account.saveCloud(server.value.id, level, json, p.optJSONObject("stats")?.optInt("kills") ?: 0, p.optLong("xp_total"))
+            Account.levels[server.value.id] = snap.level
+            Session.save(snap.level, snap.data, snap.kills, snap.xp) { data, msg ->
+                openFromServer(data)
+                com.zenvex.online.ui.Toaster.show(msg, false)
+            }
         }
+    }
+
+    /** Oturum açılınca: oyun sunucudaki kayıttan başlar (boşsa yeni karakter). */
+    fun openFromServer(data: String) {
+        open(data)
+        runCatching { saveFile(server.value.id).writeText(data) }
+    }
+
+    /** Komut (kayıt tetiklemeden): takas gibi kaydı kendisi yöneten akışlar için. */
+    fun cmdNoSave(name: String, vararg kv: Pair<String, Any>): Reply {
+        val o = JSONObject().put("cmd", name)
+        for ((k, v) in kv) o.put(k, v)
+        val r = runCatching { JSONObject(synchronized(lock) { Native.command(handle, o.toString()) }) }.getOrNull() ?: return Reply(false, "Hata")
+        return Reply(r.optBoolean("ok"), r.optString("msg"))
     }
     private val hudTmp = FloatArray(Native.HUD_SIZE)
 
+    /** Bu sunucudaki ilerlemeyi siler: önce sunucuda, sonra cihazda. */
     fun resetSave() {
-        synchronized(lock) {
-            Native.command(handle, """{"cmd":"cheat","text":"reset"}""")
+        if (Account.loggedIn) com.zenvex.online.net.Supa.bg {
+            runCatching { com.zenvex.online.net.Supa.rpcSync("zx_char_reset", Account.authJson().put("p_server", server.value.id)) }
         }
+        synchronized(lock) { Native.command(handle, """{"cmd":"reset_progress"}""") }
         save()
     }
 

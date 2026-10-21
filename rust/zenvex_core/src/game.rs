@@ -422,6 +422,8 @@ pub struct Remote {
 }
 
 pub struct Game {
+    /** Hile komutları yalnız sunucunun yönetici dediği oturumda açılır (testlerde açık) */
+    pub cheats_ok: bool,
     pub world: World,
     pub progress: Progress,
     pub player: Player,
@@ -568,6 +570,7 @@ impl Game {
             hardcore: false,
             dog: None,
             time_scale: 1.0,
+            cheats_ok: cfg!(test),
             clan_boost: [0; 3],
             events: Vec::new(),
             time: 0.0,

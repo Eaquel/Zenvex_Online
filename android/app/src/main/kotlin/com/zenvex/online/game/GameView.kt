@@ -325,7 +325,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val events: String
         synchronized(GameSession.lock) {
             val h = GameSession.handle
-            if (!paused) Native.step(h, dt, inputArr)
+            // çevrimiçi oyun: oturum yoksa ya da bağlantı koptuysa dünya durur (otomatik gösterim hariç)
+            if (!paused && (!Session.blocked || com.zenvex.online.ui.Demo.on)) {
+                Native.step(h, dt, inputArr)
+                Session.simTime += dt
+            }
             Native.hud(h, hud)
             Online.remotes(remoteBuf)?.let { n -> Native.setRemotes(h, remoteBuf, n) }
             Online.tick(h)

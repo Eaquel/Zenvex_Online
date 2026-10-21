@@ -41,17 +41,43 @@ import kotlin.math.sin
 object Gate {
     val maintenance = androidx.compose.runtime.mutableStateOf<JSONObject?>(null)
 
-    fun poll() = Account.status { r -> r.onSuccess { m -> maintenance.value = if (m.optBoolean("on")) m else null } }
+    /** Sunucuya ulaşılamıyor: oyun tamamen çevrimiçi olduğu için hiçbir ekran açılmaz (bakım ekranı da atlanamaz). */
+    val offline = androidx.compose.runtime.mutableStateOf(false)
+
+    fun poll() = Account.status { r ->
+        r.onSuccess { m -> offline.value = false; maintenance.value = if (m.optBoolean("on")) m else null }
+            .onFailure { e -> if (e.message.orEmpty().contains("ulaşılamadı")) offline.value = true }
+    }
 }
 
 @Composable
 fun GateHost() {
-    LaunchedEffect(Unit) { while (true) { Gate.poll(); delay(60_000) } }
+    LaunchedEffect(Unit) { while (true) { Gate.poll(); delay(if (Gate.offline.value) 6_000 else 45_000) } }
     val ban = Account.banned.value
     val m = Gate.maintenance.value
     when {
         ban != null -> BanScreen(ban)
+        Gate.offline.value && !Demo.on -> NoConnectionScreen()
         m != null && !Account.admin.value -> MaintenanceScreen(m.optString("msg"))
+    }
+}
+
+/** İnternet yok: oyun çevrimiçi olduğu için her şeyin üstünde kalır; bağlantı gelince kendiliğinden kapanır. */
+@Composable
+fun NoConnectionScreen() {
+    val t = rememberTime()
+    Box(Modifier.fillMaxSize().background(Color(0xFF0C0E16)).clickable(remember { MutableInteractionSource() }, null) {}) {
+        SceneBackground("bg_lobby", t, dim = 0.6f)
+        Column(Modifier.align(Alignment.Center).metalFrame().padding(horizontal = 30.dp, vertical = 26.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon("radio", 44.dp, Px.Orange.copy(alpha = 0.5f + 0.5f * kotlin.math.sin(t * 4f)))
+            Spacer(Modifier.height(6.dp))
+            PT("Bağlantı Yok", 32.sp, Px.Orange, outline = true)
+            Spacer(Modifier.height(6.dp))
+            PT("Zenvex Online tamamen çevrimiçi oynanır. İnternetini kontrol et; bağlantı gelince devam edeceksin.", 15.sp, Px.Text, maxLines = 3)
+            Spacer(Modifier.height(14.dp))
+            PxButton("Tekrar Dene", height = 46.dp, size = 17.sp, icon = "refresh") { Gate.poll() }
+        }
     }
 }
 

@@ -89,13 +89,23 @@ fun GameScreen(toLobby: () -> Unit) {
         v.serverTitle = GameSession.server.value.title
         v
     }
-    // çevrimiçiyken dünya durmaz; yalnızca tek başınayken menü oyunu duraklatır
-    view.paused = !Online.online.value && (overlay == Overlay.Menu || overlay == Overlay.Settings)
+    // çevrimiçi dünya menüde de durmaz (yalnız bağlantı koparsa oturum dünyayı durdurur)
+    view.paused = false
+    // oturum düştü (başka cihaz, bakım, yasak, bağlantı): lobiye dön, nedeni lobide gösterilir
+    val kicked = com.zenvex.online.game.Session.kicked.value
+    LaunchedEffect(kicked) { if (kicked != null) toLobby() }
     DisposableEffect(Unit) {
         Online.onChat = { l ->
             if (l.channel != "system") view.bubble(l.name, l.text)
             view.addChat((if (l.channel == "local") "[Yakın] " else if (l.channel == "system") "" else "") + "${l.name}: ${l.text}") }
-        onDispose { Online.onChat = null; GameSession.save(cloud = true); Online.stop() }
+        onDispose {
+            Online.onChat = null
+            if (Online.trade.value != null) Online.cancelTrade()
+            GameSession.save(cloud = true)
+            Online.stop()
+            // son kayıt gönderildikten sonra oturum kapanır
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ com.zenvex.online.game.Session.end() }, 1500)
+        }
     }
     BackHandler {
         overlay = when (overlay) { Overlay.None -> Overlay.Menu; Overlay.Dead -> Overlay.Dead; Overlay.Settings -> Overlay.Menu; else -> Overlay.None }
@@ -189,6 +199,8 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
         }
+        // bağlantı koptu: dünya durdu, yeniden bağlanılıyor
+        if (com.zenvex.online.game.Session.state.value == com.zenvex.online.game.Session.State.Lost && !Demo.on) ConnectionLost()
         // gelen takas isteği
         Online.tradeRequest.value?.let { (_, n) ->
             Box(Modifier.align(Alignment.TopCenter).padding(top = 90.dp)) {
@@ -201,6 +213,32 @@ fun GameScreen(toLobby: () -> Unit) {
                     }
                 }
             }
+        }
+    }
+}
+
+/** Battle Pass tuşu: altın taç, nabız gibi parlayan halka; alınmamış ödül varsa rozet. */
+@Composable
+private fun PassButton(onClick: () -> Unit) {
+    val t = rememberTime()
+    val p = remember { GameSession.ui("pass") }
+    val ready = p.optJSONArray("rewards").objs().count { it.optBoolean("reached") && !it.optBoolean("free_claimed") }
+    Box(contentAlignment = Alignment.Center) {
+        Box(Modifier.size(52.dp).border(2.dp, Px.Clan.copy(alpha = 0.35f + 0.35f * kotlin.math.sin(t * 3f)), CircleShape))
+        PxIcon("crown", size = 46.dp, badge = ready, tint = Px.Clan, color = Color(0xCC3A2A10)) { onClick() }
+    }
+}
+
+/** Bağlantı koptuğunda tüm ekranı kaplayan uyarı (oyun durur; 90 sn içinde dönmezse lobiye atılır). */
+@Composable
+private fun ConnectionLost() {
+    val t = rememberTime()
+    Box(Modifier.fillMaxSize().background(Color(0xB0000000)).clickable(remember { MutableInteractionSource() }, null) {}, contentAlignment = Alignment.Center) {
+        Column(Modifier.metalFrame().padding(horizontal = 30.dp, vertical = 22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon("radio", 40.dp, Px.Orange.copy(alpha = 0.5f + 0.5f * kotlin.math.sin(t * 4f)))
+            Spacer(Modifier.height(8.dp))
+            PT("Bağlantı Koptu", 26.sp, Px.Orange, outline = true)
+            PT("Yeniden Bağlanılıyor… Dünya Bağlantı Gelene Kadar Durdu.", 14.sp, Px.Text, maxLines = 2)
         }
     }
 }
@@ -223,8 +261,8 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
-        PxIcon("paw", size = 46.dp, tint = Color(0xFFE0B070)) { open(Overlay.Dog) }
-        PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
+        PassButton { open(Overlay.Pass) }
+        if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // görev takipçisi: simge satırının altında
     QuestTracker(story, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 140.dp)) { open(Overlay.Quests) }
@@ -298,10 +336,9 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
                 if (Online.online.value) Px.Name else Px.Sub, Modifier.align(Alignment.CenterHorizontally))
             Spacer(Modifier.height(10.dp))
             val items = listOf(
-                Triple("Devam Et", "play", Overlay.None), Triple("Gelişim", "magic", Overlay.Skills),
-                Triple("Oyuncular", "radio", Overlay.Players), Triple("Klan", "people", Overlay.Clan),
-                Triple("Profil", "profile", Overlay.Profile), Triple("Köpek", "paw", Overlay.Dog),
-                Triple("Sıralama", "trophy", Overlay.Top), Triple("Hile Paneli", "dev", Overlay.Cheat), Triple("Ayarlar", "gear", Overlay.Settings),
+                Triple("Devam Et", "play", Overlay.None), Triple("Klan", "people", Overlay.Clan),
+                Triple("Profil", "profile", Overlay.Profile), Triple("Sıralama", "trophy", Overlay.Top),
+                Triple("Battle Pass", "crown", Overlay.Pass), Triple("Ayarlar", "gear", Overlay.Settings),
             )
             // iki sütun: küçük ekranda da taşmaz
             for (row in items.chunked(2)) {

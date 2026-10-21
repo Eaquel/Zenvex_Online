@@ -115,17 +115,33 @@ val TIPS = listOf(
 )
 
 @Composable
-fun LoadingScreen(done: () -> Unit) {
+fun LoadingScreen(back: () -> Unit = {}, done: () -> Unit) {
     val ctx = LocalContext.current
     val t = rememberTime()
     var p by remember { mutableStateOf(0f) }
+    var err by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableIntStateOf(0) }
     val tip = remember { TIPS.random() }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(attempt) {
+        err = null; p = 0f
+        // 1) sunucu oturumu: kayıt sunucudan gelir; bağlantı / bakım / yasak varsa oyuna girilmez
+        // otomatik gösterim (yalnız hata ayıklama sürümü): oturumsuz, cihazdaki kayıtla
+        val data = if (Demo.on) null else kotlinx.coroutines.suspendCancellableCoroutine<String?> { c ->
+            com.zenvex.online.game.Session.start(ctx, GameSession.server.value.id) { d, e ->
+                if (e != null) err = e
+                if (c.isActive) c.resumeWith(Result.success(if (e == null) d.orEmpty() else null))
+            }
+        }
+        if (!Demo.on) {
+            if (data == null) return@LaunchedEffect
+            GameSession.openFromServer(data)
+        }
+        p = 0.15f
         val ch = GameSession.ui("profile").optInt("character")
         val groups = listOf("world", "items", "gear", "vehicles", "npcs", "hero_${HERO_IDS[ch]}", "zombie_walker", "zombie_runner", "zombie_dog",
             "zombie_toxic", "zombie_dark", "zombie_tank", "zombie_mystery")
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            groups.forEachIndexed { i, g -> runCatching { Atlas.get(ctx).preload(g) }; p = (i + 1f) / groups.size }
+            groups.forEachIndexed { i, g -> runCatching { Atlas.get(ctx).preload(g) }; p = 0.15f + 0.85f * (i + 1f) / groups.size }
         }
         Online.start(Account.name.value.ifEmpty { GameSession.ui("profile").optString("name") }, GameSession.ui("profile").optString("tag_name"))
         delay(200)
@@ -136,7 +152,19 @@ fun LoadingScreen(done: () -> Unit) {
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             PT(GameSession.server.value.title, 26.sp, Px.Clan, outline = true)
             Spacer(Modifier.height(10.dp))
-            PxBar(p, Px.Green, Modifier.width(420.dp), 14.dp)
+            val e = err
+            if (e != null) {
+                PT(e, 17.sp, Color(0xFFFF7A6A), maxLines = 2, align = TextAlign.Center)
+                Spacer(Modifier.height(10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    PxButton("Tekrar Dene", height = 44.dp, size = 16.sp, icon = "refresh") { attempt++ }
+                    PxButton("Lobiye Dön", color = Px.Dark, height = 44.dp, size = 16.sp) { back() }
+                }
+            } else {
+                PT(if (p < 0.15f) "Sunucuya Bağlanılıyor…" else "Dünya Yükleniyor…", 15.sp, Px.Sub)
+                Spacer(Modifier.height(6.dp))
+                PxBar(p, Px.Green, Modifier.width(420.dp), 14.dp)
+            }
             Spacer(Modifier.height(10.dp))
             PT(tip, 14.sp, Px.Text, align = TextAlign.Center, maxLines = 2)
         }
