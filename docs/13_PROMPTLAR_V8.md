@@ -6,7 +6,8 @@ Bu paket yeni özellikler için gereken görselleri kapsar:
 - Büyücü NPC ve ışınlanma kapısı
 - Kişisel üs: sandıklar, yatak, çit, zemin
 - Yeni bölgeler: donmuş liman, yanık orman, çöl otoyolu, bataklık, askeri hangar
-- Yeni ekipman simgeleri: kask, ceket, bot, pelerin, çanta, yüzük, kolye
+- Yeni ekipman simgeleri: kask, ceket, pantolon, bot, çanta, yüzük, kolye (pelerin kaldırıldı)
+- Araçlar: piksel motosiklet ve iki kişilik üstü açık araba (SUV ve bisiklet kaldırıldı), araçtan in tuşu
 - Efektler: helikopter iniş tozu, mermi izi, namlu ateşi, ölümsüzlük kalkanı, ele geçirme bayrağı, ışınlanma
 - Arayüz: harita üs simgeleri, ele geçirme çubuğu
 
@@ -258,10 +259,13 @@ seamless tileable pixel art ground texture, murky swamp mud with dark green wate
 
 Hepsi tek tek ya da yan yana boşluklu üretilebilir.
 
+Slotlar: Kask, Ceket, Pantolon, Bot, Silah, Çanta, Yüzük, Kolye (pelerin yok).
+
 ```
 pixel art inventory icon set, 7 separate items in a row with empty space between them, each centered and readable at 48px,
-crisp 1px dark outline, flat solid #00FF00 background: a dented steel helmet, a worn leather jacket, a pair of combat boots,
-a hooded dark cloak, a large survival backpack, a silver ring with a small red gem, a bone-and-silver necklace with a pendant
+crisp 1px dark outline, flat solid #00FF00 background: a dented steel helmet, a worn leather jacket, a pair of reinforced
+cargo trousers with knee pads, a pair of combat boots, a large survival backpack, a silver ring with a small red gem,
+a bone-and-silver necklace with a pendant
 ```
 
 **Kalite seviyeleri için (isteğe bağlı):** aynı seti "rusty / reinforced / military" diye üç kez üret.
@@ -330,4 +334,67 @@ a backpack, a large military rucksack, readable at 40px, flat solid #00FF00 back
 ```
 pixel art UI panel frame, dark riveted steel with olive military trim and yellow-black hazard stripe accents at the corners,
 empty dark center, wide rectangle, flat solid #00FF00 background outside the frame
+```
+
+---
+
+## 10) ARAÇLAR (piksel, kodla sürülecek)
+
+Kural: araçlar **yandan 3/4 açıyla, sola bakar**; tekerlekler ayrı katman gibi net görünsün (kodla döndüreceğim).
+Sürücü **çizilmesin** (karakteri ben oturturum).
+
+**V1 · Motosiklet**
+
+```
+[STİL] a rugged post-apocalyptic dirt motorcycle, matte black and rust red, knobby tires, small headlight, exhaust pipe,
+saddle bags, side view three-quarter facing left, no rider, wheels clearly visible
+```
+
+**V2 · İki kişilik üstü açık araba (sürücü ve yolcu dışarıdan görünecek)**
+
+```
+[STİL] a two-seat open-top convertible survival car, no roof, low windshield frame, two empty seats clearly visible from outside,
+roll bar behind the seats, armored bumper, spare tire on the back, dark olive and rust paint, side view three-quarter facing left,
+no driver, no passenger
+```
+
+**V3 · Tekerlek (ayrı)**
+
+```
+[STİL] a single off-road car tire with a steel rim seen exactly from the side, perfectly circular, centered
+```
+
+**V4 · Araç izleri ve yol efektleri (siyah arka plan, kutu yok)**
+
+```
+pixel art effect animation strip, 5 frames left to right with gaps, a tire kicking up brown dirt and pebbles behind a wheel,
+flat solid #000000 background, no boxes, no text
+```
+```
+pixel art effect animation strip, 5 frames left to right with gaps, a tire spraying white snow powder, flat solid #000000 background
+```
+```
+pixel art effect animation strip, 5 frames left to right with gaps, a tire splashing dark green swamp water droplets, flat solid #000000 background
+```
+```
+pixel art effect animation strip, 5 frames left to right with gaps, fine pale sand blowing behind a wheel, flat solid #000000 background
+```
+
+## 11) HUD · ARAÇTAN İN TUŞU
+
+Mevcut tuşlarla aynı çerçeve (gri metal halka, camgöbeği iç halka, koyu iç). İçinde **kapı açılıp dışarı çıkan ok** olsun ki "in" olduğu belli olsun.
+
+```
+pixel art round game HUD button, thick grey metal outer ring with small bolts, glowing cyan inner ring, dark navy center,
+white icon in the center: a car door swinging open with a bold arrow pointing out and down-left (exit vehicle),
+crisp pixels, flat solid #00FF00 background, single button centered
+```
+
+Aynı stille **Araca Bin** (direksiyon + içeri ok) ve **Battle Pass** (taç + şerit) tuşları:
+
+```
+pixel art round game HUD button, same metal and cyan ring style, white icon: a steering wheel with a bold arrow pointing in (enter vehicle)
+```
+```
+pixel art round game HUD button, same metal and cyan ring style, gold icon: a crown above a ribbon banner with stars (battle pass)
 ```

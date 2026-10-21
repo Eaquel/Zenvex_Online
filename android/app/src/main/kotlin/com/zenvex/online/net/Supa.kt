@@ -55,6 +55,8 @@ object Supa {
         if (code !in 200..299) {
             val m = runCatching { JSONObject(body).optString("message") }.getOrNull()
             Log.w("zenvex", "rpc $fn $code $body")
+            // oyun sırasında yasaklanan / silinen hesap: hangi çağrıda olursa olsun hemen yasak ekranına düşer
+            if (m != null && (m.contains("BAN|") || m.contains("Bu hesap silindi"))) main.post { com.zenvex.online.game.Account.checkBan(m) }
             throw RpcError(
                 when {
                     code == 404 -> "Sunucu kurulumu eksik (veritabanı)"

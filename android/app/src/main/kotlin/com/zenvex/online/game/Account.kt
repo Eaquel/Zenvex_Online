@@ -69,7 +69,9 @@ object Account {
 
     /** Sunucu "BAN|tarih|neden" hatası verirse yasak ekranı gösterilir. */
     fun checkBan(msg: String?) {
-        if (msg != null && msg.contains("BAN|")) banned.value = msg.substringAfter("BAN|")
+        if (msg == null) return
+        if (msg.contains("BAN|")) banned.value = msg.substringAfter("BAN|")
+        else if (msg.contains("Bu hesap silindi")) banned.value = "—|Bu hesap yönetici tarafından silindi"
     }
 
     private fun obj(r: Result<String>) = r.mapCatching { JSONObject(it) }
