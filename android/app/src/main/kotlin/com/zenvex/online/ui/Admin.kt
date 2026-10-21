@@ -68,7 +68,7 @@ fun AdminPlayerFile(target: Long, close: () -> Unit) {
         val d = data
         if (d == null) { PT(err.ifEmpty { "Yükleniyor…" }, 14.sp, Px.Sub); return@PxDialog }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ProfileAvatar(d.optInt("avatar"), d.optString("frame"), 56.dp)
+            ProfileAvatar(d.optInt("avatar"), d.optString("frame"), 56.dp, photo = d.optString("photo"))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 PT("${d.optString("name")} · ID ${fmtId(d.optLong("id"))}", 18.sp, Px.Name)
@@ -213,6 +213,7 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PxButton("Mesaj Gönder", color = Px.Blue, height = 36.dp, size = 13.sp, enabled = msg.isNotBlank()) { Account.adminAction(target, JSONObject().put("t", "msg").put("msg", msg), res) }
         PxButton("Oyundan At", color = Px.Red, height = 36.dp, size = 13.sp) { Account.adminAction(target, JSONObject().put("t", "kick").put("msg", msg), res) }
+        PxButton("Fotoğrafı Kaldır", color = Px.Dark, height = 36.dp, size = 13.sp, icon = "trash") { Account.adminAction(target, JSONObject().put("t", "clear_photo"), res) }
         // yanına ışınlan: oyuncu aynı sunucuda çevrimiçiyse anlık konumu
         PxButton("Yanına Işınlan", color = Px.Green, height = 36.dp, size = 13.sp, icon = "map") {
             val pos = Online.position("a$target")

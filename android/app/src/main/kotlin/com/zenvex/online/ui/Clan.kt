@@ -133,7 +133,7 @@ fun ClanEmblem(level: Int, top: Int, size: androidx.compose.ui.unit.Dp = 38.dp) 
 @Composable
 internal fun ClanView(c: JSONObject, myRank: Int, inGame: Boolean, changed: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Genel", "Üyeler", "Depo", "Görevler", "Güçlendirme", "Sıralama", "Kayıt")
+    val tabs = listOf("Genel", "Üyeler", "Depo", "Görevler", "Güçlendirme", "Kayıt")
     Column(Modifier.fillMaxSize()) {
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             tabs.forEachIndexed { i, s ->
@@ -149,7 +149,6 @@ internal fun ClanView(c: JSONObject, myRank: Int, inGame: Boolean, changed: () -
                 2 -> ClanDepot(c, myRank, inGame, changed)
                 3 -> ClanQuests(c)
                 4 -> ClanBoosts(c, myRank, changed)
-                5 -> ClanRanking()
                 else -> Column(Modifier.verticalScroll(rememberScrollState())) {
                     val l = c.optJSONArray("log") ?: JSONArray()
                     for (i in 0 until l.length()) PT("• " + l.getJSONObject(i).optString("text"), 13.sp, Px.Text, maxLines = 2)
@@ -452,10 +451,11 @@ fun ClanRanking() {
             else for (i in 0 until l.length()) {
                 val o = l.getJSONObject(i)
                 Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PT("#${i + 1}", 16.sp, when (i) { 0 -> Color(0xFFFFC83A); 1 -> Color(0xFFD8DEE6); 2 -> Color(0xFFCD7F32); else -> Px.Sub }, Modifier.width(44.dp))
+                    RankMedal(i + 1, if (i < 3) 44.dp else 36.dp)
+                    Spacer(Modifier.width(6.dp))
                     ClanEmblem(o.optInt("level"), o.optInt("top"), 30.dp)
                     Spacer(Modifier.width(8.dp))
-                    PT(o.optString("name"), 15.sp, Px.Clan, Modifier.weight(1f))
+                    PT(o.optString("name"), 16.sp, if (i < 3) rankColor(i + 1) else Px.Clan, Modifier.weight(1f))
                     PT(o.optString("title"), 12.sp, Px.Sub)
                     Spacer(Modifier.width(10.dp))
                     PT("${fmt(o.optLong("xp").toInt())} XP", 13.sp, Px.Level)

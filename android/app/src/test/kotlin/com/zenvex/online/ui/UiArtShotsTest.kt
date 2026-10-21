@@ -53,6 +53,11 @@ class UiArtShotsTest {
     }
 
     @Test
+    fun rulesDialog() {
+        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { Box(Modifier.fillMaxSize()) { NewsDialog(4) {} } } }
+    }
+
+    @Test
     fun craftBackground() {
         paparazzi.snapshot { ScreenFrame("ÜRETİM", "craft", {}, bg = "bg_craft") { PT("Tarifler", 20.sp, Px.Text) } }
     }

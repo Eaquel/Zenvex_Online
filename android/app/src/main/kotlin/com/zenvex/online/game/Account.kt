@@ -95,6 +95,21 @@ object Account {
 
     fun topPlayers(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_top2", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
 
+    /** Sıralama: kategoride ilk 10 (level, kills, pvp, titan, soldiers, bases, dog, crafted, time) */
+    fun board(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_board", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
+
+    /** Unvan seç ("" = unvansız); sunucu yalnız o kategoride ilk 10'daysa kabul eder */
+    fun setTitle(kind: String, done: (String?) -> Unit) =
+        Supa.rpc("zx_title_set", auth().put("p_kind", kind)) { r ->
+            r.onSuccess { applyProfile(JSONObject(it)); Online.retrack() }; done(r.exceptionOrNull()?.message)
+        }
+
+    /** Cihazdan profil fotoğrafı (96×96 WebP, base64; "" = kaldır) */
+    fun setPhoto(b64: String, done: (String?) -> Unit) =
+        Supa.rpc("zx_photo_set", auth().put("p_photo", b64)) { r ->
+            r.onSuccess { applyProfile(JSONObject(it)) }; done(r.exceptionOrNull()?.message)
+        }
+
     // ------------------------------------------------------------------ arkadaşlar + özel mesaj
     fun friends(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_friends", auth()) { r -> done(obj(r)) }
     fun friendRequest(name: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_friend_request", auth().put("p_name", name)) { r -> done(txt(r)) }

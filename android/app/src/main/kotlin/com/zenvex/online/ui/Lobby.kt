@@ -339,48 +339,25 @@ fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Com
 }
 
 @Composable
-fun TopDialog(close: () -> Unit) {
-    val sid = GameSession.server.value.id
-    var rows by remember { mutableStateOf<JSONArray?>(null) }
-    var err by remember { mutableStateOf("") }
-    LaunchedEffect(sid) { rows = null; Account.top(sid) { r -> r.onSuccess { rows = it }.onFailure { err = it.message ?: "" } } }
-    PxDialog("Sıralama", close) {
-        Column(Modifier.height(240.dp).verticalScroll(rememberScrollState())) {
-            val r = rows
-            when {
-                r == null -> PT(if (err.isNotEmpty()) err else "Yükleniyor…", 15.sp, Px.Sub, maxLines = 3)
-                r.length() == 0 -> PT("Henüz kimse yok. İlk sen ol!", 15.sp, Px.Sub)
-                else -> for (i in 0 until r.length()) {
-                    val o = r.getJSONObject(i)
-                    Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically) {
-                        PT("${i + 1}.", 15.sp, if (i < 3) Px.Clan else Px.Sub, Modifier.width(36.dp))
-                        if (o.optString("clan").isNotEmpty() && o.optString("clan") != "null") { PT(o.optString("clan"), 13.sp, Px.Clan); Spacer(Modifier.width(6.dp)) }
-                        PT(o.optString("name"), 15.sp, modifier = Modifier.weight(1f))
-                        PT("Sv ${o.optInt("level")}", 15.sp, Px.Level)
-                    }
-                }
-            }
-        }
-    }
-}
+fun TopDialog(close: () -> Unit) = BoardDialog(close)
 
 /** Ekranlarda görünen sürüm: "Beta 0.3.12" */
 fun appVersion(): String = "Beta " + BuildConfig.VERSION_NAME.substringBefore("-")
 
 /** Haberler: oyunun amacı, nasıl oynanır, ilerleme ve bu sürümdeki yenilikler. */
 @Composable
-fun NewsDialog(close: () -> Unit) {
-    var tab by remember { mutableIntStateOf(0) }
+fun NewsDialog(start: Int = 0, close: () -> Unit) {
+    var tab by remember { mutableIntStateOf(start) }
     PxDialog("Bilgi Ve Haberler", close, 640.dp) {
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("Amaç", "Nasıl Oynanır", "İlerleme", "Yenilikler").forEachIndexed { i, n ->
+            listOf("Amaç", "Nasıl Oynanır", "İlerleme", "Yenilikler", "Kurallar").forEachIndexed { i, n ->
                 PxButton(n, color = if (i == tab) Px.Blue else Px.Dark, height = 36.dp, size = 13.sp) { tab = i }
             }
         }
         Spacer(Modifier.height(8.dp))
         Column(Modifier.height(300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            for ((head, body) in NEWS[tab]) {
+            if (tab == 4) PT("Zenvex Online'ı herkes için adil ve keyifli tutmak için bu kurallara uy. Kuralları çiğneyen hesaplara yöneticiler işlem uygular.", 13.sp, Px.Sub, maxLines = 3)
+            for ((head, body) in if (tab == 4) RULES else NEWS[tab]) {
                 PT(head, 16.sp, Px.Clan)
                 PT(body, 14.sp, Px.Text, maxLines = 8)
             }

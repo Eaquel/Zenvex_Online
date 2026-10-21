@@ -665,7 +665,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun wx(x: Float) = (x - camX) * scale + sw / 2f
     private fun wy(y: Float) = (y - camY) * scale + sh / 2f
 
-    private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?, val subColor: Int = 0xFFDDDDDD.toInt())
+    private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?, val subColor: Int = 0xFFDDDDDD.toInt(),
+                        val title: String? = null, val titleRank: Int = 0)
     private val plates = ArrayList<Plate>()
 
     private fun render(c: Canvas, dt: Float) {
@@ -907,7 +908,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val top = wy(y) - 1.95f * 62.5f * this.scale
         when {
             who == -1f -> {
-                if (localName.isNotEmpty()) plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, localClan.ifEmpty { null }, CLAN_COLOR)
+                if (localName.isNotEmpty()) {
+                    val t = Account.profile.value.optJSONObject("title")
+                    plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, localClan.ifEmpty { null }, CLAN_COLOR,
+                        t?.optString("name")?.ifEmpty { null }, t?.optInt("rank") ?: 0)
+                }
                 if (hud[Native.SHIELD] > 0) drawFxSprite(c, "shield", x, y - 62, 175f, time)
                 if (Settings.current.particles && hud[Native.POISON] > 0 && Math.random() < 0.2)
                     particles += Particle(x, y, 60f, 0f, 0f, 40f, 0.8f, 0.8f, 0xFF9AFF40.toInt(), 4f, 3)
@@ -915,7 +920,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             who >= 0f -> {
                 val n = Online.lastNames.getOrNull(who.toInt()) ?: "Oyuncu"
                 val cl = Online.lastClans.getOrNull(who.toInt())?.ifEmpty { null }
-                plates += Plate(sx, top - 4 * density, n, 0xFF7FE0FF.toInt(), -1f, false, cl, CLAN_COLOR)
+                val tt = Online.lastTitles.getOrNull(who.toInt())
+                plates += Plate(sx, top - 4 * density, n, 0xFF7FE0FF.toInt(), -1f, false, cl, CLAN_COLOR, tt?.first?.ifEmpty { null }, tt?.second ?: 0)
             }
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
         }
@@ -1750,7 +1756,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (p.text.isEmpty()) continue
             if (named >= 10 && !p.boss) continue
             val w = text.apply { typeface = fontBold; textSize = ts }.measureText(p.text) / 2 + 3 * d
-            val lines = if (p.sub != null) 2 else 1
+            val lines = 1 + (if (p.sub != null) 1 else 0) + (if (p.title != null) 1 else 0)
             val r = RectF(p.x - w, y - ts * lines - 2 * d, p.x + w, y + 3 * d)
             var tries = 0
             while (plateRects.any { RectF.intersects(it, r) } && tries < 4) { r.offset(0f, -(ts + 2 * d)); y -= ts + 2 * d; tries++ }
@@ -1760,6 +1766,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             drawText(c, p.text, p.x, y, ts, p.color, center = true)
             var top = y - ts
             if (p.sub != null) { drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true); top -= ts }
+            if (p.title != null) { drawTitle(c, p.title, p.titleRank, p.x, top - 1 * d, ts * 0.85f); top -= ts }
             // konuşma balonu (oyuncular)
             bubbles[p.text]?.let { (msg, until) ->
                 if (until < time) { bubbles.remove(p.text); return@let }
@@ -1772,6 +1779,34 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 drawText(c, msg, p.x, bb.bottom - 5 * d, bs, 0xFF1A1A1A.toInt(), center = true)
             }
         }
+    }
+
+    /** Sıralama unvanı: ilk 3 altın/gümüş/bronz parıltılı ve yanlarında dönen yıldız, 4-10 sade mavi. */
+    private fun drawTitle(c: Canvas, t: String, rank: Int, x: Float, y: Float, size: Float) {
+        val base = when (rank) { 1 -> 0xFFFFC83A.toInt(); 2 -> 0xFFDCE4EE.toInt(); 3 -> 0xFFE0904A.toInt(); else -> 0xFF8CC8FF.toInt() }
+        if (rank !in 1..3) { drawText(c, t, x, y, size, base, center = true); return }
+        val k = 0.5f + 0.5f * sin(time * 3f + x * 0.01f)
+        val col = lerpColor(base, 0xFFFFFFFF.toInt(), k * 0.55f)
+        drawText(c, t, x, y, size, col, center = true)
+        val hw = text.apply { typeface = fontBold; textSize = size }.measureText(t) / 2 + 7 * density
+        for (sgn in intArrayOf(-1, 1)) {
+            val sx = x + sgn * hw; val sy = y - size * 0.35f
+            val r = size * (0.32f + 0.12f * k)
+            fill.color = alphaC(base, 0.85f)
+            path.reset()
+            for (i in 0 until 8) {
+                val a = time * 2f * sgn + i * (Math.PI.toFloat() / 4f)
+                val rr = if (i % 2 == 0) r else r * 0.4f
+                val px = sx + kotlin.math.cos(a) * rr; val py = sy + sin(a) * rr
+                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            }
+            path.close(); c.drawPath(path, fill)
+        }
+    }
+
+    private fun lerpColor(a: Int, b: Int, t: Float): Int {
+        fun ch(s: Int) = (((a shr s) and 0xFF) + ((((b shr s) and 0xFF) - ((a shr s) and 0xFF)) * t)).toInt().coerceIn(0, 255)
+        return (0xFF shl 24) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
 
     private fun drawFloaters(c: Canvas) {

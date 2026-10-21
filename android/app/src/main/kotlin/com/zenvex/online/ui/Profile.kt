@@ -35,6 +35,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +67,46 @@ val AVATARS = listOf(
     AvatarDef("z/dark/idle_0_0", "Karanlık", 0.5f), AvatarDef("z/dog/idle_0_0", "Kuduz", 1f), AvatarDef("z/titan/idle_0_0", "Titan", 0.45f),
 )
 
+// =========================================================================== cihazdan fotoğraf
+/** Sunucudaki base64 WebP profil fotoğraflarının çözülmüş hali (aynı fotoğraf her satırda yeniden çözülmesin). */
+object PhotoCache {
+    private val cache = android.util.LruCache<Int, ImageBitmap>(64)
+    fun get(b64: String): ImageBitmap? {
+        if (b64.isEmpty() || b64 == "null") return null
+        cache.get(b64.hashCode())?.let { return it }
+        return runCatching {
+            val bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT)
+            android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }.getOrNull()?.also { cache.put(b64.hashCode(), it) }
+    }
+
+    /** Seçilen görseli ortadan kare kırpar, 96×96'ya küçültür, WebP olarak sıkıştırır (sunucu sınırı 20.000 karakter). */
+    fun encode(ctx: android.content.Context, uri: android.net.Uri): String? = runCatching {
+        val cr = ctx.contentResolver
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        cr.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 192) sample *= 2
+        val src = cr.openInputStream(uri)?.use {
+            android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return null
+        val side = minOf(src.width, src.height)
+        val sq = android.graphics.Bitmap.createBitmap(src, (src.width - side) / 2, (src.height - side) / 2, side, side)
+        val out = android.graphics.Bitmap.createScaledBitmap(sq, 96, 96, true)
+        val fmt = if (android.os.Build.VERSION.SDK_INT >= 30) android.graphics.Bitmap.CompressFormat.WEBP_LOSSY
+                  else @Suppress("DEPRECATION") android.graphics.Bitmap.CompressFormat.WEBP
+        var q = 85
+        var b64: String
+        do {
+            val bo = java.io.ByteArrayOutputStream()
+            out.compress(fmt, q, bo)
+            b64 = android.util.Base64.encodeToString(bo.toByteArray(), android.util.Base64.NO_WRAP)
+            q -= 15
+        } while (b64.length >= 19000 && q >= 30)
+        b64
+    }.getOrNull()
+}
+
 // =========================================================================== çerçeveler
 /** Çerçeve: kimlik, ad, açılma koşulu metni. Koşul profil verisinden hesaplanır (VIP ve klan çerçeveleri sunucuda da denetlenir). */
 data class FrameDef(val id: String, val name: String, val need: String)
@@ -93,15 +135,20 @@ fun frameUnlocked(id: String, p: JSONObject): Boolean = when (id) {
  * Profil fotoğrafı + efektli çerçeve. Çerçeve çizimi tamamen kodla: piksel halka, dönen parıltı, kıvılcım/alev/şimşek/buz efektleri.
  */
 @Composable
-fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Modifier) {
+fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Modifier, photo: String = "") {
     val ctx = LocalContext.current
     val def = AVATARS.getOrElse(avatar) { AVATARS[0] }
     val img = remember(def.key) { SpriteCache.get(ctx, def.key) }
+    val pic = remember(photo) { PhotoCache.get(photo) }
     val t = rememberTime()
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         val inner = size * 0.8f
         Box(Modifier.size(inner).clip(RoundedCornerShape(4.dp)).background(Brush.verticalGradient(listOf(Color(0xFF3A4A5A), Color(0xFF151A22))))) {
-            if (img != null) Canvas(Modifier.fillMaxSize()) {
+            if (pic != null) Canvas(Modifier.fillMaxSize()) {
+                drawImage(pic, IntOffset.Zero, IntSize(pic.width, pic.height), IntOffset.Zero,
+                    IntSize(this.size.width.toInt(), this.size.height.toInt()), filterQuality = FilterQuality.Low)
+            }
+            else if (img != null) Canvas(Modifier.fillMaxSize()) {
                 val srcH = (img.height * def.crop).toInt().coerceAtLeast(1)
                 val k = minOf(this.size.width / img.width, this.size.height / srcH) * (if (def.crop < 1f) 1.35f else 0.95f)
                 val dw = img.width * k; val dh = srcH * k
@@ -214,7 +261,7 @@ fun TagRow(tags: JSONArray?, modifier: Modifier = Modifier) {
 @Composable
 fun ProfileBadge(p: JSONObject, guest: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(modifier.pxPanel(Color(0xE01E1D19)).clickable { onClick() }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        ProfileAvatar(p.optInt("avatar"), p.optString("frame"), 58.dp)
+        ProfileAvatar(p.optInt("avatar"), p.optString("frame"), 58.dp, photo = p.optString("photo"))
         Spacer(Modifier.width(8.dp))
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -237,22 +284,47 @@ fun ProfileBadge(p: JSONObject, guest: Boolean, modifier: Modifier = Modifier, o
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ProfileEditor(close: () -> Unit, rename: () -> Unit) {
+    val ctx = LocalContext.current
     val p = Account.profile.value
-    ProfileEditorView(p, close, rename) { avatar, frame ->
+    var busy by remember { mutableStateOf(false) }
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        Thread {
+            val b64 = PhotoCache.encode(ctx, uri)
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (b64 == null) { busy = false; Toaster.show("Fotoğraf Okunamadı", false) }
+                else Account.setPhoto(b64) { e -> busy = false; if (e != null) Toaster.show(e, false) else Toaster.show("Profil Fotoğrafı Yüklendi") }
+            }
+        }.start()
+    }
+    ProfileEditorView(p, close, rename,
+        pickPhoto = {
+            if (!busy) pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+        },
+        clearPhoto = { Account.setPhoto("") { e -> if (e != null) Toaster.show(e, false) else Toaster.show("Profil Fotoğrafı Kaldırıldı") } },
+        setTitle = { k -> Account.setTitle(k) { e -> if (e != null) Toaster.show(e, false) else Toaster.show(if (k.isEmpty()) "Unvan Kaldırıldı" else "Unvan Seçildi") } },
+    ) { avatar, frame ->
         Account.setProfile(avatar, frame) { e -> if (e != null) Toaster.show(e, false) else { Toaster.show("Profil Kaydedildi"); close() } }
     }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun ProfileEditorView(p: JSONObject, close: () -> Unit, rename: () -> Unit, save: (Int, String) -> Unit) {
+internal fun ProfileEditorView(
+    p: JSONObject, close: () -> Unit, rename: () -> Unit,
+    pickPhoto: () -> Unit = {}, clearPhoto: () -> Unit = {}, setTitle: (String) -> Unit = {},
+    save: (Int, String) -> Unit,
+) {
     var avatar by remember { mutableIntStateOf(p.optInt("avatar")) }
     var frame by remember { mutableStateOf(p.optString("frame")) }
+    val photo = p.optString("photo").takeIf { it != "null" } ?: ""
+    val title = p.optJSONObject("title")
     PxDialog("Profil", close, width = 760.dp) {
-        Row(Modifier.fillMaxWidth().height(330.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.fillMaxWidth().height(250.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // önizleme
             Column(Modifier.width(220.dp).fillMaxHeight().pxPanel(Px.PanelDark).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                ProfileAvatar(avatar, frame, 120.dp)
+                ProfileAvatar(avatar, frame, 96.dp, photo = photo)
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PT(p.optString("name"), 18.sp, Px.Name)
@@ -266,11 +338,37 @@ internal fun ProfileEditorView(p: JSONObject, close: () -> Unit, rename: () -> U
                     PT("${fmt(p.optInt("kills"))} Öldürme", 14.sp, Color(0xFFFF8A7A))
                 }
                 p.optJSONObject("clan")?.let { c -> PT("${c.optString("name")} · ${c.optString("rank_name")}", 12.sp, Px.Clan) }
+                if (title != null) { Spacer(Modifier.height(4.dp)); TitleChip(title, 11f) }
+                PT("${fmt(p.optInt("hours"))} Saat Oynadın", 12.sp, Px.Sub)
                 Spacer(Modifier.height(6.dp))
                 TagRow(p.optJSONArray("tags"))
             }
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
-                PT("Fotoğraf", 15.sp, Px.Clan)
+                PT("Cihazdan Fotoğraf", 15.sp, Px.Clan)
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PxButton(if (photo.isEmpty()) "Fotoğraf Seç" else "Değiştir", icon = "profile", color = Px.Blue, height = 38.dp, size = 13.sp) { pickPhoto() }
+                    if (photo.isNotEmpty()) PxButton("Kaldır", icon = "trash", color = Px.Red, height = 38.dp, size = 13.sp) { clearPhoto() }
+                }
+                PT("Uygunsuz Fotoğraflar Yöneticiler Tarafından Kaldırılır.", 10.sp, Px.Sub)
+                Spacer(Modifier.height(10.dp))
+                PT("Unvan", 15.sp, Px.Clan)
+                Spacer(Modifier.height(4.dp))
+                val titles = p.optJSONArray("titles") ?: JSONArray()
+                if (titles.length() == 0) PT("Bir Kategoride İlk 10'a Girince Unvan Kazanırsın (Sıralama).", 12.sp, Px.Sub, maxLines = 2)
+                else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (title == null) Color(0x553A6AB0) else Color(0x33000000))
+                        .clickable { setTitle("") }.padding(horizontal = 8.dp, vertical = 5.dp)) { PT("Unvansız", 12.sp, Px.Sub) }
+                    for (i in 0 until titles.length()) {
+                        val t = titles.getJSONObject(i)
+                        val on = title?.optString("kind") == t.optString("kind")
+                        Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Color(0x553A6AB0) else Color(0x33000000))
+                            .border(if (on) 2.dp else 0.dp, if (on) Color.White else Color.Transparent, RoundedCornerShape(3.dp))
+                            .clickable { setTitle(t.optString("kind")) }.padding(4.dp)) { TitleChip(t, 11f) }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                PT(if (photo.isEmpty()) "Karakter Resmi" else "Karakter Resmi (Fotoğraf Kaldırılınca Görünür)", 15.sp, Px.Clan)
                 Spacer(Modifier.height(4.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     AVATARS.forEachIndexed { i, a ->
@@ -289,7 +387,7 @@ internal fun ProfileEditorView(p: JSONObject, close: () -> Unit, rename: () -> U
                             .clickable { if (ok) frame = f.id else Toaster.show("${f.name}: ${f.need}", false) }.padding(5.dp),
                             horizontalAlignment = Alignment.CenterHorizontally) {
                             Box(contentAlignment = Alignment.Center) {
-                                ProfileAvatar(avatar, f.id, 54.dp)
+                                ProfileAvatar(avatar, f.id, 54.dp, photo = photo)
                                 if (!ok) Box(Modifier.size(54.dp).background(Color(0xA0000000)), contentAlignment = Alignment.Center) { Icon("lock", 20.dp, Px.Sub) }
                             }
                             PT(f.name, 11.sp, if (ok) Px.Text else Px.Sub)

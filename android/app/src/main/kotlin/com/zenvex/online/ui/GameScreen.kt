@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Profile, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog, Npc,
+    Quests, Pass, Skills, Profile, Me, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog, Npc,
 }
 
 /**
@@ -196,6 +196,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Mail -> MailScreen(close)
             Overlay.Clan -> ClanScreen({ overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }, inGame = true)
             Overlay.Top -> TopDialog(close)
+            Overlay.Me -> PlayerProfileDialog(Account.id.value.toString(), close)
             Overlay.Players -> PlayersDialog(close)
             Overlay.Cheat -> DevMenu(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
@@ -259,6 +260,9 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
             delay(400)
         }
     }
+    // sol üst portre (GameView çizer): dokununca kendi profilin (başkalarının gördüğü gibi) + düzenleme
+    Box(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 10.dp).size(68.dp)
+        .clickable(remember { MutableInteractionSource() }, null) { open(Overlay.Me) })
     // sol üst (portre/barların altı): harita, görevler, sezon, yetenekler
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
@@ -339,7 +343,7 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
             Spacer(Modifier.height(10.dp))
             val items = listOf(
                 Triple("Devam Et", "play", Overlay.None), Triple("Klan", "people", Overlay.Clan),
-                Triple("Profil", "profile", Overlay.Profile), Triple("Sıralama", "trophy", Overlay.Top),
+                Triple("Profil", "profile", Overlay.Me), Triple("Sıralama", "trophy", Overlay.Top),
                 Triple("Battle Pass", "crown", Overlay.Pass), Triple("Ayarlar", "gear", Overlay.Settings),
             )
             // iki sütun: küçük ekranda da taşmaz
