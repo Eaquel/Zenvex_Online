@@ -31,7 +31,7 @@ class Atlas private constructor(ctx: Context) {
     // Sayfalar GPU belleğinde (HARDWARE) tutulur: Java yığınını doldurmaz, donanım tuvalinde doğrudan çizilir.
     private val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.HARDWARE; inScaled = false }
     private val softOpts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inScaled = false }
-    /** efekt meta: ad → [kare, fps, döngü(1/0), toplamalı(1/0)] */
+    /** efekt meta: ad → [kare, fps, döngü(1/0), toplamalı(1/0), piksel(1/0: süzgeçsiz çizilir)] */
     val fx = HashMap<String, FloatArray>()
     val heroAnims = HashMap<String, IntArray>()   // isim → [kare, fps, döngü]
     val zombieAnims = HashMap<String, IntArray>()
@@ -57,7 +57,7 @@ class Atlas private constructor(ctx: Context) {
             for (k in f.keys()) {
                 val m = f.getJSONObject(k)
                 fx[k] = floatArrayOf(m.getInt("frames").toFloat(), m.getDouble("fps").toFloat(), if (m.optBoolean("loop")) 1f else 0f,
-                    if (m.optString("blend") == "add") 1f else 0f)
+                    if (m.optString("blend") == "add") 1f else 0f, if (m.optBoolean("pixel")) 1f else 0f)
             }
         }
         val an = manifest.getJSONObject("anims")

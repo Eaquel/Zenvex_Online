@@ -43,9 +43,14 @@ import org.json.JSONArray
 @Composable
 fun DevMenu(onClose: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
-    var log by remember { mutableStateOf("Bir düğmeye bas ya da Konsol'a komut yaz.") }
+    var log by remember { mutableStateOf("Bir düğmeye bas.") }
     var ok by remember { mutableStateOf(true) }
     var tick by remember { mutableIntStateOf(0) }
+    // seçmeli ayarlar (konsol yok): çağrılan zombi seviyesi, ışınlanma karesi, sıfırlama onayı
+    var zLv by remember { mutableIntStateOf(0) }
+    var tpX by remember { mutableIntStateOf(180) }
+    var tpY by remember { mutableIntStateOf(300) }
+    var resetAsk by remember { mutableStateOf(false) }
     val st = remember(tick) { GameSession.ui("cheat") }
     fun run(c: String) {
         val r = GameSession.cmd("cheat", "text" to c)
@@ -67,7 +72,7 @@ fun DevMenu(onClose: () -> Unit) {
             if (st.optInt("net") == 2) PT("Çevrimiçi katılımcısın: zombi hileleri yalnız ev sahibinde çalışır.", 12.sp, Color(0xFFFFB070), maxLines = 2)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Oyuncu", "Eşya", "Dünya", "Zombi", "Araç/Işın", "Yönetici", "Konsol").forEachIndexed { i, n ->
+                listOf("Oyuncu", "Eşya", "Dünya", "Zombi", "Araç/Işın", "Yönetici").forEachIndexed { i, n ->
                     PxButton(n, Modifier.weight(1f), if (tab == i) Px.Green else Px.Dark, size = 13.sp, height = 36.dp) { tab = i }
                 }
             }
@@ -94,9 +99,24 @@ fun DevMenu(onClose: () -> Unit) {
                             listOf(
                                 "+10.000 Altın" to "gold 10000", "+1.000 Elmas" to "gem 1000",
                                 "Seviye 5" to "level 5", "Seviye 10" to "level 10", "Seviye 30" to "level 30", "+5.000 XP" to "xp 5000",
-                                "+10 Skill Puanı" to "points 10", "Savaşçı Sv 10" to "charlevel 10", "Köpek Sv 5" to "dog 5", "Köpek Sv 10" to "dog 10",
+                                "Seviye 50" to "level 50", "+10 Skill Puanı" to "points 10", "Savaşçı Sv 10" to "charlevel 10",
+                                "Köpek Sv 5" to "dog 5", "Köpek Sv 10" to "dog 10",
                             ), ::run,
                         )
+                        Section("Kilitler ve sezon bileti")
+                        Buttons(
+                            listOf(
+                                "Her Şeyi Aç" to "unlock", "Bilet Kademe 10" to "pass 10", "Bilet Kademe 30" to "pass 30",
+                                "Bilet Satın Al" to "pass buy", "Elit Bilet Satın Al" to "pass buy elite",
+                            ), ::run,
+                        )
+                        Section("Profil")
+                        if (!resetAsk) PxButton("Profili Sıfırla", color = Px.Red, size = 14.sp, height = 38.dp) { resetAsk = true }
+                        else Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PT("Tüm ilerleme silinsin mi?", 14.sp, Color(0xFFFF7A6A))
+                            PxButton("Evet, Sıfırla", color = Px.Red, size = 14.sp, height = 38.dp) { resetAsk = false; run("reset") }
+                            PxButton("Vazgeç", color = Px.Dark, size = 14.sp, height = 38.dp) { resetAsk = false }
+                        }
                     }
                     1 -> {
                         Section("Hazır paketler")
@@ -116,12 +136,17 @@ fun DevMenu(onClose: () -> Unit) {
                         Buttons(listOf("×0.25" to "timescale 0.25", "×0.5" to "timescale 0.5", "×1" to "timescale 1", "×2" to "timescale 2", "×4" to "timescale 4"), ::run)
                     }
                     3 -> {
+                        Section("Zombi seviyesi")
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for (l in listOf(0, 1, 5, 10, 20, 40)) PxButton(if (l == 0) "Benim Seviyem" else "Sv $l", color = if (zLv == l) Px.Green else Px.Dark, size = 13.sp, height = 36.dp) { zLv = l }
+                        }
                         Section("Yanına zombi çağır")
+                        val lv = if (zLv == 0) "" else " $zLv"
                         Buttons(
                             listOf(
-                                "Normal ×5" to "spawn walker 5", "Koşucu ×3" to "spawn runner 3", "Köpek ×3" to "spawn dog 3",
-                                "Toksik ×3" to "spawn toxic 3", "Karanlık ×3" to "spawn dark 3", "Tank ×1" to "spawn tank 1",
-                                "Gizemli ×1" to "spawn mystery 1", "TİTAN (boss)" to "boss",
+                                "Normal ×5" to "spawn walker 5$lv", "Koşucu ×3" to "spawn runner 3$lv", "Köpek ×3" to "spawn dog 3$lv",
+                                "Toksik ×3" to "spawn toxic 3$lv", "Karanlık ×3" to "spawn dark 3$lv", "Tank ×1" to "spawn tank 1$lv",
+                                "Gizemli ×1" to "spawn mystery 1$lv", "TİTAN (boss)" to "boss",
                             ), ::run,
                         )
                         Section("Temizle")
@@ -129,17 +154,32 @@ fun DevMenu(onClose: () -> Unit) {
                     }
                     4 -> {
                         Section("Araç getir")
-                        Buttons(listOf("Bisiklet" to "vehicle bike", "Motor" to "vehicle moto", "Araba (2 kişi)" to "vehicle car", "SUV (4 kişi)" to "vehicle suv", "Yakıt + tamir" to "fuel"), ::run)
+                        Buttons(listOf("Motor" to "vehicle moto", "Araba (2 kişi)" to "vehicle car", "SUV (4 kişi)" to "vehicle suv", "Yakıt + tamir" to "fuel"), ::run)
                         Section("Işınlan")
                         Buttons(
                             listOf(
                                 "Kamp" to "tp camp", "Derin Orman" to "tp deep", "Bataklık" to "tp swamp", "Şehir" to "tp city",
                                 "Şehir Merkezi" to "tp downtown", "Titan Arenası" to "tp boss",
+                                "Yanık Orman" to "tp burnt", "Çöl Otoyolu" to "tp desert", "Kara Bataklık" to "tp bswamp",
+                                "Askeri Bölge" to "tp military", "Donmuş Liman" to "tp harbor", "Kişisel Üs" to "tp home",
+                                "Devlet Üssü 1" to "tp base 1", "Devlet Üssü 2" to "tp base 2",
                             ), ::run,
                         )
+                        Section("Kareye ışınlan (X $tpX · Y $tpY)")
+                        val steps = listOf(20, 100, 180, 260, 340, 420, 500, 580, 660, 700)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PT("X", 13.sp, Px.Sub)
+                            for (v in steps) PxButton("$v", color = if (tpX == v) Px.Green else Px.Dark, size = 12.sp, height = 32.dp) { tpX = v }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PT("Y", 13.sp, Px.Sub)
+                            for (v in steps) PxButton("$v", color = if (tpY == v) Px.Green else Px.Dark, size = 12.sp, height = 32.dp) { tpY = v }
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        PxButton("Işınlan", color = Px.Blue, size = 14.sp, height = 38.dp) { run("tp $tpX $tpY") }
                     }
-                    5 -> AdminTab { m, good -> ok = good; log = m }
-                    else -> Console(::run)
+                    else -> AdminTab { m, good -> ok = good; log = m }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -205,8 +245,8 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
     Section("Oyuncu Bul (Ad ya da ID)")
     var q by remember { mutableStateOf("") }
     var found by remember { mutableStateOf(JSONArray()) }
-    var file by remember { mutableStateOf(0L) }
-    if (file > 0) AdminPlayerFile(file) { file = 0 }
+    var file by remember { mutableStateOf(-1L) }
+    if (file >= 0) AdminPlayerFile(file) { file = -1 }
     var reason by remember { mutableStateOf("") }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Field(q, { q = it.take(20) }, "Oyuncu", Modifier.weight(1f)) { A.adminFind(q) { r -> r.onSuccess { found = it }.onFailure { report(it.message ?: "", false) } } }
@@ -221,6 +261,8 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
         Column(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Px.Row).padding(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PT("${o.optString("name")} · ${fmtId(id)} · Sv ${o.optInt("level")} · ${o.optInt("kills")} Öldürme", 14.sp, modifier = Modifier.weight(1f))
+                if (o.optBoolean("deleted")) PT("SİLİNDİ ", 12.sp, Color(0xFFFF6A5A))
+                else if (o.optBoolean("delete_req")) PT("SİLME TALEBİ ", 12.sp, Px.Orange)
                 if (!o.isNull("banned_until")) PT("YASAKLI", 12.sp, Color(0xFFFF6A5A))
                 if (!o.isNull("vip_until")) PT(" VIP", 12.sp, Px.Clan)
             }
@@ -233,6 +275,9 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
             }
         }
     }
+    // ---- silme talepleri
+    Section("Hesap Silme Talepleri (Dosya → Hesap Sekmesinden Silinir)")
+    AdminDeleteRequests { file = it }
     // ---- posta
     Section("Posta (Ödül / Etkinlik Duyurusu)")
     var to by remember { mutableStateOf("") }
@@ -278,21 +323,3 @@ private fun AdminTab(report: (String, Boolean) -> Unit) {
     }
 }
 
-@Composable
-private fun Console(run: (String) -> Unit) {
-    var cmd by remember { mutableStateOf("") }
-    PT("Komut Yaz (Örn: item w_katana 1, spawn tank 3 40, tp 120 300, speed 2.5):", 13.sp, Px.Sub, maxLines = 2)
-    Spacer(Modifier.height(6.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Field(cmd, { cmd = it }, "komut", Modifier.weight(1f)) { run(cmd); cmd = "" }
-        Spacer(Modifier.width(8.dp))
-        PxButton("Çalıştır", height = 44.dp) { run(cmd); cmd = "" }
-    }
-    Spacer(Modifier.height(8.dp))
-    PT(
-        "gold N · gem N · item id N · items · weapons · potions · level N · xp N · charlevel N · points N · dog N · " +
-            "god · onehit · nocd · invis · speed X · heal · time H · day · night · timescale X · spawn tür N seviye · boss · killall · " +
-            "vehicle bike|moto|car|suv · fuel · tp camp|city|boss|swamp|downtown|deep|x y · clearbag · reset",
-        12.sp, Px.Sub, maxLines = 12,
-    )
-}

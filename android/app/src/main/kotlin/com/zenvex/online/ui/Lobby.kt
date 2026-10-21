@@ -61,7 +61,8 @@ val HERO_COLORS = listOf(Color(0xFFFF7A4A), Color(0xFF4AD8FF), Color(0xFFB277FF)
 fun fmt(n: Int): String = "%,d".format(n).replace(',', '.')
 
 /** 6 039 464 biçimi */
-fun fmtId(id: Long): String = id.toString().reversed().chunked(3).joinToString(" ").reversed()
+/** 7 haneli gösterim: 1000001 → "1 000 001", yönetici 0 → "0 000 000"; hesap yoksa "—" */
+fun fmtId(id: Long): String = if (id < 0) "—" else id.toString().padStart(7, '0').reversed().chunked(3).joinToString(" ").reversed()
 
 /**
  * Lobi: kayan dünya haritası üstünde solda büyük karakter vitrini, sağda oyuncu kartı ve OYNA.
@@ -82,7 +83,8 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     val unlocked = ch.optBoolean("unlocked", sel == 0)
     val col = Color(0xFFB277FF)
 
-    MapBackground(t, dim = 0.38f) {
+    // sahne: yıkık şehir ve zombi sürüsü (sahnedeki kahraman kadraj dışında kalır; vitrindeki kahraman öne çıkar)
+    SceneBackground("bg_lobby", t, dim = 0.3f, zoom = 1.75f, ax = 0.97f, ay = 0.55f, drift = 0.03f) {
         // ---- sol: karakter vitrini (sürükleyerek döndür)
         Box(
             Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(0.56f).pointerInput(Unit) {
@@ -109,14 +111,17 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
             dialog = if (Account.loggedIn) "profile" else "welcome"
         }
         // ---- üst orta: logo
-        Column(Modifier.align(Alignment.TopCenter).padding(top = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            PT("ZENVEX", 40.sp, Px.Orange, outline = true)
-            PT("O N L I N E", 15.sp, Px.Clan, outline = true)
+        Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Emblem(64.dp)
+            Spacer(Modifier.width(6.dp))
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                PT("ZENVEX", 40.sp, Px.Orange, outline = true)
+                PT("O N L I N E", 15.sp, Px.Clan, outline = true)
+            }
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             PxIcon("trophy", size = 48.dp, tint = Px.Clan) { dialog = "top" }
-            PxIcon("people", size = 48.dp) { dialog = "clans" }
             PxIcon("info", size = 48.dp) { dialog = "news" }
             PxIcon("gear", size = 48.dp, color = Px.Blue) { go(Screen.Settings) }
         }
@@ -159,7 +164,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
             }
         }
         // ---- sağ alt: sürüm (7 dokunuş → geliştirici menüsü)
-        PT("v${BuildConfig.VERSION_NAME}", 13.sp, Px.Sub, Modifier.align(Alignment.BottomEnd).padding(10.dp)
+        PT(appVersion(), 13.sp, Px.Sub, Modifier.align(Alignment.BottomEnd).padding(10.dp)
             .clickable(remember { MutableInteractionSource() }, null) {
                 devTaps++
                 if (devTaps >= 7) { devTaps = 0; dialog = "dev" } else if (devTaps >= 4) Toaster.show("Geliştirici menüsüne ${7 - devTaps} dokunuş")
@@ -168,7 +173,6 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         when (dialog) {
             "welcome" -> AccountDialog(first = true) { dialog = ""; tick++ }
             "top" -> TopDialog { dialog = "" }
-            "clans" -> ClanScreen({ dialog = "" })
             "news" -> NewsDialog { dialog = "" }
             "dev" -> DevMenu(onClose = { dialog = ""; tick++ })
             "profile" -> ProfileEditor({ dialog = "" }) { dialog = "rename" }
@@ -314,7 +318,8 @@ fun copy(ctx: Context, text: String) {
 @Composable
 fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Composable () -> Unit) {
     Dim(close) {
-        PxPanel(Modifier.width(width).clickable(remember { MutableInteractionSource() }, null) {}, pad = 12.dp) {
+        // perçinli metal çerçeveli pencere (köşeler esnemez)
+        Column(Modifier.width(width).metalFrame().clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 24.dp, vertical = 22.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PT(title, 22.sp, Px.Orange)
                 Spacer(Modifier.weight(1f))
@@ -353,22 +358,58 @@ fun TopDialog(close: () -> Unit) {
     }
 }
 
+/** Ekranlarda görünen sürüm: "Beta 0.3.12" */
+fun appVersion(): String = "Beta " + BuildConfig.VERSION_NAME.substringBefore("-")
+
+/** Haberler: oyunun amacı, nasıl oynanır, ilerleme ve bu sürümdeki yenilikler. */
 @Composable
 fun NewsDialog(close: () -> Unit) {
-    PxDialog("Haberler", close, 520.dp) {
-        Column(Modifier.height(240.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            PT("v${BuildConfig.VERSION_NAME}", 18.sp, Px.Clan)
-            for (l in listOf(
-                "• Yeni lobi ve yeni uygulama simgesi",
-                "• Zenvex hesabı: ID + anahtar ile her telefondan gir",
-                "• Çevrimiçi dünya Supabase'e taşındı",
-                "• Posta kutusu, klanlar, sıralama",
-                "• Haritadan bölgeler arası seyahat",
-                "• Envanter, üretim, görevler artık oyunun içinde",
-            )) PT(l, 15.sp, maxLines = 2)
+    var tab by remember { mutableIntStateOf(0) }
+    PxDialog("Bilgi Ve Haberler", close, 640.dp) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("Amaç", "Nasıl Oynanır", "İlerleme", "Yenilikler").forEachIndexed { i, n ->
+                PxButton(n, color = if (i == tab) Px.Blue else Px.Dark, height = 36.dp, size = 13.sp) { tab = i }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Column(Modifier.height(300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((head, body) in NEWS[tab]) {
+                PT(head, 16.sp, Px.Clan)
+                PT(body, 14.sp, Px.Text, maxLines = 8)
+            }
+            if (tab == 3) PT(appVersion() + " · Bu bir Beta sürümüdür: hataları ayarlardan ya da sohbetten bildir.", 12.sp, Px.Sub, maxLines = 2)
         }
     }
 }
+
+private val NEWS: List<List<Pair<String, String>>> = listOf(
+    listOf(
+        "Hayatta Kal" to "Salgından sonra şehir zombilerle doldu. Amacın kamptan başlayarak güçlenmek, malzeme toplamak, eşya üretmek ve haritanın tehlikeli bölgelerini adım adım geri almak.",
+        "Güçlen" to "Zombileri öldür, görevleri bitir, seviye atla. Her seviye yetenek puanı verir; yetenek ağacından gücünü, canını ve becerilerini geliştir.",
+        "Birlikte Oyna" to "Bir klana katıl ya da kendi klanını kur. Klanınla devlet üslerine baskın yap, üssü ele geçir ve klan deponu doldur.",
+    ),
+    listOf(
+        "Hareket" to "Sol joystick ile yürü; joystick'i sonuna kadar itersen koşarsın. Yürümek ve koşmak dayanıklılık harcamaz.",
+        "Saldırı" to "Sağ joystick ile saldır: elin boşsa yumruk, bıçak ya da katana takılıysa kılıç darbesi. Saldırmak ve takla atmak dayanıklılık harcar; dayanıklılık bitince biraz dinlen.",
+        "Takla" to "Takla tuşu seni kısa süre hasardan korur ve kuşatmadan kurtarır. Bekleme süresine dikkat et.",
+        "NPC'ler" to "Bir NPC'ye dokununca konuşursun. Görevci görev verir, tüccar alır satar, doktor iyileştirir, tamirci aracını onarır, barınaktaki eğitmen köpek satar ve eğitir.",
+        "Güvenli Bölge" to "Kamp ve ışınlanma noktaları güvenli bölgedir: zombiler giremez, girerlerse yıldırım çarpar. Can azalınca buraya dön.",
+        "Çanta Ve Cepler" to "Çantadan eşyalarını kuşanırsın. İlk dört cep oyunda hızlı kullanım tuşu olur; ilaç ve iksirleri buraya koy.",
+    ),
+    listOf(
+        "Seviye Ve Yetenekler" to "XP ile seviye atlarsın. Yetenek puanlarını hasar, can, hız ve takla gibi dallara dağıt.",
+        "Eşya Üretimi" to "Ağaç, taş ve hurda topla; çalışma tezgâhında silah, ekipman, ilaç ve sandık üret.",
+        "Köpek" to "Köpeğini barınaktaki eğitmenden alırsın. Köpeğin seninle savaşır, seviye atlar ve eğitmende geliştirilir.",
+        "Devlet Üsleri" to "Haritada askerlerin koruduğu devlet üsleri var. Keşfettiğinde üssün vereceği ödülü ve kalan süreyi haritada görürsün. Klan olarak ele geçir, süre bitene kadar savun.",
+        "Klan" to "Klan seviyesi arttıkça üye sınırı, güçlendirmeler ve klan ödülleri açılır. Ele geçirilen üsler klana dakikada XP kazandırır.",
+    ),
+    listOf(
+        "Yeni Görseller" to "Yeni zombiler, yeni efektler (seviye atlama, iksir auraları, vuruş kıvılcımı, katana izi, yıldırım) ve yeni yapılar (sağlık çadırı, gizemli ağaç, benzin istasyonu).",
+        "Animasyonlar" to "Kahraman ve köpek animasyonları baştan yapıldı: yürüyüş, koşu, takla, silah kavrama ve kılıç savuruşu.",
+        "Denge" to "Karakterler biraz yavaşladı, ağaç kesmek daha uzun sürüyor, yalnız saldırılar dayanıklılık harcıyor.",
+        "Kaldırılanlar" to "Bisiklet oyundan çıkarıldı.",
+    ),
+)
 
 fun frameColor(f: String) = when (f) {
     "frame_bronze" -> Color(0xFFCD7F32); "frame_silver" -> Color(0xFFD8DEE6); "frame_gold" -> Pal.Gold; "frame_s1" -> Pal.Red; else -> Color(0xFF4D9BFF)

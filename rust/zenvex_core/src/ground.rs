@@ -1,7 +1,7 @@
 //! Zemin parçası çizimi: karo malzeme haritasını dokularla piksel piksel harmanlar.
 //! Kenarlar alan bükme (domain warp) ile organik, büyük ölçekli ton dalgası tekrar hissini kırar.
 use crate::rng::value_noise;
-use crate::world::{ground, World, MAP_PX, MAP_TILES, TILE};
+use crate::world::{ground, World, Zone, MAP_PX, MAP_TILES, TILE};
 
 #[derive(Default)]
 pub struct Textures {
@@ -38,6 +38,22 @@ fn mix(a: u32, b: u32, t: f32) -> u32 {
         ((va + (vb - va) * t) as u32 & 255) << sh
     };
     0xFF00_0000 | ch(16) | ch(8) | ch(0)
+}
+
+/// V8 bölge renk tonu: yanık orman kül grisi, çöl kum, kara bataklık koyu yosun, liman kar, askeri bölge haki.
+pub fn zone_tint(z: Zone, c: u32) -> u32 {
+    let gray = |c: u32| {
+        let l = (((c >> 16) & 255) * 30 + ((c >> 8) & 255) * 59 + (c & 255) * 11) / 100;
+        0xFF00_0000 | (l << 16) | (l << 8) | l
+    };
+    match z {
+        Zone::BurntForest => shade(mix(c, gray(c), 0.7), 0.62),
+        Zone::Desert => mix(c, 0xFFD2B67E, 0.42),
+        Zone::BlackSwamp => shade(mix(c, 0xFF24331E, 0.3), 0.8),
+        Zone::Harbor => mix(shade(gray(c), 1.25), 0xFFE4ECF2, 0.5),
+        Zone::Military => mix(c, 0xFF6E6A48, 0.22),
+        _ => c,
+    }
 }
 
 /// (x0, y0) dünya pikselinden başlayan `size`x`size` parçayı `out` içine yazar (ARGB).
@@ -86,6 +102,11 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
                 + value_noise(seed ^ 0x321, wx / 260.0, wy / 260.0) * 0.4;
             let k = 0.9 + big * 0.18;
             c = shade(c, k);
+            // bölge tonu (kenarları zeminle aynı bükülmeyle organik)
+            let z = world.zone(wx + nx * warp * 1.6, wy + ny * warp * 1.6);
+            if !matches!(z, Zone::Camp | Zone::Forest | Zone::DeepForest | Zone::Swamp | Zone::Wall | Zone::SafeCity | Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::BossArena | Zone::Home) {
+                c = zone_tint(z, c);
+            }
             // yol şeritleri
             if m == ground::ASPHALT {
                 let tx = (wx / TILE) as usize;

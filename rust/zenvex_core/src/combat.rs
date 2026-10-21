@@ -3,6 +3,9 @@ use crate::data::{self, QuestKind, WeaponClass, ZKind, ZOMBIES};
 use crate::game::*;
 use crate::world::{Kind, Zone};
 
+/// Ağaç/taşa vuruş oranı (kesim hızı)
+pub const GATHER_HIT: f32 = 0.4;
+
 impl Game {
     /// Önündeki yayda zombilere, yoksa ağaç/kaya/sandığa vurur.
     pub fn melee_hit(&mut self, base: f32, range: f32, arc: f32, stun: f32) {
@@ -42,6 +45,9 @@ impl Game {
                 self.player.hp = (self.player.hp + dmg * ls).min(max_hp);
             }
         }
+        // devlet üssü askerleri (düşmansa)
+        let sdmg = base * mult * self.rng.range(0.9, 1.1) * if self.player.one_hit { 1e4 } else { 1.0 };
+        hit_any |= self.melee_soldiers(sdmg, range, arc);
         if hit_any {
             self.player.combat_t = 0.0;
             self.events.push(Event::Hit {
@@ -95,6 +101,8 @@ impl Game {
     pub fn hit_static(&mut self, i: usize, dmg: f32) {
         let gather = self.progress.gather_mult();
         let s = &mut self.world.statics[i];
+        // ağaç kesmek ve taş kırmak emek ister: vuruşların yalnız bir kısmı işler (~2.5 kat uzun)
+        let dmg = if matches!(s.kind, Kind::Tree | Kind::Rock) { dmg * GATHER_HIT } else { dmg };
         s.hp -= dmg;
         s.shake = 0.3;
         let (sx, sy, kind) = (s.x, s.y, s.kind);
@@ -590,6 +598,9 @@ impl Game {
                 if self.rng.chance(0.06 * mult) {
                     self.spawn_drop_id("dark_crystal", 1, z.x, z.y);
                 }
+                if self.rng.chance(0.008 * mult) {
+                    self.spawn_drop_id("neck_dark", 1, z.x, z.y);
+                }
             }
             ZKind::Tank => {
                 let rv = self.rng.below(3);
@@ -604,6 +615,8 @@ impl Game {
                     ("electronics", 0.8),
                     ("battery", 0.4),
                     ("w_katana", 0.03),
+                    ("ring_hunter", 0.05),
+                    ("neck_amulet", 0.05),
                 ] {
                     if self.rng.chance(p * mult) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
@@ -617,7 +630,7 @@ impl Game {
                 self.spawn_drop_id("titan_shard", 3 + rv, z.x, z.y);
                 let rv = self.rng.below(2);
                 self.spawn_drop_id("dark_crystal", 2 + rv, z.x, z.y);
-                for id in ["w_katana", "potion_power", "potion_speed", "potion_heal"] {
+                for id in ["w_katana", "potion_power", "potion_speed", "potion_heal", "ring_titan"] {
                     if self.rng.chance(0.25) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
                     }

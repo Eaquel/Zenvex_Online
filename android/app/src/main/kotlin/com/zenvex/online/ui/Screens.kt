@@ -79,10 +79,11 @@ fun SplashScreen(done: () -> Unit) {
         delay(400)
         done()
     }
-    MapBackground(t, dim = 0.45f) {
+    SceneBackground("bg_lobby", t, dim = 0.35f) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            PT("Zenvex Online", 56.sp, Px.Orange, outline = true)
-            Spacer(Modifier.height(30.dp))
+            Emblem(150.dp)
+            PT("Zenvex Online", 48.sp, Px.Orange, outline = true)
+            Spacer(Modifier.height(18.dp))
             PxBar(progress, Px.Green, Modifier.width(320.dp), 14.dp)
             Spacer(Modifier.height(8.dp))
             PT("Dünya hazırlanıyor… %${(progress * 100).toInt()}", 15.sp, Px.Sub)
@@ -130,7 +131,8 @@ fun LoadingScreen(done: () -> Unit) {
         delay(200)
         done()
     }
-    MapBackground(t, dim = 0.45f) {
+    SceneBackground("bg_lobby", t, dim = 0.3f) {
+        Emblem(120.dp, Modifier.align(Alignment.TopCenter).padding(top = 24.dp))
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             PT(GameSession.server.value.title, 26.sp, Px.Clan, outline = true)
             Spacer(Modifier.height(10.dp))
@@ -305,7 +307,7 @@ fun CraftScreen(back: () -> Unit) {
     var sel by remember { mutableIntStateOf(0) }
     ScreenFrame("ÜRETİM", "craft", back, right = {
         Chip("craft", if (data.optBoolean("near_bench")) "Tezgâh yakında" else "Tezgâh yok", if (data.optBoolean("near_bench")) Pal.Green else Pal.Sub)
-    }) {
+    }, bg = "bg_craft") {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             LazyColumn(Modifier.weight(1f).fillMaxHeight().glass(20.dp).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 items(recipes.size) { i ->

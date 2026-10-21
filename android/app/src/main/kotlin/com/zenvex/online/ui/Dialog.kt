@@ -10,6 +10,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,7 +47,7 @@ import kotlin.math.sin
 
 /** NPC portre görseli (atlas npc/<ad>) */
 fun npcSprite(kind: Int) = when (kind) {
-    1 -> "npc/merchant"; 2 -> "npc/quest"; 3 -> "npc/doctor"; 4 -> "npc/mechanic"; 5 -> "npc/trainer"; else -> "npc/soldier"
+    1 -> "npc/merchant"; 2 -> "npc/quest"; 3 -> "npc/doctor"; 4 -> "npc/mechanic"; 5 -> "npc/trainer"; 7 -> "npc/quest"; else -> "npc/soldier"
 }
 
 /** Oyun içinde NPC'ye dokununca: konuşma (Rust talk komutu). */
@@ -54,7 +56,8 @@ fun NpcDialogScreen(kind: Int, close: () -> Unit, open: (String) -> Unit) {
     var data by remember { mutableStateOf(talk(kind, "")) }
     if (data == null) { LaunchedEffect(Unit) { close() }; return }
     NpcDialogView(data!!, onOption = { id ->
-        if (id == "bye") { close(); return@NpcDialogView }
+        // "bye" ve "ok" (kabul sonrası Yola Çık, teslim sonrası Tamam) konuşmayı kapatır
+        if (id == "bye" || id == "ok") { close(); return@NpcDialogView }
         val next = talk(kind, id)
         if (next == null) { close(); return@NpcDialogView }
         val o = next.optString("open")
@@ -72,6 +75,7 @@ private fun talk(kind: Int, opt: String): JSONObject? {
  * Konuşma paneli: solda portre (nefes alır), ad plakası, daktilo gibi akan satırlar; dokununca sonraki satır,
  * son satırda seçenek tuşları.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun NpcDialogView(d: JSONObject, onOption: (String) -> Unit, onClose: () -> Unit, instant: Boolean = false) {
     val lines = d.optJSONArray("lines") ?: JSONArray()
@@ -92,8 +96,10 @@ internal fun NpcDialogView(d: JSONObject, onOption: (String) -> Unit, onClose: (
     Box(
         Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xA0000000))))
             .clickable(tap, null) {
+                // dokun: yazıyı tamamla → sonraki satır → son satırda boşluğa dokunmak konuşmayı kapatır
                 if (shown < text.length) shown = text.length
                 else if (!last) line++
+                else onClose()
             },
     ) {
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.Bottom) {
@@ -121,12 +127,19 @@ internal fun NpcDialogView(d: JSONObject, onOption: (String) -> Unit, onClose: (
                     }
                 }
                 AnimatedVisibility(last && shown >= text.length, enter = fadeIn() + slideInVertically { it / 2 }) {
-                    Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // seçenekler sarılarak dizilir (konu menüsünde 6 tuşa kadar)
+                    FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         for (i in 0 until opts.length()) {
                             val o = opts.getJSONObject(i)
                             val id = o.optString("id")
-                            val col = when (id) { "accept" -> Px.Green; "turnin" -> Color(0xFFB08A2A); "bye" -> Px.Dark; "chat" -> Color(0xFF4A4A40); else -> Px.Blue }
-                            PxButton(o.optString("label"), height = 42.dp, size = 15.sp, color = col) { onOption(id) }
+                            val col = when {
+                                id == "accept" || id == "ok" -> Px.Green
+                                id == "turnin" || id == "more" -> Color(0xFFB08A2A)
+                                id == "bye" || id == "back" -> Px.Dark
+                                id == "chat" || id.startsWith("t:") -> Color(0xFF4A4A40)
+                                else -> Px.Blue
+                            }
+                            PxButton(o.optString("label"), height = 40.dp, size = 14.sp, color = col) { onOption(id) }
                         }
                     }
                 }
@@ -167,19 +180,33 @@ fun QuestTracker(story: JSONArray, modifier: Modifier = Modifier, onClick: () ->
     }
 }
 
-/** Öğretici oku (Compose): yukarıdan aşağı zıplayan sarı ok + yazı; hedef öğenin üstüne yerleştirilir. */
+/** Öğretici işaretçisi (Compose): hedefin üstünde küçük zıplayan ok başı + yarı saydam etiket. Hedefin çevresine [TutPulse]. */
 @Composable
 fun TutArrow(label: String, modifier: Modifier = Modifier) {
     val t = rememberTime()
-    Column(modifier.offset(y = (-78 + sin(t * 6f) * 6).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.background(Color(0xE015140F)).padding(horizontal = 8.dp, vertical = 3.dp)) { PT(label, 13.sp, Color(0xFFFFD34A)) }
-        androidx.compose.foundation.Canvas(Modifier.size(26.dp, 22.dp)) {
+    Column(modifier.offset(y = (-58 + sin(t * 4f) * 3).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB0101010)).padding(horizontal = 9.dp, vertical = 2.dp)) {
+            PT(label, 12.sp, Color(0xFFFFF0C0))
+        }
+        androidx.compose.foundation.Canvas(Modifier.size(16.dp, 12.dp)) {
             val p = androidx.compose.ui.graphics.Path().apply {
-                moveTo(size.width / 2, size.height); lineTo(0f, size.height * 0.45f); lineTo(size.width * 0.3f, size.height * 0.45f)
-                lineTo(size.width * 0.3f, 0f); lineTo(size.width * 0.7f, 0f); lineTo(size.width * 0.7f, size.height * 0.45f); lineTo(size.width, size.height * 0.45f); close()
+                moveTo(size.width / 2, size.height); lineTo(0f, 0f); lineTo(size.width / 2, size.height * 0.4f); lineTo(size.width, 0f); close()
             }
-            drawPath(p, Color(0xFFFFD34A))
-            drawPath(p, Color(0xFF15140F), style = androidx.compose.ui.graphics.drawscope.Stroke(3f))
+            drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * sin(t * 4f)))
+            drawPath(p, Color(0xB015140F), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        }
+    }
+}
+
+/** Hedefin çevresinde sönerek genişleyen yumuşak halka (dokunulacak tuşu belli eder) */
+@Composable
+fun TutPulse(modifier: Modifier = Modifier) {
+    val t = rememberTime()
+    androidx.compose.foundation.Canvas(modifier) {
+        for (k in 0..1) {
+            val ph = (t * 1.1f + k * 0.5f) % 1f
+            drawCircle(Color(0xFFFFE6A0).copy(alpha = 0.55f * (1f - ph)), radius = size.minDimension / 2 * (0.9f + 0.35f * ph),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
         }
     }
 }

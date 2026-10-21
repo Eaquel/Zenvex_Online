@@ -262,7 +262,8 @@ impl Game {
             ));
         }
         for (ri, r) in self.remotes.iter().enumerate() {
-            if r.x < x0 || r.x > x1 || r.y < y0 || r.y > y1 {
+            // kişisel üs: herkesin üssü aynı yerde; başka oyuncular orada görünmez
+            if r.x < x0 || r.x > x1 || r.y < y0 || r.y > y1 || Game::in_home(r.x, r.y) {
                 continue;
             }
             self.draw_tmp.push((
@@ -333,6 +334,7 @@ impl Game {
         if let Some(e) = self.dog_draw() {
             self.draw_tmp.push(e);
         }
+        self.draw_bases(x0, y0, x1, y1);
         self.draw_tmp
             .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         let cap = out.len() / STRIDE;
@@ -419,7 +421,7 @@ impl Game {
         ]
     }
 
-    /// Radar: [x, y, tür, ...] — tür: 0 zombi, 1 boss, 2 araç, 3 tüccar, 4 uzak oyuncu, 5 görev hedefi
+    /// Radar: [x, y, tür, ...] — tür: 0 zombi, 1 boss, 2 araç, 3 tüccar, 4 uzak oyuncu, 5 görev hedefi, 6 devlet üssü, 7 asker
     pub fn radar(&self, out: &mut [f32]) -> usize {
         let mut k = 0;
         let mut push = |x: f32, y: f32, t: f32, out: &mut [f32]| {
@@ -445,7 +447,22 @@ impl Game {
             push(x, y, 3.0, out);
         }
         for r in &self.remotes {
-            push(r.x, r.y, 4.0, out);
+            if !Game::in_home(r.x, r.y) {
+                push(r.x, r.y, 4.0, out);
+            }
+        }
+        // keşfedilen devlet üsleri (6) ve düşman askerler (7)
+        let cell = crate::world::MAP_PX / crate::progress::FOG_N as f32;
+        for b in crate::bases::base_defs() {
+            let (bx, by) = b.pos();
+            if (bx - px).hypot(by - py) < 6000.0 && self.progress.explored((bx / cell) as usize, (by / cell) as usize) {
+                push(bx, by, 6.0, out);
+            }
+        }
+        for s in &self.soldiers {
+            if s.dead_t <= 0.0 {
+                push(s.x, s.y, 7.0, out);
+            }
         }
         for (x, y) in self.story_targets() {
             push(x, y, 5.0, out);

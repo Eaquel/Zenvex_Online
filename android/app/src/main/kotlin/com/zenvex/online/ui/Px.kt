@@ -245,8 +245,8 @@ fun PxBar(value: Float, color: Color, modifier: Modifier = Modifier, height: Dp 
 
 // =========================================================================== dünya haritası arka planı
 object WorldMapImage {
-    /** Harita çözünürlüğü: 1 piksel ≈ 22 dünya pikseli (binalar, ağaçlar seçilir) */
-    const val SIZE = 1024
+    /** Harita çözünürlüğü: 1 piksel ≈ 30 dünya pikseli (V8: harita 720 kare; binalar, ağaçlar seçilir) */
+    const val SIZE = 1536
     @Volatile private var bmp: Bitmap? = null
     @Volatile private var img: ImageBitmap? = null
 

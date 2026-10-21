@@ -19,7 +19,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = System.getenv("VERSION_NAME") ?: "0.1.0"
+        versionName = System.getenv("VERSION_NAME") ?: "0.3.0-beta"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         // Supabase: ortam değişkeni / supabase.properties ile değiştirilebilir. Yayınlanabilir anahtar herkese açıktır;
         // veritabanı yalnızca zx_* fonksiyonlarına izin verir (supabase/migrations).

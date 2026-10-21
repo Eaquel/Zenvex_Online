@@ -68,7 +68,28 @@ impl Game {
             }
         }
         let (mut mx, mut my, mut speed) = (0.0f32, 0.0f32, 0.0f32);
-        if let Some((i, dist)) = target {
+        // zombi yoksa devlet üssünün düşman askerlerine saldırır
+        let soldier = if target.is_none() { self.dog_soldier_target(d.x, d.y) } else { None };
+        if let Some((si, dist)) = soldier {
+            let (sx, sy) = (self.soldiers[si].x, self.soldiers[si].y);
+            if dist > 46.0 {
+                mx = sx - d.x;
+                my = sy - d.y;
+                speed = m(5.2);
+                d.anim = Z_WALK;
+            } else {
+                d.dir = dir_from_vec(sx - d.x, sy - d.y);
+                if d.atk_t <= 0.0 {
+                    d.atk_t = 0.8;
+                    d.anim = Z_ATTACK;
+                    d.anim_t = 0.0;
+                    let dmg = rpg::dog_damage(lv[0]) * self.rng.range(0.9, 1.1);
+                    self.hurt_soldier(si, dmg, false);
+                } else if d.anim == Z_ATTACK && d.anim_t > 0.45 {
+                    d.anim = Z_IDLE;
+                }
+            }
+        } else if let Some((i, dist)) = target {
             let (zx, zy) = (self.zombies[i].x, self.zombies[i].y);
             let reach = ZOMBIES[self.zombies[i].kind as usize].radius + 34.0;
             if dist > reach {
@@ -156,7 +177,7 @@ impl Game {
             return Err("Zaten bir köpeğin var".into());
         }
         if !self.near_npc(5) {
-            return Err("Köpeği barınaktaki eğitmenden alabilirsin".into());
+            return Err("Köpek yalnızca barınaktaki Eğitmen Kerem'den alınır".into());
         }
         if self.progress.gold < rpg::DOG_PRICE {
             return Err(format!("{} altın gerekli", rpg::DOG_PRICE));
@@ -169,10 +190,10 @@ impl Game {
 
     pub fn dog_upgrade(&mut self, stat: usize) -> Result<String, String> {
         if !self.progress.dog_owned {
-            return Err("Önce kamptaki eğitmenden bir köpek al".into());
+            return Err("Önce barınaktaki Eğitmen Kerem'den bir köpek al".into());
         }
         if !self.near_npc(5) {
-            return Err("Geliştirme barınaktaki köpek eğitmeninde yapılır".into());
+            return Err("Köpek geliştirme barınaktaki Eğitmen Kerem'de yapılır".into());
         }
         let lv = *self.progress.dog_lv.get(stat).ok_or("Geçersiz")?;
         if lv >= rpg::DOG_MAX {

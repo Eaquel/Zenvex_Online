@@ -50,7 +50,7 @@ jobs:
         working-directory: android
         env:
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.2.${{ github.run_number }}
+          VERSION_NAME: 0.3.${{ github.run_number }}-beta
           # Supabase (isteğe bağlı): başka bir projeye geçmek için Secrets'a SB_URL / SB_KEY eklenebilir
           SB_URL: ${{ secrets.SB_URL }}
           SB_KEY: ${{ secrets.SB_KEY }}

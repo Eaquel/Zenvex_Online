@@ -35,6 +35,13 @@ pub const Z_DEATH: u8 = 4;
 pub const STRIDE: usize = 12;
 /// takla süresi (sn) ve karanlık aura yarıçapı (px)
 pub const ROLL_TIME: f32 = 0.32;
+/// Oyuncu hızları (px/sn): yürüme 1.25 m/sn, koşu 3.1 m/sn
+pub const WALK_SPEED: f32 = 1.25 * PX_PER_M;
+pub const RUN_SPEED: f32 = 3.1 * PX_PER_M;
+/// Dayanıklılık bedelleri: yumruk, kılıç/bıçak savurma, takla (yürüme/koşu bedava)
+pub const ST_PUNCH: f32 = 5.0;
+pub const ST_SWING: f32 = 7.0;
+pub const ST_ROLL: f32 = 18.0;
 pub const AURA_R: f32 = 190.0;
 pub const D_STATIC: f32 = 0.0;
 pub const D_HUMAN: f32 = 1.0;
@@ -184,6 +191,20 @@ pub enum Event {
     /// ev sahibi: uzak oyuncunun öldürdüğü zombi → ödül o oyuncuya
     #[serde(rename = "nkill")]
     NetKill { k: i32, kind: u8, level: u32, x: f32, y: f32 },
+    /// V8 devlet üssü: asker atışı (k: 0 M4, 1 keskin nişancı)
+    #[serde(rename = "botshot")]
+    BotShot { x1: f32, y1: f32, x2: f32, y2: f32, hit: bool, k: u8 },
+    #[serde(rename = "botdown")]
+    BotDown { x: f32, y: f32 },
+    /// yeni inen asker 5 sn ölümsüz
+    #[serde(rename = "immune")]
+    Immune { x: f32, y: f32 },
+    /// takviye helikopteri yola çıktı (piste iner)
+    #[serde(rename = "heli")]
+    Heli { x: f32, y: f32 },
+    /// ele geçirme süresi doldu: Kotlin sunucuya bildirir
+    #[serde(rename = "basecap")]
+    BaseCapture { id: u32 },
 }
 
 #[derive(Clone, Debug, Default)]
@@ -436,6 +457,16 @@ pub struct Game {
     pub spawn_t: f32,
     pub draw_tmp: Vec<(f32, [f32; STRIDE])>,
     pub day_index: u32,
+    /// V8 devlet üsleri (sunucu durumu + yerel garnizon)
+    pub bases: Vec<crate::bases::BaseState>,
+    pub soldiers: Vec<crate::bases::Soldier>,
+    pub helis: Vec<crate::bases::Heli>,
+    /// oyuncunun klanı (0 = yok); klan üssünün askerleri üyelere dost
+    pub my_clan: i64,
+    /// sunucu saati (ms), üs ödül sürelerini saymak için
+    pub base_clock: f64,
+    /// büyücü ışınlanma bekleme süresi
+    pub wiz_cd: f32,
 }
 
 impl Game {
@@ -443,8 +474,7 @@ impl Game {
         progress.character = 0;
         let world = World::generate(seed);
         progress.inv.migrate();
-        let cap = progress.inventory_cap();
-        progress.inv.resize(cap);
+        progress.relayout_inv();
         progress.ensure_dailies(day_index);
         let (x, y) = world::camp_spawn();
         let player = Player {
@@ -492,6 +522,8 @@ impl Game {
             let mut spots: Vec<(u8, f32, f32)> = vec![(1, mx, my), (2, mx + m(2.6), my + m(1.2))];
             if forest {
                 spots.push((6, mx - m(2.6), my + m(1.2)));
+                // büyücü kampta, ateşin doğusunda: kişisel üsse ve keşfedilen karakollara ışınlar
+                spots.push((7, mx + m(9.0), my + m(2.4)));
                 for (kind, id, ox, oy) in [(3u8, "clinic", 0.0, 0.6), (4, "gas", 0.0, 2.2), (5, "kennel", 0.0, 0.8)] {
                     let (lx, ly) = world::landmark(id).pos();
                     spots.push((kind, lx + m(ox), ly + m(oy)));
@@ -507,6 +539,11 @@ impl Game {
                 }
                 npcs.push(Npc { kind, x, y, dir: 0, cd: 0.0, anim_t: (kind as f32) * 0.7, hit_t: 0.0, hit_id: 0 });
             }
+        }
+        // kişisel üsteki büyücü (dönüş kapısının yanında)
+        {
+            let (hx, hy) = world::home_spawn();
+            npcs.push(Npc { kind: 7, x: hx + m(2.2), y: hy - m(9.5), dir: 0, cd: 0.0, anim_t: 1.3, hit_t: 0.0, hit_id: 0 });
         }
         Game {
             world,
@@ -542,6 +579,12 @@ impl Game {
             spawn_t: 0.0,
             draw_tmp: Vec::new(),
             day_index,
+            bases: Vec::new(),
+            soldiers: Vec::new(),
+            helis: Vec::new(),
+            my_clan: 0,
+            base_clock: 0.0,
+            wiz_cd: 0.0,
         }
     }
 
@@ -550,7 +593,9 @@ impl Game {
     }
 
     pub fn respawn(&mut self, city: bool) {
-        let (x, y) = if city && self.progress.level >= CITY_LEVEL {
+        let (x, y) = if self.progress.home_spawn {
+            world::home_spawn()
+        } else if city && self.progress.level >= CITY_LEVEL {
             world::city_spawn()
         } else {
             world::camp_spawn()
@@ -613,6 +658,8 @@ impl Game {
         self.update_drops(dt);
         self.update_statics(dt);
         self.update_spawning(dt);
+        self.update_bases(dt);
+        self.wiz_cd = (self.wiz_cd - dt).max(0.0);
     }
 
     fn update_zone(&mut self) {
@@ -795,11 +842,12 @@ impl Game {
         let mut moving = false;
         if mlen > 0.08 {
             let (nx, ny) = (input.move_x / mlen, input.move_y / mlen);
-            let run = mlen > 0.6 && self.player.stamina > 1.0 && !attacking;
+            // yürümek ve koşmak dayanıklılık harcamaz; yalnız saldırı ve takla harcar
+            let run = mlen > 0.6 && !attacking;
             let mut speed = if run {
-                m(4.0) * self.progress.run_mult()
+                RUN_SPEED * self.progress.run_mult()
             } else {
-                m(1.6) * (0.45 + 0.55 * (mlen / 0.6).min(1.0))
+                WALK_SPEED * (0.45 + 0.55 * (mlen / 0.6).min(1.0))
             };
             speed *= self.progress.move_mult() * self.player.speed_cheat * (1.0 + 0.02 * self.clan_boost[2] as f32);
             if self.player.speed_t > 0.0 {
@@ -813,11 +861,6 @@ impl Game {
             }
             if attacking {
                 speed *= if ranged { 0.65 } else { 0.45 };
-            }
-            if run {
-                let cost = 6.0 * self.progress.stamina_cost_mult() * dt;
-                self.player.stamina = (self.player.stamina - cost).max(0.0);
-                self.player.stamina_delay = 0.6;
             }
             let gate_open = self.progress.level >= CITY_LEVEL;
             let (mut x, mut y) = (
@@ -907,9 +950,7 @@ impl Game {
             }
         }
         if swing {
-            let cost = 4.0 * self.progress.stamina_cost_mult();
-            self.player.stamina = (self.player.stamina - cost).max(0.0);
-            self.player.stamina_delay = 0.8;
+            self.spend_stamina(ST_PUNCH);
             self.events.push(Event::Swing);
             let dmg = self.progress.fist_damage();
             self.melee_hit(dmg, m(1.4), 0.75, 0.0);
@@ -919,8 +960,10 @@ impl Game {
     fn update_melee(&mut self, _dt: f32, wants: bool, w: &'static data::WeaponDef) {
         let b = self.progress.bonus();
         let (dmg, reach) = (w.damage * (1.0 + b.blade_pct), m(w.range_m) * (1.0 + b.reach));
+        // yorgunken savurma yavaşlar
+        let tired = if self.player.stamina < ST_SWING { 1.6 } else { 1.0 };
         let p = &mut self.player;
-        let period = 1.0 / (w.rate * (1.0 + b.atk_speed));
+        let period = tired / (w.rate * (1.0 + b.atk_speed));
         if wants && !p.atk_active {
             p.atk_active = true;
             p.hit_done = false;
@@ -937,9 +980,7 @@ impl Game {
         let ct = p.anim_t % period;
         if !p.hit_done && ct >= period * 0.4 {
             p.hit_done = true;
-            self.player.stamina =
-                (self.player.stamina - 5.0 * self.progress.stamina_cost_mult()).max(0.0);
-            self.player.stamina_delay = 0.8;
+            self.spend_stamina(ST_SWING * if w.range_m > 1.6 { 1.3 } else { 0.75 });
             self.events.push(Event::Swing);
             self.melee_hit(dmg, reach, if w.pierce > 0 { 1.2 } else { 0.9 }, w.stun);
         }
@@ -1093,6 +1134,11 @@ impl Game {
         if self.player.roll_t > 0.0 || self.player.hurt_t > 0.3 {
             return Err(String::new());
         }
+        let cost = ST_ROLL * self.progress.stamina_cost_mult();
+        if self.player.stamina < cost && !self.player.no_cd {
+            return Err("Takla İçin Çok Yorgunsun".into());
+        }
+        self.spend_stamina(ST_ROLL);
         let (dx, dy) = dir_vec(self.player.dir);
         let p = &mut self.player;
         p.roll_t = ROLL_TIME;
@@ -1107,6 +1153,13 @@ impl Game {
         self.events.push(Event::Roll { x, y });
         self.story_event(crate::story::Ev::Roll);
         Ok(String::new())
+    }
+
+    /// Dayanıklılık harcar (beceri indirimi uygulanır); kısa süre dolum durur.
+    fn spend_stamina(&mut self, base: f32) {
+        let cost = base * self.progress.stamina_cost_mult();
+        self.player.stamina = (self.player.stamina - cost).max(0.0);
+        self.player.stamina_delay = 0.9;
     }
 
     fn update_roll(&mut self, dt: f32) {

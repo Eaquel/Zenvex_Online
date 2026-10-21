@@ -58,10 +58,27 @@ class UiShotsTest {
         paparazzi.snapshot { TreeView(data) {} }
     }
 
+    /** Çanta yarı saydam: arkada oyun görünsün diye çimen renginde zemin üstüne çizilir. */
     @Test
     fun bagScreen() {
         val data = sample("inventory")
-        paparazzi.snapshot { BagView(data, 0, true, {}, { _, _ -> com.zenvex.online.game.GameSession.Reply(true, "") }) {} }
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF3E5A2A))) {
+                BagView(data, 0, true, {}, { _, _ -> com.zenvex.online.game.GameSession.Reply(true, "") }) {}
+            }
+        }
+    }
+
+    /** Kişisel üste sandık açıkken: solda sandık içeriği. */
+    @Test
+    fun bagChestScreen() {
+        val data = sample("inventory")
+        val chest = sample("chest")
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF3E5A2A))) {
+                BagView(data, 0, true, {}, { _, _ -> com.zenvex.online.game.GameSession.Reply(true, "") }, chest = chest) {}
+            }
+        }
     }
 
     @Test
@@ -71,9 +88,25 @@ class UiShotsTest {
         val w = sample("world")
         val me = sample("player")
         val fog = fogMask(sample("fog"))
-        val marks = mapMarks(w, JSONObject()) + MapMark(me.getDouble("x").toFloat() + 900f, me.getDouble("y").toFloat() - 1400f, 3, "Gizemli Ağaç")
+        val marks = mapMarks(w, JSONObject()) + baseMarks(sample("bases")) +
+            MapMark(me.getDouble("x").toFloat() + 900f, me.getDouble("y").toFloat() - 1400f, 3, "Gizemli Ağaç")
         paparazzi.snapshot {
             WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}, {})
+        }
+    }
+
+    /** V8: keşfedilen devlet üsleri (devlet / başka klan / kendi klanın) */
+    @Test
+    fun worldMapBases() {
+        val bmp: android.graphics.Bitmap = android.graphics.BitmapFactory.decodeStream(javaClass.getResourceAsStream("/ui/map.png"))
+        val img = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
+        val w = sample("world")
+        val b = sample("bases").getJSONArray("bases").getJSONObject(1)
+        val all = org.json.JSONObject().put("bases", org.json.JSONArray().apply {
+            for (i in 0 until 50) put(org.json.JSONObject(sample("bases").getJSONArray("bases").getJSONObject(i).toString()).put("found", true))
+        })
+        paparazzi.snapshot {
+            WorldMapView(img, null, w, b.getDouble("x").toFloat(), b.getDouble("y").toFloat(), 30, mapMarks(w, JSONObject()) + baseMarks(all), {}, {})
         }
     }
 

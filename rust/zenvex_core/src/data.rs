@@ -16,6 +16,12 @@ pub enum ItemKind {
     Bag,
     Cloak,
     Currency,
+    /// V8: yüzük (armor = hasar %, bonus = kritik şansı)
+    Ring,
+    /// V8: kolye (armor = düz can, bonus = can yenilenmesi %)
+    Necklace,
+    /// V8: kişisel üsse kurulan sandık (armor = kapasite)
+    Chest,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -107,24 +113,24 @@ pub const ITEMS: &[ItemDef] = &[
     item!("w_sniper", "Keskin Nişancı", Weapon, Legendary, 1, 1200, "Delip geçen ağır mermi."),
     item!("w_rpg", "RPG", Weapon, Legendary, 1, 1500, "Alan hasarlı roketatar."),
     // kasklar (32-35) armor, bonus = can %
-    item!("helm_basic", "Basit Kask", Helmet, Common, 1, 30, "+5 zırh.", 5.0, 0.0),
-    item!("helm_police", "Polis Kaskı", Helmet, Rare, 1, 120, "+12 zırh.", 12.0, 0.0),
-    item!("helm_military", "Askerî Kask", Helmet, Epic, 1, 300, "+20 zırh.", 20.0, 0.0),
-    item!("helm_titan", "Titan Kaskı", Helmet, Legendary, 1, 2000, "+35 zırh, +%10 can.", 35.0, 0.10),
+    item!("helm_basic", "Basit Kask", Helmet, Common, 1, 30, "+4 zırh.", 4.0, 0.0),
+    item!("helm_police", "Polis Kaskı", Helmet, Rare, 1, 120, "+8 zırh.", 8.0, 0.0),
+    item!("helm_military", "Askerî Kask", Helmet, Epic, 1, 300, "+12 zırh.", 12.0, 0.0),
+    item!("helm_titan", "Titan Kaskı", Helmet, Legendary, 1, 2000, "+20 zırh, +%10 can.", 20.0, 0.10),
     // ceketler (36-39)
-    item!("jacket_basic", "Basit Yelek", Jacket, Common, 1, 40, "+6 zırh.", 6.0, 0.0),
-    item!("jacket_police", "Polis Yeleği", Jacket, Rare, 1, 150, "+15 zırh.", 15.0, 0.0),
-    item!("jacket_military", "Askerî Ceket", Jacket, Epic, 1, 350, "+24 zırh.", 24.0, 0.0),
-    item!("jacket_titan", "Titan Ceketi", Jacket, Legendary, 1, 2500, "+40 zırh, +%10 hasar direnci.", 40.0, 0.10),
+    item!("jacket_basic", "Basit Yelek", Jacket, Common, 1, 40, "+5 zırh.", 5.0, 0.0),
+    item!("jacket_police", "Polis Yeleği", Jacket, Rare, 1, 150, "+10 zırh.", 10.0, 0.0),
+    item!("jacket_military", "Askerî Ceket", Jacket, Epic, 1, 350, "+15 zırh.", 15.0, 0.0),
+    item!("jacket_titan", "Titan Ceketi", Jacket, Legendary, 1, 2500, "+24 zırh, +%8 hasar direnci.", 24.0, 0.08),
     // botlar (40-43) bonus = hız
-    item!("boots_basic", "Basit Bot", Boots, Common, 1, 30, "+3 zırh, +%2 hız.", 3.0, 0.02),
-    item!("boots_police", "Polis Botu", Boots, Rare, 1, 110, "+7 zırh, +%4 hız.", 7.0, 0.04),
-    item!("boots_military", "Askerî Bot", Boots, Epic, 1, 280, "+12 zırh, +%6 hız.", 12.0, 0.06),
-    item!("boots_titan", "Titan Botu", Boots, Legendary, 1, 1800, "+20 zırh, +%10 hız.", 20.0, 0.10),
-    // çantalar (44-46) bonus = slot
-    item!("bag_basic", "Basit Çanta", Bag, Common, 1, 50, "+8 envanter slotu.", 0.0, 8.0),
-    item!("bag_police", "Polis Çantası", Bag, Rare, 1, 180, "+16 envanter slotu.", 0.0, 16.0),
-    item!("bag_military", "Askerî Çanta", Bag, Epic, 1, 400, "+24 envanter slotu.", 0.0, 24.0),
+    item!("boots_basic", "Basit Bot", Boots, Common, 1, 30, "+2 zırh, +%2 hız.", 2.0, 0.02),
+    item!("boots_police", "Polis Botu", Boots, Rare, 1, 110, "+4 zırh, +%3 hız.", 4.0, 0.03),
+    item!("boots_military", "Askerî Bot", Boots, Epic, 1, 280, "+7 zırh, +%5 hız.", 7.0, 0.05),
+    item!("boots_titan", "Titan Botu", Boots, Legendary, 1, 1800, "+10 zırh, +%8 hız.", 10.0, 0.08),
+    // çantalar (44-46) armor = ek bölme başı slot, bonus = ek bölme sayısı
+    item!("bag_basic", "Basit Çanta", Bag, Common, 1, 50, "Çantana 1 ek bölme açar (12 slot).", 12.0, 1.0),
+    item!("bag_police", "Polis Çantası", Bag, Rare, 1, 180, "Çantana 2 ek bölme açar (12'şer slot).", 12.0, 2.0),
+    item!("bag_military", "Askerî Çanta", Bag, Epic, 1, 400, "Çantana 3 ek bölme açar (16'şar slot).", 16.0, 3.0),
     // pelerin (47)
     item!("cloak", "Tanrı Pelerini", Cloak, Seasonal, 1, 0,
           "Sezon 1'e özel. Can %20'nin altına düşünce 3 sn hasar almazsın, +%20 hız, +%25 hasar (60 sn bekleme)."),
@@ -147,7 +153,26 @@ pub const ITEMS: &[ItemDef] = &[
     item!("bone", "Kemik", Material, Common, 50, 3, "Zombi ve köpeklerden düşer."),
     item!("w_knife", "Bıçak", Weapon, Rare, 1, 60, "Hızlı ve sessiz. Kısa menzil, yüksek saldırı hızı."),
     item!("w_katana", "Katana", Weapon, Epic, 1, 900, "Geniş yay çizen ağır kesik. Önündeki birden çok düşmana vurur."),
+    // V8 yüzükler (armor = hasar %, bonus = kritik şansı), kolyeler (armor = düz can, bonus = can yenilenmesi %), sandıklar (armor = kapasite)
+    item!("ring_copper", "Bakır Yüzük", Ring, Common, 1, 60, "+%4 hasar.", 0.04, 0.0),
+    item!("ring_hunter", "Avcı Yüzüğü", Ring, Rare, 1, 220, "+%3 hasar, +%4 kritik şansı.", 0.03, 0.04),
+    item!("ring_titan", "Titan Yüzüğü", Ring, Legendary, 1, 2200, "+%8 hasar, +%6 kritik şansı.", 0.08, 0.06),
+    item!("neck_bone", "Kemik Kolye", Necklace, Common, 1, 50, "+15 can.", 15.0, 0.0),
+    item!("neck_amulet", "Koruyucu Muska", Necklace, Rare, 1, 240, "+30 can, +%10 can yenilenmesi.", 30.0, 0.10),
+    item!("neck_dark", "Karanlık Kolye", Necklace, Epic, 1, 700, "+50 can, +%20 can yenilenmesi.", 50.0, 0.20),
+    item!("chest_wood", "Ahşap Sandık", Chest, Common, 5, 40, "Kişisel üssüne kurulur. 16 slot saklar.", 16.0, 0.0),
+    item!("chest_iron", "Demir Sandık", Chest, Rare, 5, 160, "Kişisel üssüne kurulur. 24 slot saklar.", 24.0, 0.0),
+    item!("chest_military", "Askerî Sandık", Chest, Epic, 5, 450, "Kişisel üssüne kurulur. 32 slot saklar.", 32.0, 0.0),
 ];
+
+/// Oyundan kaldırılan eşyalar (ateşli silahlar, mermiler): hile panelinde de listelenmez.
+/// V8: kask, ceket, bot, çanta ve pelerin çanta ekipman slotlarıyla geri döndü.
+pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "screw"];
+
+/// Eşya şu an oyunda elde edilebilir mi
+pub fn item_in_game(id: &str) -> bool {
+    !RETIRED_ITEMS.iter().any(|r| if r.ends_with('_') { id.starts_with(r) } else { id == *r })
+}
 
 pub fn item_index(id: &str) -> Option<usize> {
     ITEMS.iter().position(|i| i.id == id)
@@ -309,7 +334,7 @@ pub const WEAPONS: &[WeaponDef] = &[
     WeaponDef {
         item: "w_knife",
         class: WeaponClass::Melee,
-        damage: 20.0,
+        damage: 17.0,
         rate: 2.8,
         range_m: 1.5,
         ammo: "",
@@ -324,7 +349,7 @@ pub const WEAPONS: &[WeaponDef] = &[
     WeaponDef {
         item: "w_katana",
         class: WeaponClass::Melee,
-        damage: 40.0,
+        damage: 33.0,
         rate: 1.5,
         range_m: 2.3,
         ammo: "",
@@ -557,6 +582,33 @@ pub const RECIPES: &[Recipe] = &[
         inputs: &[("scrap", 8), ("copper", 3), ("leather", 2), ("tape", 2), ("dark_crystal", 1)],
         bench: true,
     },
+    // V8 ekipman: kask, ceket, bot, çanta (basit tezgâhsız; polis ve askerî tezgâhta)
+    Recipe { out: "helm_basic", count: 1, inputs: &[("scrap", 4), ("leather", 1), ("tape", 1)], bench: false },
+    Recipe { out: "jacket_basic", count: 1, inputs: &[("cloth", 6), ("leather", 2), ("tape", 1)], bench: false },
+    Recipe { out: "boots_basic", count: 1, inputs: &[("leather", 3), ("cloth", 2), ("glue", 1)], bench: false },
+    Recipe { out: "bag_basic", count: 1, inputs: &[("cloth", 6), ("leather", 2), ("rope", 2)], bench: false },
+    Recipe { out: "helm_police", count: 1, inputs: &[("scrap", 8), ("plastic", 4), ("leather", 2), ("glue", 2)], bench: true },
+    Recipe { out: "jacket_police", count: 1, inputs: &[("cloth", 10), ("plastic", 4), ("leather", 4), ("tape", 3)], bench: true },
+    Recipe { out: "boots_police", count: 1, inputs: &[("leather", 6), ("plastic", 2), ("glue", 2), ("nails", 4)], bench: true },
+    Recipe { out: "bag_police", count: 1, inputs: &[("cloth", 10), ("leather", 6), ("rope", 4), ("tape", 2)], bench: true },
+    Recipe { out: "helm_military", count: 1, inputs: &[("scrap", 14), ("gear", 2), ("leather", 3), ("dark_crystal", 1)], bench: true },
+    Recipe { out: "jacket_military", count: 1, inputs: &[("cloth", 14), ("scrap", 8), ("leather", 6), ("dark_crystal", 1)], bench: true },
+    Recipe { out: "boots_military", count: 1, inputs: &[("leather", 8), ("scrap", 4), ("spring", 2), ("dark_crystal", 1)], bench: true },
+    Recipe { out: "bag_military", count: 1, inputs: &[("cloth", 16), ("leather", 10), ("rope", 6), ("gear", 2), ("dark_crystal", 1)], bench: true },
+    Recipe { out: "helm_titan", count: 1, inputs: &[("titan_shard", 3), ("scrap", 20), ("dark_crystal", 2)], bench: true },
+    Recipe { out: "jacket_titan", count: 1, inputs: &[("titan_shard", 4), ("leather", 12), ("dark_crystal", 2)], bench: true },
+    Recipe { out: "boots_titan", count: 1, inputs: &[("titan_shard", 2), ("leather", 10), ("dark_crystal", 1)], bench: true },
+    // V8 yüzük ve kolye
+    Recipe { out: "ring_copper", count: 1, inputs: &[("copper", 4), ("glue", 1)], bench: false },
+    Recipe { out: "ring_hunter", count: 1, inputs: &[("copper", 6), ("tooth", 6), ("gear", 1)], bench: true },
+    Recipe { out: "ring_titan", count: 1, inputs: &[("titan_shard", 2), ("copper", 8), ("dark_crystal", 2)], bench: true },
+    Recipe { out: "neck_bone", count: 1, inputs: &[("bone", 6), ("rope", 1)], bench: false },
+    Recipe { out: "neck_amulet", count: 1, inputs: &[("bone", 8), ("toxic", 2), ("copper", 3), ("rope", 1)], bench: true },
+    Recipe { out: "neck_dark", count: 1, inputs: &[("dark_crystal", 3), ("bone", 10), ("copper", 4)], bench: true },
+    // V8 sandıklar (kişisel üsse kurulur)
+    Recipe { out: "chest_wood", count: 1, inputs: &[("wood", 30), ("nails", 6), ("rope", 1)], bench: true },
+    Recipe { out: "chest_iron", count: 1, inputs: &[("scrap", 16), ("wood", 10), ("nails", 10), ("spring", 2)], bench: true },
+    Recipe { out: "chest_military", count: 1, inputs: &[("scrap", 30), ("gear", 4), ("spring", 4), ("dark_crystal", 1)], bench: true },
 ];
 
 // --------------------------------------------------------------------------- tüccar
@@ -614,6 +666,9 @@ pub struct VehicleDef {
     pub length: f32,
 }
 
+/// Araçlar. 0. kayıt (bisiklet) oyundan kaldırıldı: hiçbir yerde doğmaz, hileyle de gelmez; yalnız
+/// ağ/çizim indeksleri (motor 1, araba 2, SUV 3) değişmesin diye yer tutucu olarak durur.
+pub const REMOVED_VEHICLE: usize = 0;
 pub const VEHICLES: &[VehicleDef] = &[
     VehicleDef {
         id: "bike",

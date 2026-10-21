@@ -252,7 +252,10 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
                 // öğretici: üretim ve cep adımlarında çantayı göster
                 val step = (0 until story.length()).map { story.getJSONObject(it) }
                     .firstOrNull { it.optBoolean("guide") && it.optBoolean("on") && !it.optBoolean("ready") }?.optString("id")
-                if (step == "g4" || step == "g5") TutArrow(if (step == "g4") "Çantayı Aç → Üret" else "Çantayı Aç", Modifier.align(Alignment.TopCenter))
+                if (step == "g4" || step == "g5") {
+                    TutPulse(Modifier.matchParentSize())
+                    TutArrow("Çantayı Aç", Modifier.align(Alignment.TopCenter))
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -265,7 +268,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
                 PT("Genel Sohbet", 15.sp)
             }
             PT("Mesaj", 15.sp, Px.Sub, Modifier.weight(1f).padding(start = 14.dp))
-            Icon("chat", 24.dp, Px.Clan, Modifier.padding(end = 10.dp))
+            ArtImage("btn_chat", Modifier.padding(end = 4.dp).size(34.dp))
         }
     }
 }
@@ -383,7 +386,7 @@ private fun DogDialog(close: () -> Unit) {
             PxButton("Satın al · ${fmt(d.optInt("price"))} altın", Modifier.fillMaxWidth(), if (near) Px.Green else Px.Dark, icon = "paw", size = 17.sp, enabled = near) {
                 val r = GameSession.cmd("dog_buy"); Toaster.show(r.msg, r.ok); tick++
             }
-            if (!near) PT("Köpeği tüccardan alabilirsin (haritada sarı noktalar).", 13.sp, Px.Clan, maxLines = 2)
+            if (!near) PT("Köpek yalnızca barınaktaki Eğitmen Kerem'den alınır. Barınak haritada işaretli.", 13.sp, Px.Clan, maxLines = 2)
             return@PxDialog
         }
         val dead = d.optDouble("dead")
@@ -403,6 +406,6 @@ private fun DogDialog(close: () -> Unit) {
             }
             Spacer(Modifier.height(6.dp))
         }
-        PT(if (near) "Altın: ${fmt(d.optInt("gold"))}" else "Geliştirme tüccarda yapılır.", 13.sp, Px.Clan)
+        PT(if (near) "Altın: ${fmt(d.optInt("gold"))}" else "Geliştirme barınaktaki Eğitmen Kerem'de yapılır.", 13.sp, Px.Clan)
     }
 }

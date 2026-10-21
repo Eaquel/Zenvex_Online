@@ -274,6 +274,26 @@ pub fn bonus(p: &Progress) -> Bonus {
             Stat::IFrame => b.iframe += v,
         }
     }
+    // V8 ekipman: yüzük (hasar %, kritik), kolye (düz can, can yenilenmesi), titan kaskı (+can %),
+    // ceket (hasar direnci), bot (hız)
+    let eq = &p.eq;
+    if let Some(d) = eq.def("ring") {
+        b.dmg_pct += d.armor;
+        b.crit += d.bonus;
+    }
+    if let Some(d) = eq.def("necklace") {
+        b.hp_flat += d.armor;
+        b.regen += d.bonus;
+    }
+    if let Some(d) = eq.def("helmet") {
+        b.hp_flat += (100.0 + 5.0 * p.level.saturating_sub(1) as f32) * d.bonus;
+    }
+    if let Some(d) = eq.def("jacket") {
+        b.dmg_taken += d.bonus;
+    }
+    if let Some(d) = eq.def("boots") {
+        b.speed += d.bonus;
+    }
     b.dmg_taken = b.dmg_taken.min(0.6);
     b.dodge = b.dodge.min(0.5);
     b.roll_cd = b.roll_cd.min(0.6);

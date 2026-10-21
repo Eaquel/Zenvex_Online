@@ -60,8 +60,10 @@ fun GateHost() {
 fun MaintenanceScreen(msg: String) {
     val t = rememberTime()
     Box(Modifier.fillMaxSize().background(Color(0xFF0C0E16)).clickable(remember { MutableInteractionSource() }, null) {}) {
-        Canvas(Modifier.fillMaxSize()) { maintenanceScene(t) }
-        Column(Modifier.align(Alignment.Center).padding(top = 40.dp).pxPanel(Color(0xE81E1D19)).padding(22.dp),
+        // gece şantiyesi görseli + kaynak kıvılcımı, yanıp sönen ikaz lambaları
+        SceneBackground("bg_maint", null, dim = 0.15f)
+        Canvas(Modifier.fillMaxSize()) { maintenanceFx(t) }
+        Column(Modifier.align(Alignment.Center).padding(top = 40.dp).metalFrame().padding(horizontal = 30.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             PT("Bakım Çalışması", 34.sp, Px.Orange, outline = true)
             Spacer(Modifier.height(6.dp))
@@ -76,61 +78,37 @@ fun MaintenanceScreen(msg: String) {
     }
 }
 
-private fun DrawScope.maintenanceScene(t: Float) {
-    val w = size.width; val h = size.height; val px = 4.dp.toPx()
-    // gökyüzü + yıldızlar
-    drawRect(Brush.verticalGradient(listOf(Color(0xFF0A0C18), Color(0xFF1C1830), Color(0xFF2A1E2A))))
-    for (k in 0 until 60) {
-        val a = 0.3f + 0.7f * (0.5f + 0.5f * sin(t * 1.5f + k * 2.1f))
-        drawRect(Color(0xFFFFF4D0).copy(alpha = a * 0.8f), Offset((k * 137f) % w, (k * 71f) % (h * 0.5f)), Size(px * 0.5f, px * 0.5f))
+/** Bakım görselinin üstüne canlılık: görsel koordinatlarında (478x267) kaynak ışığı, kıvılcımlar, ikaz lambaları. */
+private fun DrawScope.maintenanceFx(t: Float) {
+    val iw = 478f; val ih = 267f
+    val k = maxOf(size.width / iw, size.height / ih) * 1.06f
+    val ox = (size.width - iw * k) / 2; val oy = (size.height - ih * k) / 2
+    fun p(x: Float, y: Float) = Offset(ox + x * k, oy + y * k)
+    // kaynak: düzensiz titreyen mavi-beyaz ışık ve sıçrayan kıvılcımlar
+    val fl = (0.55f + 0.45f * sin(t * 31f) * sin(t * 7.3f + 1f)).coerceIn(0f, 1f)
+    val w = p(73f, 162f)
+    drawCircle(Brush.radialGradient(listOf(Color(0xFFBFE8FF).copy(alpha = 0.55f * fl), Color.Transparent), w, 42f * k), 42f * k, w)
+    for (n in 0 until 14) {
+        val ph = (t * 1.7f + n * 0.37f) % 1f
+        val a = (n * 2.39f) + (t * 0.2f)
+        val d = ph * (18f + (n % 5) * 5f)
+        val sp = p(73f + cos(a) * d, 162f + sin(a) * d * 0.6f + ph * ph * 22f)
+        drawRect(Color(0xFFFFF2B0).copy(alpha = (1f - ph) * fl), sp, Size(k * 0.9f, k * 0.9f))
     }
-    // ay
-    drawCircle(Color(0xFFEDE6C8), h * 0.07f, Offset(w * 0.82f, h * 0.18f))
-    drawCircle(Color(0xFF1C1830), h * 0.06f, Offset(w * 0.8f, h * 0.165f))
-    // yıkık şehir silueti (pikselli basamaklar)
-    var x = 0f; var k = 0
-    while (x < w) {
-        val bw = px * (8 + (k * 7) % 11); val bh = h * (0.18f + ((k * 37) % 23) / 100f)
-        drawRect(Color(0xFF14121E), Offset(x, h - bh), Size(bw, bh))
-        // pencereler
-        for (wy in 0 until (bh / (px * 4)).toInt()) for (wx in 0 until (bw / (px * 4)).toInt()) {
-            if ((wx * 13 + wy * 7 + k) % 9 == 0) {
-                val on = sin(t * 0.7f + wx + wy * 3 + k) > 0.2f
-                drawRect(if (on) Color(0xFFE8B850) else Color(0xFF221E2C), Offset(x + px + wx * px * 4, h - bh + px * 2 + wy * px * 4), Size(px * 1.6f, px * 1.6f))
-            }
-        }
-        x += bw + px; k++
+    // ikaz lambaları (vinç ve bariyerler)
+    // sağdaki tezgâhta ikinci kaynakçı (daha sönük)
+    val fl2 = (0.5f + 0.5f * sin(t * 23f + 2f) * sin(t * 5.1f)).coerceIn(0f, 1f)
+    val w2 = p(355f, 203f)
+    drawCircle(Brush.radialGradient(listOf(Color(0xFF9FD8FF).copy(alpha = 0.4f * fl2), Color.Transparent), w2, 22f * k), 22f * k, w2)
+    val lamps = listOf(361f to 7f, 431f to 90f, 150f to 128f, 418f to 203f, 434f to 221f, 470f to 221f,
+        452f to 89f, 24f to 49f, 27f to 118f, 16f to 222f, 51f to 219f, 397f to 202f, 463f to 179f)
+    for ((i, xy) in lamps.withIndex()) {
+        val on = sin(t * 3.2f + i * 1.7f) > 0.2f
+        if (!on) continue
+        val c = p(xy.first, xy.second)
+        val col = if (i < 6) Color(0xFFFF3A2A) else Color(0xFFFFB02A)
+        drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.6f), Color.Transparent), c, 9f * k), 9f * k, c)
     }
-    // vinç
-    val cx = w * 0.18f
-    drawRect(Color(0xFF3A3020), Offset(cx, h * 0.25f), Size(px * 2, h * 0.75f))
-    drawRect(Color(0xFF3A3020), Offset(cx - px * 10, h * 0.25f), Size(px * 50, px * 2))
-    val hookY = h * 0.35f + sin(t * 0.8f) * px * 6
-    drawLine(Color(0xFF6A6050), Offset(cx + px * 34, h * 0.25f), Offset(cx + px * 34, hookY), px * 0.6f)
-    drawRect(Color(0xFFB08A2A), Offset(cx + px * 30, hookY), Size(px * 8, px * 5))
-    // dişliler
-    gear(Offset(w * 0.12f, h * 0.78f), h * 0.12f, t * 40f, Color(0xFF5A4A30))
-    gear(Offset(w * 0.12f + h * 0.2f, h * 0.84f), h * 0.08f, -t * 60f, Color(0xFF6A5A38))
-    gear(Offset(w * 0.9f, h * 0.8f), h * 0.1f, t * 50f, Color(0xFF5A4A30))
-    // kaynak kıvılcımları
-    val sx = w * 0.88f; val sy = h * 0.55f
-    if (sin(t * 9f) > -0.3f) {
-        drawCircle(Brush.radialGradient(listOf(Color.White, Color(0xFF8CC8FF).copy(alpha = 0.6f), Color.Transparent), Offset(sx, sy), px * 8), px * 8, Offset(sx, sy))
-        for (s in 0 until 10) {
-            val ph = (t * 2.3f + s * 0.13f) % 1f
-            val a = s * 0.63f
-            drawRect(Color(0xFFFFD070).copy(alpha = 1 - ph), Offset(sx + cos(a) * ph * px * 26, sy + sin(a) * ph * px * 14 + ph * ph * px * 30), Size(px * 0.8f, px * 0.8f))
-        }
-    }
-    // uyarı lambaları
-    for ((lx, ph) in listOf(w * 0.35f to 0f, w * 0.65f to PI.toFloat())) {
-        val on = sin(t * 4f + ph) > 0
-        drawCircle(if (on) Color(0xFFFF8A20) else Color(0xFF4A2A10), px * 3, Offset(lx, h * 0.92f))
-        if (on) drawCircle(Brush.radialGradient(listOf(Color(0x88FF8A20), Color.Transparent), Offset(lx, h * 0.92f), px * 22), px * 22, Offset(lx, h * 0.92f))
-    }
-    // şerit
-    var bx = -((t * 40f) % (px * 16))
-    while (bx < w) { drawRect(Color(0xFFE8C030), Offset(bx, h - px * 4), Size(px * 8, px * 4)); drawRect(Color(0xFF1A1A1A), Offset(bx + px * 8, h - px * 4), Size(px * 8, px * 4)); bx += px * 16 }
 }
 
 private fun DrawScope.gear(c: Offset, r: Float, deg: Float, col: Color) {

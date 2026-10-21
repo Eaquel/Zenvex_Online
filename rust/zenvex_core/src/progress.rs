@@ -149,6 +149,61 @@ pub struct Equipment {
     pub boots: String,
     pub bag: String,
     pub cloak: String,
+    /// V8
+    pub ring: String,
+    pub necklace: String,
+}
+
+impl Equipment {
+    /// Tüm ekipman slotları (arayüz sırası: sol sütun, sağ sütun)
+    pub const KEYS: [&'static str; 8] = ["helmet", "jacket", "boots", "cloak", "weapon", "bag", "ring", "necklace"];
+
+    pub fn get(&self, key: &str) -> Option<&String> {
+        Some(match key {
+            "weapon" => &self.weapon,
+            "helmet" => &self.helmet,
+            "jacket" => &self.jacket,
+            "boots" => &self.boots,
+            "bag" => &self.bag,
+            "cloak" => &self.cloak,
+            "ring" => &self.ring,
+            "necklace" => &self.necklace,
+            _ => return None,
+        })
+    }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut String> {
+        Some(match key {
+            "weapon" => &mut self.weapon,
+            "helmet" => &mut self.helmet,
+            "jacket" => &mut self.jacket,
+            "boots" => &mut self.boots,
+            "bag" => &mut self.bag,
+            "cloak" => &mut self.cloak,
+            "ring" => &mut self.ring,
+            "necklace" => &mut self.necklace,
+            _ => return None,
+        })
+    }
+
+    pub fn key_for(kind: ItemKind) -> Option<&'static str> {
+        Some(match kind {
+            ItemKind::Weapon => "weapon",
+            ItemKind::Helmet => "helmet",
+            ItemKind::Jacket => "jacket",
+            ItemKind::Boots => "boots",
+            ItemKind::Bag => "bag",
+            ItemKind::Cloak => "cloak",
+            ItemKind::Ring => "ring",
+            ItemKind::Necklace => "necklace",
+            _ => return None,
+        })
+    }
+
+    /// Kuşanılan eşyanın tanımı
+    pub fn def(&self, key: &str) -> Option<&'static data::ItemDef> {
+        self.get(key).filter(|s| !s.is_empty()).and_then(|id| data::item_index(id)).map(|i| &ITEMS[i])
+    }
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -220,21 +275,55 @@ pub struct Progress {
     pub fog: Vec<u64>,
     /// rehber ve görevci zincirleri
     pub story: crate::story::StoryState,
+    /// V8: kişisel üsse kurulan sandıklar
+    pub chests: Vec<crate::chests::Chest>,
+    /// V8: ölünce kişisel üste doğ (büyücüden seçilir)
+    pub home_spawn: bool,
 }
 
-/// Keşif ızgarası: 60×60 hücre (her hücre 6 kare = 384 px)
-pub const FOG_N: usize = 60;
+/// Keşif ızgarası: 120×120 hücre (her hücre 6 kare = 384 px); satır başına 2 kelime (FOG_W).
+/// V8 öncesi kayıtlar 60 satır × 1 kelimeydi: aynı hücre boyunda olduğundan eski bitler sol üst çeyreğe aynen taşınır.
+pub const FOG_N: usize = 120;
+pub const FOG_W: usize = 2;
 
 impl Progress {
     pub fn explored(&self, cx: usize, cy: usize) -> bool {
-        self.fog.get(cy).is_some_and(|r| r >> cx & 1 == 1)
+        if cx >= FOG_N || cy >= FOG_N {
+            return false;
+        }
+        if self.fog.len() == 60 {
+            return cx < 64 && self.fog.get(cy).is_some_and(|r| r >> cx & 1 == 1);
+        }
+        self.fog.get(cy * FOG_W + cx / 64).is_some_and(|r| r >> (cx % 64) & 1 == 1)
+    }
+
+    /// Eski (60×1) keşif kaydını yeni düzene çevirir.
+    pub fn migrate_fog(&mut self) {
+        if self.fog.len() == FOG_N * FOG_W {
+            return;
+        }
+        let old = std::mem::take(&mut self.fog);
+        self.fog = vec![0; FOG_N * FOG_W];
+        if old.len() <= 64 {
+            for (y, r) in old.iter().enumerate() {
+                self.fog[y * FOG_W] = *r;
+            }
+        }
+    }
+
+    /// Satır satır onaltılık dizgi (Kotlin: her satır FOG_W kelime, yüksek kelime önce)
+    pub fn fog_rows(&self) -> Vec<String> {
+        (0..FOG_N)
+            .map(|y| {
+                let w = |k: usize| if self.fog.len() == FOG_N * FOG_W { self.fog[y * FOG_W + k] } else if k == 0 { self.fog.get(y).copied().unwrap_or(0) } else { 0 };
+                format!("{:016x}{:016x}", w(1), w(0))
+            })
+            .collect()
     }
 
     /// (x, y) çevresini keşfedilmiş say; yeni hücre açıldıysa true
     pub fn reveal(&mut self, x: f32, y: f32, r_cells: i32) -> bool {
-        if self.fog.len() != FOG_N {
-            self.fog.resize(FOG_N, 0);
-        }
+        self.migrate_fog();
         let cell = crate::world::MAP_PX / FOG_N as f32;
         let (cx, cy) = ((x / cell) as i32, (y / cell) as i32);
         let mut new = false;
@@ -247,10 +336,10 @@ impl Progress {
                 if qx < 0 || qy < 0 || qx >= FOG_N as i32 || qy >= FOG_N as i32 {
                     continue;
                 }
-                let row = &mut self.fog[qy as usize];
-                let bit = 1u64 << qx;
-                if *row & bit == 0 {
-                    *row |= bit;
+                let word = &mut self.fog[qy as usize * FOG_W + qx as usize / 64];
+                let bit = 1u64 << (qx as usize % 64);
+                if *word & bit == 0 {
+                    *word |= bit;
                     new = true;
                 }
             }
@@ -300,6 +389,8 @@ impl Default for Progress {
             extra_points: 0,
             fog: Vec::new(),
             story: Default::default(),
+            chests: Vec::new(),
+            home_spawn: false,
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);
@@ -386,14 +477,38 @@ impl Progress {
     }
 
     // ---- ekipman
-    /// V4: zırh setleri kalktı; savunma skill ağacından gelir.
+    /// V8: kask + ceket + bot zırhı (hasar × 100 / (100 + zırh)).
     pub fn armor(&self) -> f32 {
-        0.0
+        ["helmet", "jacket", "boots"].iter().filter_map(|k| self.eq.def(k)).map(|d| d.armor).sum()
     }
 
-    /// Çanta kalktı: her 5 seviyede +2 slot.
+    /// Ana çanta bölmesi: 20 slot, her 5 seviyede +2.
     pub fn inventory_cap(&self) -> usize {
         BASE_SLOTS + 2 * (self.level / 5) as usize
+    }
+
+    /// Bölme boyları: ana çanta + kuşanılan çantanın ek bölmeleri (en fazla 3).
+    pub fn inv_pages(&self) -> Vec<usize> {
+        Self::pages_for(self.inventory_cap(), self.eq.def("bag"))
+    }
+
+    fn pages_for(main: usize, bag: Option<&data::ItemDef>) -> Vec<usize> {
+        let mut v = vec![main];
+        if let Some(b) = bag {
+            for _ in 0..(b.bonus as usize).min(crate::inventory::PAGES - 1) {
+                v.push(b.armor as usize);
+            }
+        }
+        v
+    }
+
+    /// Çanta düzenini seviye ve kuşanılan çantaya göre günceller (eşya kaybolmaz).
+    pub fn relayout_inv(&mut self) {
+        let caps = self.inv_pages();
+        let cur: Vec<usize> = self.inv.pages.iter().map(|&p| p as usize).collect();
+        if cur != caps {
+            self.inv.layout(&caps);
+        }
     }
 
     pub fn bonus(&self) -> crate::rpg::Bonus {
@@ -412,7 +527,7 @@ impl Progress {
     /// Yumruk: temel 20 (+seviye), yakın dövüş düz bonusu, yüzde bonusları (Savaşçı Sv2/Sv7 + ağaç)
     pub fn fist_damage(&self) -> f32 {
         let b = self.bonus();
-        (20.0 + 0.6 * (self.level - 1) as f32 + b.melee_flat) * (1.0 + b.fist_pct)
+        (15.0 + 0.5 * (self.level - 1) as f32 + b.melee_flat) * (1.0 + b.fist_pct)
     }
     pub fn crit_chance(&self) -> f32 {
         0.05 + self.bonus().crit
@@ -460,6 +575,15 @@ impl Progress {
         self.bonus().dmg_taken
     }
 
+    /// Çanta değişince kapanacak ek bölmelerde eşya varsa izin verme.
+    fn bag_change_ok(&self, new_bag: Option<&data::ItemDef>) -> Result<(), &'static str> {
+        let keep = Self::pages_for(self.inventory_cap(), new_bag).len();
+        if (keep..self.inv.pages.len()).any(|p| self.inv.page_used(p) > 0) {
+            return Err("Önce kapanacak çanta bölmelerini boşalt");
+        }
+        Ok(())
+    }
+
     /// Envanterdeki slotu giy. Eskisini envantere geri koyar.
     pub fn equip_slot(&mut self, slot: usize) -> Result<&'static str, &'static str> {
         let s = self
@@ -470,49 +594,45 @@ impl Progress {
             .flatten()
             .ok_or("Boş slot")?;
         let def = &ITEMS[s.item as usize];
-        let target: &mut String = match def.kind {
-            ItemKind::Weapon => &mut self.eq.weapon,
-            ItemKind::Helmet => &mut self.eq.helmet,
-            ItemKind::Jacket => &mut self.eq.jacket,
-            ItemKind::Boots => &mut self.eq.boots,
-            ItemKind::Bag => &mut self.eq.bag,
-            ItemKind::Cloak => &mut self.eq.cloak,
-            _ => return Err("Bu eşya giyilemez"),
-        };
+        let key = Equipment::key_for(def.kind).ok_or("Bu eşya giyilemez")?;
+        if key == "bag" {
+            self.bag_change_ok(Some(def))?;
+        }
+        let target = self.eq.get_mut(key).ok_or("Bu eşya giyilemez")?;
         let old = std::mem::replace(target, def.id.to_string());
-        self.inv.slots[slot] = None;
-        if !old.is_empty() {
+        // yığından bir tane al (çanta/ekipman yığınlanmaz ama güvenli olsun)
+        self.inv.take_n(slot, Some(1));
+        self.relayout_inv();
+        if !old.is_empty() && self.inv.add_id(&old, 1) > 0 {
+            // yer kalmadıysa eski eşya son bölmeye eklenir (kaybolmaz)
+            let caps: Vec<usize> = self.inv.pages.iter().map(|&p| p as usize).collect();
+            let mut caps2 = caps.clone();
+            *caps2.last_mut().unwrap() += 1;
+            self.inv.layout(&caps2);
             self.inv.add_id(&old, 1);
         }
-        let cap = self.inventory_cap();
-        self.inv.resize(cap);
         Ok(def.name)
     }
 
     pub fn unequip(&mut self, which: &str) -> Result<(), &'static str> {
-        let cap_after = if which == "bag" {
-            BASE_SLOTS
-        } else {
-            self.inventory_cap()
-        };
-        let target = match which {
-            "weapon" => &mut self.eq.weapon,
-            "helmet" => &mut self.eq.helmet,
-            "jacket" => &mut self.eq.jacket,
-            "boots" => &mut self.eq.boots,
-            "bag" => &mut self.eq.bag,
-            "cloak" => &mut self.eq.cloak,
-            _ => return Err("Geçersiz slot"),
-        };
-        if target.is_empty() {
+        let id = self.eq.get(which).ok_or("Geçersiz slot")?.clone();
+        if id.is_empty() {
             return Err("Zaten boş");
         }
-        let id = target.clone();
-        let used = self.inv.slots.iter().skip(crate::inventory::POCKETS).filter(|s| s.is_some()).count();
-        if used + 1 > cap_after {
+        if which == "bag" {
+            self.bag_change_ok(None)?;
+        }
+        // çıkarınca sığacak mı (çanta çıkarılıyorsa yalnız ana bölme kalır)
+        let room = if which == "bag" {
+            self.inv.page_range(0).map_or(0, |r| self.inv.slots[r].iter().filter(|s| s.is_none()).count())
+        } else {
+            self.inv.free_slots()
+        };
+        if room == 0 {
             return Err("Envanterde yer yok");
         }
-        *target = String::new();
+        *self.eq.get_mut(which).unwrap() = String::new();
+        self.relayout_inv();
         self.inv.add_id(&id, 1);
         Ok(())
     }
@@ -651,6 +771,78 @@ mod tests {
         p.equip_slot(slot).unwrap();
         assert_eq!(p.eq.weapon, "w_knife");
         assert_eq!(p.armor(), 0.0);
+    }
+
+    fn equip_id(p: &mut Progress, id: &str) -> Result<&'static str, &'static str> {
+        p.inv.add_id(id, 1);
+        let slot = p.inv.slots.iter().position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == id)).unwrap();
+        p.equip_slot(slot)
+    }
+
+    #[test]
+    fn ring_necklace_armor_bonuses() {
+        let mut p = Progress::default();
+        let (hp0, dmg0, crit0) = (p.max_hp(), p.damage_mult(), p.crit_chance());
+        equip_id(&mut p, "ring_hunter").unwrap();
+        equip_id(&mut p, "neck_bone").unwrap();
+        equip_id(&mut p, "helm_basic").unwrap();
+        equip_id(&mut p, "jacket_basic").unwrap();
+        assert_eq!(p.eq.ring, "ring_hunter");
+        assert_eq!(p.eq.necklace, "neck_bone");
+        assert!((p.max_hp() - hp0 - 15.0).abs() < 0.01);
+        assert!(p.damage_mult() > dmg0 && p.crit_chance() > crit0);
+        assert!((p.armor() - 9.0).abs() < 0.01);
+        // yüzük değişince eskisi çantaya döner
+        equip_id(&mut p, "ring_copper").unwrap();
+        assert_eq!(p.inv.count_id("ring_hunter"), 1);
+        p.unequip("necklace").unwrap();
+        assert_eq!(p.inv.count_id("neck_bone"), 1);
+        assert!(p.unequip("necklace").is_err());
+    }
+
+    #[test]
+    fn bag_opens_pages_and_guards_unequip() {
+        let mut p = Progress::default();
+        assert_eq!(p.inv.pages.len(), 1);
+        equip_id(&mut p, "bag_police").unwrap();
+        assert_eq!(p.inv.pages, vec![BASE_SLOTS as u16, 12, 12]);
+        // ek bölmeye eşya koy: çanta çıkarılamaz, küçük çantayla değiştirilemez
+        p.inv.add_id("wood", 1);
+        let w = p.inv.slots.iter().position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "wood")).unwrap();
+        p.inv.move_to_page(w, 2).unwrap();
+        assert!(p.unequip("bag").is_err());
+        assert!(equip_id(&mut p, "bag_basic").is_err());
+        // boşaltınca olur; askerî çanta 3 bölme açar
+        let r = p.inv.page_range(2).unwrap();
+        for i in r {
+            p.inv.slots[i] = None;
+        }
+        let b = p.inv.slots.iter().position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "bag_basic")).unwrap();
+        p.inv.slots[b] = None;
+        equip_id(&mut p, "bag_military").unwrap();
+        assert_eq!(p.inv.pages, vec![BASE_SLOTS as u16, 16, 16, 16]);
+        assert_eq!(p.inv.count_id("bag_police"), 1);
+        p.unequip("bag").unwrap();
+        assert_eq!(p.inv.pages.len(), 1);
+        assert_eq!(p.inv.count_id("bag_military"), 1);
+    }
+
+    #[test]
+    fn old_save_without_v8_fields_loads() {
+        let mut p = Progress::default();
+        p.inv.add_id("wood", 7);
+        let mut v = serde_json::to_value(&p).unwrap();
+        // V7 kaydı: bölme, yüzük, kolye ve sandık alanları yok
+        v["inv"].as_object_mut().unwrap().remove("pages");
+        v["eq"].as_object_mut().unwrap().remove("ring");
+        v["eq"].as_object_mut().unwrap().remove("necklace");
+        v.as_object_mut().unwrap().remove("chests");
+        let mut q: Progress = serde_json::from_value(v).unwrap();
+        assert!(q.chests.is_empty() && q.eq.ring.is_empty());
+        q.inv.migrate();
+        q.relayout_inv();
+        assert_eq!(q.inv.pages, vec![BASE_SLOTS as u16]);
+        assert_eq!(q.inv.count_id("wood"), 7);
     }
 
     #[test]

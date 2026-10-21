@@ -274,8 +274,13 @@ PX_PER_M = 62.5
 V6_PROPS = {"crate": ("crate", 0.9), "crate_mil": ("milbox", 1.0), "campfire": ("campfire", 1.3), "workbench": ("workbench", 1.7),
             "quest_board": ("quest_board", 1.5), "med_station": ("med_station", 0.95), "kennel": ("kennel", 1.3),
             "fuel_pump": ("fuel_pump", 0.75), "charger": ("charger", 0.8), "mailbox": ("mailbox", 0.55),
-            "anvil": ("anvil", 0.8), "barricade": ("barricade", 2.0)}
+            "anvil": ("anvil", 0.8), "barricade": ("barricade", 2.0),
+            "portal": ("portal", 2.2)}  # V8 kişisel üs dönüş kapısı
 # NPC'ler: (görsel, boy m)
+# V7 piksel yer işaretleri: (görsel, genişlik m, çapa x/y oranı)
+V7 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v7")
+V7_PROPS = {"med_tent": ("med_tent", 3.4, (0.5, 0.93)), "mystery_tree": ("mystery_tree", 6.0, (0.53, 0.97)),
+            "gas_station": ("gas_station", 4.6, (0.56, 0.92))}
 V6_NPCS = {"merchant": 1.85, "soldier": 1.75, "quest": 1.72, "doctor": 1.75, "mechanic": 1.78, "trainer": 1.8}
 
 
@@ -301,6 +306,11 @@ def main():
         if os.path.exists(f):
             im = v6_img("objects", fn + ".png")
             props.append((f"s/{key}", im, im.width / 2, im.height - 1, w_m * PX_PER_M / im.width))
+    for key, (fn, w_m, (fx_, fy_)) in V7_PROPS.items():
+        f = os.path.join(V7, "props", fn + ".png")
+        if os.path.exists(f):
+            im = Image.open(f).convert("RGBA")
+            props.append((f"s/{key}", im, im.width * fx_, im.height * fy_, w_m * PX_PER_M / im.width))
     keys = {t[0] for t in props}
     world = [t for t in world if t[0] not in keys]
     P.pack_group("world", world)
@@ -343,6 +353,7 @@ def main():
         P.pack_group("gear", gear)
     veh = []
     collect_dirs("vehicles", "v", veh, actor=True)
+    veh = [t for t in veh if not t[0].startswith("v/bike/")]  # bisiklet oyundan kaldırıldı
     P.pack_group("vehicles", veh)
     r3 = SRC3 if has3("npcs") else None
     old_npcs = not os.path.isdir(os.path.join(V6, "npc"))  # V6 piksel NPC'ler varsa eski 3D kareler atlasa girmez
@@ -370,7 +381,7 @@ def main():
             # lobi: piksel idle kareleri (tek yön; arayüz sağa bakışı aynalar)
             for key, im, ax, ay in it:
                 a = key.split("/")[-1]
-                if a.startswith("idle_"):
+                if a.startswith("idle_") and "@" not in a:  # silahlı kareler lobide yok
                     _, dd, ff = a.split("_")
                     lob.append((f"l/{h}/{dd}_{ff}", im, ax, ay))
             d = ""
@@ -387,13 +398,20 @@ def main():
         r3 = SRC3 if has3("zombies", z) else None
         kk = K3 if r3 else 1.0
         fixed = (100, 136) if z == "dog" and r3 is None else None
+        px = False
         if z == "dog" and os.path.isdir(os.path.join(PIX, "zdog")):
             kk = pixel_k("zdog")
             n = collect_pixel_hero("z/dog", it, None, sub="zdog")
+            px = True
+        elif os.path.isdir(os.path.join(PIX, f"z_{z}")):
+            # V7: tek piksel görselden örgü iskeletli (tools/pixel/zombie_rig.py) kareler; eski 3D kareler atlasa girmez
+            kk = pixel_k(f"z_{z}")
+            n = collect_pixel_hero(f"z/{z}", it, None, sub=f"z_{z}")
+            px = True
         else:
             n = collect_actor("zombies", z, f"z/{z}", ZOMBIE_ANIMS, attach, it, fixed_anchor=fixed, root=r3, k=kk)
         if it:
-            P.pack_group(f"zombie_{z}", it, kk, pixel=z == "dog" and os.path.isdir(os.path.join(PIX, "zdog")))
+            P.pack_group(f"zombie_{z}", it, kk, pixel=px)
         print("zombie", z, n)
     # evcil köpek: seviye görünümleri (1-4, 5-9, 10)
     for sub in ("dog0", "dog5", "dog10"):
@@ -414,6 +432,24 @@ def main():
             for i in range(meta["frames"]):
                 im = Image.open(os.path.join(fd, name, f"{i}.png")).convert("RGBA")
                 fx.append((f"fx/{name}/{i}", im, im.width / 2, im.height / 2))
+    # V7 piksel efektler (tools/pixel/fx_sheet.py): aynı adlı eskilerin yerine geçer
+    fx7 = []
+    d7 = os.path.join(V7, "fx")
+    if os.path.isdir(d7):
+        for name in sorted(os.listdir(d7)):
+            meta = jload(os.path.join(d7, name, "meta.json"))
+            if not meta:
+                continue
+            meta["pixel"] = True
+            fxmeta[name] = meta
+            ax, ay = meta.get("anchor", (0.5, 0.5))
+            for i in range(meta["frames"]):
+                im = Image.open(os.path.join(d7, name, f"{i}.png")).convert("RGBA")
+                fx7.append((f"fx/{name}/{i}", im, im.width * ax, im.height * ay))
+        new = {t[0].split("/")[1] for t in fx7}
+        fx = [t for t in fx if t[0].split("/")[1] not in new]
+        P.pack_group("fx7", fx7, pixel=True)
+    if fx:
         P.pack_group("fx", fx)
     pages = P.save(OUT)
     manifest = {"pages": pages, "groups": P.groups, "sprites": P.sprites, "attach": attach, "fx": fxmeta,

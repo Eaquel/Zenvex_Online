@@ -271,8 +271,9 @@ fun Dim(onDismiss: (() -> Unit)? = null, content: @Composable BoxScope.() -> Uni
 
 /** Ekran iskeleti: arka plan + başlık + geri. */
 @Composable
-fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable RowScope.() -> Unit = {}, content: @Composable ColumnScope.() -> Unit) {
-    PxFrame(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), icon, onBack, right, content)
+fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable RowScope.() -> Unit = {}, bg: String? = null,
+                content: @Composable ColumnScope.() -> Unit) {
+    PxFrame(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), icon, onBack, right, bg, content)
 }
 
 /** Yavaş yükselen parıltı/kor parçacıkları (arka plan canlılığı). */

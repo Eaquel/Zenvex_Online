@@ -1,5 +1,7 @@
 //! Zenvex Online oyun çekirdeği. Motordan ve platformdan bağımsızdır;
 //! Android tarafı `zenvex_jni` üzerinden kullanır, ileride sunucu da aynı kodu kullanacak.
+pub mod bases;
+pub mod chests;
 pub mod data;
 pub mod game;
 pub mod ground;
@@ -8,12 +10,14 @@ pub mod progress;
 pub mod rng;
 pub mod rpg;
 pub mod story;
+pub mod talk;
 pub mod pet;
 pub mod ui;
 pub mod world;
 
 mod combat;
 mod draw;
+mod home;
 pub mod net;
 mod vehicles;
 mod zombies;
@@ -67,7 +71,10 @@ pub fn world_json(g: &Game) -> String {
         "benches": w.benches,
         "camp": world::CAMP,
         "travel": travel,
-        "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y]) }).collect::<Vec<_>>(),
+        "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y, l.safe]) }).collect::<Vec<_>>(),
+        "bases": bases::base_defs().iter().map(|b| { let (x, y) = b.pos(); json!([b.id, b.name(), x, y, b.level]) }).collect::<Vec<_>>(),
+        "base_half": bases::BASE_HALF * world::TILE,
+        "home": [world::HOME_X0 as f32 * world::TILE, world::HOME_Y0 as f32 * world::TILE, (world::HOME_X1 + 1) as f32 * world::TILE, (world::HOME_Y1 + 1) as f32 * world::TILE],
         "boss": world::BOSS,
         "wall_y": world::WALL_Y as f32 * world::TILE,
         "items": items,
@@ -93,7 +100,9 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
             let tx = px * world::MAP_TILES / n;
             let ty = py * world::MAP_TILES / n;
             if let Some(o) = out.get_mut(py * n + px) {
-                *o = COL[(g.world.ground_at(tx, ty) as usize).min(world::ground::COUNT - 1)];
+                let c = COL[(g.world.ground_at(tx, ty) as usize).min(world::ground::COUNT - 1)];
+                let z = g.world.zone(tx as f32 * world::TILE, ty as f32 * world::TILE);
+                *o = ground::zone_tint(z, c);
             }
         }
     }
@@ -142,6 +151,14 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
                     }
                 }
                 (1, Kind::Fire, _) => disc(cx, cy, 1.4, 0xFFFFA040, out),
+                // duvarlar (devlet üsleri, kişisel üs, şehir suru)
+                (1, Kind::Prop, Shape::Rect(hw, hh)) if s.sprite == world::sprite("wall_x") || s.sprite == world::sprite("wall_z") => {
+                    for y in (cy - hh * k) as i32..=(cy + hh * k) as i32 {
+                        for x in (cx - hw * k) as i32..=(cx + hw * k) as i32 {
+                            put(x, y, 0xFF2A2622, out);
+                        }
+                    }
+                }
                 _ => {}
             }
         }

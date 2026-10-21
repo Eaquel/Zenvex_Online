@@ -1,6 +1,6 @@
 //! Arayüz köprüsü: Kotlin ekranları için JSON görünümleri ve JSON komutları (geliştirici hileleri dahil).
 use crate::data::{
-    self, ItemKind, CHARACTERS, COSMETICS, ITEMS, MERCHANT, PASS_REWARDS, RECIPES, WEAPONS,
+    self, ItemKind, CHARACTERS, COSMETICS, ITEMS, MERCHANT, PASS_REWARDS, RECIPES,
 };
 use crate::game::*;
 use crate::progress::{self, SKILLS};
@@ -145,11 +145,11 @@ impl Game {
                             "cost": crate::rpg::dog_upgrade_cost(lv[i]) })
                 }).collect();
                 let d = self.dog.as_ref();
-                json!({ "owned": g.dog_owned, "price": crate::rpg::DOG_PRICE, "gold": g.gold, "near": self.near_merchant(),
+                json!({ "owned": g.dog_owned, "price": crate::rpg::DOG_PRICE, "gold": g.gold, "near": self.near_npc(5),
                         "stats": stats, "hp": d.map_or(0.0, |d| d.hp), "dead": d.map_or(0.0, |d| d.dead_t) })
             }
             "cheat" => {
-                let items: Vec<Value> = ITEMS.iter().filter(|d| d.kind != ItemKind::Currency)
+                let items: Vec<Value> = ITEMS.iter().filter(|d| d.kind != ItemKind::Currency && data::item_in_game(d.id))
                     .map(|d| json!([d.id, d.name, format!("{:?}", d.kind), d.rarity as u8])).collect();
                 json!({ "god": self.player.god, "onehit": self.player.one_hit, "speed": self.player.speed_cheat,
                         "net": self.net, "level": g.level, "gold": g.gold, "items": items,
@@ -171,9 +171,11 @@ impl Game {
                     "drone_targets": g.drone_targets,
                 })
             }
+            "bases" => self.bases_json(),
+            "base_near" => self.base_near_json(),
             "fog" => {
                 let n = crate::progress::FOG_N;
-                let rows: Vec<String> = (0..n).map(|y| format!("{:016x}", g.fog.get(y).copied().unwrap_or(0))).collect();
+                let rows: Vec<String> = g.fog_rows();
                 json!({ "n": n, "rows": rows })
             }
             "inventory" => {
@@ -196,12 +198,26 @@ impl Game {
                     })
                     .collect();
                 let e = &g.eq;
+                let mut eq = serde_json::Map::new();
+                for k in crate::progress::Equipment::KEYS {
+                    eq.insert(k.into(), item_json(e.get(k).map_or("", |s| s.as_str())));
+                }
+                // 4 bölme sekmesi: açık olanlar (aralık) + kapalı olanlar (hangi çanta gerekir)
+                const NEED: [&str; 4] = ["", "Basit Çanta", "Polis Çantası", "Askerî Çanta"];
+                const NAMES: [&str; 4] = ["Ana Çanta", "Bölme 2", "Bölme 3", "Bölme 4"];
+                let pages: Vec<Value> = (0..crate::inventory::PAGES)
+                    .map(|p| match g.inv.page_range(p) {
+                        Some(r) => json!({ "start": r.start, "len": r.len(), "used": g.inv.page_used(p), "name": NAMES[p], "open": true }),
+                        None => json!({ "start": 0, "len": 0, "used": 0, "name": NAMES[p], "open": false, "need": NEED[p] }),
+                    })
+                    .collect();
+                let used = g.inv.slots.iter().skip(crate::inventory::POCKETS).filter(|s| s.is_some()).count();
                 json!({
-                    "slots": slots, "cap": g.inventory_cap(), "pockets": crate::inventory::POCKETS,
-                    "eq": { "weapon": item_json(&e.weapon), "helmet": item_json(&e.helmet), "jacket": item_json(&e.jacket),
-                            "boots": item_json(&e.boots), "bag": item_json(&e.bag), "cloak": item_json(&e.cloak) },
-                    "armor": g.armor(), "max_hp": g.max_hp(), "dmg": g.damage_mult(), "speed": g.move_mult(),
+                    "slots": slots, "cap": g.inv.slots.len().saturating_sub(crate::inventory::POCKETS), "used": used,
+                    "pockets": crate::inventory::POCKETS, "pages": pages, "eq": eq,
+                    "armor": g.armor(), "max_hp": g.max_hp(), "dmg": g.damage_mult(), "speed": g.move_mult(), "crit": g.crit_chance(),
                     "gold": g.gold, "gems": g.gems, "in_game_hp": self.player.hp,
+                    "chest": self.near_chest().map_or(-1, |i| i as i64), "home": self.at_home(),
                 })
             }
             "craft" => {
@@ -317,6 +333,7 @@ impl Game {
                     .collect();
                 json!({ "items": list, "gems": g.gems })
             }
+            k if k == "chests" || k.starts_with("chest:") => self.chests_json(k).unwrap_or(Value::Null),
             _ => json!({ "error": "bilinmeyen görünüm" }),
         };
         v.to_string()
@@ -350,11 +367,28 @@ impl Game {
         let v: Value = serde_json::from_str(s).unwrap_or(Value::Null);
         let cmd = v["cmd"].as_str().unwrap_or("");
         let int = |k: &str| v[k].as_u64().unwrap_or(0) as usize;
+        // çanta komutlarından önce düzen güncel olsun (seviye atlayınca ana çanta büyür)
+        if matches!(cmd, "equip" | "unequip" | "use" | "drop" | "move" | "split" | "move_page" | "sort" | "chest_take" | "chest_all") {
+            self.progress.relayout_inv();
+        }
+        if let Some(r) = self.chest_command(cmd, &v) {
+            return match r {
+                Ok(m) => reply(true, m),
+                Err(m) => reply(false, m),
+            };
+        }
         let res: Result<String, String> = match cmd {
             "equip" => self.progress.equip_slot(int("slot")).map(|n| format!("{n} kuşanıldı")).map_err(String::from),
             "unequip" => self.progress.unequip(v["slot"].as_str().unwrap_or("")).map(|_| "Çıkarıldı".into()).map_err(String::from),
             "use" => self.use_slot(int("slot")),
-            "drop" => self.drop_slot(int("slot")),
+            "drop" => self.drop_slot(int("slot"), v["n"].as_u64().map(|n| n as u32)),
+            "split" => self
+                .progress
+                .inv
+                .split(int("slot"), v["n"].as_u64().unwrap_or(1) as u32)
+                .map(|_| "Yığın bölündü".into())
+                .map_err(String::from),
+            "move_page" => self.progress.inv.move_to_page(int("from"), int("page")).map(|_| String::new()).map_err(String::from),
             "move" => {
                 let to = int("to");
                 let r = self.progress.inv.move_slot(int("from"), to).map(|_| String::new()).map_err(String::from);
@@ -427,7 +461,10 @@ impl Game {
                 }
             }
             "sort" => {
-                self.progress.inv.sort();
+                match v["page"].as_u64() {
+                    Some(p) => self.progress.inv.sort_page(p as usize),
+                    None => self.progress.inv.sort(),
+                }
                 Ok("Sıralandı".into())
             }
             "craft" => self.craft(int("i"), v["n"].as_u64().unwrap_or(1).clamp(1, 50) as u32),
@@ -483,6 +520,18 @@ impl Game {
                 Ok(String::new())
             }
             "travel" => self.travel(v["to"].as_str().unwrap_or("")),
+            // V8 devlet üsleri: sunucu durumu (Kotlin her 30 sn ve harita açılınca) / ele geçirme reddi
+            "bases" => {
+                let data: Value = match &v["data"] {
+                    Value::String(t) => serde_json::from_str(t).unwrap_or(Value::Null),
+                    o => o.clone(),
+                };
+                Ok(format!("{}", self.apply_bases(&data)))
+            }
+            "base_cap_fail" => {
+                self.base_capture_failed(int("id"));
+                Ok(String::new())
+            }
             "mail_claim" => {
                 let g = v["gold"].as_u64().unwrap_or(0) as u32;
                 self.progress.add_gold(g);
@@ -611,13 +660,16 @@ impl Game {
             | ItemKind::Jacket
             | ItemKind::Boots
             | ItemKind::Bag
-            | ItemKind::Cloak => {
+            | ItemKind::Cloak
+            | ItemKind::Ring
+            | ItemKind::Necklace => {
                 return self
                     .progress
                     .equip_slot(slot)
                     .map(|n| format!("{n} kuşanıldı"))
                     .map_err(String::from);
             }
+            ItemKind::Chest => return self.place_chest(slot),
             ItemKind::Consumable => {}
             _ if d.id == "fuel" => {
                 let vi = self.player.vehicle.ok_or("Önce bir araca bin")?;
@@ -682,14 +734,15 @@ impl Game {
         Ok(format!("{} kullanıldı", d.name))
     }
 
-    fn drop_slot(&mut self, slot: usize) -> Result<String, String> {
-        let s = self.progress.inv.take_slot(slot).ok_or("Boş slot")?;
+    /// Yere bırak: n = None → yığının tamamı, aksi halde n tane.
+    fn drop_slot(&mut self, slot: usize, n: Option<u32>) -> Result<String, String> {
+        let s = self.progress.inv.take_n(slot, n).ok_or("Boş slot")?;
         let (x, y) = (self.player.x, self.player.y + 30.0);
         self.spawn_drop(s.item as usize, s.count as u32, x, y);
         if let Some(d) = self.drops.last_mut() {
             d.age = -1.5; // hemen geri toplanmasın
         }
-        Ok(format!("{} yere bırakıldı", ITEMS[s.item as usize].name))
+        Ok(if s.count > 1 { format!("{} ×{} yere bırakıldı", ITEMS[s.item as usize].name, s.count) } else { format!("{} yere bırakıldı", ITEMS[s.item as usize].name) })
     }
 
     fn craft(&mut self, i: usize, n: u32) -> Result<String, String> {
@@ -960,8 +1013,8 @@ impl Game {
             }
             "item" | "esya" => {
                 let id = arg(1);
-                if data::item_index(id).is_none() {
-                    let ids: Vec<&str> = ITEMS.iter().map(|i| i.id).collect();
+                if data::item_index(id).is_none() || !data::item_in_game(id) {
+                    let ids: Vec<&str> = ITEMS.iter().filter(|i| data::item_in_game(i.id)).map(|i| i.id).collect();
                     return Err(format!("Eşya kimlikleri: {}", ids.join(", ")));
                 }
                 Ok(self.progress.grant(&format!("{id}:{}", num(2, 1.0) as u32)))
@@ -977,21 +1030,6 @@ impl Game {
                     self.progress.inv.add_id(id, 1);
                 }
                 Ok("Bıçak ve katana eklendi".into())
-            }
-            "set" => {
-                let t = match arg(1) {
-                    "police" | "polis" => "police",
-                    "military" | "asker" => "military",
-                    "titan" => "titan",
-                    _ => "basic",
-                };
-                for k in ["helm", "jacket", "boots", "bag"] {
-                    let id = format!("{k}_{t}");
-                    if data::item_index(&id).is_some() {
-                        self.progress.inv.add_id(&id, 1);
-                    }
-                }
-                Ok(format!("{t} seti eklendi"))
             }
             "level" | "seviye" => {
                 let target = (num(1, 10.0) as u32).clamp(1, progress::MAX_LEVEL);
@@ -1083,7 +1121,17 @@ impl Game {
                     "boss" | "titan" => (world::BOSS.0 - 600.0, world::BOSS.1 + 400.0),
                     "swamp" | "bataklik" => (50.0 * world::TILE, 300.0 * world::TILE),
                     "downtown" | "merkez" => (50.0 * world::TILE, 60.0 * world::TILE),
-                    "deep" | "derin" => (300.0 * world::TILE, 250.0 * world::TILE),
+                    "deep" | "derin" => (300.0 * world::TILE, 232.0 * world::TILE),
+                    "burnt" | "kul" => (500.0 * world::TILE, 280.0 * world::TILE),
+                    "desert" | "col" => (250.0 * world::TILE, 520.0 * world::TILE),
+                    "bswamp" | "karabataklik" => (90.0 * world::TILE, 520.0 * world::TILE),
+                    "military" | "askeri" => (520.0 * world::TILE, 90.0 * world::TILE),
+                    "harbor" | "liman" => (520.0 * world::TILE, 520.0 * world::TILE),
+                    "home" | "us" => world::home_spawn(),
+                    "base" | "uss" => {
+                        let b = &crate::bases::base_defs()[(num(2, 1.0) as usize).clamp(1, crate::bases::BASE_N) - 1];
+                        (b.tx * world::TILE, (b.ty + crate::bases::BASE_HALF + 5.0) * world::TILE)
+                    }
                     _ => (num(1, px / world::TILE) * world::TILE, num(2, py / world::TILE) * world::TILE),
                 };
                 let (x, y) = self.teleport(x, y);
@@ -1110,24 +1158,16 @@ impl Game {
                 }
             },
             "vehicle" | "arac" => {
+                // bisiklet kaldırıldı: varsayılan motor
                 let k = match arg(1) {
-                    "moto" | "motor" => 1,
                     "car" | "araba" => 2,
                     "suv" => 3,
-                    _ => 0,
+                    _ => 1,
                 };
                 let (mut x, mut y) = (px + 120.0, py);
                 self.world.resolve(&mut x, &mut y, data::VEHICLES[k].radius, true, &mut self.scratch);
                 self.vehicles.push(Vehicle { kind: k, x, y, angle: 0.0, speed: 0.0, hp: data::VEHICLES[k].hp, fuel: 100.0, driver: false, wrecked: false });
                 Ok(format!("{} getirildi", data::VEHICLES[k].name))
-            }
-            "ammo" | "mermi" => {
-                for w in &WEAPONS[1..] {
-                    if !w.ammo.is_empty() {
-                        self.progress.inv.add_id(w.ammo, 200);
-                    }
-                }
-                Ok("Her mermiden 200 eklendi".into())
             }
             "points" | "puan" => {
                 self.progress.extra_points += num(1, 10.0) as u32;
@@ -1146,10 +1186,6 @@ impl Game {
                     *sl = None;
                 }
                 Ok("Çanta boşaltıldı".into())
-            }
-            "infammo" | "sonsuzmermi" => {
-                self.player.inf_ammo = !self.player.inf_ammo;
-                Ok(format!("Sonsuz mermi {}", if self.player.inf_ammo { "AÇIK" } else { "KAPALI" }))
             }
             "nocd" | "beklemesiz" => {
                 self.player.no_cd = !self.player.no_cd;
@@ -1181,9 +1217,9 @@ impl Game {
                 self.respawn(false);
                 Ok("Profil sıfırlandı".into())
             }
-            _ => Err("Komutlar: gold N, gem N, item id N, items, weapons, set basic|police|military|titan, level N, xp N, charlevel N, \
-                      god, onehit, speed X, time H, day, night, heal, spawn tür N lvl, boss, killall, tp city|camp|boss|swamp|downtown|deep|x y, \
-                      unlock, pass N, pass buy [elite], vehicle bike|moto|car|suv, ammo, points N, fuel, clearbag, infammo, nocd, invis, timescale X, dog N, potions, reset"
+            _ => Err("Komutlar: gold N, gem N, item id N, items, weapons, level N, xp N, charlevel N, \
+                      god, onehit, speed X, time H, day, night, heal, spawn tür N lvl, boss, killall, tp city|camp|boss|swamp|downtown|deep|burnt|desert|bswamp|military|harbor|home|base N|x y, \
+                      unlock, pass N, pass buy [elite], vehicle moto|car|suv, points N, fuel, clearbag, nocd, invis, timescale X, dog N, potions, reset"
                 .into()),
         }
     }
@@ -1219,10 +1255,10 @@ mod cheat_tests {
     fn all_panel_cheats_work() {
         let mut g = Game::new(7, Progress::default(), 1);
         let cmds = [
-            "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "ammo", "points 10", "infammo", "infammo", "nocd", "nocd", "invis", "invis", "timescale 2", "timescale 1", "dog 5", "potions",
-            "set basic", "set police", "set military", "set titan", "item w_katana 1", "item medkit 5", "god", "god", "onehit", "onehit",
+            "gold 10000", "gem 500", "level 10", "level 50", "xp 5000", "charlevel 10", "items", "weapons", "points 10", "nocd", "nocd", "invis", "invis", "timescale 2", "timescale 1", "dog 5", "potions",
+            "item w_katana 1", "item medkit 5", "god", "god", "onehit", "onehit",
             "speed 2", "speed 1", "heal", "day", "night", "time 18", "spawn walker 3", "spawn runner 2", "spawn dog 2",
-            "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle bike", "vehicle moto",
+            "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle moto",
             "vehicle car", "vehicle suv", "fuel", "tp camp", "tp city", "tp swamp", "tp deep", "tp downtown", "tp boss", "tp 100 100",
             "unlock", "pass 30", "pass buy", "pass buy elite", "clearbag", "reset",
         ];
@@ -1239,7 +1275,7 @@ mod cheat_tests {
         assert!(g.cheat("spawn tank 1").is_err());
         assert!(g.cheat("gold 5").is_ok());
         let v: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
-        assert!(v["items"].as_array().unwrap().len() > 40);
+        assert!(v["items"].as_array().unwrap().len() > 25, "yalnız oyundaki eşyalar listelenir");
     }
 }
 
@@ -1280,6 +1316,26 @@ mod v4_tests {
             g.progress.inv.move_slot(from, k).unwrap();
         }
         g.use_slot(1).unwrap();
+        // V8 ekipman: kask, ceket, bot, çanta (2 ek bölme), yüzük, kolye; ek bölmede eşya; yanında sandık
+        for id in ["helm_police", "jacket_basic", "boots_basic", "bag_police", "ring_hunter", "neck_bone"] {
+            g.cheat(&format!("item {id} 1")).unwrap();
+            let s = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == id)).unwrap();
+            g.use_slot(s).unwrap();
+        }
+        g.cheat("item stone 22").unwrap();
+        let st = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "stone")).unwrap();
+        g.progress.inv.move_to_page(st, 1).unwrap();
+        g.cheat("item chest_iron 1").unwrap();
+        let cs = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "chest_iron")).unwrap();
+        let (px, py) = (g.player.x, g.player.y + 40.0);
+        let ci = g.progress.place_chest(cs, px, py).unwrap();
+        g.cheat("item scrap 40").unwrap();
+        let sc = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "scrap")).unwrap();
+        g.progress.chest_put(ci, sc, Some(25)).unwrap();
+        g.cheat("item ring_copper 1").unwrap();
+        let rc = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "ring_copper")).unwrap();
+        g.progress.chest_put(ci, rc, None).unwrap();
+        std::fs::write(format!("{dir}/chest.json"), g.ui_json(&format!("chest:{ci}"))).unwrap();
         g.step(1.0 / 30.0, crate::game::Input::default());
         // harita: başlangıçtan kuzeye bir yol keşfedilmiş
         let (sx, sy) = (g.player.x, g.player.y);
@@ -1287,6 +1343,18 @@ mod v4_tests {
             g.progress.reveal(sx, sy - k as f32 * 700.0, 2);
         }
         std::fs::write(format!("{dir}/world.json"), crate::world_json(&g)).unwrap();
+        // V8 devlet üsleri: ilk 6 üs keşfedilmiş; biri bir klanın, biri oyuncunun klanının
+        for b in crate::bases::base_defs().iter().take(6) {
+            let (bx, by) = b.pos();
+            g.progress.reveal(bx, by, 2);
+        }
+        let now = 1_800_000_000_000.0;
+        g.apply_bases(&serde_json::json!({"now": now, "clan": 7, "bases": [
+            {"id": 0, "owner": 0, "reward": "titan_shard", "n": 1, "end": now + 754_000.0},
+            {"id": 1, "owner": 3, "name": "Kurtlar", "color": 0xC04040, "reward": "potion_heal", "n": 2, "end": now + 312_000.0, "cap": now - 900_000.0},
+            {"id": 2, "owner": 7, "name": "Benim Klanım", "color": 0x40A0E0, "reward": "medkit", "n": 3, "end": now + 61_000.0, "cap": now - 60_000.0},
+        ]}));
+        std::fs::write(format!("{dir}/bases.json"), g.ui_json("bases")).unwrap();
         std::fs::write(format!("{dir}/player.json"), serde_json::json!({"x": sx, "y": sy}).to_string()).unwrap();
         // konuşma ve görev örnekleri
         let mut h = Game::new(5, Progress::default(), 1);
@@ -1320,7 +1388,7 @@ mod v4_tests {
         assert!(g.player.hp >= g.progress.max_hp() - 0.5);
         assert_eq!(g.progress.gold, 80);
         goto(&mut g, 4);
-        g.cheat("vehicle bike").unwrap();
+        g.cheat("vehicle moto").unwrap();
         g.vehicles.last_mut().unwrap().fuel = 10.0;
         g.command(r#"{"cmd":"mechanic"}"#);
         assert_eq!(g.vehicles.last().unwrap().fuel, 100.0);
@@ -1415,5 +1483,41 @@ mod v4_tests {
         z.home_x = px + 200.0 + crate::data::PX_PER_M * 20.0;
         tick(&mut g, 2);
         assert!(g.zombies[0].ret, "bölge sınırını aşan yaratık geri dönmeli");
+    }
+
+    #[test]
+    fn walking_and_running_cost_no_stamina_but_attacks_do() {
+        let mut g = Game::new(9, Progress::default(), 1);
+        let full = g.progress.max_stamina();
+        let run = Input { move_x: 1.0, ..Default::default() };
+        for _ in 0..90 {
+            g.step(1.0 / 30.0, run);
+        }
+        assert_eq!(g.player.stamina, full, "koşmak dayanıklılık harcamamalı");
+        assert!(g.player.moving);
+        g.player.ability_cd = 0.0;
+        g.start_roll().unwrap();
+        assert!(g.player.stamina < full, "takla harcamalı");
+        let after_roll = g.player.stamina;
+        for _ in 0..12 {
+            g.step(1.0 / 30.0, Input::default());
+        }
+        let atk = Input { attacking: true, atk_x: 1.0, ..Default::default() };
+        for _ in 0..20 {
+            g.step(1.0 / 30.0, atk);
+        }
+        assert!(g.player.stamina < after_roll, "yumruk harcamalı");
+    }
+
+    #[test]
+    fn bicycle_is_gone() {
+        let g = Game::new(3, Progress::default(), 1);
+        assert!(g.vehicles.iter().all(|v| v.kind != crate::data::REMOVED_VEHICLE));
+        assert!(g.world.vehicle_spawns.iter().all(|v| v.0 != crate::data::REMOVED_VEHICLE));
+        let mut g = g;
+        g.cheat("vehicle bike").unwrap();
+        assert_ne!(g.vehicles.last().unwrap().kind, crate::data::REMOVED_VEHICLE);
+        let c: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
+        assert!(c["items"].as_array().unwrap().iter().all(|i| i[0] != "w_sniper" && !i[0].as_str().unwrap().starts_with("ammo_")));
     }
 }

@@ -65,13 +65,15 @@ fun AdminPlayerFile(target: Long, close: () -> Unit) {
                 PT("${d.optString("name")} · ID ${fmtId(d.optLong("id"))}", 18.sp, Px.Name)
                 PT("Sv ${d.optInt("level")} · ${fmt(d.optInt("kills"))} Öldürme · Klan: ${d.optJSONObject("clan")?.optString("name") ?: "—"}" +
                     (if (d.optBoolean("google")) " · Google" else ""), 12.sp, Px.Sub)
+                if (d.optBoolean("deleted")) PT("HESAP SİLİNDİ · ${d.optString("deleted_reason")}", 12.sp, Color(0xFFFF6A5A))
+                else if (d.optBoolean("delete_req")) PT("Oyuncu Hesabının Silinmesini İstedi", 12.sp, Px.Orange)
                 if (!d.isNull("banned_until")) PT("YASAKLI: ${d.optString("banned_until").take(16)} · ${d.optString("ban_reason")}", 12.sp, Color(0xFFFF6A5A))
             }
             TagRow(d.optJSONArray("tags"))
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            listOf("Envanter", "Son İşlemler", "Sohbetler", "Özel Mesajlar", "Uzaktan İşlem").forEachIndexed { i, n ->
+            listOf("Envanter", "Son İşlemler", "Sohbetler", "Özel Mesajlar", "Uzaktan İşlem", "Hesap").forEachIndexed { i, n ->
                 Box(Modifier.background(if (i == tab) Px.Panel else Px.PanelDark).clickable { tab = i }.padding(horizontal = 10.dp, vertical = 6.dp)) {
                     PT(n, 13.sp, if (i == tab) Px.Text else Px.Sub)
                 }
@@ -106,6 +108,7 @@ fun AdminPlayerFile(target: Long, close: () -> Unit) {
                 1 -> LogList(d.optJSONArray("activity")) { o -> "[${ts(o.optLong("ts"))}] ${o.optString("t")}" }
                 2 -> LogList(d.optJSONArray("chat")) { o -> "[${ts(o.optLong("ts"))}] (${o.optString("ch")}) ${o.optString("t")}" }
                 3 -> LogList(d.optJSONArray("dm")) { o -> "[${ts(o.optLong("ts"))}] ${if (o.optBoolean("out")) "→" else "←"} ${o.optString("to")}: ${o.optString("t")}" }
+                5 -> AdminAccountTab(target, d, res)
                 else -> {
                     var msg by remember { mutableStateOf("") }
                     var gold by remember { mutableStateOf("") }
@@ -141,4 +144,63 @@ fun AdminPlayerFile(target: Long, close: () -> Unit) {
 private fun LogList(a: JSONArray?, line: (JSONObject) -> String) {
     if (a == null || a.length() == 0) { PT("Kayıt Yok", 13.sp, Px.Sub); return }
     for (i in 0 until a.length()) PT(line(a.getJSONObject(i)), 12.sp, Px.Text, maxLines = 3)
+}
+
+/** Hesap işlemleri: silme (onaylı, geri alınabilir), geri getirme, anahtar sıfırlama (yeni anahtar kopyalanır). */
+@Composable
+private fun AdminAccountTab(target: Long, d: JSONObject, res: (Result<String>) -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var reason by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf(false) }
+    var newKey by remember { mutableStateOf("") }
+    if (d.optBoolean("admin")) { PT("Yönetici Hesabı: Silinemez Ve Anahtarı Buradan Değişmez.", 14.sp, Px.Sub); return }
+    if (d.optBoolean("deleted")) {
+        PT("Bu Hesap Silinmiş. Oyuncu Giriş Yapamaz; Kayıtları Duruyor.", 14.sp, Px.Sub, maxLines = 2)
+        Spacer(Modifier.height(8.dp))
+        PxButton("Hesabı Geri Getir", color = Px.Green, height = 40.dp, size = 14.sp) { Account.adminRestore(target, res) }
+        return
+    }
+    PT("Hesabı Sil", 15.sp, Px.Clan)
+    PT("Oyuncu bir daha giriş yapamaz, klandan çıkar ve Google bağı kalkar. Kayıtlar silinmez; gerekirse geri getirilebilir.", 12.sp, Px.Sub, maxLines = 3)
+    Spacer(Modifier.height(6.dp))
+    Field(reason, { reason = it.take(120) }, "Silme Nedeni", Modifier.fillMaxWidth())
+    Spacer(Modifier.height(6.dp))
+    PxButton(if (confirm) "Emin Misin? Tekrar Bas" else "Hesabı Sil", color = Px.Red, height = 40.dp, size = 14.sp) {
+        if (!confirm) confirm = true else { confirm = false; Account.adminDelete(target, reason, res) }
+    }
+    Spacer(Modifier.height(14.dp))
+    PT("Anahtarı Sıfırla", 15.sp, Px.Clan)
+    PT("Anahtarını kaybeden oyuncuya yeni anahtar üretir; eski anahtar hemen geçersiz olur.", 12.sp, Px.Sub, maxLines = 2)
+    Spacer(Modifier.height(6.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PxButton("Yeni Anahtar Üret", color = Px.Blue, height = 40.dp, size = 14.sp) {
+            Account.adminResetKey(target) { r -> r.onSuccess { newKey = it }.onFailure { Toaster.show(it.message ?: "", false) } }
+        }
+        if (newKey.isNotEmpty()) {
+            Spacer(Modifier.width(10.dp))
+            PT(newKey, 18.sp, Px.Name)
+            Spacer(Modifier.width(8.dp))
+            PxButton("Kopyala", color = Px.Dark, height = 34.dp, size = 12.sp) {
+                val cm = ctx.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.setPrimaryClip(android.content.ClipData.newPlainText("zenvex", "Zenvex ID: ${fmtId(target)}  Anahtar: $newKey"))
+                Toaster.show("Kopyalandı")
+            }
+        }
+    }
+}
+
+/** Silme talepleri listesi (Ayarlar → Hesabımı Sil ile gelenler); dokununca oyuncu dosyası açılır. */
+@Composable
+fun AdminDeleteRequests(open: (Long) -> Unit) {
+    var list by remember { mutableStateOf<JSONArray?>(null) }
+    LaunchedEffect(Unit) { Account.adminDeleteRequests { r -> list = r.getOrNull() ?: JSONArray() } }
+    val l = list ?: run { PT("Yükleniyor…", 13.sp, Px.Sub); return }
+    if (l.length() == 0) { PT("Silme Talebi Yok.", 13.sp, Px.Sub); return }
+    for (i in 0 until l.length()) {
+        val o = l.getJSONObject(i)
+        Row(Modifier.fillMaxWidth().clickable { open(o.optLong("id")) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            PT("${o.optString("name")} · ${fmtId(o.optLong("id"))} · Sv ${o.optInt("level")}", 14.sp, Px.Text, modifier = Modifier.weight(1f))
+            PT(ts(o.optLong("at")), 12.sp, Px.Sub)
+        }
+    }
 }

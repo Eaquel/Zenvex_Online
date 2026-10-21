@@ -52,8 +52,8 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-/** Haritadaki bir işaret (dünya pikseli). kind: 0 oyuncu, 1 seyahat, 2 titan, 3 görev, 4 kamp NPC'si */
-data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "")
+/** Haritadaki bir işaret (dünya pikseli). kind: 0 oyuncu, 1 seyahat, 2 titan, 3 görev, 4 kamp NPC'si, 5 devlet üssü */
+data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "", val sub: String = "", val color: Int = 0)
 
 /** Keşif bulutu maskesi: keşfedilmemiş hücre opak (yumuşak kenar için küçük bitmap büyütülerek çizilir). */
 fun fogMask(fog: JSONObject): ImageBitmap? {
@@ -62,8 +62,14 @@ fun fogMask(fog: JSONObject): ImageBitmap? {
     if (n <= 0) return null
     val px = IntArray(n * n)
     for (y in 0 until n) {
-        val v = java.lang.Long.parseUnsignedLong(rows.optString(y, "0"), 16)
-        for (x in 0 until n) px[y * n + x] = if ((v ushr x) and 1L == 1L) 0 else 0xFF000000.toInt()
+        // satır: 16 onaltılık hane = 64 hücre; V8'de 32 hane (yüksek kelime önce)
+        val row = rows.optString(y, "0")
+        val lo = java.lang.Long.parseUnsignedLong(if (row.length > 16) row.substring(row.length - 16) else row, 16)
+        val hi = if (row.length > 16) java.lang.Long.parseUnsignedLong(row.substring(0, row.length - 16), 16) else 0L
+        for (x in 0 until n) {
+            val bit = if (x < 64) (lo ushr x) and 1L else (hi ushr (x - 64)) and 1L
+            px[y * n + x] = if (bit == 1L) 0 else 0xFF000000.toInt()
+        }
     }
     return Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888).asImageBitmap()
 }
@@ -99,12 +105,32 @@ fun WorldMapScreen(close: () -> Unit) {
     val w = remember { GameSession.world() }
     val fog = remember { fogMask(GameSession.ui("fog")) }
     val prof = remember { GameSession.ui("profile") }
-    val marks = remember { mapMarks(w, GameSession.ui("quests")) }
+    val marks = remember { mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { com.zenvex.online.game.Bases.refresh() }
     WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close) { to ->
         val r = GameSession.cmd("travel", "to" to to)
         Toaster.show(r.msg, r.ok)
         if (r.ok) close()
     }
+}
+
+/** Keşfedilen devlet üsleri: sahip, ödül, kalan süre (dokununca kart). */
+fun baseMarks(b: JSONObject): List<MapMark> {
+    val out = ArrayList<MapMark>()
+    val list = b.optJSONArray("bases") ?: return out
+    for (i in 0 until list.length()) {
+        val o = list.getJSONObject(i)
+        if (!o.optBoolean("found")) continue
+        val left = o.optDouble("left", -1.0)
+        val time = if (left >= 0) " · ${(left / 60).toInt()}:${"%02d".format((left % 60).toInt())} Kaldı" else ""
+        val mine = o.optBoolean("mine")
+        val owner = if (mine) "Klanının Üssü" else "Sahibi: ${o.optString("owner")}"
+        val col = when { mine -> 0xFF60E080.toInt(); o.optLong("clan") == 0L -> 0xFF6E7A3E.toInt(); else -> 0xFF000000.toInt() or (o.optInt("color") and 0xFFFFFF) }
+        val reward = if (o.optString("reward").isNotEmpty()) "Ödül: ${o.optString("reward")} ×${o.optInt("n", 1)}$time" else "Ödül Bilgisi Bekleniyor"
+        out += MapMark(o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), 5, "${o.optString("name")} · Sv ${o.optInt("level")}",
+            "$owner\n$reward" + if (o.optLong("clan") == 0L) "\nDevlet Üssü Ödül Vermez; Klanla Ele Geçir" else "\nKlana Dakikada 60 Tecrübe", col)
+    }
+    return out
 }
 
 /** Seyahat noktaları, titan, kamp NPC'leri ve etkin görev hedefi. */
@@ -206,6 +232,12 @@ internal fun WorldMapView(
                         drawCircle(Color(0x55FF9A2A), 18.dp.toPx() * pulse, p)
                         drawCircle(Color(0xFF15140F), 9.dp.toPx(), p); drawCircle(Color(0xFFFF9A2A), 6.dp.toPx(), p)
                     }
+                    5 -> {
+                        val s = 9.dp.toPx()
+                        drawRect(Color(0xFF15140F), Offset(p.x - s - 2, p.y - s - 2), Size(2 * s + 4, 2 * s + 4))
+                        drawRect(Color(m.color), Offset(p.x - s, p.y - s), Size(2 * s, 2 * s))
+                        drawRect(Color(0x80FFFFFF), Offset(p.x - s * 0.35f, p.y - s * 0.35f), Size(s * 0.7f, s * 0.7f))
+                    }
                     else -> drawCircle(Color(0xFFB0E0FF), 4.dp.toPx(), p)
                 }
             }
@@ -229,12 +261,14 @@ internal fun WorldMapView(
         PxPanel(Modifier.align(Alignment.BottomStart).padding(12.dp), color = Color(0xD0201F1C), pad = 8.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Legend(Color(0xFF3A8AFF), "Sen"); Legend(Px.Clan, "Seyahat"); Legend(Color(0xFFFF9A2A), "Görev"); Legend(Color(0xFFE03030), "Titan")
+                Legend(Color(0xFF6E7A3E), "Devlet Üssü")
                 PT("İki Parmakla Yakınlaştır", 12.sp, Px.Sub)
             }
         }
         picked?.let { m ->
             PxPanel(Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp), color = Color(0xE02B2B26), pad = 10.dp) {
                 PT(m.label.ifEmpty { "İşaret" }, 18.sp, Px.Text)
+                for (l in m.sub.split('\n').filter { it.isNotEmpty() }) PT(l, 14.sp, if (m.kind == 5) Px.Clan else Px.Sub, maxLines = 2)
             }
         }
         AnimatedVisibility(showTravel, Modifier.align(Alignment.CenterEnd)) {

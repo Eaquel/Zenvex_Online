@@ -22,7 +22,8 @@ fun serverById(id: String) = SERVERS.firstOrNull { it.id == id } ?: SERVERS[0]
 object Account {
     data class Clan(val id: Long, val name: String, val color: Int, val owner: Boolean, val rank: Int = 0, val json: JSONObject = JSONObject())
 
-    val id = mutableStateOf(0L)
+    /** -1 = hesap yok (0 yönetici hesabının kimliği) */
+    val id = mutableStateOf(-1L)
     val name = mutableStateOf("")
     val clan = mutableStateOf<Clan?>(null)
     val levels = mutableStateMapOf<String, Int>()
@@ -39,12 +40,12 @@ object Account {
         private set
     private lateinit var prefs: android.content.SharedPreferences
 
-    val loggedIn: Boolean get() = id.value > 0 && key.isNotEmpty()
+    val loggedIn: Boolean get() = id.value >= 0 && key.isNotEmpty()
 
     fun init(ctx: Context) {
         prefs = ctx.getSharedPreferences("account", Context.MODE_PRIVATE)
-        id.value = prefs.getLong("id", 0L)
         key = prefs.getString("key", "") ?: ""
+        id.value = if (key.isEmpty()) -1L else prefs.getLong("id", -1L)
         name.value = prefs.getString("name", "") ?: ""
         if (loggedIn) refresh()
     }
@@ -135,6 +136,10 @@ object Account {
         Supa.bg { Supa.rpcSync("zx_chat_log", auth().put("p_channel", channel).put("p_text", text)) }
     }
 
+    /** V8 devlet üssü ele geçirme: sunucu güncel üs listesini döndürür */
+    fun baseCapture(server: String, base: Int, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_base_capture", auth().put("p_server", server).put("p_base", base)) { r -> done(r) }
+
     // ------------------------------------------------------------------ yönetici
     fun adminPlayer(target: Long, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_admin_player", auth().put("p_target", target)) { r -> done(obj(r)) }
     fun adminAction(target: Long, action: JSONObject, done: (Result<String>) -> Unit) =
@@ -144,6 +149,12 @@ object Account {
     fun adminFind(name: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_admin_find", auth().put("p_name", name)) { r -> done(arr(r)) }
     fun adminBan(target: Long, hours: Int, reason: String, done: (Result<String>) -> Unit) =
         Supa.rpc("zx_admin_ban", auth().put("p_target", target).put("p_hours", hours).put("p_reason", reason)) { r -> done(txt(r)) }
+    fun adminDelete(target: Long, reason: String, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_admin_delete", auth().put("p_target", target).put("p_reason", reason)) { r -> done(txt(r)) }
+    fun adminRestore(target: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_restore", auth().put("p_target", target)) { r -> done(txt(r)) }
+    /** yeni anahtarı döndürür (oyuncuya iletilir) */
+    fun adminResetKey(target: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_reset_key", auth().put("p_target", target)) { r -> done(txt(r)) }
+    fun adminDeleteRequests(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_admin_delete_requests", auth()) { r -> done(arr(r)) }
     fun adminVip(target: Long, days: Int, done: (Result<String>) -> Unit) =
         Supa.rpc("zx_admin_vip", auth().put("p_target", target).put("p_days", days)) { r -> done(txt(r)) }
     fun adminMail2(to: String, title: String, body: String, gold: Int, gems: Int, xp: Int, items: JSONArray, kind: String, done: (Result<Int>) -> Unit) =
@@ -214,7 +225,7 @@ object Account {
     }
 
     fun logout() {
-        id.value = 0L; key = ""; name.value = ""; clan.value = null; levels.clear(); unread.intValue = 0
+        id.value = -1L; key = ""; name.value = ""; clan.value = null; levels.clear(); unread.intValue = 0
         persist()
     }
 

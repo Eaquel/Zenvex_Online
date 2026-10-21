@@ -9,11 +9,15 @@ const MAX_ACTIVE: usize = 26;
 
 /// Bölge sınırı: yaratık doğduğu yerden bu kadar uzaklaşınca takibi bırakıp geri döner.
 const LEASH: f32 = 15.0 * crate::data::PX_PER_M;
+/// Denge: yaratıklar oyuncu hızıyla orantılı yavaşladı (%20), canları ve vuruşları güçlendi.
+pub const ZOMBIE_PACE: f32 = 0.8;
+pub const ZOMBIE_HP_MULT: f32 = 1.45;
+pub const ZOMBIE_DMG_MULT: f32 = 1.2;
 
 impl Game {
     pub fn make_zombie(&mut self, kind: ZKind, level: u32, x: f32, y: f32) -> Zombie {
         let def = &ZOMBIES[kind as usize];
-        let hp = def.hp + def.hp_lv * level as f32;
+        let hp = (def.hp + def.hp_lv * level as f32) * if kind == ZKind::Titan { 1.0 } else { ZOMBIE_HP_MULT };
         let id = self.next_zid;
         self.next_zid = self.next_zid.wrapping_add(1);
         Zombie {
@@ -511,7 +515,7 @@ impl Game {
                         z.hit_done = true;
                         let (fx, fy) = dir_vec(z.dir);
                         let facing = (dx * fx + dy * fy) / dist.max(1e-3);
-                        let lvl_dmg = def.dmg + def.dmg_lv * z.level as f32;
+                        let lvl_dmg = (def.dmg + def.dmg_lv * z.level as f32) * ZOMBIE_DMG_MULT;
                         match z.kind {
                             ZKind::Tank => {
                                 slams.push((z.x + fx * 40.0, z.y + fy * 40.0, m(2.0), lvl_dmg));
@@ -643,7 +647,7 @@ impl Game {
     }
 
     fn move_zombie(&mut self, z: &mut Zombie, nx: f32, ny: f32, dt: f32, speed_m: f32) {
-        let sp = m(speed_m);
+        let sp = m(speed_m) * ZOMBIE_PACE;
         let r = ZOMBIES[z.kind as usize].radius;
         let (mut x, mut y) = (z.x + nx * sp * dt, z.y + ny * sp * dt);
         self.world

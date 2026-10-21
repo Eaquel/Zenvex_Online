@@ -13,6 +13,8 @@ pub const N_DOCTOR: u8 = 3;
 pub const N_MECHANIC: u8 = 4;
 pub const N_TRAINER: u8 = 5;
 pub const N_GUIDE: u8 = 6;
+/// V8: büyücü (kampta ve kişisel üste; ışınlanma)
+pub const N_WIZARD: u8 = 7;
 
 /// NPC adı ve unvanı
 pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
@@ -23,6 +25,7 @@ pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
         N_MECHANIC => ("Tamirci Rıza", "Tamirci"),
         N_TRAINER => ("Eğitmen Kerem", "Köpek Eğitmeni"),
         N_GUIDE => ("Rehber Deniz", "Rehber"),
+        N_WIZARD => ("Büyücü Arif", "Büyücü"),
         _ => ("Kule Askeri", "Muhafız"),
     }
 }
@@ -355,6 +358,10 @@ impl Game {
     }
 
     /// Bir NPC ile konuşma: satırlar + seçenekler. `opt`: seçilen seçenek (boşsa açılış).
+    ///
+    /// Akış: açılış → [görev kabul/teslim, hizmet, Sohbet Et, Hoşça Kal]. Kabulden sonra NPC kısa bir onay söyler ve
+    /// yalnız "Yola Çık" (kapatır) kalır; teslimden sonra ödül + "Başka İşin Var Mı?" / "Tamam".
+    /// "chat" konu menüsünü açar, "t:<konu>" konuyu anlatır, "back" ana menüye döner. "ok"/"bye" Kotlin'de kapatır.
     pub fn talk(&mut self, kind: u8, opt: &str) -> Value {
         let (name, role) = npc_name(kind);
         let mut lines: Vec<String> = Vec::new();
@@ -369,6 +376,15 @@ impl Game {
             N_QUEST => Some(1u8),
             _ => None,
         };
+        // menü türü: ana menü, konu menüsü ya da tek çıkış
+        enum Menu {
+            Main,
+            Topics,
+            Leave,
+            AfterTurnin,
+            Teleport,
+        }
+        let mut menu = Menu::Main;
         match opt {
             "accept" | "turnin" if which.is_some() => {
                 let w = which.unwrap();
@@ -376,16 +392,25 @@ impl Game {
                 if let Some(q) = chain(w).get(idx) {
                     if opt == "accept" && !on && self.progress.level >= q.min_level {
                         self.story_set(w, idx, true, 0);
+                        let mut given = Vec::new();
                         for &(id, c) in q.start_items {
                             let left = self.progress.inv.add_id(id, c);
                             if left > 0 {
                                 let (x, y) = (self.player.x, self.player.y);
                                 self.spawn_drop_id(id, left, x, y + 30.0);
                             }
+                            if let Some(i) = data::item_index(id) {
+                                given.push(format!("{c}× {}", data::ITEMS[i].name));
+                            }
                         }
-                        lines.push(format!("Güzel. {}", q.hint));
-                        self.events.push(Event::Quest { title: format!("Yeni görev: {}", q.title) });
+                        lines.push(format!("Anlaştık! {}.", q.hint));
+                        if !given.is_empty() {
+                            lines.push(format!("Al bunları, işine yarar: {}.", given.join(", ")));
+                        }
+                        lines.push("Hedefin sol üstteki takipçide ve haritada işaretli. İşin bitince bana dön.".into());
+                        self.events.push(Event::Quest { title: format!("Yeni Görev: {}", q.title) });
                         self.story_tick();
+                        menu = Menu::Leave;
                     } else if opt == "turnin" && on && self.quest_progress(q, n) >= q.count {
                         lines.push(q.done.to_string());
                         self.progress.add_gold(q.gold);
@@ -404,14 +429,59 @@ impl Game {
                                 got.push(format!("{c}× {}", data::ITEMS[i].name));
                             }
                         }
-                        lines.push(format!("Ödül: {}", got.join(", ")));
-                        self.events.push(Event::Quest { title: format!("Tamamlandı: {}", q.title) });
+                        lines.push(format!("Ödülün: {}", got.join(", ")));
+                        self.events.push(Event::Quest { title: format!("Görev Teslim Edildi: {}", q.title) });
                         self.story_set(w, idx + 1, false, 0);
                         self.check_level_quests();
+                        menu = Menu::AfterTurnin;
                     }
                 }
             }
-            "chat" => lines.extend(chatter(kind, self.time as usize).iter().map(|s| s.to_string())),
+            "chat" => {
+                lines.push(crate::talk::chat_intro(kind).into());
+                menu = Menu::Topics;
+            }
+            "t:todo" => {
+                lines.extend(self.todo_lines(kind));
+                menu = Menu::Topics;
+            }
+            t if t.starts_with("t:") => {
+                let seed = (self.time as usize).wrapping_add(self.progress.level as usize);
+                lines.extend(crate::talk::topic_lines(kind, &t[2..], seed).into_iter().map(String::from));
+                menu = Menu::Topics;
+            }
+            "back" => lines.push(match kind {
+                N_MERCHANT => "Başka? Tezgâh açık, dostum.",
+                N_QUEST => "Başka bir şey sormak ister misin evlat?",
+                _ => "Başka bir şey var mı?",
+            }
+            .into()),
+            "tp" => {
+                lines.push(if self.at_home() {
+                    "Nereye gidelim? Yalnız güvenli yerlere açarım kapıyı; bilmediğin yere götüremem.".into()
+                } else {
+                    "Kapıyı nereye açayım? Kişisel üssün ve kamp bedava; karakollar 15 altın. Yalnız gördüğün güvenli yerlere götürürüm.".into()
+                });
+                menu = Menu::Teleport;
+            }
+            t if t.starts_with("tp:") => match self.wizard_teleport(&t[3..]) {
+                Ok(m) => {
+                    lines.push(format!("Gözlerini kapa… {m}."));
+                    menu = Menu::Leave;
+                }
+                Err(e) => {
+                    lines.push(e);
+                    menu = Menu::Teleport;
+                }
+            },
+            "homespawn" => {
+                self.progress.home_spawn = !self.progress.home_spawn;
+                lines.push(if self.progress.home_spawn {
+                    "Tamam: düşersen ruhunu buraya, üssüne çağırırım.".into()
+                } else {
+                    "Peki: düşersen yine kampta uyanırsın.".into()
+                });
+            }
             "shop" => open = "merchant",
             "dailies" => open = "quests",
             "dog" => open = "dog",
@@ -423,8 +493,8 @@ impl Game {
             },
             _ => {}
         }
-        // açılışta: görev durumu ya da selam
-        if opt.is_empty() {
+        // açılış (ve "Başka İşin Var Mı?"): görev durumu ya da selam
+        if opt.is_empty() || opt == "more" {
             let mut said = false;
             if let Some(w) = which {
                 let (idx, on, n) = self.story_slot(w);
@@ -438,7 +508,7 @@ impl Game {
                         said = true;
                     }
                     Some(q) if on => {
-                        lines.push(format!("{} — {} / {}", q.hint, self.quest_progress(q, n), q.count));
+                        lines.push(format!("{} Şu an {} / {}. Acele etme, ama oyalanma da.", q.hint, self.quest_progress(q, n), q.count));
                         said = true;
                     }
                     Some(q) => {
@@ -449,34 +519,113 @@ impl Game {
                 }
             }
             if !said {
-                lines.push(greeting(kind).to_string());
+                lines.push(if opt == "more" { "Şimdilik başka işim yok. Kendine iyi bak.".into() } else { greeting(kind).to_string() });
             }
         }
         // seçenekler
-        if let Some(w) = which {
-            let (idx, on, n) = self.story_slot(w);
-            if let Some(q) = chain(w).get(idx) {
-                if !on && self.progress.level >= q.min_level {
-                    opts.push(("accept".into(), "Görevi Kabul Et".into()));
-                } else if on && self.quest_progress(q, n) >= q.count {
-                    opts.push(("turnin".into(), "Görevi Teslim Et".into()));
+        match menu {
+            Menu::Leave => {
+                // kabul: hedef anında tamamlandıysa (ör. seviye görevi) teslim de sunulur
+                if let Some(w) = which {
+                    let (idx, on, n) = self.story_slot(w);
+                    if let Some(q) = chain(w).get(idx) {
+                        if on && self.quest_progress(q, n) >= q.count {
+                            opts.push(("turnin".into(), "Görevi Teslim Et".into()));
+                        }
+                    }
                 }
+                opts.push(("ok".into(), "Yola Çık".into()));
+            }
+            Menu::AfterTurnin => {
+                if let Some(w) = which {
+                    let (idx, _, _) = self.story_slot(w);
+                    if chain(w).get(idx).is_some_and(|q| self.progress.level >= q.min_level) {
+                        opts.push(("more".into(), "Başka İşin Var Mı?".into()));
+                    }
+                }
+                opts.push(("ok".into(), "Tamam".into()));
+            }
+            Menu::Teleport => {
+                for d in self.wizard_dests() {
+                    let label = if d.cost > 0 { format!("{} ({} Altın)", d.name, d.cost) } else { d.name.to_string() };
+                    opts.push((format!("tp:{}", d.id), label));
+                }
+                opts.push(("back".into(), "Geri".into()));
+            }
+            Menu::Topics => {
+                for (id, label) in crate::talk::topics(kind) {
+                    opts.push((format!("t:{id}"), label.to_string()));
+                }
+                opts.push(("back".into(), "Geri".into()));
+            }
+            Menu::Main => {
+                if let Some(w) = which {
+                    let (idx, on, n) = self.story_slot(w);
+                    if let Some(q) = chain(w).get(idx) {
+                        if !on && self.progress.level >= q.min_level {
+                            opts.push(("accept".into(), "Görevi Kabul Et".into()));
+                        } else if on && self.quest_progress(q, n) >= q.count {
+                            opts.push(("turnin".into(), "Görevi Teslim Et".into()));
+                        }
+                    }
+                }
+                match kind {
+                    N_MERCHANT => opts.push(("shop".into(), "Alışveriş Yap".into())),
+                    N_QUEST => opts.push(("dailies".into(), "Günlük Görevler".into())),
+                    N_DOCTOR => opts.push(("heal".into(), format!("Tedavi Ol ({} Altın)", crate::ui::DOCTOR_PRICE))),
+                    N_MECHANIC => opts.push(("repair".into(), format!("Aracımı Onar ({} Altın)", crate::ui::MECHANIC_PRICE))),
+                    N_TRAINER => opts.push(("dog".into(), if self.progress.dog_owned { "Köpeğimi Geliştir".into() } else { "Köpek Sahiplen".into() })),
+                    N_WIZARD => {
+                        opts.push(("tp".into(), "Işınlan".into()));
+                        if self.at_home() {
+                            opts.push(("homespawn".into(), if self.progress.home_spawn { "Kampta Doğ".into() } else { "Burada Doğ".into() }));
+                        }
+                    }
+                    _ => {}
+                }
+                opts.push(("chat".into(), "Sohbet Et".into()));
+                opts.push(("bye".into(), "Hoşça Kal".into()));
             }
         }
-        match kind {
-            N_MERCHANT => opts.push(("shop".into(), "Alışveriş Yap".into())),
-            N_QUEST => opts.push(("dailies".into(), "Günlük Görevler".into())),
-            N_DOCTOR => opts.push(("heal".into(), format!("Tedavi Ol ({} Altın)", crate::ui::DOCTOR_PRICE))),
-            N_MECHANIC => opts.push(("repair".into(), format!("Aracımı Onar ({} Altın)", crate::ui::MECHANIC_PRICE))),
-            N_TRAINER => opts.push(("dog".into(), if self.progress.dog_owned { "Köpeğimi Geliştir".into() } else { "Köpek Sahiplen".into() })),
-            _ => {}
-        }
-        opts.push(("chat".into(), "Sohbet Et".into()));
-        opts.push(("bye".into(), "Hoşça Kal".into()));
         json!({
             "npc": kind, "name": name, "role": role, "lines": lines, "open": open,
             "opts": opts.iter().map(|(id, l)| json!({"id": id, "label": l})).collect::<Vec<_>>(),
         })
+    }
+
+    /// "Ne Yapmalıyım?": oyuncunun durumuna göre yol gösterir (etkin görev, seviye, köpek).
+    fn todo_lines(&self, kind: u8) -> Vec<String> {
+        let mut out = Vec::new();
+        let s = &self.progress.story;
+        let lv = self.progress.level;
+        if let Some(q) = GUIDE.get(s.guide) {
+            if s.guide_on {
+                out.push(format!("Rehber Deniz'in verdiği işi bitir: {}.", q.hint));
+            } else if lv >= q.min_level {
+                out.push("Rehber Deniz seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
+            }
+        }
+        if let Some(q) = MAIN.get(s.main) {
+            if s.main_on {
+                out.push(format!("Yaşlı Hüseyin'in görevi: {}.", q.hint));
+            } else if lv >= q.min_level {
+                out.push(format!("Yaşlı Hüseyin'in sana yeni bir işi var: \"{}\". Kampta onu bul.", q.title));
+            } else {
+                out.push(format!("Hüseyin'in sıradaki işi için {}. seviyeye ulaşmalısın. Ormanda zombi avla, ağaç kes, tecrübe topla.", q.min_level));
+            }
+        }
+        if !self.progress.dog_owned && lv >= 3 {
+            out.push("Henüz köpeğin yok. Barınaktaki Eğitmen Kerem'den bir yol arkadaşı alabilirsin.".into());
+        }
+        if lv < 10 {
+            out.push(format!("Şehrin kapısı 10. seviyede açılır. Sen şu an {lv}. seviyedesin."));
+        } else {
+            out.push("Şehir sana açık. Banliyö ve şehir merkezi daha tehlikeli ama ganimeti de bol.".into());
+        }
+        if kind == N_DOCTOR && self.player.hp < self.progress.max_hp() * 0.6 {
+            out.push("Ama önce şu yaralarına bakalım; böyle dolaşamazsın.".into());
+        }
+        out
     }
 
     /// Seviye görevleri teslimden hemen sonra da hazır olabilir
@@ -493,40 +642,9 @@ fn greeting(kind: u8) -> &'static str {
         N_MECHANIC => "Motor sesi duydum sandım… Aracın mı bozuldu? Rıza'nın elinden kurtulan araç yoktur.",
         N_TRAINER => "Köpekler insanı kokusundan tanır. Seninki iyi bir koku, sana güvenirler.",
         N_GUIDE => "Bir şey sormak istersen buradayım. Kampın etrafında dikkatli ol.",
+        N_WIZARD => "Rüzgâr senin geleceğini fısıldadı yolcu. Kapılarım açık: kendi üssüne ya da gördüğün güvenli bir yere.",
         _ => "Kuleden her şeyi görüyorum. Zombileri mızrağımla indiririm, sen içeride güvendesin.",
     }
-}
-
-/// NPC başına ara sıra değişen sohbet satırları
-fn chatter(kind: u8, seed: usize) -> &'static [&'static str] {
-    let all: &[&[&str]] = match kind {
-        N_MERCHANT => &[
-            &["Eskiden kasabada bir dükkânım vardı. Şimdi bu tezgâh ve bir çadır.", "Ama ticaret ölmez, dostum. İnsanlar hep bir şeye ihtiyaç duyar."],
-            &["Kemik toplarsan satın alırım. Köpek eğitmeni bayılıyor onlara.", "Zehir bezi mi? Bataklıktan getirebilirsen iyi para eder."],
-        ],
-        N_QUEST => &[
-            &["Bu kamp ilk kurulduğunda üç kişiydik. Şimdi bak, bir köy olduk.", "Her gelen bir umut getiriyor."],
-            &["Şehrin kapısını Titan'ın yıktığını söylüyorlar.", "Ben inanmıyorum… Ama kuzeyden gelen sesleri sen de duydun, değil mi?"],
-        ],
-        N_DOCTOR => &[
-            &["Isırık yaraları kolay iyileşmez. Bandajları sık değiştir.", "Zehirli zombilere yakın durma; panzehir her zaman yanında olsun."],
-            &["Bu hastaneyi bir çadırla kurdum. Şimdi on yatağımız var.", "Malzeme getirirsen daha çok insan kurtarırız."],
-        ],
-        N_MECHANIC => &[
-            &["Bu istasyonun son depolarında hâlâ biraz benzin var.", "Bisiklet en sessizidir; zombiler motor sesine koşar, bunu unutma."],
-            &["Bir SUV'u tamir etmek için üç gün uğraştım.", "Sonra bir tank zombi devirdi. Hayat işte."],
-        ],
-        N_TRAINER => &[
-            &["Köpeğin seninle birlikte savaşır, zombiler de ona saldırır.", "Canı azalırsa bayılır, biraz dinlenince geri gelir."],
-            &["Kemikle eğitilen köpek daha güçlü ısırır.", "Burada sahipsiz kalan köpekleri topluyorum."],
-        ],
-        N_GUIDE => &[
-            &["Gece zombiler daha cesur olur. Fenerin yoksa kampa yakın dur.", "Güvenli bölgeye kaçarsan peşindeki yaratık seni bırakır; tanrılar bazen onları çarpar bile."],
-            &["Takla, cepler, üretim… Hepsini öğrendin.", "Bir de haritaya bak: keşfetmediğin yerler bulutla kaplı."],
-        ],
-        _ => &[&["Mızrağım hiç ıskalamaz.", "Yine de sen dikkatli ol."]],
-    };
-    all[seed % all.len()]
 }
 
 #[cfg(test)]
@@ -584,5 +702,44 @@ mod tests {
         g.step(1.0 / 30.0, Input::default());
         g.story_tick();
         assert_eq!(g.story_json()[1]["ready"], true);
+    }
+
+    #[test]
+    fn accept_closes_with_single_leave_option() {
+        let mut g = Game::new(5, Progress::default(), 1);
+        npc_at(&mut g, N_GUIDE);
+        let d = g.talk(N_GUIDE, "accept");
+        let ids: Vec<&str> = d["opts"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["ok"], "kabulden sonra yalnız Yola Çık kalmalı");
+        assert!(d["lines"].as_array().unwrap().iter().all(|l| !l.as_str().unwrap().contains("Tamamlandı")));
+        assert!(g.progress.story.guide_on);
+        // anında tamamlanan seviye görevi: teslim de sunulur
+        g.progress.story = StoryState { guide: 6, ..Default::default() };
+        g.progress.level = 6;
+        let d = g.talk(N_GUIDE, "accept");
+        let ids: Vec<&str> = d["opts"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap()).collect();
+        assert_eq!(ids, ["turnin", "ok"]);
+        let d = g.talk(N_GUIDE, "turnin");
+        assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "ok"));
+    }
+
+    #[test]
+    fn chat_topics_menu() {
+        let mut g = Game::new(5, Progress::default(), 1);
+        for k in [N_MERCHANT, N_QUEST, N_DOCTOR, N_MECHANIC, N_TRAINER, N_GUIDE] {
+            npc_at(&mut g, k);
+            let d = g.talk(k, "chat");
+            let opts = d["opts"].as_array().unwrap();
+            assert!(opts.len() >= 6 && opts.iter().any(|o| o["id"] == "back"));
+            for o in opts {
+                let id = o["id"].as_str().unwrap();
+                if id.starts_with("t:") {
+                    let d = g.talk(k, id);
+                    assert!(!d["lines"].as_array().unwrap().is_empty(), "{k} {id}");
+                }
+            }
+            let d = g.talk(k, "back");
+            assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "bye"));
+        }
     }
 }

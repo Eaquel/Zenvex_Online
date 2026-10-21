@@ -117,7 +117,22 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                         3 -> {
                             PT("Ödül postaları, etkinlik duyuruları, arkadaşlık istekleri ve klan davetleri için bildirim alırsın.", 13.sp, Px.Text, maxLines = 3)
                             Spacer(Modifier.height(10.dp))
-                            PxButton("Bildirim İzinlerini Aç", color = Px.Blue, icon = "mail", height = 44.dp, size = 15.sp) {
+                            // izin durumu: sistem ayarlarından dönünce de güncellenir
+                            var allowed by remember { mutableStateOf(androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()) }
+                            androidx.compose.runtime.LaunchedEffect(Unit) {
+                                while (true) {
+                                    allowed = androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled()
+                                    kotlinx.coroutines.delay(1000)
+                                }
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(if (allowed) "check" else "mail", 26.dp, if (allowed) Px.Name else Px.Sub)
+                                Spacer(Modifier.width(8.dp))
+                                PT(if (allowed) "Bildirimler Açık" else "Bildirimler Kapalı", 16.sp, if (allowed) Px.Name else Color(0xFFFF7A6A))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            PxButton(if (allowed) "Bildirim Ayarlarını Düzenle" else "Bildirim İzinlerini Aç",
+                                color = if (allowed) Px.Dark else Px.Blue, icon = "mail", height = 44.dp, size = 15.sp) {
                                 val i = if (Build.VERSION.SDK_INT >= 26) Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName)
                                 else Intent(SysSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))
                                 runCatching { ctx.startActivity(i) }
@@ -217,7 +232,7 @@ private fun LegalSection() {
         1 -> for (p in TERMS) PT(p, 13.sp, Px.Text, Modifier.padding(bottom = 6.dp), maxLines = 6)
         else -> {
             PT("Zenvex Online", 20.sp, Px.Orange)
-            PT("Sürüm ${BuildConfig.VERSION_NAME}", 12.sp, Px.Sub)
+            PT("Sürüm: ${appVersion()}", 12.sp, Px.Sub)
             Spacer(Modifier.height(6.dp))
             PT("Oyun çekirdeği Rust, Android arayüzü Kotlin ile yazıldı. Çevrimiçi altyapı: Supabase (AB, Frankfurt).", 13.sp, maxLines = 3)
             PT("Yazı tipleri: Outfit, Big Shoulders, Pixelify Sans (SIL Open Font License).", 13.sp, maxLines = 2)
@@ -277,6 +292,14 @@ private fun AccountSettings() {
             }
         }
         PT("ID ve anahtarı bir yere not et: telefon değişirse bunlarla girersin.", 12.sp, Px.Sub, maxLines = 2)
+        if (Account.profile.value.optBoolean("google")) {
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon("check", 22.dp, Px.Name)
+                Spacer(Modifier.width(6.dp))
+                PT("Google Hesabına Bağlı: Bu Telefonda Ya Da Yenisinde Google İle Girebilirsin", 13.sp, Px.Name, maxLines = 2)
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(nick, { nick = it.take(16) }, "Oyuncu Adı", Modifier.width(220.dp))
@@ -294,10 +317,10 @@ private fun AccountSettings() {
                 confirmKey = false
                 Account.changeKey { e -> if (e != null) Toaster.show(e, false) else { showKey = true; Toaster.show("Yeni Anahtar Oluşturuldu, Not Et!") } }
             }
-            PxButton("Google'a Bağla", height = 40.dp, size = 13.sp) {
+            if (!Account.profile.value.optBoolean("google")) PxButton("Google'a Bağla", height = 40.dp, size = 13.sp) {
                 val act = ctx as? android.app.Activity ?: return@PxButton
                 com.zenvex.online.net.GoogleSignIn.start(act, link = true) { e ->
-                    when { e == null -> Toaster.show("Hesabın Google'a Bağlandı"); e.isNotEmpty() -> Toaster.show(e, false) }
+                    when { e == null -> { Toaster.show("Hesabın Google'a Bağlandı"); Account.refresh() }; e.isNotEmpty() -> Toaster.show(e, false) }
                 }
             }
             PxButton("Başka Hesaba Gir", color = Px.Dark, height = 40.dp, size = 13.sp) { dialog = true }
