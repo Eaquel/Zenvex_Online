@@ -527,12 +527,15 @@ impl Game {
         z.flash_t = 0.1;
         z.bar_t = 3.0;
         let heavy = matches!(z.kind, ZKind::Tank | ZKind::Titan);
+        // hafif itme: vuruş hissedilir ama zombi saldırısını kesmez (eskiden 140/220 savruluyordu, oyun çok kolaydı)
         let push = if heavy {
-            20.0
+            0.0
+        } else if stun {
+            90.0
         } else if crit {
-            220.0
+            55.0
         } else {
-            140.0
+            25.0
         };
         z.kx = kx * push;
         z.ky = ky * push;
@@ -570,11 +573,17 @@ impl Game {
             z.anim_t = 0.0;
             z.timer = 3.0;
             self.on_zombie_killed(i, by_player);
-        } else if !heavy && z.state != ZState::Flee {
+        } else if stun && !heavy && z.state != ZState::Flee {
+            // yalnız sersemletme durdurur; sıradan vuruşta zombi saldırmaya devam eder
             z.state = ZState::Hurt;
             z.anim = Z_HURT;
             z.anim_t = 0.0;
-            z.timer = if stun { 1.0 } else { 0.22 };
+            z.timer = 1.0;
+        } else if matches!(z.state, ZState::Wander | ZState::Notice) && !z.ret {
+            // vurulan zombi hemen saldırgana döner
+            z.state = ZState::Chase;
+            z.anim = Z_WALK;
+            z.anim_t = 0.0;
         }
     }
 
@@ -782,7 +791,7 @@ impl Game {
         }
         self.areas.retain(|a| a.life > 0.0);
         if pdmg > 0.0 {
-            self.damage_player(pdmg);
+            self.damage_player_dot(pdmg);
         }
         if let Some((sx, sy, d)) = shock {
             // Titan dalgası: takla atan kaçar; değerse geri savrulur ve yere düşer

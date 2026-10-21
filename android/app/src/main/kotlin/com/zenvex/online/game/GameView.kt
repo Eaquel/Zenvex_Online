@@ -439,9 +439,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (chatLines.size > 8) chatLines.removeAt(0)
     }
 
+    private var lastVibe = 0L
+    private var lastHurtFx = 0L
     private fun vibrate(ms: Long, amp: Int) {
         val lvl = Settings.current.haptics
         if (lvl == 0) return
+        // titreşim bir sistem çağrısı: kurşun yağmurunda art arda çağrılınca kare düşürüyordu
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastVibe < 140) return
+        lastVibe = now
         runCatching { vibrator?.vibrate(VibrationEffect.createOneShot(ms, (amp * (if (lvl == 2) 1.0 else 0.5)).toInt().coerceIn(1, 255))) }
     }
 
@@ -518,7 +524,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "pdmg" -> {
                     floaters += Floater(x, y, "-" + e.getInt("v"), 0xFFFF5050.toInt(), 24f)
-                    vignetteRed = 0.6f; shake(7f, 0.18f); vibrate(40, 160); Audio.play("hurt", 0.8f)
+                    vignetteRed = 0.6f
+                    val now = android.os.SystemClock.uptimeMillis()
+                    if (now - lastHurtFx > 180) { lastHurtFx = now; shake(7f, 0.18f); vibrate(40, 160); Audio.play("hurt", 0.8f) }
                 }
                 "xp" -> floaters += Floater(x, y, "+" + e.getInt("v") + " XP", 0xFF8CE0FF.toInt(), 18f, 1.4f, 1.4f)
                 "gold" -> { floaters += Floater(x, y, "+" + e.getInt("v"), 0xFFFFD34A.toInt(), 20f); Audio.play("coin", 0.7f) }
@@ -531,7 +539,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "invfull" -> ui.onToast("Çanta dolu!")
                 "lvl" -> {
                     fx("levelup", 0f, 0f, 120f, follow = true)
-                    setBanner("SEVİYE ${e.getInt("level")}", "+1 skill puanı · skill ağacından bir yol seç", 0xFFFFD34A.toInt())
+                    setBanner("SEVİYE ${e.getInt("level")}", "+5 Can · +1 Yumruk Hasarı", 0xFFFFD34A.toInt())
                     Audio.play("levelup"); vibrate(120, 200)
                     burst(hud[Native.PX], hud[Native.PY], 40, 0xFFFFE070.toInt(), 300f, 5f, 1, 1.2f)
                 }

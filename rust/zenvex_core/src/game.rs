@@ -241,6 +241,11 @@ pub struct Player {
     pub combat_t: f32,
     pub last_breath_cd: f32,
     pub hurt_t: f32,
+    /// sendeleme bekleme süresi: art arda vuruşlar (kurşun yağmuru) oyuncuyu kilitlemesin
+    pub flinch_cd: f32,
+    /// sürekli hasar (zehir birikintisi) için biriken hasar yazısı
+    pub dot_acc: f32,
+    pub dot_t: f32,
     pub flash_t: f32,
     pub moving: bool,
     pub step_t: f32,
@@ -808,6 +813,8 @@ impl Game {
             }
             return;
         }
+        self.player.flinch_cd -= dt;
+        self.player.dot_t -= dt;
         if self.player.hurt_t > 0.0 {
             self.player.hurt_t -= dt;
             if self.player.anim != A_HURT {
@@ -1076,6 +1083,15 @@ impl Game {
     }
 
     pub fn damage_player(&mut self, amount: f32) {
+        self.damage_player_ex(amount, false);
+    }
+
+    /// Sürekli hasar (zehir birikintisi, bulut): sendeletmez, hasar yazısı yarım saniyede bir toplu çıkar.
+    pub fn damage_player_dot(&mut self, amount: f32) {
+        self.damage_player_ex(amount, true);
+    }
+
+    fn damage_player_ex(&mut self, amount: f32, dot: bool) {
         if self.player_invulnerable() {
             return;
         }
@@ -1121,13 +1137,24 @@ impl Game {
             return;
         }
         p.hp -= dmg;
-        p.flash_t = 0.12;
         let (x, y) = (p.x, p.y);
-        self.events.push(Event::PlayerDamage {
-            x,
-            y: y - 110.0,
-            v: dmg.round().max(1.0) as i32,
-        });
+        if dot {
+            p.dot_acc += dmg;
+            if p.dot_t <= 0.0 {
+                p.dot_t = 0.5;
+                p.flash_t = 0.12;
+                let v = p.dot_acc.round().max(1.0) as i32;
+                p.dot_acc = 0.0;
+                self.events.push(Event::PlayerDamage { x, y: y - 110.0, v });
+            }
+        } else {
+            p.flash_t = 0.12;
+            self.events.push(Event::PlayerDamage {
+                x,
+                y: y - 110.0,
+                v: dmg.round().max(1.0) as i32,
+            });
+        }
         let max_hp = self.progress.max_hp();
         let has_cloak = self.progress.eq.cloak == "cloak";
         let p = &mut self.player;
@@ -1145,8 +1172,10 @@ impl Game {
                 return;
             }
             self.kill_player();
-        } else if !p.atk_active {
+        } else if !dot && !p.atk_active && p.flinch_cd <= 0.0 && dmg >= max_hp * 0.04 {
+            // kısa sendeleme: en fazla 1,2 sn'de bir ve yalnız kayda değer vuruşta
             p.hurt_t = 0.18;
+            p.flinch_cd = 1.2;
         }
     }
 

@@ -274,8 +274,12 @@ pub struct Progress {
     pub dog_owned: bool,
     /// köpek gelişimi: hasar, can, can yenilenmesi (0–10)
     pub dog_lv: [u8; 3],
-    /// hile/ödül ile verilen ek skill puanı
+    /// hile/ödül ile verilen ek skill puanı (eski; ağaç artık elmasla açılır)
     pub extra_points: u32,
+    /// ağaca harcanan toplam elmas (sıfırlanınca kredi olur)
+    pub tree_spent: u32,
+    /// sıfırlamadan kalan ağaç kredisi: yeni düğümlerde önce bu harcanır (elmas geri verilmez, kayıt doğrulayıcısı elmas artışını reddeder)
+    pub tree_credit: u32,
     /// keşfedilen harita hücreleri (FOG_N satır × FOG_N bit; haritada bulut kalkar)
     pub fog: Vec<u64>,
     /// rehber ve görevci zincirleri
@@ -407,6 +411,8 @@ impl Default for Progress {
             dog_owned: false,
             dog_lv: [0; 3],
             extra_points: 0,
+            tree_spent: 0,
+            tree_credit: 0,
             fog: Vec::new(),
             story: Default::default(),
             chests: Vec::new(),
@@ -545,10 +551,10 @@ impl Progress {
     pub fn damage_mult(&self) -> f32 {
         1.0 + self.bonus().dmg_pct
     }
-    /// Yumruk: temel 20 (+seviye), yakın dövüş düz bonusu, yüzde bonusları (Savaşçı Sv2/Sv7 + ağaç)
+    /// Yumruk: temel 15 (+1/seviye), yakın dövüş düz bonusu, yüzde bonusları (Savaşçı Sv2/Sv7 + ağaç)
     pub fn fist_damage(&self) -> f32 {
         let b = self.bonus();
-        (15.0 + 0.5 * (self.level - 1) as f32 + b.melee_flat) * (1.0 + b.fist_pct)
+        (15.0 + 1.0 * (self.level - 1) as f32 + b.melee_flat) * (1.0 + b.fist_pct)
     }
     pub fn crit_chance(&self) -> f32 {
         0.05 + self.bonus().crit

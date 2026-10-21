@@ -37,9 +37,17 @@ object Audio {
     }
 
     /** volume: 0..1 ek çarpan (ör. uzaklık); pitch: 0.5..2 */
+    private val lastPlay = HashMap<String, Long>()
+
     fun play(name: String, volume: Float = 1f, pitch: Float = 1f, bus: Bus = Bus.Sfx) {
         val p = pool ?: return
         val id = ids[name] ?: return
+        // aynı ses 45 ms içinde tekrar çalınmaz (çok askerli çatışmada ses kanalı ve işlemci boğulmasın)
+        val now = android.os.SystemClock.uptimeMillis()
+        synchronized(lastPlay) {
+            if (now - (lastPlay[name] ?: 0L) < 45) return
+            lastPlay[name] = now
+        }
         if (!synchronized(loaded) { id in loaded }) return
         val s = Settings.current
         val v = (s.master * (if (bus == Bus.Ui) s.uiSound else s.sfx) * volume).coerceIn(0f, 1f)

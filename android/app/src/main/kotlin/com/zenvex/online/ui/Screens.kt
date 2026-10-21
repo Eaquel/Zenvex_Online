@@ -235,79 +235,9 @@ fun DroneTargets(prof: JSONObject, changed: () -> Unit) {
     }
 }
 
-// =========================================================================== yetenekler
-@Composable
-fun SkillsScreen(back: () -> Unit) {
-    var tick by remember { mutableIntStateOf(0) }
-    val data = remember(tick) { GameSession.ui("skills") }
-    val branches = listOf("Power" to ("GÜÇ" to Pal.Red), "Endurance" to ("DAYANIKLILIK" to Pal.Green), "Agility" to ("ÇEVİKLİK" to Pal.Blue), "Survival" to ("HAYATTA KALMA" to Pal.Gold))
-    ScreenFrame("YETENEKLER", "magic", back, right = {
-        Chip("star", "${data.optInt("points")} puan", Pal.Gold)
-        Spacer(Modifier.width(10.dp))
-        GButton("Sıfırla", tone = Tone.Red, icon = "refresh", height = 38.dp, size = 13.sp, sub = "${data.optInt("reset_cost")} altın") {
-            val r = GameSession.cmd("reset_skills"); Toaster.show(r.msg, r.ok); tick++
-        }
-    }) {
-        val skills = data.optJSONArray("skills").objs()
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            for ((b, meta) in branches) {
-                val (title, col) = meta
-                Column(Modifier.weight(1f).fillMaxHeight().glass(20.dp, col).padding(10.dp).verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    T(title, 16.sp, col, display = true)
-                    for (s in skills.filter { it.optString("branch") == b }) {
-                        val lvl = s.optInt("lvl"); val max = s.optInt("max")
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0x55000000)).padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(34.dp).clip(CircleShape).background(col.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) { Icon(skillIcon(s.optString("icon")), 20.dp, col) }
-                                Spacer(Modifier.width(8.dp))
-                                Column(Modifier.weight(1f)) {
-                                    T(s.optString("name"), 13.sp, bold = true)
-                                    T("$lvl / $max", 11.sp, Pal.Sub)
-                                }
-                            }
-                            T(s.optString("desc"), 11.sp, Pal.Sub)
-                            Spacer(Modifier.height(4.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                repeat(max) { k -> Box(Modifier.weight(1f).height(5.dp).clip(RoundedCornerShape(3.dp)).background(if (k < lvl) col else Color(0x40FFFFFF))) }
-                            }
-                            Spacer(Modifier.height(6.dp))
-                            if (lvl < max) GButton(if (s.optBoolean("can")) "GELİŞTİR" else s.optString("why").ifEmpty { "Sv ${s.optInt("req")}" },
-                                Modifier.fillMaxWidth(), if (s.optBoolean("can")) Tone.Green else Tone.Dark, height = 32.dp, size = 12.sp) {
-                                val r = GameSession.cmd("upgrade_skill", "id" to s.optInt("id")); if (!r.ok) Toaster.show(r.msg, false); tick++
-                            } else T("EN YÜKSEK", 12.sp, col, bold = true)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fun skillIcon(i: String) = when (i) { "fist" -> "fist"; "heart" -> "heart"; "shield" -> "shield"; "bolt" -> "bolt"; "wood" -> "wood"; "gem" -> "gem"; "coin" -> "coin"; "plus" -> "plus"; "play" -> "play"; else -> "star" }
-
-// envanter: Bag.kt
-
-@Composable
-private fun EqSlot(eq: JSONObject, key: String, label: String, selected: Boolean, onClick: () -> Unit) {
-    val it = eq.optJSONObject(key)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        ItemSlot(it?.optString("id"), 0, it?.optInt("rarity") ?: 0, 58.dp, selected, label = label) { onClick() }
-    }
-}
-
-@Composable
-fun Stat(icon: String, v: String, label: String, col: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, 18.dp, col)
-        T(v, 13.sp, bold = true)
-        T(label, 10.sp, Pal.Sub)
-    }
-}
-
 private val RARITY_NAMES = listOf("Sıradan", "Nadir", "Destansı", "Efsanevi", "Sezonluk")
 private val KIND_NAMES = mapOf("Material" to "Malzeme", "Consumable" to "Tüketilebilir", "Ammo" to "Mermi", "Weapon" to "Silah", "Helmet" to "Kask",
-    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Cloak" to "Pelerin", "Currency" to "Para")
+    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Pants" to "Pantolon", "Ring" to "Yüzük", "Necklace" to "Kolye", "Currency" to "Para")
 
 @Composable
 fun ItemDetail(item: JSONObject) {
@@ -326,6 +256,7 @@ fun ItemDetail(item: JSONObject) {
     if (item.optDouble("armor", 0.0) > 0) T("Zırh +${item.optDouble("armor").toInt()}", 12.sp, Pal.Blue, bold = true)
     T("Değer: ${item.optInt("value")} altın", 11.sp, Pal.Gold)
 }
+
 
 // =========================================================================== üretim
 @Composable

@@ -369,7 +369,7 @@ fun NewsDialog(start: Int = 0, close: () -> Unit) {
 private val NEWS: List<List<Pair<String, String>>> = listOf(
     listOf(
         "Hayatta Kal" to "Salgından sonra şehir zombilerle doldu. Amacın kamptan başlayarak güçlenmek, malzeme toplamak, eşya üretmek ve haritanın tehlikeli bölgelerini adım adım geri almak.",
-        "Güçlen" to "Zombileri öldür, görevleri bitir, seviye atla. Her seviye yetenek puanı verir; yetenek ağacından gücünü, canını ve becerilerini geliştir.",
+        "Güçlen" to "Zombileri öldür, görevleri bitir, seviye atla. Her seviye +5 Can ve +1 Yumruk Hasarı verir; yetenek ağacındaki düğümleri elmasla açarak gücünü, canını ve becerilerini geliştir.",
         "Birlikte Oyna" to "Bir klana katıl ya da kendi klanını kur. Klanınla devlet üslerine baskın yap, üssü ele geçir ve klan deponu doldur.",
     ),
     listOf(
@@ -381,7 +381,7 @@ private val NEWS: List<List<Pair<String, String>>> = listOf(
         "Çanta Ve Cepler" to "Çantadan eşyalarını kuşanırsın. İlk dört cep oyunda hızlı kullanım tuşu olur; ilaç ve iksirleri buraya koy.",
     ),
     listOf(
-        "Seviye Ve Yetenekler" to "XP ile seviye atlarsın. Yetenek puanlarını hasar, can, hız ve takla gibi dallara dağıt.",
+        "Seviye Ve Yetenekler" to "XP ile seviye atlarsın; her seviye +5 Can ve +1 Yumruk Hasarı verir. Yetenek ağacında hasar, can, hız ve takla dallarındaki düğümleri elmasla aç. Ağacı sıfırlarsan harcadığın elmas kredi olarak kalır.",
         "Eşya Üretimi" to "Ağaç, taş ve hurda topla; çalışma tezgâhında silah, ekipman, ilaç ve sandık üret.",
         "Köpek" to "Köpeğini barınaktaki eğitmenden alırsın. Köpeğin seninle savaşır, seviye atlar ve eğitmende geliştirilir.",
         "Devlet Üsleri" to "Haritada askerlerin koruduğu devlet üsleri var. Keşfettiğinde üssün vereceği ödülü ve kalan süreyi haritada görürsün. Klan olarak ele geçir, süre bitene kadar savun.",

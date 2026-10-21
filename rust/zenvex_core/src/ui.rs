@@ -131,9 +131,10 @@ impl Game {
                     let owned = n.id == 0 || g.tree.contains(&n.id);
                     let avail = !owned && n.links.iter().any(|&l| l == 0 || g.tree.contains(&l));
                     json!({ "id": n.id, "x": n.x, "y": n.y, "b": n.branch, "k": n.kind, "s": format!("{:?}", n.stat), "name": n.name, "desc": n.desc,
-                            "links": n.links, "own": owned, "av": avail })
+                            "links": n.links, "own": owned, "av": avail, "cost": g.tree_cost(n.id), "req": g.tree_req_level(n.id) })
                 }).collect();
-                json!({ "points": g.tree_points(), "level": g.level, "reset_cost": g.tree_reset_cost(), "branches": crate::rpg::BRANCHES,
+                json!({ "points": g.tree_points(), "gems": g.gems, "credit": g.tree_credit, "spent": g.tree_spent, "level": g.level,
+                        "reset_cost": g.tree_reset_cost(), "branches": crate::rpg::BRANCHES,
                         "nodes": nodes, "perks": crate::rpg::WARRIOR_PERKS, "char_level": g.char_level[0],
                         "char_xp": g.char_xp[0], "char_next": data::char_xp_to_next(g.char_level[0]) })
             }
@@ -1258,8 +1259,8 @@ impl Game {
                 Ok(format!("{} getirildi", data::VEHICLES[k].name))
             }
             "points" | "puan" => {
-                self.progress.extra_points += num(1, 10.0) as u32;
-                Ok(format!("Skill puanı: {}", self.progress.tree_points()))
+                self.progress.tree_credit += num(1, 10.0) as u32 * 10;
+                Ok(format!("Ağaç kredisi: {}", self.progress.tree_credit))
             }
             "fuel" | "yakit" => {
                 for v in self.vehicles.iter_mut() {

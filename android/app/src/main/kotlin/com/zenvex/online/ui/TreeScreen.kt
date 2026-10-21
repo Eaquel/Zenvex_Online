@@ -50,7 +50,7 @@ import kotlin.math.sin
 
 
 /**
- * Gelişim ekranı: "Skill Ağacı" (her seviye 1 puan, bağlı düğümden ilerlenir) ve "Savaşçı" (karakter seviyesi 1–10).
+ * Gelişim ekranı: "Skill Ağacı" (düğümler elmasla açılır, bağlı düğümden ilerlenir) ve "Savaşçı" (karakter seviyesi 1–10).
  */
 @Composable
 fun TreeScreen(close: () -> Unit) {
@@ -67,10 +67,13 @@ fun TreeScreen(close: () -> Unit) {
                 PxButton("Savaşçı", color = if (tab == 1) Px.Green else Px.Dark, size = 16.sp, height = 40.dp) { tab = 1 }
                 Spacer(Modifier.weight(1f))
                 if (tab == 0) {
-                    PT("Puan: ${data.optInt("points")}", 20.sp, if (data.optInt("points") > 0) Px.Clan else Px.Sub)
+                    Icon("gem", 22.dp, Color(0xFF7FE0FF))
+                    Spacer(Modifier.width(4.dp))
+                    PT(fmt(data.optInt("gems")), 20.sp, Color(0xFF7FE0FF))
+                    if (data.optInt("credit") > 0) { Spacer(Modifier.width(8.dp)); PT("+ ${fmt(data.optInt("credit"))} Kredi", 14.sp, Px.Clan) }
                     Spacer(Modifier.width(10.dp))
                     var confirm by remember { mutableStateOf(false) }
-                    PxButton(if (confirm) "Emin misin?" else "Sıfırla (${fmt(data.optInt("reset_cost"))} altın)", color = Px.Red, size = 13.sp, height = 36.dp) {
+                    PxButton(if (confirm) "Emin Misin? Elmaslar Kredi Olur" else "Sıfırla (${fmt(data.optInt("reset_cost"))} Altın)", color = Px.Red, size = 13.sp, height = 36.dp) {
                         if (!confirm) { confirm = true; return@PxButton }
                         confirm = false
                         val r = GameSession.cmd("tree_reset"); Toaster.show(r.msg, r.ok); tick++
@@ -217,7 +220,7 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
             if (n == null) {
                 PT("Bir düğüme dokun", 16.sp, Px.Sub)
                 Spacer(Modifier.height(8.dp))
-                PT("Her seviyede 1 puan kazanırsın. Ortadan başla, açık bir düğüme bağlı olanları alabilirsin. Parlayanlar şu an alınabilir.",
+                PT("Düğümler elmasla açılır. Ortadan başla, açık bir düğüme bağlı olanları alabilirsin. Her seviye ayrıca +5 Can ve +1 Yumruk Hasarı verir. Sıfırlayınca harcadığın elmas kredi olarak kalır.",
                     13.sp, Px.Text, maxLines = 8)
                 Spacer(Modifier.height(10.dp))
                 for (st in listOf("FistPct" to "Hasar", "Crit" to "Kritik", "BladePct" to "Silah", "HpFlat" to "Can", "DmgTaken" to "Savunma", "Dodge" to "Çeviklik"))
@@ -249,7 +252,9 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
                 Spacer(Modifier.weight(1f))
                 when {
                     n.optBoolean("own") -> PT("✔ Açık", 16.sp, Px.Name)
-                    n.optBoolean("av") -> PxButton("Aç (1 puan)", Modifier.fillMaxWidth(), Px.Green, size = 16.sp, enabled = data.optInt("points") > 0) {
+                    n.optBoolean("av") && data.optInt("level") < n.optInt("req") -> PT("Seviye ${n.optInt("req")} Gerekli", 14.sp, Px.Orange)
+                    n.optBoolean("av") -> PxButton("Aç · ${fmt(n.optInt("cost"))} Elmas", Modifier.fillMaxWidth(), Px.Green, icon = "gem", size = 16.sp,
+                        enabled = data.optInt("gems") + data.optInt("credit") >= n.optInt("cost")) {
                         val r = GameSession.cmd("tree_unlock", "id" to n.optInt("id")); Toaster.show(r.msg, r.ok)
                         if (r.ok) { burst = n.optInt("id") to time; haptic.performHapticFeedback(HapticFeedbackType.LongPress) }
                         changed()

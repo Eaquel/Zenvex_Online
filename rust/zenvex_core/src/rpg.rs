@@ -307,39 +307,62 @@ pub fn bonus(p: &Progress) -> Bonus {
 }
 
 impl Progress {
-    /// Harcanabilir skill puanı: her seviye 1 (1. seviye hariç).
-    pub fn tree_points(&self) -> u32 {
-        (self.level.saturating_sub(1) + self.extra_points).saturating_sub(self.tree.len() as u32)
+    /// Düğüm bedeli (elmas): türe göre taban (küçük 10, belirgin 25, anahtar 100), her açık düğümle %8 artar; 5'e yuvarlı.
+    pub fn tree_cost(&self, id: u16) -> u32 {
+        let base = match tree().get(id as usize).map(|n| n.kind).unwrap_or(0) { 0 => 10.0, 1 => 25.0, _ => 100.0 };
+        let k = 1.0 + 0.08 * self.tree.len() as f32;
+        (((base * k) / 5.0).round() as u32 * 5).max(5)
     }
 
-    pub fn tree_can(&self, id: u16) -> Result<(), &'static str> {
+    /// Anahtar düğümler seviye 10'dan önce açılmaz.
+    pub fn tree_req_level(&self, id: u16) -> u32 {
+        if tree().get(id as usize).map(|n| n.kind).unwrap_or(0) == 2 { 10 } else { 1 }
+    }
+
+    /// HUD rozeti: şu an parası yetip açılabilecek düğüm sayısı.
+    pub fn tree_points(&self) -> u32 {
+        tree().iter().filter(|n| self.tree_can(n.id).is_ok()).count() as u32
+    }
+
+    pub fn tree_can(&self, id: u16) -> Result<(), String> {
         let t = tree();
         let n = t.get(id as usize).ok_or("Geçersiz düğüm")?;
         if id == 0 {
-            return Err("Merkez zaten açık");
+            return Err("Merkez zaten açık".into());
         }
         if self.tree.contains(&id) {
-            return Err("Zaten açık");
+            return Err("Zaten açık".into());
         }
         if !n.links.iter().any(|&l| l == 0 || self.tree.contains(&l)) {
-            return Err("Önce bağlı bir düğümü aç");
+            return Err("Önce bağlı bir düğümü aç".into());
         }
-        if self.tree_points() == 0 {
-            return Err("Skill puanın yok (her seviyede 1 puan)");
+        let lv = self.tree_req_level(id);
+        if self.level < lv {
+            return Err(format!("Seviye {lv} gerekli"));
+        }
+        let c = self.tree_cost(id);
+        if self.gems + self.tree_credit < c {
+            return Err(format!("{c} elmas gerekli"));
         }
         Ok(())
     }
 
     pub fn tree_unlock(&mut self, id: u16) -> Result<String, String> {
-        self.tree_can(id).map_err(String::from)?;
+        self.tree_can(id)?;
+        let c = self.tree_cost(id);
+        let from_credit = c.min(self.tree_credit);
+        self.tree_credit -= from_credit;
+        self.gems -= c - from_credit;
+        self.tree_spent += c;
         self.tree.push(id);
-        Ok(tree()[id as usize].name.clone())
+        Ok(format!("{} açıldı (-{c} elmas)", tree()[id as usize].name))
     }
 
     pub fn tree_reset_cost(&self) -> u32 {
         100 * self.level
     }
 
+    /// Sıfırlama: altın karşılığı; harcanan elmaslar ağaç kredisi olarak kalır.
     pub fn tree_reset(&mut self) -> Result<String, String> {
         let c = self.tree_reset_cost();
         if self.gold < c {
@@ -347,7 +370,9 @@ impl Progress {
         }
         self.gold -= c;
         self.tree.clear();
-        Ok("Skill ağacı sıfırlandı".into())
+        self.tree_credit += self.tree_spent;
+        self.tree_spent = 0;
+        Ok(format!("Skill ağacı sıfırlandı · {} elmas kredi olarak kaldı", self.tree_credit))
     }
 }
 
@@ -365,8 +390,10 @@ pub fn dog_hp(lv: u8) -> f32 {
 pub fn dog_regen(lv: u8) -> f32 {
     1.0 + 0.8 * lv as f32
 }
+/// Köpek geliştirme bedeli: yuvarlak tutarlar (250, 500, 1.000 …).
 pub fn dog_upgrade_cost(lv: u8) -> u32 {
-    (150.0 * ((lv as f32) + 1.0).powf(1.6)).round() as u32
+    const COST: [u32; 10] = [250, 500, 1_000, 1_500, 2_500, 4_000, 6_000, 8_000, 12_000, 15_000];
+    COST[(lv as usize).min(COST.len() - 1)]
 }
 
 #[cfg(test)]
@@ -395,8 +422,8 @@ mod tests {
 
     #[test]
     fn tree_unlock_rules() {
-        let mut p = Progress { level: 3, ..Default::default() };
-        assert_eq!(p.tree_points(), 2);
+        let mut p = Progress { level: 3, gems: 25, ..Default::default() };
+        assert_eq!(p.tree_cost(tree()[0].links[0]), 10);
         let first = tree()[0].links[0];
         assert!(p.tree_unlock(first).is_ok());
         // komşusu açık olmayan uzak düğüm alınamaz
@@ -404,8 +431,14 @@ mod tests {
         assert!(p.tree_unlock(far).is_err());
         let next = tree()[first as usize].links.iter().copied().find(|&l| l != 0).unwrap();
         assert!(p.tree_unlock(next).is_ok());
-        assert_eq!(p.tree_points(), 0);
+        assert!(p.gems < 10);
         assert!(p.tree_unlock(tree()[0].links[1]).is_err());
+        // sıfırlama: elmas geri gelmez, kredi olur
+        p.gold = 1000;
+        let spent = p.tree_spent;
+        assert!(p.tree_reset().is_ok());
+        assert_eq!(p.tree_credit, spent);
+        assert!(p.tree_unlock(first).is_ok());
     }
 
     #[test]
