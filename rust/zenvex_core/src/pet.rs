@@ -105,7 +105,9 @@ impl Game {
                     d.anim_t = 0.0;
                     let (kx, ky) = ((zx - d.x) / dist.max(1.0), (zy - d.y) / dist.max(1.0));
                     let dmg = rpg::dog_damage(lv[0]) * self.rng.range(0.9, 1.1);
+                    self.dog_hit = true;
                     self.hurt_zombie(i, dmg, false, kx, ky, false, true);
+                    self.dog_hit = false;
                     // ısırılan zombi köpeğe döner
                     if let Some(z) = self.zombies.get_mut(i) {
                         z.dog_aggro = 4.0;

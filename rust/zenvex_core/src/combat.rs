@@ -545,6 +545,9 @@ impl Game {
         }
         self.progress.kills += 1;
         self.progress.kills_by[z.kind as usize] += 1;
+        if self.dog_hit {
+            self.progress.ev.dog_kills += 1;
+        }
         self.events.push(Event::Kill {
             x: z.x,
             y: z.y,

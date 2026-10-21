@@ -148,15 +148,18 @@ pub struct Equipment {
     pub jacket: String,
     pub boots: String,
     pub bag: String,
+    /// V9'da slotu kaldırıldı; eski kayıtlarda kuşanılı pelerin çantaya döner
     pub cloak: String,
     /// V8
     pub ring: String,
     pub necklace: String,
+    /// V9
+    pub pants: String,
 }
 
 impl Equipment {
     /// Tüm ekipman slotları (arayüz sırası: sol sütun, sağ sütun)
-    pub const KEYS: [&'static str; 8] = ["helmet", "jacket", "boots", "cloak", "weapon", "bag", "ring", "necklace"];
+    pub const KEYS: [&'static str; 8] = ["helmet", "jacket", "pants", "boots", "weapon", "bag", "ring", "necklace"];
 
     pub fn get(&self, key: &str) -> Option<&String> {
         Some(match key {
@@ -166,6 +169,7 @@ impl Equipment {
             "boots" => &self.boots,
             "bag" => &self.bag,
             "cloak" => &self.cloak,
+            "pants" => &self.pants,
             "ring" => &self.ring,
             "necklace" => &self.necklace,
             _ => return None,
@@ -180,6 +184,7 @@ impl Equipment {
             "boots" => &mut self.boots,
             "bag" => &mut self.bag,
             "cloak" => &mut self.cloak,
+            "pants" => &mut self.pants,
             "ring" => &mut self.ring,
             "necklace" => &mut self.necklace,
             _ => return None,
@@ -193,7 +198,7 @@ impl Equipment {
             ItemKind::Jacket => "jacket",
             ItemKind::Boots => "boots",
             ItemKind::Bag => "bag",
-            ItemKind::Cloak => "cloak",
+            ItemKind::Pants => "pants",
             ItemKind::Ring => "ring",
             ItemKind::Necklace => "necklace",
             _ => return None,
@@ -279,6 +284,19 @@ pub struct Progress {
     pub chests: Vec<crate::chests::Chest>,
     /// V8: ölünce kişisel üste doğ (büyücüden seçilir)
     pub home_spawn: bool,
+    /// V9: etkinlik puanı sayaçları (istemci farkları sunucuya yollar)
+    pub ev: EventStats,
+}
+
+/// Etkinlik sayaçları: yalnız artar; istemci son gönderilenden farkı sunucuya yazar.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct EventStats {
+    pub soldier_kills: u32,
+    pub base_caps: u32,
+    pub dog_kills: u32,
+    /// tehlikeli (güvenli olmayan) bölgede yaşayarak geçen saniye
+    pub danger_secs: f64,
 }
 
 /// Keşif ızgarası: 120×120 hücre (her hücre 6 kare = 384 px); satır başına 2 kelime (FOG_W).
@@ -391,6 +409,7 @@ impl Default for Progress {
             story: Default::default(),
             chests: Vec::new(),
             home_spawn: false,
+            ev: EventStats::default(),
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);
@@ -479,7 +498,7 @@ impl Progress {
     // ---- ekipman
     /// V8: kask + ceket + bot zırhı (hasar × 100 / (100 + zırh)).
     pub fn armor(&self) -> f32 {
-        ["helmet", "jacket", "boots"].iter().filter_map(|k| self.eq.def(k)).map(|d| d.armor).sum()
+        ["helmet", "jacket", "pants", "boots"].iter().filter_map(|k| self.eq.def(k)).map(|d| d.armor).sum()
     }
 
     /// Ana çanta bölmesi: 20 slot, her 5 seviyede +2.

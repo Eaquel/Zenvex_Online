@@ -168,6 +168,9 @@ impl Game {
                     "city": g.level >= progress::CITY_LEVEL, "zone": world::ZONES_ALL[self.player.zone as usize].name(),
                     "stats": { "kills": g.kills, "deaths": g.deaths, "trees": g.trees, "crates": g.crates, "crafted": g.crafted,
                                "boss": g.boss_kills, "gold_earned": g.gold_earned, "time": g.play_time as u64 },
+                    // etkinlik puanı için sayaçlar (zombi türüne göre öldürme dahil)
+                    "ev": { "kills_by": g.kills_by, "boss": g.boss_kills, "soldiers": g.ev.soldier_kills, "caps": g.ev.base_caps,
+                            "dog": g.ev.dog_kills, "danger": g.ev.danger_secs as u64, "trees": g.trees, "crates": g.crates, "crafted": g.crafted },
                     "drone_targets": g.drone_targets,
                 })
             }
@@ -425,13 +428,30 @@ impl Game {
                 let a = &v["a"];
                 match a["t"].as_str().unwrap_or("") {
                     "remove_item" => {
+                        // adet yoksa o eşyanın tamamı, varsa yığınlardan o kadar
                         let it = a["item"].as_u64().unwrap_or(u64::MAX) as usize;
+                        let mut left = a["n"].as_u64().unwrap_or(u64::MAX);
                         for s in self.progress.inv.slots.iter_mut() {
-                            if s.is_some_and(|x| x.item as usize == it) {
-                                *s = None;
+                            if left == 0 {
+                                break;
+                            }
+                            if let Some(x) = s {
+                                if x.item as usize == it {
+                                    if (x.count as u64) <= left {
+                                        left -= x.count as u64;
+                                        *s = None;
+                                    } else {
+                                        x.count -= left as u16;
+                                        left = 0;
+                                    }
+                                }
                             }
                         }
                         Ok("Yönetici bir eşyanı kaldırdı".into())
+                    }
+                    "set_gems" => {
+                        self.progress.gems = a["v"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32;
+                        Ok("Yönetici elmasını ayarladı".into())
                     }
                     "clear_bag" => {
                         for s in self.progress.inv.slots.iter_mut() {
@@ -515,6 +535,34 @@ impl Game {
                 self.progress = progress::Progress::default();
                 self.respawn(false);
                 Ok("Profil sıfırlandı".into())
+            }
+            // süresi dolan etkinlik ödülü: çantadan, sandıklardan ve kuşanılandan kalkar
+            "expire_item" => {
+                let id = v["id"].as_str().unwrap_or("").to_string();
+                if let Some(idx) = crate::data::item_index(&id) {
+                    for s in self.progress.inv.slots.iter_mut() {
+                        if s.is_some_and(|x| x.item as usize == idx) {
+                            *s = None;
+                        }
+                    }
+                    for c in self.progress.chests.iter_mut() {
+                        for s in c.slots.iter_mut() {
+                            if s.is_some_and(|x| x.item as usize == idx) {
+                                *s = None;
+                            }
+                        }
+                    }
+                    for k in crate::progress::Equipment::KEYS {
+                        if let Some(e) = self.progress.eq.get_mut(k) {
+                            if *e == id {
+                                e.clear();
+                            }
+                        }
+                    }
+                    Ok(format!("{} süresi doldu", crate::data::item(&id).name))
+                } else {
+                    Err("Eşya yok".into())
+                }
             }
             "set_admin" => {
                 self.cheats_ok = v["on"].as_bool().unwrap_or(false);
@@ -604,7 +652,9 @@ impl Game {
                 // takas: verilen eşyayı envanterden çıkar
                 let id = v["id"].as_str().unwrap_or("");
                 let n = v["n"].as_u64().unwrap_or(1) as u32;
-                if id == "coin" {
+                if crate::data::item_bound(id) {
+                    Err("Etkinlik ödülleri takas edilemez".into())
+                } else if id == "coin" {
                     if self.progress.gold >= n {
                         self.progress.gold -= n;
                         Ok("ok".into())
@@ -671,7 +721,7 @@ impl Game {
             | ItemKind::Jacket
             | ItemKind::Boots
             | ItemKind::Bag
-            | ItemKind::Cloak
+            | ItemKind::Pants
             | ItemKind::Ring
             | ItemKind::Necklace => {
                 return self
@@ -747,6 +797,11 @@ impl Game {
 
     /// Yere bırak: n = None → yığının tamamı, aksi halde n tane.
     fn drop_slot(&mut self, slot: usize, n: Option<u32>) -> Result<String, String> {
+        if let Some(Some(x)) = self.progress.inv.slots.get(slot) {
+            if crate::data::item_bound(ITEMS[x.item as usize].id) {
+                return Err("Etkinlik ödülleri yere bırakılamaz".into());
+            }
+        }
         let s = self.progress.inv.take_n(slot, n).ok_or("Boş slot")?;
         let (x, y) = (self.player.x, self.player.y + 30.0);
         self.spawn_drop(s.item as usize, s.count as u32, x, y);

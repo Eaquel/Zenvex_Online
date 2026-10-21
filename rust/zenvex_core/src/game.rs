@@ -422,6 +422,8 @@ pub struct Remote {
 }
 
 pub struct Game {
+    /** köpeğin vuruşu sırasında doğru: öldürme köpek sayacına da yazılır */
+    pub dog_hit: bool,
     /** Hile komutları yalnız sunucunun yönetici dediği oturumda açılır (testlerde açık) */
     pub cheats_ok: bool,
     pub world: World,
@@ -571,6 +573,7 @@ impl Game {
             dog: None,
             time_scale: 1.0,
             cheats_ok: cfg!(test),
+            dog_hit: false,
             clan_boost: [0; 3],
             events: Vec::new(),
             time: 0.0,
@@ -641,6 +644,9 @@ impl Game {
         self.time += dt;
         self.day_t += dt / 960.0;
         self.progress.play_time += dt as f64;
+        if !self.player.dead && !crate::world::ZONES_ALL[self.player.zone as usize].safe() {
+            self.progress.ev.danger_secs += dt as f64;
+        }
         self.tick_timers(dt);
         self.story_tick();
         if self.passenger {

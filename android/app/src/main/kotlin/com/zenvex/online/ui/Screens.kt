@@ -144,6 +144,7 @@ fun LoadingScreen(back: () -> Unit = {}, done: () -> Unit) {
             groups.forEachIndexed { i, g -> runCatching { Atlas.get(ctx).preload(g) }; p = 0.15f + 0.85f * (i + 1f) / groups.size }
         }
         Online.start(Account.name.value.ifEmpty { GameSession.ui("profile").optString("name") }, GameSession.ui("profile").optString("tag_name"))
+        if (!Demo.on) com.zenvex.online.game.Events.onSessionStart()
         delay(200)
         done()
     }

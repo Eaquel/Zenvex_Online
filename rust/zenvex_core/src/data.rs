@@ -22,6 +22,8 @@ pub enum ItemKind {
     Necklace,
     /// V8: kişisel üsse kurulan sandık (armor = kapasite)
     Chest,
+    /// V9: pantolon (armor = zırh, bonus = hız %)
+    Pants,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -162,7 +164,30 @@ pub const ITEMS: &[ItemDef] = &[
     item!("neck_dark", "Karanlık Kolye", Necklace, Epic, 1, 700, "+50 can, +%20 can yenilenmesi.", 50.0, 0.20),
     item!("chest_wood", "Ahşap Sandık", Chest, Common, 5, 40, "Kişisel üssüne kurulur. 16 slot saklar.", 16.0, 0.0),
     item!("chest_iron", "Demir Sandık", Chest, Rare, 5, 160, "Kişisel üssüne kurulur. 24 slot saklar.", 24.0, 0.0),
-    item!("chest_military", "Askerî Sandık", Chest, Epic, 5, 450, "Kişisel üssüne kurulur. 32 slot saklar.", 32.0, 0.0),
+    item!("chest_military", "Askerî Sandık", Chest, Epic, 5, 450, "Kişisel üssüne kurulur. 32 slot saklar.", 32.0, 0.0),    // V9 pantolonlar (armor = zırh, bonus = hız %)
+    item!("pants_basic", "Kargo Pantolon", Pants, Common, 1, 35, "+3 zırh, +%1 hız.", 3.0, 0.01),
+    item!("pants_police", "Dizlikli Pantolon", Pants, Rare, 1, 130, "+6 zırh, +%2 hız.", 6.0, 0.02),
+    item!("pants_military", "Askerî Pantolon", Pants, Epic, 1, 320, "+10 zırh, +%3 hız.", 10.0, 0.03),
+    item!("pants_titan", "Titan Pantolonu", Pants, Legendary, 1, 2100, "+16 zırh, +%5 hız.", 16.0, 0.05),
+    // V9 etkinlik ödülleri (1., 2., 3. sıra): takas edilemez, yere bırakılamaz, 30 gün sonra kaybolur
+    item!("ev_blood_ring", "Kan Ayı Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Kan Ayı etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_blood_neck", "Kan Ayı Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Kan Ayı etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_blood_helm", "Kan Ayı Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Kan Ayı etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    item!("ev_titan_ring", "Titan Avı Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Titan Avı etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_titan_neck", "Titan Avı Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Titan Avı etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_titan_helm", "Titan Avı Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Titan Avı etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    item!("ev_base_ring", "Üs Fırtınası Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Üs Fırtınası etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_base_neck", "Üs Fırtınası Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Üs Fırtınası etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_base_helm", "Üs Fırtınası Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Üs Fırtınası etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    item!("ev_scrap_ring", "Hurdacılar Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Hurdacılar etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_scrap_neck", "Hurdacılar Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Hurdacılar etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_scrap_helm", "Hurdacılar Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Hurdacılar etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    item!("ev_pack_ring", "Sürü Lideri Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Sürü Lideri etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_pack_neck", "Sürü Lideri Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Sürü Lideri etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_pack_helm", "Sürü Lideri Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Sürü Lideri etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    item!("ev_breath_ring", "Son Nefes Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Son Nefes etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
+    item!("ev_breath_neck", "Son Nefes Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Son Nefes etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
+    item!("ev_breath_helm", "Son Nefes Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Son Nefes etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
 ];
 
 /// Oyundan kaldırılan eşyalar (ateşli silahlar, mermiler): hile panelinde de listelenmez.
@@ -172,6 +197,11 @@ pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w
 /// Eşya şu an oyunda elde edilebilir mi
 pub fn item_in_game(id: &str) -> bool {
     !RETIRED_ITEMS.iter().any(|r| if r.ends_with('_') { id.starts_with(r) } else { id == *r })
+}
+
+/// Hesaba bağlı eşya (etkinlik ödülleri): takas edilemez, yere bırakılamaz
+pub fn item_bound(id: &str) -> bool {
+    id.starts_with("ev_")
 }
 
 pub fn item_index(id: &str) -> Option<usize> {

@@ -147,7 +147,7 @@ fun InventoryScreen(back: () -> Unit, inGame: Boolean = false, onCraft: (() -> U
     BagView(inv, hero, inGame, back, { name, kv -> GameSession.cmd(name, *kv) }, onCraft = onCraft, chest = chest) { tick++ }
 }
 
-private val EQ_LEFT = listOf("helmet" to "Kask", "jacket" to "Ceket", "boots" to "Bot", "cloak" to "Pelerin")
+private val EQ_LEFT = listOf("helmet" to "Kask", "jacket" to "Ceket", "pants" to "Pantolon", "boots" to "Bot")
 private val EQ_RIGHT = listOf("weapon" to "Silah", "bag" to "Çanta", "ring" to "Yüzük", "necklace" to "Kolye")
 private val EQUIP_KINDS = listOf("Weapon", "Helmet", "Jacket", "Boots", "Bag", "Cloak", "Ring", "Necklace")
 private val BagPanel = Color(0xB4201F1C)
@@ -502,7 +502,7 @@ private fun PxStat(icon: String, v: String, col: Color) {
 
 private val RARITY_NAMES = listOf("Sıradan", "Nadir", "Destansı", "Efsanevi", "Sezonluk")
 private val KIND_NAMES = mapOf("Material" to "Malzeme", "Consumable" to "Tüketilebilir", "Ammo" to "Mermi", "Weapon" to "Silah", "Helmet" to "Kask",
-    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Cloak" to "Pelerin", "Currency" to "Para", "Ring" to "Yüzük", "Necklace" to "Kolye",
+    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Cloak" to "Pelerin", "Pants" to "Pantolon", "Chest" to "Sandık", "Currency" to "Para", "Ring" to "Yüzük", "Necklace" to "Kolye",
     "Chest" to "Sandık")
 
 @Composable

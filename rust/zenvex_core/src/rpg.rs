@@ -294,6 +294,9 @@ pub fn bonus(p: &Progress) -> Bonus {
     if let Some(d) = eq.def("boots") {
         b.speed += d.bonus;
     }
+    if let Some(d) = eq.def("pants") {
+        b.speed += d.bonus;
+    }
     b.dmg_taken = b.dmg_taken.min(0.6);
     b.dodge = b.dodge.min(0.5);
     b.roll_cd = b.roll_cd.min(0.6);

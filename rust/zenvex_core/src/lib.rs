@@ -171,6 +171,11 @@ pub fn progress_from_json(s: &str) -> Progress {
         p.level = 1;
     }
     p.unlocked[0] = true;
+    // V9: pelerin slotu kalktı → kuşanılı pelerin çantaya döner
+    if !p.eq.cloak.is_empty() {
+        let c = std::mem::take(&mut p.eq.cloak);
+        p.inv.add_id(&c, 1);
+    }
     if !p.unlocked[p.character.min(3)] {
         p.character = 0;
     }

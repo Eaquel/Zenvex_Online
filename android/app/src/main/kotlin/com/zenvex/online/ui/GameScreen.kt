@@ -132,6 +132,8 @@ fun GameScreen(toLobby: () -> Unit) {
             delay(30_000)
         }
     }
+    // etkinlik puanı: 20 sn'de bir sayaç farkı sunucuya
+    LaunchedEffect(Unit) { while (true) { delay(20_000); com.zenvex.online.game.Events.tick() } }
     // klan güçlendirmeleri oyuna uygulanır (hasar, tecrübe, hız)
     LaunchedEffect(Account.clan.value) {
         val b = Account.clan.value?.json?.optJSONObject("boosts")

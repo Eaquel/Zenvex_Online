@@ -724,6 +724,7 @@ impl Game {
             let lv = s.level;
             self.events.push(Event::BotDown { x, y });
             if by_player {
+                self.progress.ev.soldier_kills += 1;
                 self.give_xp(x, y, 40 + lv);
                 if self.rng.chance(0.3) {
                     let id = if self.rng.chance(0.3) { "medkit" } else { "bandage" };
@@ -808,6 +809,7 @@ impl Game {
             st.capture_t += dt;
             if st.capture_t >= CAPTURE_TIME {
                 st.cap_sent = true;
+                self.progress.ev.base_caps += 1;
                 self.events.push(Event::BaseCapture { id: i as u32 });
                 self.events.push(Event::Msg { text: "Üs ele geçiriliyor… Karargâha bildirildi".into() });
             }

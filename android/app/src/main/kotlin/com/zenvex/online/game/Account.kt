@@ -159,6 +159,14 @@ object Account {
     /** yeni anahtarı döndürür (oyuncuya iletilir) */
     fun adminResetKey(target: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_reset_key", auth().put("p_target", target)) { r -> done(txt(r)) }
     fun adminDeleteRequests(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_admin_delete_requests", auth()) { r -> done(arr(r)) }
+    fun adminFlags(target: Long, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_admin_flags", auth().put("p_target", target)) { r -> done(obj(r)) }
+    fun adminBanDevice(device: String, on: Boolean, reason: String, done: (Result<String>) -> Unit) =
+        Supa.rpc("zx_admin_ban_device", auth().put("p_device", device).put("p_on", on).put("p_reason", reason)) { r -> done(txt(r)) }
+    // ------------------------------------------------------------------ etkinlikler
+    fun eventCurrent(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_event_current") { r -> done(obj(r)) }
+    fun eventBoard(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_event_board", auth()) { r -> done(obj(r)) }
+    fun adminEventStart(kind: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_start", auth().put("p_kind", kind)) { r -> done(txt(r)) }
+    fun adminEventStop(done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_stop", auth()) { r -> done(txt(r)) }
     fun adminVip(target: Long, days: Int, done: (Result<String>) -> Unit) =
         Supa.rpc("zx_admin_vip", auth().put("p_target", target).put("p_days", days)) { r -> done(txt(r)) }
     fun adminMail2(to: String, title: String, body: String, gold: Int, gems: Int, xp: Int, items: JSONArray, kind: String, done: (Result<Int>) -> Unit) =
