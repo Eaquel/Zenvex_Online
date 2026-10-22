@@ -297,6 +297,21 @@ pub fn item_bound(id: &str) -> bool {
     id.starts_with("ev_")
 }
 
+/// Elle yazılmış eşya kimliğini çözer (yönetici postası: "Medkit", "ilk yardım kiti", " medkit "): önce birebir,
+/// sonra küçük harf / boşluk→alt çizgi, en son görünen adla (büyük-küçük harf duyarsız).
+pub fn resolve_item_id(raw: &str) -> Option<&'static str> {
+    let t = raw.trim();
+    if let Some(i) = item_index(t) {
+        return Some(ITEMS[i].id);
+    }
+    let low = t.to_lowercase().replace(' ', "_");
+    if let Some(i) = item_index(&low) {
+        return Some(ITEMS[i].id);
+    }
+    let name = t.to_lowercase();
+    ITEMS.iter().find(|d| d.name.to_lowercase() == name).map(|d| d.id)
+}
+
 pub fn item_index(id: &str) -> Option<usize> {
     ITEMS.iter().position(|i| i.id == id)
 }

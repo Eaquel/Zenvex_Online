@@ -768,11 +768,10 @@ impl Game {
                     got.push(format!("{xp} XP"));
                 }
                 for it in v["items"].as_array().cloned().unwrap_or_default() {
-                    let id = it["id"].as_str().unwrap_or("");
                     let n = it["n"].as_u64().unwrap_or(1) as u32;
-                    if crate::data::item_index(id).is_none() || n == 0 {
+                    let Some(id) = crate::data::resolve_item_id(it["id"].as_str().unwrap_or("")).filter(|_| n > 0) else {
                         continue;
-                    }
+                    };
                     let left = self.progress.inv.add_id(id, n);
                     if left > 0 {
                         let (x, y) = (self.player.x, self.player.y);
