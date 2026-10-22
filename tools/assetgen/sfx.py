@@ -4,6 +4,9 @@ import os
 import wave
 import numpy as np
 
+# Bu adlar artık assets/sfx/*.ogg (Kenney, CC0); üretici üzerine yazmasın
+KENNEY = {"click", "coin", "pickup", "chop", "step0", "step1", "crate", "craft", "quest", "car_hit", "hit"}
+
 SR = 22050
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "android", "app", "src", "main", "assets", "sfx")
@@ -63,6 +66,8 @@ def save(name, x):
     os.makedirs(OUT, exist_ok=True)
     x = np.clip(norm(x), -1, 1)
     data = (x * 32767).astype("<i2").tobytes()
+    if name in KENNEY:  # yerine CC0 Kenney sesi kondu (assets/licenses/Kenney-CC0.txt)
+        return
     with wave.open(os.path.join(OUT, name + ".wav"), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)

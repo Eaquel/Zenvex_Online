@@ -8,6 +8,9 @@ import os
 import subprocess
 import wave
 
+# Bu adlar artık assets/sfx/*.ogg (Kenney, CC0); üretici üzerine yazmasın
+KENNEY = {"click", "coin", "pickup", "chop", "step0", "step1", "crate", "craft", "quest", "car_hit", "hit"}
+
 import numpy as np
 
 SR = 44100
@@ -95,6 +98,8 @@ def fade(x, a=0.002, r=0.01):
 def save(name, x, peak=0.92):
     os.makedirs(OUT, exist_ok=True)
     x = np.clip(norm(fade(x), peak), -1, 1)
+    if name in KENNEY:  # yerine CC0 Kenney sesi kondu (assets/licenses/Kenney-CC0.txt)
+        return
     with wave.open(os.path.join(OUT, name + ".wav"), "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
