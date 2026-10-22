@@ -365,22 +365,28 @@ internal fun QuestsView(q: JSONObject, back: () -> Unit) {
                 }
             }
             PxPanel(Modifier.weight(1f).fillMaxHeight(), pad = 10.dp) {
-                PT("Günlük Görevler", 16.sp, Px.Clan)
-                PT("Her Gün Yenilenir", 11.sp, Px.Sub)
-                Spacer(Modifier.height(6.dp))
-                for (d in q.optJSONArray("daily").objs()) {
-                    val done = d.optBoolean("done")
-                    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).pxPanel(if (done) Color(0xF0243A20) else Px.PanelDark).padding(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PT(d.optString("title"), 14.sp, if (done) Px.Name else Px.Text, Modifier.weight(1f))
-                            if (done) Icon("check", 18.dp, Px.Name)
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    for ((key, title, sub) in listOf(Triple("daily", "Günlük Görevler", "Her Gün Yenilenir"), Triple("weekly", "Haftalık Görevler", "Her Pazartesi Yenilenir"))) {
+                        PT(title, 16.sp, Px.Clan)
+                        PT(sub + " · Sezon Bileti XP'si Verir", 11.sp, Px.Sub)
+                        Spacer(Modifier.height(6.dp))
+                        for (d in q.optJSONArray(key).objs()) {
+                            val done = d.optBoolean("done")
+                            Column(Modifier.fillMaxWidth().padding(bottom = 6.dp).pxPanel(if (done) Color(0xF0243A20) else Px.PanelDark).padding(8.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    PT(d.optString("title"), 14.sp, if (done) Px.Name else Px.Text, Modifier.weight(1f))
+                                    if (done) Icon("check", 18.dp, Px.Name)
+                                }
+                                PxBar(d.optInt("progress") / d.optInt("goal", 1).toFloat(), if (done) Px.GreenHi else Px.Blue, Modifier.fillMaxWidth().padding(vertical = 3.dp), 9.dp)
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    PT("${fmt(d.optInt("progress"))}/${fmt(d.optInt("goal"))}", 11.sp, Px.Sub)
+                                    PT("+${fmt(d.optInt("gold"))} Altın", 11.sp, Px.Clan)
+                                    PT("+${fmt(d.optInt("xp"))} XP", 11.sp, Px.Level)
+                                    PT("+${fmt(d.optInt("pass_xp"))} Bilet XP", 11.sp, Px.Orange)
+                                }
+                            }
                         }
-                        PxBar(d.optInt("progress") / d.optInt("goal", 1).toFloat(), if (done) Px.GreenHi else Px.Blue, Modifier.fillMaxWidth().padding(vertical = 3.dp), 9.dp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PT("${d.optInt("progress")}/${d.optInt("goal")}", 11.sp, Px.Sub)
-                            PT("+${d.optInt("gold")} Altın", 11.sp, Px.Clan)
-                            PT("+${d.optInt("xp")} XP", 11.sp, Px.Level)
-                        }
+                        Spacer(Modifier.height(6.dp))
                     }
                 }
             }
