@@ -107,3 +107,30 @@ def fx():
             im = Image.open(os.path.join(d, f"{i}.png")).convert("RGBA")
             out.append((f"fx/{name}/{i}", im, im.width * ax, im.height * ay, 1.0))
     return out, meta
+
+
+# --------------------------------------------------------------------------- V11 aktör animasyonları
+V11 = os.path.join(ROOT, "art", "v11")
+
+
+def actor_group(prefix):
+    """Atlas grubu: h/kaan → hero_kaan, z/walker → zombie_walker, p/dog0 → pet_dog0, n/... → npc6"""
+    kind, name = prefix.split("/", 1)
+    return {"h": f"hero_{name}", "z": f"zombie_{name}", "p": f"pet_{name}"}.get(kind, "npc6")
+
+
+def v11_actors():
+    """[(önek, [(anahtar, Image, ax, ay, k)], {anim: [kare, fps, döngü]})] — tools/pixel/actor_poses.py çıktıları"""
+    out = []
+    if not os.path.isdir(V11):
+        return out
+    for actor in sorted(os.listdir(V11)):
+        p = os.path.join(V11, actor, "anim", "anim.json")
+        if not os.path.exists(p):
+            continue
+        meta = json.load(open(p))
+        pre = meta["prefix"]
+        items = [(f"{pre}/{key}", Image.open(os.path.join(V11, actor, "anim", key + ".png")).convert("RGBA"), ax, ay, k)
+                 for key, (ax, ay, k) in meta["frames"].items()]
+        out.append((pre, items, meta["anims"]))
+    return out

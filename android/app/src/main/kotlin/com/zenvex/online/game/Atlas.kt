@@ -35,6 +35,10 @@ class Atlas private constructor(ctx: Context) {
     val fx = HashMap<String, FloatArray>()
     val heroAnims = HashMap<String, IntArray>()   // isim → [kare, fps, döngü]
     val zombieAnims = HashMap<String, IntArray>()
+    private val actorAnims = HashMap<String, HashMap<String, IntArray>>()
+
+    /** Aktörün animasyon tablosu: kendine özel tablo varsa o, yoksa türün ortak tablosu ([fallback]) */
+    fun anims(prefix: String, fallback: Map<String, IntArray>): Map<String, IntArray> = actorAnims[prefix] ?: fallback
 
     init {
         val pf = manifest.getJSONArray("pages")
@@ -64,6 +68,14 @@ class Atlas private constructor(ctx: Context) {
         for ((key, map) in listOf("hero" to heroAnims, "zombie" to zombieAnims)) {
             val o = an.getJSONObject(key)
             for (k in o.keys()) { val a = o.getJSONArray(k); map[k] = IntArray(3) { a.getInt(it) } }
+        }
+        // V11: aktöre özel tablolar ("z/walker", "p/dog0" ...): kare sayısı türden türe değişebilir
+        for (key in an.keys()) {
+            if (!key.contains('/')) continue
+            val o = an.getJSONObject(key)
+            val map = HashMap<String, IntArray>()
+            for (k in o.keys()) { val a = o.getJSONArray(k); map[k] = IntArray(3) { a.getInt(it) } }
+            actorAnims[key] = map
         }
     }
 

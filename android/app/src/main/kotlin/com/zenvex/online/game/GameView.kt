@@ -816,6 +816,20 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         return if (a[2] == 1) f.mod(a[0]) else f.coerceAtMost(a[0] - 1)
     }
 
+    /** [viewDir] sonucunun aynalanıp aynalanmayacağı (çizim iş parçacığı tek; ayırma yapmamak için alan) */
+    private var viewFlip = false
+
+    /**
+     * Piksel aktör görünümü: yön 2/6 → yan kare (yön 6, sola bakar; 2 aynası), 3-5 → sırt (yön 4), diğerleri ön (yön 0, sola
+     * bakar; 1-3 aynası). İstenen görünümün karesi yoksa ön görünüme düşer.
+     */
+    private fun viewDir(prefix: String, anim: String, dir: Int, f: Int): Int {
+        if ((dir == 2 || dir == 6) && atlas.has(spriteKey(prefix, anim, 6, f))) { viewFlip = dir == 2; return 6 }
+        if (dir in 3..5 && atlas.has(spriteKey(prefix, anim, 4, f))) { viewFlip = false; return 4 }
+        viewFlip = dir in 1..3
+        return 0
+    }
+
     private fun spriteKey(prefix: String, anim: String, dir: Int, f: Int, suffix: String = ""): String {
         keyBuf.setLength(0)
         keyBuf.append(prefix).append('/').append(anim).append('_').append(dir).append('_').append(f).append(suffix)
@@ -851,15 +865,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val wIdx = drawBuf[o + 10].toInt() % 16
         val f = when {
             anim == "melee" && who == -1f -> meleeFrame(t, wIdx)
-            (anim == "walk" || anim == "run") && who == -1f -> strideFrame(x, y, anim)
-            else -> frameOf(atlas.heroAnims, anim, t)
+            (anim == "walk" || anim == "run") && who == -1f -> strideFrame(x, y, anim, atlas.anims(prefix, atlas.heroAnims)[anim]?.get(0) ?: 8)
+            else -> frameOf(atlas.anims(prefix, atlas.heroAnims), anim, t)
         }
-        // piksel kahraman tek görünüm (sola bakar); sağa bakan yönler aynalanır
+        // piksel kahraman: ön / yan / sırt görünümü bakış yönüne göre (kare yoksa ön), sağa bakanlar aynalanır
         val pix = ch in 0..3
-        // yukarı (kameradan uzağa) yürürken/beklerken V9 sırt görünümü; yoksa ön görünüm
-        val backView = pix && dir in 3..5 && (anim == "idle" || anim == "walk" || anim == "run") && atlas[spriteKey(prefix, anim, 4, f)] != null
-        val flip = pix && !backView && dir in 1..3
-        val kdir = if (backView) 4 else if (pix) 0 else dir
+        val kdir = if (pix) viewDir(prefix, anim, dir, f) else dir
+        val flip = pix && viewFlip
         var key = spriteKey(prefix, anim, kdir, f)
         // elde gerçek silahla render edilmiş kare varsa onu kullan
         val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
@@ -1353,18 +1365,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     // yürüme/koşu adımı kat edilen yola göre ilerler: hız ne olursa olsun ayak kaymaz (döngü başına adım boyu)
     private var strideX = Float.NaN; private var strideY = 0f; private var stridePh = 0f
-    private fun strideFrame(x: Float, y: Float, anim: String): Int {
+    private fun strideFrame(x: Float, y: Float, anim: String, n: Int = 8): Int {
         if (!strideX.isNaN()) {
             val d = kotlin.math.hypot(x - strideX, y - strideY)
             if (d < 120f) stridePh += d / (if (anim == "run") 110f else 64f)
         }
         strideX = x; strideY = y
-        return ((stridePh % 1f) * 8).toInt().coerceIn(0, 7)
+        return ((stridePh % 1f) * n).toInt().coerceIn(0, n - 1)
     }
 
     // köpek: ölçülen hıza göre tırıs/dörtnal, adım yine yola bağlı
     private var petX = Float.NaN; private var petY = 0f; private var petPh = 0f; private var petV = 0f; private var petT = 0f
-    private fun petGait(x: Float, y: Float): Pair<String, Int> {
+    private fun petGait(x: Float, y: Float, anims: Map<String, IntArray>): Pair<String, Int> {
         val dt = (time - petT).coerceIn(0.001f, 0.2f)
         var d = 0f
         if (!petX.isNaN()) { d = kotlin.math.hypot(x - petX, y - petY); if (d > 150f) d = 0f }
@@ -1372,7 +1384,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         petX = x; petY = y; petT = time
         val run = petV > 4.2f * 62.5f
         petPh += d / (if (run) 125f else 75f)
-        return (if (run) "run" else "walk") to ((petPh % 1f) * 8).toInt().coerceIn(0, 7)
+        val g = if (run) "run" else "walk"
+        val n = anims[g]?.get(0) ?: 8
+        return g to ((petPh % 1f) * n).toInt().coerceIn(0, n - 1)
     }
 
     /** Köpek yardımcı: piksel köpek (seviyeye göre zırh), "Köpek" etiketiyle. */
@@ -1381,15 +1395,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val dir = drawBuf[o + 4].toInt()
         var anim = zAnimNames.getOrElse(drawBuf[o + 5].toInt()) { "idle" }
         val t = drawBuf[o + 6]
-        val gait = petGait(x, y)
-        val sx = wx(x); val sy = wy(y)
-        if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 400) return
-        var f = frameOf(atlas.zombieAnims, anim, t)
-        if (anim == "walk") { anim = gait.first; f = gait.second }
         val lv = drawBuf[o + 9].toInt()
         val pre = when { lv >= 10 -> "p/dog10"; lv >= 5 -> "p/dog5"; else -> "p/dog0" }
-        val flip = dir in 1..3
-        val sp = atlas[spriteKey(pre, anim, 0, f)] ?: atlas[spriteKey(pre, "idle", 0, 0)] ?: atlas[spriteKey("z/dog", "idle", 0, 0)]
+        val pa = atlas.anims(pre, atlas.zombieAnims)
+        val gait = petGait(x, y, pa)
+        val sx = wx(x); val sy = wy(y)
+        if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 400) return
+        var f = frameOf(pa, anim, t)
+        if (anim == "walk") { anim = gait.first; f = gait.second }
+        val vd = viewDir(pre, anim, dir, f)
+        val flip = viewFlip
+        val sp = atlas[spriteKey(pre, anim, vd, f)] ?: atlas[spriteKey(pre, "idle", 0, 0)] ?: atlas[spriteKey("z/dog", "idle", 0, 0)]
         if (sp == null) { placeholder(c, sx, sy, 0xFFC08A40.toInt()); return }
         val paint = if (drawBuf[o + 7] > 0) flashPaint else pixelPaint
         atlas.draw(c, sp, sx, sy, scale, paint, flip)
@@ -1412,11 +1428,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
         val name = zombieSprite.getOrElse(kind) { "walker" }
-        val f = frameOf(atlas.zombieAnims, anim, t)
+        val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, t)
         // piksel zombiler (köpek + V7 örgü iskeletli türler): tek görünüm (sola bakar), sağa bakarken aynalanır
         val pix = zombiePixel.getOrPut(name) { !atlas.has("z/$name/idle_1_0") && atlas.has("z/$name/idle_0_0") }
-        val zflip = pix && dir in 1..3
-        val zdir = if (pix) 0 else dir
+        val zdir = if (pix) viewDir("z/$name", anim, dir, f) else dir
+        val zflip = pix && viewFlip
         var sp = atlas[spriteKey("z/$name", anim, zdir, f)]
         if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
         if (sp == null) sp = atlas[spriteKey("z/walker", anim, dir, f)]

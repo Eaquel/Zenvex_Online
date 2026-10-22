@@ -89,12 +89,13 @@ SCENES = {
 }
 
 
-def cleaned(name, bg, px):
+def cleaned(name, bg, px, src=None, erase=None):
+    """Izgaraya indirilmiş, arka planı silinmiş sayfa (önbellekli). [src] verilmezse art/v10u/<ad>.jpg."""
     os.makedirs(TMP, exist_ok=True)
     p = os.path.join(TMP, name + ".png")
     if not os.path.exists(p):
-        erase = SHEETS[name][5]
-        src = os.path.join(SRC, name + ".jpg")
+        erase = SHEETS[name][5] if erase is None else erase
+        src = src or os.path.join(SRC, name + ".jpg")
         if erase:
             # yazılı etiketleri arka plan rengiyle boya (ızgara bulunmadan önce)
             im = Image.open(src).convert("RGB")
@@ -135,10 +136,15 @@ def despill(c, olive=False, keep_green=False):
 
 
 def build_sheet(name):
-    bg, group, names, radius, px, _ = SHEETS[name]
-    im = cleaned(name, bg, px)
-    a = despill(np.asarray(im).copy(), name in OLIVE, name in KEEP_GREEN)
-    im = Image.fromarray(a)
+    bg, group, names, radius, px, erase = SHEETS[name]
+    extract_sheet(name, os.path.join(OUT, group), names, radius, px, bg=bg, erase=erase,
+                  olive=name in OLIVE, keep_green=name in KEEP_GREEN)
+
+
+def extract_sheet(name, out_dir, names, radius=3, px=None, bg="green", erase=(), src=None, olive=False, keep_green=False, mirror=False):
+    """Sayfayı parçalara ayırır: satır satır soldan sağa [names] ("-" ile başlayan atılır). [mirror]: parçalar aynalanır."""
+    im = cleaned(name, bg, px, src, erase)
+    a = despill(np.asarray(im).copy(), olive, keep_green)
     rows = order(components(a, radius))
     # parça etiketleri (components ile aynı büyütme): kırpılan kutuya komşu parçaların pikselleri girmesin
     solid = a[..., 3] > 0
@@ -149,8 +155,7 @@ def build_sheet(name):
         print(f"! {name}: {len(flat)} parça bulundu, {len(names)} bekleniyordu")
         flat2 = sorted(flat, key=lambda b: -b[4])[:len(names)]
         flat = [b for b in flat if b in flat2]
-    od = os.path.join(OUT, group)
-    os.makedirs(od, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
     for nm, (y0, x0, y1, x1, _, lab_id) in zip(names, flat):
         if nm.startswith("-"):
             continue
@@ -159,8 +164,10 @@ def build_sheet(name):
         others = [f[5] for f in flat if f[5] != lab_id]
         part[np.isin(lab, others), 3] = 0
         crop = Image.fromarray(part).crop((x0, y0, x1, y1))
-        crop.save(os.path.join(od, nm + ".png"))
-        print(f"{group}/{nm}: {crop.size}")
+        if mirror:
+            crop = crop.transpose(Image.FLIP_LEFT_RIGHT)
+        crop.save(os.path.join(out_dir, nm + ".png"))
+        print(f"{os.path.basename(out_dir)}/{nm}: {crop.size}")
 
 
 def build_scene(name):
