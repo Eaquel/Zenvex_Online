@@ -56,15 +56,17 @@ import kotlin.math.sin
 
 // =========================================================================== profil fotoğrafları
 /** Profil fotoğrafı: atlas görseli + kadraj (üstten alınan yükseklik oranı; insanlarda baş-omuz). */
-data class AvatarDef(val key: String, val name: String, val crop: Float)
+/** [pick]: seçilebilir mi (yalnız NPC görselleri; eski kahraman/asker/köpek/zombi resimleri sunucudaki sıra numaraları bozulmasın diye listede kalır) */
+data class AvatarDef(val key: String, val name: String, val crop: Float, val pick: Boolean = true)
 
 val AVATARS = listOf(
-    AvatarDef("l/kaan/0_0", "Savaşçı", 0.42f),
+    AvatarDef("l/kaan/0_0", "Savaşçı", 0.42f, false),
     AvatarDef("npc/merchant", "Tüccar", 0.4f), AvatarDef("npc/quest", "Görevci", 0.4f), AvatarDef("npc/doctor", "Doktor", 0.4f),
-    AvatarDef("npc/mechanic", "Tamirci", 0.4f), AvatarDef("npc/trainer", "Eğitmen", 0.4f), AvatarDef("npc/soldier", "Muhafız", 0.4f),
-    AvatarDef("p/dog0/idle_0_0", "Yavru Köpek", 1f), AvatarDef("p/dog5/idle_0_0", "Kurt Köpeği", 1f), AvatarDef("p/dog10/idle_0_0", "Alfa", 1f),
-    AvatarDef("z/walker/idle_0_0", "Aylak", 0.5f), AvatarDef("z/runner/idle_0_0", "Koşucu", 0.5f), AvatarDef("z/toxic/idle_0_0", "Zehirli", 0.5f),
-    AvatarDef("z/dark/idle_0_0", "Karanlık", 0.5f), AvatarDef("z/dog/idle_0_0", "Kuduz", 1f), AvatarDef("z/titan/idle_0_0", "Titan", 0.45f),
+    AvatarDef("npc/mechanic", "Tamirci", 0.4f), AvatarDef("npc/trainer", "Eğitmen", 0.4f), AvatarDef("npc/soldier", "Muhafız", 0.4f, false),
+    AvatarDef("p/dog0/idle_0_0", "Yavru Köpek", 1f, false), AvatarDef("p/dog5/idle_0_0", "Kurt Köpeği", 1f, false), AvatarDef("p/dog10/idle_0_0", "Alfa", 1f, false),
+    AvatarDef("z/walker/idle_0_0", "Aylak", 0.5f, false), AvatarDef("z/runner/idle_0_0", "Koşucu", 0.5f, false), AvatarDef("z/toxic/idle_0_0", "Zehirli", 0.5f, false),
+    AvatarDef("z/dark/idle_0_0", "Karanlık", 0.5f, false), AvatarDef("z/dog/idle_0_0", "Kuduz", 1f, false), AvatarDef("z/titan/idle_0_0", "Titan", 0.45f, false),
+    AvatarDef("npc/wizard", "Büyücü Aldric", 0.4f),
 )
 
 // =========================================================================== cihazdan fotoğraf
@@ -137,7 +139,8 @@ fun frameUnlocked(id: String, p: JSONObject): Boolean = when (id) {
 @Composable
 fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Modifier, photo: String = "") {
     val ctx = LocalContext.current
-    val def = AVATARS.getOrElse(avatar) { AVATARS[0] }
+    // kaldırılan resimler (kahraman, asker, köpek, zombi) Tüccar olarak görünür
+    val def = AVATARS.getOrNull(avatar)?.takeIf { it.pick } ?: AVATARS[1]
     val img = remember(def.key) { SpriteCache.get(ctx, def.key) }
     val pic = remember(photo) { PhotoCache.get(photo) }
     val t = rememberTime()
@@ -378,6 +381,7 @@ internal fun ProfileEditorView(
                 Spacer(Modifier.height(4.dp))
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     AVATARS.forEachIndexed { i, a ->
+                        if (!a.pick) return@forEachIndexed
                         Box(Modifier.border(2.dp, if (i == avatar) Color.White else Color.Transparent).clickable { avatar = i }) {
                             ProfileAvatar(i, "", 56.dp)
                         }

@@ -141,6 +141,8 @@ object Online {
     }
 
     fun setIdentity(playerName: String, playerTag: String) { name = playerName; tag = playerTag; trackMe() }
+    /** İsim değişti: sonraki konum paketiyle (≤0,2 sn) diğer oyuncularda da yenilenir */
+    fun rename(playerName: String) { name = playerName; trackMe() }
     /** Sunucuya gidiş-dönüş süresi (ms); bağlı değilse -1 */
     fun ping(): Int = channel?.takeIf { it.joined }?.pingMs ?: -1
 
@@ -179,6 +181,7 @@ object Online {
                 val arr = p.optJSONArray("s") ?: return
                 synchronized(remotes) {
                     val r = remotes.getOrPut(k) { Remote(p.optString("n", "Oyuncu")) }
+                    p.optString("n").takeIf { it.isNotEmpty() }?.let { r.name = it }
                     val now = SystemClock.elapsedRealtime()
                     val ox = r.target[0]; val oy = r.target[1]
                     for (i in 0 until minOf(arr.length(), Native.REMOTE_STRIDE)) r.target[i] = arr.optDouble(i).toFloat()

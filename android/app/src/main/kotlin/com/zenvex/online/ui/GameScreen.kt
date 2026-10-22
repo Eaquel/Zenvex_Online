@@ -76,6 +76,8 @@ fun GameScreen(toLobby: () -> Unit) {
             override fun onDeath() { v.post { overlay = Overlay.Dead } }
             override fun onOpen(panel: String) {
                 v.post {
+                    // bir pencere açıkken oyun ekranındaki tuşlar (mini harita, etkileşim, NPC) başka pencere açmaz
+                    if (overlay != Overlay.None) return@post
                     if (panel.startsWith("npc:")) { npcKind = panel.substring(4).toIntOrNull() ?: 1; overlay = Overlay.Npc; return@post }
                     overlay = when (panel) {
                         "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
@@ -137,6 +139,15 @@ fun GameScreen(toLobby: () -> Unit) {
     }
     // etkinlik puanı: 20 sn'de bir sayaç farkı sunucuya
     LaunchedEffect(Unit) { while (true) { delay(20_000); com.zenvex.online.game.Events.tick() } }
+    // oyun içinde isim değişince: başımızın üstündeki ad, oyun kaydı ve diğer oyunculara yayın anında yenilenir
+    val myName = Account.name.value
+    LaunchedEffect(myName) {
+        if (myName.isNotEmpty() && myName != view.localName) {
+            view.localName = myName
+            GameSession.cmd("set_name", "name" to myName)
+            Online.rename(myName)
+        }
+    }
     // klan güçlendirmeleri oyuna uygulanır (hasar, tecrübe, hız)
     LaunchedEffect(Account.clan.value) {
         val b = Account.clan.value?.json?.optJSONObject("boosts")
@@ -174,8 +185,13 @@ fun GameScreen(toLobby: () -> Unit) {
         AndroidView({ view }, Modifier.fillMaxSize())
         if (overlay == Overlay.None) Hud { overlay = it }
         // tam ekran pencerelerin arkası düz (oyun görünmez); ayarlardan şeffaf yapılabilir
-        if (overlay !in SEE_THROUGH && !com.zenvex.online.game.Settings.current.uiTransparent)
-            Box(Modifier.fillMaxSize().background(Color(0xFF15140F)).clickable(remember { MutableInteractionSource() }, null) {})
+        // her pencerenin altında dokunuşu yutan katman: pencere dışına dokunmak alttaki oyun tuşlarına geçmez
+        // (sohbet hariç: sohbet açıkken oyun oynanmaya devam eder, ama oyun tuşları pencere açmaz)
+        if (overlay != Overlay.None && overlay != Overlay.Chat) {
+            val solid = overlay !in SEE_THROUGH && !com.zenvex.online.game.Settings.current.uiTransparent
+            Box(Modifier.fillMaxSize().then(if (solid) Modifier.background(Color(0xFF15140F)) else Modifier)
+                .clickable(remember { MutableInteractionSource() }, null) {})
+        }
         when (overlay) {
             Overlay.Menu -> SideMenu(close, { overlay = it }) { GameSession.save(cloud = true); toLobby() }
             Overlay.Settings -> SettingsScreen(back = { overlay = Overlay.Menu; view.post { view.requestLayout() } }, inGame = true)

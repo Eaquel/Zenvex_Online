@@ -46,7 +46,7 @@ fun DevMenu(onClose: () -> Unit) {
     var log by remember { mutableStateOf("Hazır.") }
     var ok by remember { mutableStateOf(true) }
     val report: (String, Boolean) -> Unit = { m, g -> log = m; ok = g }
-    Dim(onClose) {
+    Dim {
         Column(Modifier.width(820.dp).fillMaxHeight(0.94f).metalFrame().clickable(remember { MutableInteractionSource() }, null) {}
             .padding(horizontal = 18.dp, vertical = 14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

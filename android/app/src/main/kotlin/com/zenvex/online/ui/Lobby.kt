@@ -324,7 +324,8 @@ fun copy(ctx: Context, text: String) {
 // =========================================================================== küçük pencereler
 @Composable
 fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Composable () -> Unit) {
-    Dim(close) {
+    // pencere dışına dokunmak kapatmaz (yanlışlıkla kapanıyordu): yalnız X ya da geri tuşu
+    Dim {
         // perçinli metal çerçeveli pencere (köşeler esnemez)
         // V10 kurukafa köşeli pencere çerçevesi (yoksa eski metal çerçeve)
         Column(Modifier.width(width).metalFrame(px = 0.9.dp, name = "frame_panel", corner = 32)

@@ -363,7 +363,9 @@ fun PlayerProfileDialog(key: String, close: () -> Unit) {
     PlayerProfileView(o, err, mine, close, { edit = true }) {
         Account.friendRequest(it) { r -> r.onSuccess { m -> Toaster.show(m) }.onFailure { e -> Toaster.show(e.message ?: "", false) } }
     }
-    if (edit) ProfileEditor({ edit = false; reload++ }) { Toaster.show("İsmini Lobideki Profilden Değiştirebilirsin", false) }
+    var renaming by remember { mutableStateOf(false) }
+    if (edit) ProfileEditor({ edit = false; reload++ }) { renaming = true }
+    if (renaming) RenameDialog { renaming = false; reload++ }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
