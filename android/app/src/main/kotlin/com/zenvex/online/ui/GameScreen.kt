@@ -53,6 +53,9 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** Arkasında oyunun her zaman görüneceği katmanlar (yan menü, NPC konuşması, sohbet, ölüm ekranı) */
+private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay.Chat, Overlay.Dead)
+
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
     Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
@@ -170,6 +173,9 @@ fun GameScreen(toLobby: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         AndroidView({ view }, Modifier.fillMaxSize())
         if (overlay == Overlay.None) Hud { overlay = it }
+        // tam ekran pencerelerin arkası düz (oyun görünmez); ayarlardan şeffaf yapılabilir
+        if (overlay !in SEE_THROUGH && !com.zenvex.online.game.Settings.current.uiTransparent)
+            Box(Modifier.fillMaxSize().background(Color(0xFF15140F)).clickable(remember { MutableInteractionSource() }, null) {})
         when (overlay) {
             Overlay.Menu -> SideMenu(close, { overlay = it }) { GameSession.save(cloud = true); toLobby() }
             Overlay.Settings -> SettingsScreen(back = { overlay = Overlay.Menu; view.post { view.requestLayout() } }, inGame = true)

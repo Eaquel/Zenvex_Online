@@ -55,6 +55,9 @@ object Audio {
         p.play(id, v, v, 1, 0, pitch.coerceIn(0.5f, 2f))
     }
 
+    /** Uygulama ön planda mı: arka plandayken ekran değişse de (oturum düşüp lobiye dönmek gibi) müzik başlamaz */
+    @Volatile private var foreground = true
+
     fun music(name: String) {
         if (current == name && player != null) { updateVolume(); return }
         current = name
@@ -69,7 +72,7 @@ object Audio {
                 isLooping = true
                 setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_GAME).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
                 prepare()
-                start()
+                if (foreground) start()
             }
             updateVolume()
         }
@@ -81,6 +84,6 @@ object Audio {
         runCatching { player?.setVolume(v, v) }
     }
 
-    fun pauseMusic() { runCatching { player?.pause() } }
-    fun resumeMusic() { runCatching { player?.start(); updateVolume() } }
+    fun pauseMusic() { foreground = false; runCatching { player?.pause() } }
+    fun resumeMusic() { foreground = true; runCatching { player?.start(); updateVolume() } }
 }

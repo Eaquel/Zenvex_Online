@@ -34,6 +34,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -104,7 +107,17 @@ fun RankMedal(rank: Int, size: Dp = 40.dp) {
                     }
                 }
             }
-            if (rank <= 3) ArtImage("medal_$rank", Modifier.fillMaxSize())
+            if (rank <= 3) {
+                // madalya süzülür ve üstünden ışık geçer
+                val mt = rememberTime()
+                Box(Modifier.fillMaxSize().graphicsLayer { translationY = sin(mt * 2.4f + rank) * 1.5f * density; compositingStrategy = CompositingStrategy.Offscreen }
+                    .drawWithContent {
+                        drawContent()
+                        val u = ((mt * 0.4f + rank * 0.3f) % 1.5f) * (this.size.width + 60f) - 30f
+                        drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.6f), Color.Transparent), Offset(u - 14f, 0f), Offset(u + 14f, this.size.height)),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                    }) { ArtImage("medal_$rank", Modifier.fillMaxSize()) }
+            }
             else {
                 ArtImage("badge_top10", Modifier.fillMaxSize())
                 PT("$rank", (size.value * 0.26f).sp, Px.Text, Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.13f))
@@ -193,13 +206,24 @@ fun TitleChip(title: JSONObject?, size: Float = 12f) {
         val dens = androidx.compose.ui.platform.LocalDensity.current
         val barH = (size * 1.9f).dp
         val k = barH / (pl.barBot - pl.barTop).toFloat()  // kaynak px → dp
+        val tt = if (rank in 1..3) rememberTime() else 0f
         Box(Modifier.height(k * img.height.toFloat())
-            .drawBehind { drawSlice3(img, 0f, 0f, this.size.width, this.size.height, pl.capL, pl.capR) }
+            // ilk 3: şerit hafifçe süzülür, üstünden ışık geçer (yalnız şeridin piksellerine: SrcAtop)
+            .graphicsLayer {
+                if (rank in 1..3) { translationY = sin(tt * 2.2f + rank) * 1.5f * density; compositingStrategy = CompositingStrategy.Offscreen }
+            }
+            .drawBehind {
+                drawSlice3(img, 0f, 0f, this.size.width, this.size.height, pl.capL, pl.capR)
+                if (rank in 1..3) {
+                    val w = this.size.width; val u = ((tt * 0.35f + rank * 0.27f) % 1.4f) * (w + 160f) - 80f
+                    drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.55f), Color.Transparent), Offset(u - 40f, 0f), Offset(u + 40f, this.size.height)),
+                        blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop)
+                }
+            }
             .padding(start = k * pl.capL.toFloat(), end = k * pl.capR.toFloat(), top = k * pl.barTop.toFloat(),
                 bottom = k * (img.height - pl.barBot).toFloat()),
             contentAlignment = Alignment.Center) {
-            val t = if (rank in 1..3) rememberTime() else 0f
-            val glow = 0.5f + 0.5f * sin(t * 3f)
+            val glow = 0.5f + 0.5f * sin(tt * 3f)
             Text(title.optString("name"), style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
                 color = if (rank in 1..3) Color.White else Color(0xFFCFE6FF),
                 shadow = Shadow(if (rank in 1..3) col.copy(alpha = 0.6f + 0.4f * glow) else Color.Black, Offset(0f, with(dens) { 1.dp.toPx() }), 6f)),

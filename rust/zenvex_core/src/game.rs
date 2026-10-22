@@ -299,9 +299,12 @@ pub enum ZState {
 pub struct Zombie {
     /// ağ kimliği (ev sahibi atar)
     pub id: u32,
-    /// istemcide ara değerleme hedefi
+    /// istemcide ara değerleme hedefi: son anlık görüntü, iki görüntü arası hız ve geldiği an (oyun saati)
     pub snap_x: f32,
     pub snap_y: f32,
+    pub snap_vx: f32,
+    pub snap_vy: f32,
+    pub snap_at: f32,
     pub kind: ZKind,
     pub level: u32,
     pub x: f32,

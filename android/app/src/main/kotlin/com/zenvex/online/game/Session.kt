@@ -98,6 +98,8 @@ object Session {
             state.value = State.Live
             runCatching { JSONObject(body) }.getOrNull()?.let { o ->
                 if (!o.isNull("trade")) Trade.claimPending(o.optLong("trade"))
+                // posta rozeti oyundayken de güncellensin
+                if (o.has("unread")) Account.unread.intValue = o.optInt("unread")
             }
         }.onFailure { e ->
             val m = e.message.orEmpty()

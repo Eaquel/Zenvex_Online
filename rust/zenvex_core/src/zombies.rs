@@ -24,6 +24,9 @@ impl Game {
             id,
             snap_x: x,
             snap_y: y,
+            snap_vx: 0.0,
+            snap_vy: 0.0,
+            snap_at: 0.0,
             kind,
             level,
             x,
@@ -175,11 +178,19 @@ impl Game {
 
     pub fn update_zombies(&mut self, dt: f32) {
         if self.net == 2 {
-            // istemci: ev sahibinin anlık görüntüsüne doğru yumuşak takip
-            let k = 1.0 - (-10.0 * dt).exp();
+            // istemci: son anlık görüntüden hızla ileri tahmin (en çok 0.35 sn), tahmin edilen noktaya yumuşak takip.
+            // Görüntüler 5 Hz gelir; yalnız hedefe yaklaşmak zombiyi her görüntüde durdurup sıçratıyordu.
+            let k = 1.0 - (-14.0 * dt).exp();
+            let now = self.time;
             for z in self.zombies.iter_mut() {
-                z.x += (z.snap_x - z.x) * k;
-                z.y += (z.snap_y - z.y) * k;
+                let ahead = (now - z.snap_at).clamp(0.0, 0.35);
+                let (tx, ty) = (z.snap_x + z.snap_vx * ahead, z.snap_y + z.snap_vy * ahead);
+                if (tx - z.x).hypot(ty - z.y) > 260.0 {
+                    z.x = tx;
+                    z.y = ty;
+                }
+                z.x += (tx - z.x) * k;
+                z.y += (ty - z.y) * k;
                 z.anim_t += dt;
                 z.flash_t = (z.flash_t - dt).max(0.0);
                 z.bar_t = (z.bar_t - dt).max(0.0);

@@ -58,9 +58,13 @@ object Online {
         val cur = FloatArray(Native.REMOTE_STRIDE)
         val target = FloatArray(Native.REMOTE_STRIDE)
         var ts = 0L
+        /** iki yayın arası hız (px/sn): yayınlar arasında konum ileri tahmin edilir */
+        var vx = 0f
+        var vy = 0f
         var present = true
     }
     private val remotes = HashMap<String, Remote>()
+    private var lastRemotes = 0L
     private val local = FloatArray(Native.REMOTE_STRIDE)
     private var lastPub = 0L
     private var lastSnap = 0L
@@ -137,6 +141,9 @@ object Online {
     }
 
     fun setIdentity(playerName: String, playerTag: String) { name = playerName; tag = playerTag; trackMe() }
+    /** Sunucuya gidiş-dönüş süresi (ms); bağlı değilse -1 */
+    fun ping(): Int = channel?.takeIf { it.joined }?.pingMs ?: -1
+
     /** Unvan değişince yayındaki kimliği yenile */
     fun retrack() = trackMe()
 
@@ -172,9 +179,16 @@ object Online {
                 val arr = p.optJSONArray("s") ?: return
                 synchronized(remotes) {
                     val r = remotes.getOrPut(k) { Remote(p.optString("n", "Oyuncu")) }
+                    val now = SystemClock.elapsedRealtime()
+                    val ox = r.target[0]; val oy = r.target[1]
                     for (i in 0 until minOf(arr.length(), Native.REMOTE_STRIDE)) r.target[i] = arr.optDouble(i).toFloat()
+                    val gap = (now - r.ts) / 1000f
+                    if (r.ts > 0L && gap in 0.05f..1f) {
+                        r.vx = (r.target[0] - ox) / gap; r.vy = (r.target[1] - oy) / gap
+                        if (hypot(r.vx, r.vy) > 1500f) { r.vx = 0f; r.vy = 0f }  // ışınlanma / seyahat
+                    } else { r.vx = 0f; r.vy = 0f }
                     if (r.ts == 0L) System.arraycopy(r.target, 0, r.cur, 0, Native.REMOTE_STRIDE)
-                    r.ts = SystemClock.elapsedRealtime()
+                    r.ts = now
                 }
             }
             "z" -> if (mode == 2 && p.optString("h") != me) {
@@ -342,6 +356,9 @@ object Online {
     fun remotes(out: FloatArray): Int? {
         if (channel == null) return null
         val now = SystemClock.elapsedRealtime()
+        val dt = ((now - lastRemotes) / 1000f).coerceIn(0f, 0.1f)
+        lastRemotes = now
+        val kf = 1f - kotlin.math.exp(-14f * dt)
         synchronized(remotes) {
             var n = 0
             val nm = ArrayList<String>()
@@ -353,8 +370,12 @@ object Online {
                 if (r.ts == 0L || now - r.ts > 10000) continue
                 if ((n + 1) * Native.REMOTE_STRIDE > out.size) break
                 if (hypot(r.target[0] - myX, r.target[1] - myY) > 3000f) continue
-                r.cur[0] += (r.target[0] - r.cur[0]) * 0.2f
-                r.cur[1] += (r.target[1] - r.cur[1]) * 0.2f
+                // son yayından hızla ileri tahmin (en çok 0.35 sn), oraya kare hızından bağımsız yumuşak takip
+                val ahead = ((now - r.ts) / 1000f).coerceIn(0f, 0.35f)
+                val tx = r.target[0] + r.vx * ahead; val ty = r.target[1] + r.vy * ahead
+                if (hypot(tx - r.cur[0], ty - r.cur[1]) > 300f) { r.cur[0] = tx; r.cur[1] = ty }
+                r.cur[0] += (tx - r.cur[0]) * kf
+                r.cur[1] += (ty - r.cur[1]) * kf
                 for (i in 2 until Native.REMOTE_STRIDE) r.cur[i] = r.target[i]
                 r.cur[4] += 1f / 60f
                 System.arraycopy(r.cur, 0, out, n * Native.REMOTE_STRIDE, Native.REMOTE_STRIDE)

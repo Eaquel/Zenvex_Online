@@ -59,8 +59,16 @@ impl Game {
                     self.zombies.len() - 1
                 }
             };
+            let now = self.time;
             let z = &mut self.zombies[i];
             let flags = r[11] as u8;
+            // iki görüntü arası hız (sıçrama/ışınlanmada sıfır)
+            let gap = now - z.snap_at;
+            let (vx, vy) = if idx.is_some() && gap > 0.05 && gap < 1.0 { ((r[2] - z.snap_x) / gap, (r[3] - z.snap_y) / gap) } else { (0.0, 0.0) };
+            let fast = vx.hypot(vy) > 900.0;
+            z.snap_vx = if fast { 0.0 } else { vx };
+            z.snap_vy = if fast { 0.0 } else { vy };
+            z.snap_at = now;
             z.snap_x = r[2];
             z.snap_y = r[3];
             z.dir = r[4] as u8 & 7;

@@ -730,6 +730,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawControls(c)
         drawTutorial(c)
         if (s.showFps) drawText(c, "${fps.roundToInt()} FPS", 12 * density, sh - 10 * density, 12 * density, 0xFF9AFF9A.toInt())
+        if (s.showPing) {
+            // ping: yeşil iyi, sarı orta, kırmızı kötü; bağlantı yoksa gri
+            val pm = Online.ping()
+            val col = when { pm < 0 -> 0xFF9A9A9A.toInt(); pm < 90 -> 0xFF7AE07A.toInt(); pm < 180 -> 0xFFF6D04A.toInt(); else -> 0xFFFF6A5A.toInt() }
+            drawText(c, if (pm < 0) "Ping —" else "Ping $pm ms", 12 * density, sh - (if (s.showFps) 26 else 10) * density, 12 * density, col)
+        }
     }
 
     private fun drawGround(c: Canvas) {
@@ -1244,11 +1250,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.drawLine(gx, hy - 4 * s, gx + cos(a) * 118 * s, hy - 4 * s + sin(a) * 46 * s, stroke)
         }
         fill.color = 0xFF202020.toInt(); c.drawCircle(gx, hy - 4 * s, 7 * s, fill)
-        if (alt < 150f && Settings.current.particles && Math.random() < 0.5)
-            burst(x + ((Math.random() - 0.5) * 220).toFloat(), y, 2, 0xFFA89878.toInt(), 220f, 5f, 0, 0.8f, 40f)
-        // iniş tozu halkası
+        if (alt < 150f && Settings.current.particles && Math.random() < 0.12)
+            burst(x + ((Math.random() - 0.5) * 200).toFloat(), y, 1, 0xFFA89878.toInt(), 160f, 4f, 0, 0.7f, 30f)
+        // iniş tozu: pervane rüzgârı iki yana yerden toz kaldırır (seyrek, küçük; eski dar kare büyütülünce kutu gibiydi)
         heliDustT -= 1f / 60f
-        if (alt < 120f && heliDustT <= 0f) { heliDustT = 0.45f; fx("heli_dust", x, y - 10, 300f) }
+        if (alt < 110f && heliDustT <= 0f) {
+            heliDustT = 0.8f
+            val side = if (Math.random() < 0.5) -1f else 1f
+            fx("dust", x + side * (60f + (Math.random() * 50).toFloat()), y - 6, 150f)
+        }
     }
 
     /**
@@ -1551,9 +1561,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 20f, 0.6f, 0.6f, tc, 3f, 3)
         }
         val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
+        // efektlerin (egzoz, toz, iz, far) yönü: yan görünüşlü araçta görselin baktığı yan (doğu/batı)
+        var fxDir = dir
         if (v8 != null) {
             // motorun resmi sağa, cipin resmi sola bakar
             val right = when (dir) { in 1..3 -> true; in 5..7 -> false; else -> vehFace[driver] ?: (dir == 0) }
+            fxDir = if (right) 2 else 6
             if (driver >= 0) vehFace[driver] = right
             val flip = if (kind == 1) !right else right
             val sgn = if (right) 1f else -1f
@@ -1568,7 +1581,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.restore()
             if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
             if (driver >= 0 && speed > 20 && !wreck) {
-                surfaceFx(x, y, dir, speed, kind)
+                surfaceFx(x, y, fxDir, speed, kind)
                 wheelSpray(x, y, kind, sgn, speed)
             }
         } else {
@@ -1581,17 +1594,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
             if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
         }
-        if (driver >= 0 && speed > 30) {
-            val bx = -sin(dir * PI.toFloat() / 4); val by = -cos(dir * PI.toFloat() / 4)
+        if (driver >= 0 && speed > 30 && !wreck) {
+            val bx = -sin(fxDir * PI.toFloat() / 4); val by = -cos(fxDir * PI.toFloat() / 4)
             val back = if (kind >= 2) 120f else 55f
-            if (kind >= 1 && Math.random() < 0.35) fx("exhaust", x + bx * back, y + by * back * 0.7f - 15, 55f + speed * 0.06f)
+            // egzoz yalnız arkadaki borudan, seyrek (eskisi sürekli bulut gibi birleşiyordu)
+            if (kind >= 1 && Math.random() < 0.18) fx("exhaust", x + bx * back, y + by * back * 0.7f - (if (kind >= 2) 22f else 18f), 40f + speed * 0.04f)
             if (speed > 160 && Math.random() < 0.45) {
                 val side = if (Math.random() < 0.5) -1 else 1
                 fx("dust", x + bx * back * 0.8f + by * side * 30, y + by * back * 0.55f - bx * side * 20, 70f + speed * 0.1f)
             }
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
-            lightSources += floatArrayOf(x + sin(dir * PI.toFloat() / 4) * 160, y + cos(dir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
+            lightSources += floatArrayOf(x + sin(fxDir * PI.toFloat() / 4) * 160, y + cos(fxDir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
     }
 
     // ------------------------------------------------------------------ yüzeye göre araç izi ve tozu
@@ -2055,6 +2069,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    private val glintPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
     private val plateSrc = android.graphics.Rect()
     private val plateDst = RectF()
 
@@ -2075,9 +2090,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 plateSrc.set(sx, 0, sx + sw, bmp.height); plateDst.set(dx, top, dx + dw, top + h)
                 c.drawBitmap(bmp, plateSrc, plateDst, pixelPaint)
             }
+            // ilk 3: şerit süzülür ve üstünden ışık geçer (yalnız şeridin piksellerine)
+            val bob = if (rank in 1..3) sin(time * 2.2f + rank) * 1.5f * density else 0f
+            c.save(); c.translate(0f, bob)
+            val layer = if (rank in 1..3) c.saveLayer(left, top, left + cl + tw + cr, top + h, null) else -1
             part(0, pl.capL, left, cl)
             part(pl.capL, bmp.width - pl.capL - pl.capR, left + cl, tw)
             part(bmp.width - pl.capR, pl.capR, left + cl + tw, cr)
+            if (layer >= 0) {
+                val w = cl + tw + cr
+                val u = left + ((time * 0.35f + rank * 0.27f) % 1.4f) * (w + 120f) - 60f
+                glintPaint.shader = LinearGradient(u - 30f, top, u + 30f, top + h, intArrayOf(0, 0x90FFFFFF.toInt(), 0), null, Shader.TileMode.CLAMP)
+                c.drawRect(left, top, left + w, top + h, glintPaint)
+                c.restoreToCount(layer)
+            }
+            c.restore()
             val col = if (rank in 1..3) lerpColor(0xFFFFFFFF.toInt(), base, 0.25f + 0.25f * sin(time * 3f + x * 0.01f)) else 0xFFCFE6FF.toInt()
             drawText(c, t, x, y, size, col, center = true)
             return

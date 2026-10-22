@@ -129,6 +129,11 @@ object Supa {
         private var joinRef = "0"
         private var beat: ScheduledFuture<*>? = null
         private var trackMeta: JSONObject? = null
+        /** gidiş-dönüş süresi (ms): 5 sn'de bir kalp atışı yanıtından; -1 = ölçülmedi */
+        @Volatile var pingMs = -1
+            private set
+        @Volatile private var pingRef = ""
+        @Volatile private var pingAt = 0L
         private var backoff = 1000L
         private val timer = Executors.newSingleThreadScheduledExecutor()
 
@@ -147,7 +152,11 @@ object Supa {
                     backoff = 1000L
                     join()
                     beat?.cancel(false)
-                    beat = timer.scheduleWithFixedDelay({ push("phoenix", "heartbeat", JSONObject(), null) }, 20, 20, TimeUnit.SECONDS)
+                    // kalp atışı aynı zamanda ping ölçer (sunucu aynı ref ile yanıtlar)
+                    beat = timer.scheduleWithFixedDelay({
+                        pingRef = (++ref).toString(); pingAt = android.os.SystemClock.elapsedRealtime()
+                        push("phoenix", "heartbeat", JSONObject(), null, pingRef)
+                    }, 1, 5, TimeUnit.SECONDS)
                 }
 
                 override fun onMessage(webSocket: WebSocket, text: String) = handle(text)
@@ -163,6 +172,7 @@ object Supa {
 
         private fun drop() {
             joined = false
+            pingMs = -1
             beat?.cancel(false)
             if (closed) return
             onStatus("Bağlantı koptu, yeniden deneniyor…")
@@ -186,7 +196,9 @@ object Supa {
             val ev = m.optString("event")
             val p = m.optJSONObject("payload") ?: JSONObject()
             when (ev) {
-                "phx_reply" -> if (m.optString("ref") == joinRef && m.optString("topic") == topic) {
+                "phx_reply" -> if (m.optString("topic") == "phoenix") {
+                    if (m.optString("ref") == pingRef) pingMs = (android.os.SystemClock.elapsedRealtime() - pingAt).toInt()
+                } else if (m.optString("ref") == joinRef && m.optString("topic") == topic) {
                     if (p.optString("status") == "ok") {
                         joined = true
                         onStatus("Çevrimiçi")
