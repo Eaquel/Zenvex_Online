@@ -166,23 +166,6 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Gizemli ağacın çevresinde zombilerin durup baktığını gördüm.", "Ağaca değil, gökyüzüne bakıyorlardı."],
             &["Bazı hayatta kalanlar güneydeki eski askerî üslerden bahsediyor.", "Askerler hâlâ oradaymış, ama kimin için savaştıklarını bilen yok."],
         ]),
-        // ------------------------------------------------------------------ kule askeri
-        (_, "area") => vec![
-            "Kuleden her şeyi görürüm: orman, yol, şehrin dumanı.",
-            "Kampa yaklaşan her yaratığa mızrağımı atarım. Sen içerideyken rahat ol.",
-        ],
-        (_, "self") => vec![
-            "Bölüğümden geriye ben kaldım. Mızrak kullanmayı burada öğrendim; mermi çoktan bitti.",
-            "Nöbet bana iyi geliyor. Düşünecek vakit bırakmıyor.",
-        ],
-        (_, "tip") => vec![
-            "Kuleler güvenli bölgenin sınırını korur. Peşinde zombi varsa kuleye doğru koş.",
-            "Zombiler güvenli bölgeye giremez; girmeye kalkanı gökten bir yıldırım çarpar.",
-        ],
-        (_, "rumor") => pick(&[
-            &["Dün gece kuzeyde bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
-            &["Titan arenasından gelen kükremeyi kulede bile hissettim.", "Hazır olmadan oraya gitme."],
-        ]),
         // ------------------------------------------------------------------ büyücü
         (N_WIZARD, "area") => vec![
             "Kişisel üssün, dünyanın kıyısında, duvarlarla çevrili küçük bir bahçe. Oraya yalnız ben kapı açabilirim.",
@@ -207,6 +190,23 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Donmuş Liman'dan gelen bir tüccar, buz tutmuş konteynerlerin içinde ışık gördüğünü anlattı.", "Kim bilir, belki asker sandıklarıdır, belki de daha kötüsü."],
             &["Yanık Orman hâlâ tütüyor. Ateşi kimin yaktığını bilen yok; ama küllerin arasında koşan şeyler var."],
             &["Askeri Bölge'nin hangarlarında devlet son birliklerini saklıyormuş. Helikopter sesleri geceleri buraya kadar gelir."],
+        ]),
+        // ------------------------------------------------------------------ kule askeri
+        (_, "area") => vec![
+            "Kuleden her şeyi görürüm: orman, yol, şehrin dumanı.",
+            "Kampa yaklaşan her yaratığa mızrağımı atarım. Sen içerideyken rahat ol.",
+        ],
+        (_, "self") => vec![
+            "Bölüğümden geriye ben kaldım. Mızrak kullanmayı burada öğrendim; mermi çoktan bitti.",
+            "Nöbet bana iyi geliyor. Düşünecek vakit bırakmıyor.",
+        ],
+        (_, "tip") => vec![
+            "Kuleler güvenli bölgenin sınırını korur. Peşinde zombi varsa kuleye doğru koş.",
+            "Zombiler güvenli bölgeye giremez; girmeye kalkanı gökten bir yıldırım çarpar.",
+        ],
+        (_, "rumor") => pick(&[
+            &["Dün gece kuzeyde bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
+            &["Titan arenasından gelen kükremeyi kulede bile hissettim.", "Hazır olmadan oraya gitme."],
         ]),
         _ => vec!["Bunu bilmiyorum, kusura bakma."],
     }
