@@ -12,7 +12,7 @@ impl Game {
         if z.safe() {
             return false;
         }
-        if matches!(z, Zone::Military | Zone::Harbor) {
+        if matches!(z, Zone::Military | Zone::Harbor | Zone::Front) {
             return true;
         }
         let r = (crate::bases::BASE_HALF + 6.0) * crate::world::TILE;
@@ -629,7 +629,7 @@ impl Game {
             Zone::BurntForest => ["scorched_resin", "charcoal"],
             Zone::Desert => ["scorpion_venom", "dried_hide"],
             Zone::BlackSwamp => ["swamp_moss", "bog_iron"],
-            Zone::Military => ["circuit_board", "powder_pouch"],
+            Zone::Military | Zone::Front => ["circuit_board", "powder_pouch"],
             Zone::Downtown | Zone::Suburb | Zone::Industrial => ["gold_watch", "rusty_key"],
             _ => return,
         };
@@ -797,6 +797,7 @@ impl Game {
             self.quests_done(done);
             if self.progress.level == crate::progress::CITY_LEVEL {
                 self.msg("Şehir kapısı açıldı! Kuzeye git.");
+                self.msg("Cephe Hattı açıldı: üslere Büyücü Aldric ışınlar (kampta).");
             }
         }
     }

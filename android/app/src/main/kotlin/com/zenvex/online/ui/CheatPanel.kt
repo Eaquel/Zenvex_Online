@@ -347,7 +347,7 @@ private fun CheatTab(report: (String, Boolean) -> Unit) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
         for ((n, c) in listOf("Kamp" to "camp", "Kişisel Üs" to "home", "Şehir" to "city", "Şehir Merkezi" to "downtown", "Derin Orman" to "deep",
             "Bataklık" to "swamp", "Yanık Orman" to "burnt", "Çöl Otoyolu" to "desert", "Kara Bataklık" to "bswamp", "Askerî Bölge" to "military",
-            "Donmuş Liman" to "harbor", "Titan Arenası" to "boss")) {
+            "Donmuş Liman" to "harbor", "Titan Arenası" to "boss", "Cephe Hattı" to "front")) {
             PxButton(n, color = Px.Dark, height = 34.dp, size = 12.sp) { run("tp $c") }
         }
     }

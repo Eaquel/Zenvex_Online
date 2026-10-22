@@ -62,12 +62,15 @@ fun fogMask(fog: JSONObject): ImageBitmap? {
     if (n <= 0) return null
     val px = IntArray(n * n)
     for (y in 0 until n) {
-        // satır: 16 onaltılık hane = 64 hücre; V8'de 32 hane (yüksek kelime önce)
+        // satır: 16 onaltılık hane = 64 hücre; kelimeler yüksekten alçağa (V8: 2 kelime, V11: 3 kelime)
         val row = rows.optString(y, "0")
-        val lo = java.lang.Long.parseUnsignedLong(if (row.length > 16) row.substring(row.length - 16) else row, 16)
-        val hi = if (row.length > 16) java.lang.Long.parseUnsignedLong(row.substring(0, row.length - 16), 16) else 0L
+        val words = (row.length + 15) / 16
+        val w = LongArray(words) { k ->
+            val end = row.length - k * 16
+            java.lang.Long.parseUnsignedLong(row.substring(maxOf(0, end - 16), end), 16)
+        }
         for (x in 0 until n) {
-            val bit = if (x < 64) (lo ushr x) and 1L else (hi ushr (x - 64)) and 1L
+            val bit = w.getOrElse(x / 64) { 0L } ushr (x % 64) and 1L
             px[y * n + x] = if (bit == 1L) 0 else 0xFF000000.toInt()
         }
     }

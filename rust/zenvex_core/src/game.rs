@@ -567,6 +567,11 @@ impl Game {
             let (hx, hy) = world::home_spawn();
             npcs.push(Npc { kind: 7, x: hx + m(2.2), y: hy - m(9.5), dir: 0, cd: 0.0, anim_t: 1.3, hit_t: 0.0, hit_id: 0 });
         }
+        // Cephe Karargâhı'ndaki büyücü (geri dönüş); tüccar ve diğerleri world.merchants ile gelir
+        {
+            let (fx, fy) = world::front_spawn();
+            npcs.push(Npc { kind: 7, x: fx + m(6.0), y: fy - m(0.5), dir: 0, cd: 0.0, anim_t: 0.9, hit_t: 0.0, hit_id: 0 });
+        }
         Game {
             world,
             progress,
@@ -923,8 +928,9 @@ impl Game {
                 self.player.x + nx * speed * dt,
                 self.player.y + ny * speed * dt,
             );
+            let (ox, oy) = (self.player.x, self.player.y);
             self.world
-                .resolve(&mut x, &mut y, 14.0, gate_open, &mut self.scratch);
+                .resolve_move(ox, oy, &mut x, &mut y, 14.0, gate_open, &mut self.scratch);
             if !gate_open
                 && y < (world::WALL_Y as f32 + 2.2) * world::TILE
                 && self.player.y >= (world::WALL_Y as f32 + 2.2) * world::TILE

@@ -97,9 +97,10 @@ impl Game {
         let (dx, dy) = (v.angle.sin(), v.angle.cos());
         let (mut x, mut y) = (v.x + dx * v.speed * dt, v.y + dy * v.speed * dt);
         let r = def.radius * 0.7;
+        let (ox, oy) = (v.x, v.y);
         let hit = self
             .world
-            .resolve(&mut x, &mut y, r, gate_open, &mut self.scratch);
+            .resolve_move(ox, oy, &mut x, &mut y, r, gate_open, &mut self.scratch);
         let speed = v.speed;
         if hit && speed > m(3.0) {
             let dmg = speed / crate::data::PX_PER_M * 2.0;

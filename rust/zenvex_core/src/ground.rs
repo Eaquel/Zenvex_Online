@@ -52,6 +52,8 @@ pub fn zone_tint(z: Zone, c: u32) -> u32 {
         Zone::BlackSwamp => shade(mix(c, 0xFF24331E, 0.3), 0.8),
         Zone::Harbor => mix(shade(gray(c), 1.25), 0xFFE4ECF2, 0.5),
         Zone::Military => mix(c, 0xFF6E6A48, 0.22),
+        // Cephe Hattı: is ve barut lekeli, soluk kahverengi
+        Zone::Front => shade(mix(c, 0xFF5A4A36, 0.3), 0.85),
         _ => c,
     }
 }

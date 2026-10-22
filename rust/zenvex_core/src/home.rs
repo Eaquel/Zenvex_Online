@@ -49,7 +49,12 @@ impl Game {
         if self.progress.level >= CITY_LEVEL && self.explored_at(sx, sy) && far(sx, sy) {
             v.push(Dest { id: "city", name: "Şehir Güvenli Bölgesi", x: sx, y: sy, cost: WIZ_COST });
         }
-        for l in LANDMARKS.iter().filter(|l| l.safe) {
+        // V11 Cephe Hattı (tüm üsler orada): yalnız buradan, şehir seviyesine ulaşınca; keşif gerekmez
+        let (fx, fy) = world::front_spawn();
+        if self.progress.level >= CITY_LEVEL && far(fx, fy) {
+            v.push(Dest { id: "front", name: "Cephe Hattı (Üsler)", x: fx, y: fy, cost: WIZ_COST });
+        }
+        for l in LANDMARKS.iter().filter(|l| l.safe && l.id != "front_hq") {
             let (lx, ly) = (l.tx * TILE, (l.ty + 2.5) * TILE);
             if self.explored_at(lx, ly) && far(lx, ly) {
                 v.push(Dest { id: l.id, name: l.name, x: lx, y: ly, cost: WIZ_COST });

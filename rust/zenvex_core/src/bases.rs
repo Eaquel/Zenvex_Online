@@ -10,8 +10,7 @@
 //! - Askerler en yakın düşmana (oyuncu, köpek ya da zombi) sıkar; bazen ıskalar.
 use crate::data;
 use crate::game::*;
-use crate::rng::Rng;
-use crate::world::{self, region_road, zone_at_tile, Zone, LANDMARKS, MAP_TILES, TILE};
+use crate::world::{self, Zone, TILE};
 use serde_json::{json, Value};
 use std::f32::consts::TAU;
 use std::sync::OnceLock;
@@ -63,14 +62,7 @@ impl BaseDef {
         (self.tx * TILE, self.ty * TILE)
     }
     pub fn name(&self) -> String {
-        let r = match self.region {
-            Zone::Military => "Askeri",
-            Zone::Harbor => "Liman",
-            Zone::BurntForest => "Kül",
-            Zone::Desert => "Çöl",
-            Zone::BlackSwamp => "Bataklık",
-            _ => "Şehir",
-        };
+        let r = if self.tx >= world::WORLD_TILES as f32 { "Doğu Cephesi" } else { "Güney Cephesi" };
         format!("{r} Üssü {}", self.id + 1)
     }
 }
@@ -81,9 +73,9 @@ pub fn base_defs() -> &'static [BaseDef] {
 }
 
 /// Üs yerleri tohumdan bağımsızdır (sunucudaki üs kimlikleri her istemcide aynı yeri gösterir).
+/// V11: tüm üsler Cephe Hattı'nda (doğu şerit 3 sütun, güney şerit 3 satır; güneydoğu köşe karargâh). Kimlik sırası,
+/// seviye ve kaynak bölge (ad, ganimet) V10 ile aynı; yalnız yerleri değişti, sunucudaki sahiplikler korunur.
 fn generate_defs() -> Vec<BaseDef> {
-    let mut rng = Rng::new(0xBA5E_0050);
-    let mut out: Vec<BaseDef> = Vec::new();
     let quotas: [(Zone, usize, u32); 6] = [
         (Zone::Military, 14, 46),
         (Zone::Harbor, 10, 48),
@@ -92,53 +84,30 @@ fn generate_defs() -> Vec<BaseDef> {
         (Zone::BlackSwamp, 4, 36),
         (Zone::Industrial, 4, 40),
     ];
-    let h = BASE_HALF;
-    let ok_zone = |z: Zone, want: Zone| if want == Zone::Industrial { matches!(z, Zone::Industrial | Zone::Downtown) } else { z == want };
+    // yuvalar: doğu şeritte (x 744/810/876) ve güney şeritte (y 744/810/876), 62 karo arayla; iki şerit dönüşümlü
+    let w = world::WORLD_TILES as f32;
+    let lanes = [w + 24.0, w + 90.0, w + 156.0];
+    let mut east = Vec::new();
+    let mut south = Vec::new();
+    for k in 0..12 {
+        let along = 30.0 + k as f32 * 62.0;
+        for &l in &lanes {
+            east.push((l, along));
+            south.push((along, l));
+        }
+    }
+    let mut slots = Vec::new();
+    for i in 0..east.len() {
+        slots.push(east[i]);
+        slots.push(south[i]);
+    }
+    let mut out: Vec<BaseDef> = Vec::new();
+    let mut it = slots.into_iter();
     for (zone, n, level) in quotas {
-        let mut got = 0;
-        for _ in 0..40000 {
-            if got >= n {
-                break;
-            }
-            let (tx, ty) = if zone == Zone::Industrial {
-                // eski şehirde yalnız blok içleri (yollar arası 26×22 karo)
-                let bx = 8 + 34 * rng.below(10) as usize;
-                let by = 6 + 30 * rng.below(3) as usize;
-                ((bx + 19) as f32, (by + 17) as f32)
-            } else {
-                (rng.range(24.0, MAP_TILES as f32 - 24.0).round(), rng.range(24.0, MAP_TILES as f32 - 24.0).round())
-            };
-            let corners = [(0.0, 0.0), (-h, -h), (h, -h), (-h, h), (h, h), (0.0, h + 2.0)];
-            if !corners.iter().all(|(ox, oy)| ok_zone(zone_at_tile((tx + ox) as usize, (ty + oy) as usize), zone)) {
-                continue;
-            }
-            if LANDMARKS.iter().any(|l| (l.tx - tx).hypot(l.ty - ty) < l.r + h + 10.0) {
-                continue;
-            }
-            let (cx, cy) = world::CAMP;
-            if (cx / TILE - tx).hypot(cy / TILE - ty) < 70.0 || (world::BOSS.0 / TILE - tx).hypot(world::BOSS.1 / TILE - ty) < 50.0 {
-                continue;
-            }
-            if out.iter().any(|b| (b.tx - tx).hypot(b.ty - ty) < 40.0) {
-                continue;
-            }
-            // yeni bölgelerde yollar yerleşkenin içinden geçmesin
-            let mut road = false;
-            let mut k = -h - 2.0;
-            while k <= h + 2.0 && !road {
-                for (ax, ay) in [(tx + k, ty - h - 2.0), (tx + k, ty + h + 2.0), (tx - h - 2.0, ty + k), (tx + h + 2.0, ty + k), (tx + k, ty)] {
-                    if region_road(ax as usize, ay as usize).0 {
-                        road = true;
-                    }
-                }
-                k += 1.0;
-            }
-            if road {
-                continue;
-            }
+        for _ in 0..n {
+            let (tx, ty) = it.next().expect("üs yuvası");
             let id = out.len() as u16;
             out.push(BaseDef { id, tx, ty, level: level + (id as u32 % 3), region: zone });
-            got += 1;
         }
     }
     out
@@ -932,6 +901,7 @@ const PX_PER_M_F: f32 = crate::data::PX_PER_M;
 mod tests {
     use super::*;
     use crate::Progress;
+    use crate::world::zone_at_tile;
 
     fn game() -> Game {
         let mut g = Game::new(7, Progress::default(), 0);
@@ -950,9 +920,9 @@ mod tests {
                 assert!((b.tx - c.tx).hypot(b.ty - c.ty) >= 40.0);
             }
         }
-        // çoğu yeni bölgelerde
-        let new = d.iter().filter(|b| b.tx >= world::OLD_TILES as f32 || b.ty >= world::OLD_TILES as f32).count();
-        assert!(new >= 40, "{new}");
+        // V11: hepsi Cephe Hattı'nda
+        assert!(d.iter().all(|b| zone_at_tile(b.tx as usize, b.ty as usize) == Zone::Front));
+        assert!(d.iter().all(|b| b.tx + BASE_HALF < world::MAP_TILES as f32 - 3.0 && b.ty + BASE_HALF < world::MAP_TILES as f32 - 3.0));
     }
 
     fn goto_base(g: &mut Game, i: usize) {

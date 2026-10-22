@@ -1393,6 +1393,7 @@ impl Game {
                     "military" | "askeri" => (520.0 * world::TILE, 90.0 * world::TILE),
                     "harbor" | "liman" => (520.0 * world::TILE, 520.0 * world::TILE),
                     "home" | "us" => world::home_spawn(),
+                    "front" | "cephe" => world::front_spawn(),
                     "base" | "uss" => {
                         let b = &crate::bases::base_defs()[(num(2, 1.0) as usize).clamp(1, crate::bases::BASE_N) - 1];
                         (b.tx * world::TILE, (b.ty + crate::bases::BASE_HALF + 5.0) * world::TILE)

@@ -314,10 +314,14 @@ pub struct EventStats {
     pub pvp_kills: u32,
 }
 
-/// Keşif ızgarası: 120×120 hücre (her hücre 6 kare = 384 px); satır başına 2 kelime (FOG_W).
-/// V8 öncesi kayıtlar 60 satır × 1 kelimeydi: aynı hücre boyunda olduğundan eski bitler sol üst çeyreğe aynen taşınır.
-pub const FOG_N: usize = 120;
-pub const FOG_W: usize = 2;
+/// Keşif ızgarası: 150×150 hücre (her hücre 6 kare = 384 px); satır başına 3 kelime (FOG_W).
+/// Hücre boyu hiç değişmedi: V8 öncesi (60 satır × 1 kelime) ve V8-V10 (120 satır × 2 kelime) kayıtların bitleri
+/// aynı hücrelere aynen taşınır (V11'de harita 900 karoya büyüdü).
+pub const FOG_N: usize = 150;
+pub const FOG_W: usize = 3;
+/// V8-V10 düzeni (eski kayıtlar)
+const FOG_N_V8: usize = 120;
+const FOG_W_V8: usize = 2;
 
 impl Progress {
     pub fn explored(&self, cx: usize, cy: usize) -> bool {
@@ -326,6 +330,9 @@ impl Progress {
         }
         if self.fog.len() == 60 {
             return cx < 64 && self.fog.get(cy).is_some_and(|r| r >> cx & 1 == 1);
+        }
+        if self.fog.len() == FOG_N_V8 * FOG_W_V8 {
+            return cx < 128 && cy < FOG_N_V8 && self.fog.get(cy * FOG_W_V8 + cx / 64).is_some_and(|r| r >> (cx % 64) & 1 == 1);
         }
         self.fog.get(cy * FOG_W + cx / 64).is_some_and(|r| r >> (cx % 64) & 1 == 1)
     }
@@ -341,6 +348,12 @@ impl Progress {
             for (y, r) in old.iter().enumerate() {
                 self.fog[y * FOG_W] = *r;
             }
+        } else if old.len() == FOG_N_V8 * FOG_W_V8 {
+            for y in 0..FOG_N_V8 {
+                for k in 0..FOG_W_V8 {
+                    self.fog[y * FOG_W + k] = old[y * FOG_W_V8 + k];
+                }
+            }
         }
     }
 
@@ -348,8 +361,18 @@ impl Progress {
     pub fn fog_rows(&self) -> Vec<String> {
         (0..FOG_N)
             .map(|y| {
-                let w = |k: usize| if self.fog.len() == FOG_N * FOG_W { self.fog[y * FOG_W + k] } else if k == 0 { self.fog.get(y).copied().unwrap_or(0) } else { 0 };
-                format!("{:016x}{:016x}", w(1), w(0))
+                let w = |k: usize| {
+                    if self.fog.len() == FOG_N * FOG_W {
+                        self.fog[y * FOG_W + k]
+                    } else if self.fog.len() == FOG_N_V8 * FOG_W_V8 {
+                        if y < FOG_N_V8 && k < FOG_W_V8 { self.fog[y * FOG_W_V8 + k] } else { 0 }
+                    } else if k == 0 {
+                        self.fog.get(y).copied().unwrap_or(0)
+                    } else {
+                        0
+                    }
+                };
+                (0..FOG_W).rev().map(|k| format!("{:016x}", w(k))).collect::<String>()
             })
             .collect()
     }
@@ -822,6 +845,26 @@ impl Progress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// V8-V10 keşif kaydı (120×2) V11 düzenine (150×3) aynı hücrelerle taşınır
+    #[test]
+    fn fog_v8_migrates_to_v11() {
+        let mut p = Progress::default();
+        p.fog = vec![0; 240];
+        // hücre (5, 3) ve (100, 119)
+        p.fog[3 * 2] |= 1 << 5;
+        p.fog[119 * 2 + 1] |= 1 << (100 - 64);
+        assert!(p.explored(5, 3) && p.explored(100, 119));
+        assert_eq!(p.fog_rows()[3].len(), 48);
+        p.migrate_fog();
+        assert_eq!(p.fog.len(), FOG_N * FOG_W);
+        assert!(p.explored(5, 3) && p.explored(100, 119) && !p.explored(6, 3));
+        // yeni şeritte keşif
+        let cell = crate::world::MAP_PX / FOG_N as f32;
+        p.reveal(145.0 * cell, 140.0 * cell, 0);
+        assert!(p.explored(145, 140));
+        assert!(p.fog_rows()[140].starts_with("0000"));
+    }
 
     #[test]
     fn xp_curve_matches_design() {

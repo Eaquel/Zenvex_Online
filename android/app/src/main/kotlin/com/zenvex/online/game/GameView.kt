@@ -1624,7 +1624,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             z.contains("Donmuş") -> 3
             z.contains("Bataklık") -> 4
             z.contains("Yanık") -> 5
-            z.contains("Orman") || z.contains("Kamp") || z.contains("Karakol") -> 1
+            z.contains("Orman") || z.contains("Kamp") || z.contains("Karakol") || z.contains("Cephe") -> 1
             else -> 0
         }
     }
