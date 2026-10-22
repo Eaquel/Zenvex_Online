@@ -848,8 +848,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         // piksel kahraman tek görünüm (sola bakar); sağa bakan yönler aynalanır
         val pix = ch in 0..3
-        val flip = pix && dir in 1..3
-        val kdir = if (pix) 0 else dir
+        // yukarı (kameradan uzağa) yürürken/beklerken V9 sırt görünümü; yoksa ön görünüm
+        val backView = pix && dir in 3..5 && (anim == "idle" || anim == "walk" || anim == "run") && atlas[spriteKey(prefix, anim, 4, f)] != null
+        val flip = pix && !backView && dir in 1..3
+        val kdir = if (backView) 4 else if (pix) 0 else dir
         var key = spriteKey(prefix, anim, kdir, f)
         // elde gerçek silahla render edilmiş kare varsa onu kullan
         val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null

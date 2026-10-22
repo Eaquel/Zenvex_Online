@@ -246,13 +246,19 @@ def collect_pixel_hero(prefix, items, attach_out=None, sub="hero"):
     att = jload(os.path.join(d, "attach.json")) or {}
     rel = {}
     n = 0
-    for f in sorted(os.listdir(d)):
+    # V9: sırt görünümü (yukarı yürürken) <sub>_back dizininde, yön 4; aynı çapa/ölçek
+    back = os.path.join(PIX, sub + "_back")
+    files = [(d, f) for f in sorted(os.listdir(d))]
+    if os.path.isdir(back):
+        files += [(back, f) for f in sorted(os.listdir(back))]
+        att.update(jload(os.path.join(back, "attach.json")) or {})
+    for fd, f in files:
         if not f.endswith(".png"):
             continue
         anim, dr, fr = f[:-4].rsplit("_", 2)
-        if dr != "0":
-            continue  # tek görünüm: oyun sağa bakan yönleri çizerken aynalar (atlas 8× küçük)
-        im = Image.open(os.path.join(d, f)).convert("RGBA")
+        if dr not in ("0", "4"):
+            continue  # ön görünüm tek (sağa bakan yönler aynalanır) + sırt görünümü
+        im = Image.open(os.path.join(fd, f)).convert("RGBA")
         variants = [(int(dr), im, ax0)]
         for dd, img, ax in variants:
             t, x0, y0 = trim(img)

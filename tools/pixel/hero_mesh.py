@@ -6,6 +6,7 @@ noktası el kemiğine bağlı, yönü bileğin 3B dönüşünden gelir (öne uza
 <anim>_0_<kare>@knife / @katana olarak ayrıca pişirilir (oyun bunları otomatik seçer).
 
 python3 tools/pixel/hero_mesh.py art/v6/hero_s.png /home/user/zx_pix/hero [önizleme_dizini]
+Sırt görünümü: ZX_VIEW=back ZX_ONLY=idle,walk,run python3 tools/pixel/hero_mesh.py art/v9/hero_back_s.png /home/user/zx_pix/hero_back
 Çıktı: <anim>_0_<kare>[@silah].png, attach.json, meta.json (çapa, mpp, kareler)
 """
 import json
@@ -53,6 +54,33 @@ ARM_R = [(100, 88), (110, 90), (117, 102), (119, 120), (123, 148), (126, 166), (
          (103, 120), (99, 104)]
 WRIST_Y = 150.0
 YAW, KZ = 15.0, 0.32  # bakış: kameraya göre 15° sola; derinlik → ekran aşağı katsayısı
+LEG_L_RIGHT = False  # L bacağı (kahramanın sağı) izleyicinin sağında mı (sırt görünümü)
+DIR = 0  # çıktı yön numarası (0 ön, 4 sırt)
+
+# Sırt görünümü (V9 K1 dönüş görseli, art/v9/hero_back_s.png): kahraman kameradan uzaklaşır (yaw 180°).
+# Eklem adları anatomik kalır: L = kahramanın sağı (sırttan bakınca izleyicinin sağı), silah L elde.
+if os.environ.get("ZX_VIEW") == "back":
+    J = {
+        "pelvis": (None, (86, 148)),
+        "pelvis_lo": ("pelvis", (86, 176)),
+        "waist": ("pelvis", (86, 146)),
+        "chest": ("waist", (86, 106)),
+        "neck": ("chest", (86, 78)),
+        "head": ("neck", (86, 46)),
+        "shL": ("chest", (116, 104)), "elL": ("shL", (119, 132)), "wrL": ("elL", (119, 152)), "hdL": ("wrL", (119, 167)),
+        "shR": ("chest", (56, 104)), "elR": ("shR", (52, 132)), "wrR": ("elR", (51, 152)), "hdR": ("wrR", (51, 167)),
+        "hipL": ("pelvis", (101, 152)), "knL": ("hipL", (103, 205)), "anL": ("knL", (104, 249)),
+        "toL": ("anL", (104, 259)), "heL": ("anL", (103, 260)),
+        "hipR": ("pelvis", (71, 152)), "knR": ("hipR", (70, 205)), "anR": ("knR", (70, 249)),
+        "toR": ("anR", (70, 259)), "heR": ("anR", (71, 260)),
+    }
+    ARM_L = [(110, 100), (120, 100), (125, 110), (127, 125), (128, 150), (127, 172), (113, 172), (113, 145), (109, 130), (107, 118),
+             (106, 108)]
+    ARM_R = [(50, 100), (60, 100), (62, 112), (60, 118), (59, 135), (58, 150), (58, 165), (57, 172), (44, 172), (44, 150), (45, 125),
+             (47, 110)]
+    YAW = 180.0
+    LEG_L_RIGHT = True
+    DIR = 4
 
 
 def poly_mask(shape, poly):
@@ -90,8 +118,8 @@ class Hero:
         armR = poly_mask(a.shape, ARM_R) & opaque
         arms = armL | armR
         legs = opaque & ~arms & (ys >= 150)
-        legL = legs & (xs < 88)
-        legR = legs & (xs >= 88)
+        legL = legs & ((xs >= 87) if LEG_L_RIGHT else (xs < 88))
+        legR = legs & ~legL
         torso_m = opaque & ~arms & ~legs
         # kolların arkasında kalan gövde: omuz/yan kısımlar komşu renklerle dolar (kol savrulunca delik kalmasın)
         tex = a.copy()
@@ -521,10 +549,10 @@ def main(src, out, prev=None):
             for f in range(n):
                 pose = pose_for(anim, f, n, w)
                 img, pts = hero.render(pose, w)
-                name = f"{anim}_0_{f}" + (f"@{w}" if w else "")
+                name = f"{anim}_{DIR}_{f}" + (f"@{w}" if w else "")
                 Image.fromarray(img).save(os.path.join(out, name + ".png"))
                 if w is None:
-                    att[f"{anim}_0_{f}"] = pts
+                    att[f"{anim}_{DIR}_{f}"] = pts
                 sheets.setdefault((anim, w), []).append(img)
     json.dump(att, open(os.path.join(out, "attach.json"), "w"))
     json.dump({"anchor": list(ANCHOR), "mpp": MPP, "frames": FRAMES}, open(os.path.join(out, "meta.json"), "w"))
