@@ -112,10 +112,10 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Otuz yıl kamyon tamir ettim. Motorun sesinden derdini anlarım.",
               "Salgın başladığında herkes kaçıyordu; ben kaçanların arabalarını tamir ediyordum.",
               "Sonunda kaçacak kimse kalmadı, ben de buraya yerleştim."],
-            &["Bir SUV'u tamir etmek için üç gün uğraştım.", "Sonra bir tank zombi devirdi. Hayat işte."],
+            &["Bir arabayı tamir etmek için üç gün uğraştım.", "Sonra bir tank zombi devirdi. Hayat işte."],
         ]),
         (N_MECHANIC, "tip") => vec![
-            "Motor tek kişiliktir ama çok hızlıdır. Araba iki, SUV dört kişi alır; klan arkadaşlarını da bindirebilirsin.",
+            "Motor tek kişiliktir ama çevik. Araba iki kişiliktir; yanına bir arkadaşını al, dışarıdan ikiniz de görünürsünüz.",
             "Yakıt biterse araç durur. Yakıt bidonu ya da benim pompam lazım.",
             "Zombilere çarpmak onları ezer ama aracın da hasar alır. Duman çıkıyorsa yanıma getir.",
         ],

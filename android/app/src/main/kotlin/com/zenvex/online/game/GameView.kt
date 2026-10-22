@@ -686,6 +686,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.translate((Math.random().toFloat() - 0.5f) * a * 2, (Math.random().toFloat() - 0.5f) * a * 2)
         }
         drawGround(c)
+        drawTracks(c, dt)
         drawChests(c)
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
@@ -1479,6 +1480,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
         if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
         if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+        if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
         if (driver >= 0 && speed > 30) {
             val bx = -sin(dir * PI.toFloat() / 4); val by = -cos(dir * PI.toFloat() / 4)
             val back = if (kind >= 2) 120f else 55f
@@ -1490,6 +1492,81 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
             lightSources += floatArrayOf(x + sin(dir * PI.toFloat() / 4) * 160, y + cos(dir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
+    }
+
+    // ------------------------------------------------------------------ yüzeye göre araç izi ve tozu
+    /** zemin izi (dünya koordinatı, açı, ömür); yumuşak zeminde (kum, kar, çamur) ve asfaltta frende kalır */
+    private class Track(val x: Float, val y: Float, val a: Float, val color: Int, var life: Float, val max: Float, val w: Float)
+    private val tracks = ArrayList<Track>()
+    private var trackT = 0f
+
+    /** Sürülen yerin yüzeyi: 0 asfalt, 1 toprak/orman, 2 kum, 3 kar, 4 çamur, 5 kül */
+    private fun surface(): Int {
+        val z = zones.getOrElse(hud[Native.ZONE].toInt()) { "" }
+        return when {
+            z.contains("Çöl") -> 2
+            z.contains("Donmuş") -> 3
+            z.contains("Bataklık") -> 4
+            z.contains("Yanık") -> 5
+            z.contains("Orman") || z.contains("Kamp") || z.contains("Karakol") -> 1
+            else -> 0
+        }
+    }
+
+    private fun surfaceFx(x: Float, y: Float, dir: Int, speed: Float, kind: Int) {
+        val surf = surface()
+        val a = dir * PI.toFloat() / 4
+        val bx = -sin(a); val by = -cos(a)
+        val back = if (kind >= 2) 95f else 45f
+        val wide = if (kind >= 2) 34f else 0f
+        val k = (speed / 400f).coerceIn(0.2f, 1f)
+        // teker izi: 0,06 sn'de bir iki (araba) ya da bir (motor) iz
+        trackT += 1f / 60f
+        if (trackT > 0.06f && (surf >= 2 || surf == 1 || speed > 300)) {
+            trackT = 0f
+            val col = when (surf) { 2 -> 0x55806040; 3 -> 0x66A0B4C8; 4 -> 0x66302818; 5 -> 0x55201A18; 1 -> 0x40403020; else -> 0x45101010 }
+            val life = if (surf >= 2) 9f else 4f
+            for (side in if (kind >= 2) intArrayOf(-1, 1) else intArrayOf(0)) {
+                val tx = x + bx * back + by * side * wide * 0.7f
+                val ty = y + by * back * 0.7f - bx * side * wide * 0.5f
+                tracks += Track(tx, ty, a, col.toInt(), life, life, if (kind >= 2) 9f else 6f)
+            }
+            if (tracks.size > 600) tracks.subList(0, tracks.size - 600).clear()
+        }
+        if (!Settings.current.particles) return
+        val (pc, n, lift) = when (surf) {
+            2 -> Triple(0xFFD8B878.toInt(), 3, 70f)   // kum tozu
+            3 -> Triple(0xFFF2F8FF.toInt(), 3, 90f)   // kar savrulması
+            4 -> Triple(0xFF4A5230.toInt(), 2, 110f)  // çamur sıçraması
+            5 -> Triple(0xFF3A3432.toInt(), 2, 60f)   // kül
+            1 -> Triple(0xFF7A6A44.toInt(), 1, 50f)   // toprak
+            else -> Triple(0xFF9A9AA0.toInt(), if (speed > 300) 1 else 0, 40f) // asfalt: yalnız hızlıyken lastik dumanı
+        }
+        for (i in 0 until n) {
+            if (Math.random() > 0.55 * k) continue
+            val side = if (Math.random() < 0.5) -1f else 1f
+            val ox = x + bx * back + by * side * wide * 0.7f
+            val oy = y + by * back * 0.7f - bx * side * wide * 0.5f
+            particles += Particle(ox, oy, 6f, bx * 60f + (Math.random().toFloat() - 0.5f) * 90f, by * 40f + (Math.random().toFloat() - 0.5f) * 40f,
+                lift * (0.5f + Math.random().toFloat()) * k, 0.7f, 0.7f, pc, if (surf == 4) 4.5f else 5.5f, 3)
+        }
+    }
+
+    private fun drawTracks(c: Canvas, dt: Float) {
+        if (tracks.isEmpty()) return
+        val it = tracks.iterator()
+        while (it.hasNext()) {
+            val t = it.next()
+            t.life -= dt
+            if (t.life <= 0f) { it.remove(); continue }
+            val sx = wx(t.x); val sy = wy(t.y)
+            if (sx < -50 || sx > sw + 50 || sy < -50 || sy > sh + 50) continue
+            fill.color = alphaC(t.color, (t.life / t.max).coerceIn(0f, 1f))
+            val l = 10f * scale; val w = t.w * scale * 0.5f
+            c.save(); c.rotate(-Math.toDegrees(t.a.toDouble()).toFloat(), sx, sy)
+            c.drawRect(sx - w, sy - l, sx + w, sy + l, fill)
+            c.restore()
+        }
     }
 
     // eyer konumu (araç çapasına göre dünya birimi), yön 0..4; 5..7 aynası

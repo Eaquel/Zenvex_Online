@@ -1325,7 +1325,6 @@ impl Game {
                 // bisiklet kaldırıldı: varsayılan motor
                 let k = match arg(1) {
                     "car" | "araba" => 2,
-                    "suv" => 3,
                     _ => 1,
                 };
                 let (mut x, mut y) = (px + 120.0, py);
@@ -1383,7 +1382,7 @@ impl Game {
             }
             _ => Err("Komutlar: gold N, gem N, item id N, items, weapons, level N, xp N, charlevel N, \
                       god, onehit, speed X, time H, day, night, heal, spawn tür N lvl, boss, killall, tp city|camp|boss|swamp|downtown|deep|burnt|desert|bswamp|military|harbor|home|base N|x y, \
-                      unlock, pass N, pass buy [elite], vehicle moto|car|suv, points N, fuel, clearbag, nocd, invis, timescale X, dog N, potions, reset"
+                      unlock, pass N, pass buy [elite], vehicle moto|car, points N, fuel, clearbag, nocd, invis, timescale X, dog N, potions, reset"
                 .into()),
         }
     }
@@ -1423,7 +1422,7 @@ mod cheat_tests {
             "item w_katana 1", "item medkit 5", "god", "god", "onehit", "onehit",
             "speed 2", "speed 1", "heal", "day", "night", "time 18", "spawn walker 3", "spawn runner 2", "spawn dog 2",
             "spawn toxic 2", "spawn dark 2", "spawn tank 1", "spawn mystery 1", "boss", "killall", "vehicle moto",
-            "vehicle car", "vehicle suv", "fuel", "tp camp", "tp city", "tp swamp", "tp deep", "tp downtown", "tp boss", "tp 100 100",
+            "vehicle car", "fuel", "tp camp", "tp city", "tp swamp", "tp deep", "tp downtown", "tp boss", "tp 100 100",
             "unlock", "pass 30", "pass buy", "pass buy elite", "clearbag", "reset",
         ];
         for c in cmds {

@@ -696,8 +696,8 @@ pub struct VehicleDef {
     pub length: f32,
 }
 
-/// Araçlar. 0. kayıt (bisiklet) oyundan kaldırıldı: hiçbir yerde doğmaz, hileyle de gelmez; yalnız
-/// ağ/çizim indeksleri (motor 1, araba 2, SUV 3) değişmesin diye yer tutucu olarak durur.
+/// Araçlar. 0. kayıt (bisiklet) ve 3. kayıt (SUV) oyundan kaldırıldı: hiçbir yerde doğmaz, hileyle de gelmez;
+/// yalnız ağ/çizim indeksleri (motor 1, araba 2) değişmesin diye yer tutucu olarak durur.
 pub const REMOVED_VEHICLE: usize = 0;
 pub const VEHICLES: &[VehicleDef] = &[
     VehicleDef {

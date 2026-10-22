@@ -773,6 +773,12 @@ impl World {
         w.place_posts();
         w.place_home();
         w.place_bases();
+        // SUV oyundan kaldırıldı: doğduğu yerlerde iki kişilik araba durur (indeks 3 yalnız yer tutucu)
+        for v in w.vehicle_spawns.iter_mut() {
+            if v.0 == 3 {
+                v.0 = 2;
+            }
+        }
         w.build_grid();
         w
     }
