@@ -42,7 +42,11 @@ object Account {
 
     val loggedIn: Boolean get() = id.value >= 0 && key.isNotEmpty()
 
+    private var appCtx: Context? = null
+    private var notifyOn = false
+
     fun init(ctx: Context) {
+        appCtx = ctx.applicationContext
         prefs = ctx.getSharedPreferences("account", Context.MODE_PRIVATE)
         key = prefs.getString("key", "") ?: ""
         id.value = if (key.isEmpty()) -1L else prefs.getLong("id", -1L)
@@ -52,6 +56,12 @@ object Account {
 
     private fun persist() {
         prefs.edit().putLong("id", id.value).putString("key", key).putString("name", name.value).apply()
+        // cihaz bildirimleri: giriş yapınca kurulur, çıkışta durur
+        val c = appCtx
+        if (c != null && loggedIn != notifyOn) {
+            notifyOn = loggedIn
+            runCatching { if (loggedIn) Notifier.schedule(c) else Notifier.cancel(c) }
+        }
     }
 
     private fun applyProfile(p: JSONObject) {

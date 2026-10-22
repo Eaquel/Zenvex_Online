@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
         com.zenvex.online.game.Integrity.check(this)
         Settings.load(this)
         Account.init(this)
+        if (Account.loggedIn) runCatching { com.zenvex.online.game.Notifier.schedule(this) }
         GameSession.init(this)
         Audio.init(this)
         // otomatik gösterim yalnız hata ayıklama sürümünde (yayın sürümünde çevrimdışı oynamaya kapı açmasın)
@@ -90,12 +91,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        com.zenvex.online.game.Notifier.foreground = false
         GameSession.save(cloud = true)
         Audio.pauseMusic()
     }
 
     override fun onResume() {
         super.onResume()
+        com.zenvex.online.game.Notifier.foreground = true
         Audio.resumeMusic()
     }
 }
