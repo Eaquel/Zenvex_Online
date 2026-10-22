@@ -177,7 +177,8 @@ object Supa {
                 .put("broadcast", JSONObject().put("self", false).put("ack", false))
                 .put("presence", JSONObject().put("enabled", true).put("key", presenceKey))
                 .put("private", false)
-            push(topic, "phx_join", JSONObject().put("config", cfg), joinRef)
+            // katılım mesajının kendi ref'i join_ref ile aynı olmalı: sunucu cevabı mesaj ref'iyle döner (join_ref göndermez)
+            push(topic, "phx_join", JSONObject().put("config", cfg), joinRef, joinRef)
         }
 
         private fun handle(text: String) {
@@ -205,8 +206,8 @@ object Supa {
             }
         }
 
-        private fun push(t: String, event: String, payload: JSONObject, jr: String?) {
-            val m = JSONObject().put("topic", t).put("event", event).put("payload", payload).put("ref", (++ref).toString())
+        private fun push(t: String, event: String, payload: JSONObject, jr: String?, msgRef: String? = null) {
+            val m = JSONObject().put("topic", t).put("event", event).put("payload", payload).put("ref", msgRef ?: (++ref).toString())
             if (jr != null) m.put("join_ref", jr)
             ws?.send(m.toString())
         }
