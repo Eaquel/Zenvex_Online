@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
@@ -129,5 +131,68 @@ fun Modifier.metalFrame(px: Dp = 1.6.dp, name: String = "frame", corner: Int = 1
         part(sw - c, 0, c, c, W - dc, 0, dc, dc)
         part(0, sh - c, c, c, 0, H - dc, dc, dc)
         part(sw - c, sh - c, c, c, W - dc, H - dc, dc, dc)
+    }
+}
+
+/** Görseli kutuya çizer (DrawScope içinde): [fill] doğruysa tam kaplar, değilse oranı koruyup ortalar. */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArt(img: ImageBitmap, x: Float, y: Float, w: Float, h: Float, alpha: Float = 1f,
+                                                            fq: FilterQuality = FilterQuality.None) {
+    if (w <= 0f || h <= 0f) return
+    drawImage(img, IntOffset.Zero, IntSize(img.width, img.height), IntOffset(x.toInt(), y.toInt()), IntSize(w.toInt(), h.toInt()),
+        alpha = alpha, filterQuality = fq)
+}
+
+/**
+ * Yatay üç parçalı çizim (V10 tuş, sekme, unvan şeridi): uçlar ([capL]/[capR] kaynak px) oranı koruyarak yüksekliğe
+ * göre ölçeklenir, orta kısım yatayda esner.
+ */
+fun androidx.compose.ui.graphics.drawscope.DrawScope.drawSlice3(img: ImageBitmap, x: Float, y: Float, w: Float, h: Float, capL: Int, capR: Int = capL,
+                                                               alpha: Float = 1f) {
+    val k = h / img.height
+    // dar kutuda uçlar daralır (her biri en çok genişliğin %40'ı), orta şerit kalır
+    val f = minOf(1f, w * 0.8f / ((capL + capR) * k))
+    val l = capL * k * f; val r = capR * k * f
+    fun part(sx: Int, sw: Int, dx: Float, dw: Float) {
+        if (sw > 0 && dw > 0f) drawImage(img, IntOffset(sx, 0), IntSize(sw, img.height), IntOffset(dx.toInt(), y.toInt()),
+            IntSize((dx + dw).toInt() - dx.toInt(), h.toInt()), alpha = alpha, filterQuality = FilterQuality.None)
+    }
+    part(0, capL, x, l)
+    part(capL, img.width - capL - capR, x + l, w - l - r)
+    part(img.width - capR, capR, x + w - r, r)
+}
+
+/** Arayüz görseliyle zemin: yoksa [fallback] (null ise hiçbir şey) */
+@Composable
+fun Modifier.artBehind(name: String, slice: Int = 0, alpha: Float = 1f, fallback: Modifier? = null): Modifier {
+    val ctx = LocalContext.current
+    val img = remember(name) { UiArt.image(ctx, name) } ?: return if (fallback != null) this.then(fallback) else this
+    return this.drawBehind {
+        if (slice > 0) drawSlice3(img, 0f, 0f, size.width, size.height, slice, alpha = alpha)
+        else drawArt(img, 0f, 0f, size.width, size.height, alpha, FilterQuality.Low)
+    }
+}
+
+/** Kapat tuşu: V10 çarpı görseli (yoksa ikonlu kare tuş). */
+@Composable
+fun CloseButton(size: Dp = 36.dp, onClick: () -> Unit) {
+    val ctx = LocalContext.current
+    if (remember { UiArt.image(ctx, "btn_close") } == null) { PxIcon("close", size = size, onClick = onClick); return }
+    ArtImage("btn_close", Modifier.size(size).clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+        com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); onClick()
+    })
+}
+
+/** Görseli kutuyu kaplayacak şekilde ortadan kırparak zemine çizer ([dim] kadar karartır). Yoksa değişiklik yok. */
+@Composable
+fun Modifier.artCover(name: String, dim: Float = 0f, ay: Float = 0.5f): Modifier {
+    val ctx = LocalContext.current
+    val img = remember(name) { UiArt.image(ctx, name) } ?: return this
+    return this.drawBehind {
+        val k = maxOf(size.width / img.width, size.height / img.height)
+        val sw = (size.width / k).toInt().coerceAtMost(img.width); val sh = (size.height / k).toInt().coerceAtMost(img.height)
+        val sx = (img.width - sw) / 2; val sy = ((img.height - sh) * ay).toInt()
+        drawImage(img, IntOffset(sx, sy), IntSize(sw, sh), IntOffset.Zero, IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = FilterQuality.None)
+        if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
     }
 }

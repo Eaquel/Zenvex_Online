@@ -33,6 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -54,18 +55,19 @@ import kotlin.math.sin
 
 // =========================================================================== kategoriler
 /** Sıralama kategorisi: sunucu anahtarı, sekme adı, simge, ilk 10'a verilen unvan, değer biçimi. */
-data class BoardCat(val kind: String, val name: String, val icon: String, val title: String, val unit: (Long) -> String)
+data class BoardCat(val kind: String, val name: String, val icon: String, val title: String, val art: String? = null, val unit: (Long) -> String)
 
+// art: V10 piksel kategori simgesi (assets/ui); yoksa çizim ikon
 val BOARD_CATS = listOf(
     BoardCat("level", "Seviye", "star", "Efsane") { "Sv $it" },
-    BoardCat("kills", "Zombi Avı", "skull", "Canavar Avcısı") { "${fmtL(it)} Zombi" },
-    BoardCat("pvp", "Oyuncu Avı", "attack", "Oyuncu Katili") { "${fmtL(it)} Oyuncu" },
-    BoardCat("titan", "Titan", "flame", "Titan Avcısı") { "${fmtL(it)} Titan" },
+    BoardCat("kills", "Zombi Avı", "skull", "Canavar Avcısı", "lb_kills") { "${fmtL(it)} Zombi" },
+    BoardCat("pvp", "Oyuncu Avı", "attack", "Oyuncu Katili", "lb_pvp") { "${fmtL(it)} Oyuncu" },
+    BoardCat("titan", "Titan", "flame", "Titan Avcısı", "lb_titan") { "${fmtL(it)} Titan" },
     BoardCat("soldiers", "Asker", "shield", "Savaş Lordu") { "${fmtL(it)} Asker" },
-    BoardCat("bases", "Üs Fethi", "map", "Fatih") { "${fmtL(it)} Üs" },
-    BoardCat("dog", "Köpek", "paw", "Sürü Lideri") { "${fmtL(it)} Av" },
-    BoardCat("crafted", "Zanaat", "hammer", "Usta Zanaatkâr") { "${fmtL(it)} Üretim" },
-    BoardCat("time", "Emektar", "calendar", "Emektar") { "${fmtL(it / 3600)} Saat" },
+    BoardCat("bases", "Üs Fethi", "map", "Fatih", "lb_bases") { "${fmtL(it)} Üs" },
+    BoardCat("dog", "Köpek", "paw", "Sürü Lideri", "lb_dog") { "${fmtL(it)} Av" },
+    BoardCat("crafted", "Zanaat", "hammer", "Usta Zanaatkâr", "lb_crafted") { "${fmtL(it)} Üretim" },
+    BoardCat("time", "Emektar", "calendar", "Emektar", "lb_time") { "${fmtL(it / 3600)} Saat" },
 )
 
 fun fmtL(n: Long): String = "%,d".format(n).replace(',', '.')
@@ -82,6 +84,34 @@ fun rankColor(r: Int): Color = when (r) { 1 -> GOLD; 2 -> SILVER; 3 -> BRONZE; e
  */
 @Composable
 fun RankMedal(rank: Int, size: Dp = 40.dp) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // V10: 1-2-3 taç/defne/kalkan madalyaları, 4-10 çelik altıgen rozet (numara alt yuvada)
+    if (rank in 1..10 && remember { UiArt.image(ctx, "badge_top10") } != null) {
+        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            if (rank == 1) {
+                val t = rememberTime()
+                Canvas(Modifier.fillMaxSize()) {
+                    val w = this.size.width; val c = Offset(w / 2, w * 0.62f)
+                    for (i in 0 until 8) {
+                        val a = t * 0.8f + i * PI.toFloat() / 4
+                        val p = Path().apply {
+                            moveTo(c.x, c.y)
+                            lineTo(c.x + cos(a - 0.12f) * w * 0.55f, c.y + sin(a - 0.12f) * w * 0.55f)
+                            lineTo(c.x + cos(a + 0.12f) * w * 0.55f, c.y + sin(a + 0.12f) * w * 0.55f)
+                            close()
+                        }
+                        drawPath(p, Brush.radialGradient(listOf(GOLD.copy(alpha = 0.45f), Color.Transparent), c, w * 0.55f))
+                    }
+                }
+            }
+            if (rank <= 3) ArtImage("medal_$rank", Modifier.fillMaxSize())
+            else {
+                ArtImage("badge_top10", Modifier.fillMaxSize())
+                PT("$rank", (size.value * 0.26f).sp, Px.Text, Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.13f))
+            }
+        }
+        return
+    }
     if (rank !in 1..3) {
         Box(Modifier.size(size), contentAlignment = Alignment.Center) {
             Box(Modifier.size(size * 0.78f).clip(RoundedCornerShape(3.dp)).background(Color(0xFF26251F)).border(2.dp, Color(0xFF4A4A40), RoundedCornerShape(3.dp)),
@@ -140,12 +170,43 @@ fun RankMedal(rank: Int, size: Dp = 40.dp) {
 }
 
 // =========================================================================== unvan
+/** Unvan şeridi görseli: dilim uçları ve yazı bandı (kaynak px). Oyun içi isim etiketi de kullanır. */
+class Plate(val name: String, val capL: Int, val capR: Int, val barTop: Int, val barBot: Int) {
+    companion object {
+        private val P = listOf(Plate("plate_1", 139, 141, 17, 46), Plate("plate_2", 129, 111, 12, 41), Plate("plate_3", 55, 65, 15, 45),
+            Plate("plate_n", 6, 6, 0, 29))
+        fun of(rank: Int) = P[(rank - 1).coerceIn(0, 3)]
+    }
+}
+
 /** Unvan rozeti: ilk 3 kayan altın/gümüş/bronz parıltılı ve hale efektli, 4-10 sade. */
 @Composable
 fun TitleChip(title: JSONObject?, size: Float = 12f) {
     if (title == null || title.optString("name").isEmpty()) return
     val rank = title.optInt("rank")
     val col = rankColor(rank)
+    // V10 isim şeritleri: 1. kanatlı altın, 2. kanatlı gümüş, 3. boynuzlu bronz, 4-10 sade çelik
+    val pl = Plate.of(rank)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val img = remember(pl.name) { UiArt.image(ctx, pl.name) }
+    if (img != null) {
+        val dens = androidx.compose.ui.platform.LocalDensity.current
+        val barH = (size * 1.9f).dp
+        val k = barH / (pl.barBot - pl.barTop).toFloat()  // kaynak px → dp
+        Box(Modifier.height(k * img.height.toFloat())
+            .drawBehind { drawSlice3(img, 0f, 0f, this.size.width, this.size.height, pl.capL, pl.capR) }
+            .padding(start = k * pl.capL.toFloat(), end = k * pl.capR.toFloat(), top = k * pl.barTop.toFloat(),
+                bottom = k * (img.height - pl.barBot).toFloat()),
+            contentAlignment = Alignment.Center) {
+            val t = if (rank in 1..3) rememberTime() else 0f
+            val glow = 0.5f + 0.5f * sin(t * 3f)
+            Text(title.optString("name"), style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
+                color = if (rank in 1..3) Color.White else Color(0xFFCFE6FF),
+                shadow = Shadow(if (rank in 1..3) col.copy(alpha = 0.6f + 0.4f * glow) else Color.Black, Offset(0f, with(dens) { 1.dp.toPx() }), 6f)),
+                modifier = Modifier.padding(horizontal = 4.dp))
+        }
+        return
+    }
     Box(Modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xCC15140F)).border(1.dp, col.copy(alpha = 0.7f), RoundedCornerShape(3.dp))
         .padding(horizontal = 6.dp, vertical = 2.dp)) {
         if (rank in 1..3) {
@@ -181,7 +242,8 @@ fun BoardDialog(close: () -> Unit, preview: JSONArray? = null) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xFF4A3A1E) else Px.PanelDark)
                         .border(if (on) 2.dp else 0.dp, if (on) GOLD.copy(alpha = 0.7f) else Color.Transparent, RoundedCornerShape(3.dp))
                         .clickable { tab = i }.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(ic, 18.dp, if (on) GOLD else Px.Sub)
+                        val art = BOARD_CATS.getOrNull(i)?.art
+                        if (art != null) ArtImage(art, Modifier.size(20.dp)) else Icon(ic, 18.dp, if (on) GOLD else Px.Sub)
                         Spacer(Modifier.width(8.dp))
                         PT(n, 13.sp, if (on) Px.Text else Px.Sub)
                     }
@@ -328,11 +390,16 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
     }
 }
 
+/** Profil istatistiklerinde çizim ikonun yerine V10 piksel simge */
+private val STAT_ART = mapOf("skull" to "lb_kills", "calendar" to "lb_time", "flame" to "lb_titan", "map" to "lb_bases", "paw" to "lb_dog",
+    "hammer" to "lb_crafted")
+
 @Composable
 private fun StatBox(icon: String, label: String, value: String, col: Color) {
     Row(Modifier.width(130.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x55000000)).padding(horizontal = 6.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, 18.dp, Px.Sub)
+        val art = STAT_ART[icon]
+        if (art != null) ArtImage(art, Modifier.size(20.dp)) else Icon(icon, 18.dp, Px.Sub)
         Spacer(Modifier.width(6.dp))
         Column {
             PT(label, 10.sp, Px.Sub)

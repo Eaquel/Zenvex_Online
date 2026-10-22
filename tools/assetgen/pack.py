@@ -19,6 +19,8 @@ import sys
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter
 
+import v10_assets
+
 SRC = sys.argv[1] if len(sys.argv) > 1 else "/home/user/zx_render"
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(__file__), "..", "..", "android", "app", "src", "main",
                                                          "assets", "v2")
@@ -366,6 +368,7 @@ def main():
             if os.path.exists(fo):
                 io = v8_img("props", key + "_open.png")
                 props.append((f"s/{key}_open", io, io.width / 2, io.height * 0.95, k))
+    props += v10_assets.props()  # V10 bölge dekorları ve çadırlar
     keys = {t[0] for t in props}
     world = [t for t in world if t[0] not in keys]
     P.pack_group("world", world)
@@ -399,6 +402,7 @@ def main():
         if os.path.exists(f):
             im = Image.open(f).convert("RGBA")
             npcs6.append((key, im, im.width * fx_, im.height * fy_, w_m * PX_PER_M / im.width))
+    npcs6 += v10_assets.npcs()  # V10 asker/keskin nişancı yan görünüm pozları
     P.pack_group("npc6", npcs6, pixel=True)
     # eşya simgeleri: yeni (yüksek çözünürlük) varsa onu kullan
     items = []
@@ -427,6 +431,8 @@ def main():
                 im = tinted(Image.open(os.path.join(du, fn + ".png")).convert("RGBA"), rgb, 0.6)
                 extra[f"i/ev_{ev}_{part}"] = (f"i/ev_{ev}_{part}", im, im.width / 2, im.height - 1)
         items = [t for t in items if t[0] not in extra] + list(extra.values())
+    v10i = v10_assets.items()  # V10 bölge eşyaları
+    items = [t for t in items if t[0] not in {x[0] for x in v10i}] + v10i
     P.pack_group("items", items, pixel=os.path.isdir(d6))
     gear = []
     if not KEEP_GEAR:
@@ -458,6 +464,12 @@ def main():
         if h == "kaan" and os.path.isdir(os.path.join(PIX, "hero")):
             kk = pixel_k("hero")
             n = collect_pixel_hero(f"h/{h}", it, attach)
+            # V10 elle çizilmiş pozlar: vurulma/düşme/kalkma/ölüm yerine geçer, etkileşim pozları eklenir
+            old = tuple(f"h/{h}/{a}_" for a in v10_assets.HERO_REPLACED)
+            it = [t for t in it if not t[0].startswith(old)]
+            hv, hanims = v10_assets.hero(f"h/{h}")
+            it += hv
+            HERO_ANIMS.update({a: tuple(v) for a, v in hanims.items()})
         else:
             n = collect_actor("heroes", h, f"h/{h}", HERO_ANIMS, attach, it, arms=r3 is None, root=r3, k=kk)
         if it:

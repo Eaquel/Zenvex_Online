@@ -149,3 +149,22 @@ Görselleri yeniden üretmek için (bilgisayarda): `pip install bpy` → `python
   üst gövde eğilme/nefes, düşme/takla tüm figür döndürmesi; döndürme Scale2x³ + en yakın örnekleme (RotSprite benzeri).
   Yönler: ön (güney), aynası (doğu/güneydoğu), maske/atkı kapüşonla örtülmüş sırt (kuzey ve aynası).
   Üret: `python3 tools/pixel/cutout_rig.py art/v5/warrior_base.png /home/user/zx_pix/hero` sonra `pack.py`.
+
+## V10 — Kullanıcı görselleri (3 paket, Ekim 2026)
+Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10_objects.py`, efektler `tools/pixel/fx_sheet.py`).
+- **Atlas yaması:** ham render dizinleri (zx_render, zx_pix) depoda yok; `tools/assetgen/v10_pack.py` mevcut atlas sayfalarından
+  ilgili piksel gruplarını (kahraman, NPC, dekor, eşya, efekt) geri çıkarıp yeni parçalarla yeniden paketler, diğer sayfalara dokunmaz.
+  Aynı tanımlar `tools/assetgen/v10_assets.py` içinde; `pack.py` tam paketlemede de bunları kullanır.
+- **Kahraman:** elle çizilmiş vurulma, yere düşme, kalkma ve ölüm pozları (`tools/pixel/hero_poses.py`); yeni etkileşim pozları:
+  toplama, odun kesme (yumrukla ağaca vurunca balta), kazma (taşa vurunca), sandık açma, içme (eşya kullanınca), sevinç (seviye atlayınca),
+  işaret etme (NPC ile konuşunca). Pozlar yalnız dururken oynar; hareket ya da saldırı keser (`Game::play_pose`).
+- **Askerler:** yan görünüm devriye, nişan, ateş, kulede çömelme, şarjör, dürbün, vurulma, düşüş, ölü; namlu ucu görselden.
+- **Dünya:** 34 bölge dekoru ve 3 kamp çadırı. Eski nesnenin yerine bölgesine ve konumuna göre seçilir (`world::v10_variant`);
+  rastgele sayı dizisi değişmediği için ağaç/bina yerleşimi aynı kalır.
+- **Eşyalar:** 12 bölge eşyasının simgesi. **Efektler:** kan, kan gölü (zemin), kıvılcım, namlu ateşi, alev, duman, yer sarsıntısı,
+  patlama, kritik vuruş, şifa, buz (Donmuş Liman'da vuruş), zehir.
+- **Arayüz** (`assets/ui`, `tools/pixel/v10_ui.py`): kurukafa köşeli pencere çerçevesi, kızıl/kapalı tuş, sekme, nadirliğe göre eşya yuvası,
+  kapat tuşu; sıralama madalyaları, ilk 10 rozeti, kanatlı/boynuzlu unvan şeritleri (oyunda isim etiketinde de), kategori simgeleri;
+  9 klan seviyesi amblemi; 6 etkinlik afişi; elmas sandığı, kasa odası, nadirlik ışınları, hediye kutuları; Sezon Bileti arka planı,
+  kademe kartları, ilerleme şeridi, düğüm, mühür, kilit ve görev simgeleri.
+- **Uygulama simgesi:** katanalı kapüşonlu savaşçı ve köpeği (`tools/pixel/v10_icon.py`).

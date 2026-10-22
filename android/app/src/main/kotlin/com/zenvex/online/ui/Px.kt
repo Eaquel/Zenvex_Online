@@ -31,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
@@ -149,11 +150,19 @@ fun PxButton(
     val pressed by src.collectIsPressedAsState()
     val sink by animateFloatAsState(if (pressed && enabled) 1f else 0f, spring(0.6f, 1400f), label = "px")
     val c = if (enabled) color else Px.Dark
+    // V10 metal tuş görselleri: kızıl (normal / basılı) ve kapalı; diğer renkler kodla çizilir
+    val ctx = LocalContext.current
+    val art = when {
+        !enabled -> remember { UiArt.image(ctx, "btn_off") }
+        color == Px.Red -> if (pressed) remember { UiArt.image(ctx, "btn_red_down") } else remember { UiArt.image(ctx, "btn_red") }
+        else -> null
+    }
     Box(
         modifier.height(height).clip(RoundedCornerShape(3.dp))
             .drawBehind {
                 val e = 4.dp.toPx(); val down = e * sink
                 val w = this.size.width; val h = this.size.height
+                if (art != null) { drawSlice3(art, 0f, 0f, w, h, 32); return@drawBehind }
                 // gövde gölgesi (kabartma alt kenarı)
                 drawRect(Px.Edge, Offset(0f, 0f), Size(w, h))
                 drawRect(Color(c.red * 0.55f, c.green * 0.55f, c.blue * 0.55f, 1f), Offset(2f, down + 2f), Size(w - 4f, h - 4f - down))
@@ -217,8 +226,9 @@ fun PxTabs(items: List<String>, selected: Int, modifier: Modifier = Modifier, on
         items.forEachIndexed { i, s ->
             val on = i == selected
             Box(
-                Modifier.weight(1f).height(48.dp).clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
-                    .background(if (on) Px.Panel else Px.PanelDark)
+                Modifier.weight(1f).height(48.dp)
+                    .artBehind(if (on) "tab_on" else "tab_off", slice = 28,
+                        fallback = Modifier.clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)).background(if (on) Px.Panel else Px.PanelDark))
                     .clickable { Audio.play("click", bus = Audio.Bus.Ui); onSelect(i) },
                 contentAlignment = Alignment.Center,
             ) { PT(s, 22.sp, if (on) Px.Text else Px.Sub) }

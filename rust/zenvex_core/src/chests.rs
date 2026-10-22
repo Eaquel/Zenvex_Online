@@ -190,7 +190,7 @@ impl Game {
         let int = |k: &str| v[k].as_u64().unwrap_or(0) as usize;
         let n = v["n"].as_u64().map(|n| n as u32);
         let ci = int("chest");
-        Some(match cmd {
+        let r = match cmd {
             "place_chest" => self.place_chest(int("slot")),
             "pickup_chest" => self.chest_reach(ci).and_then(|_| {
                 self.progress.pickup_chest(ci).map(|n| format!("{n} çantaya alındı")).map_err(String::from)
@@ -206,7 +206,11 @@ impl Game {
             }),
             "chest_move" => self.chest_reach(ci).and_then(|_| self.progress.chest_move(ci, int("from"), int("to")).map(|_| String::new()).map_err(String::from)),
             _ => return None,
-        })
+        };
+        if r.is_ok() && matches!(cmd, "chest_put" | "chest_take" | "chest_all") {
+            self.play_pose(crate::game::A_OPEN, 0.7);
+        }
+        Some(r)
     }
 
     /// "chests": kurulu sandıklar (çizim) + yakındaki; "chest:i": tek sandığın içeriği

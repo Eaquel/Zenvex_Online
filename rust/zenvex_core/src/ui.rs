@@ -476,6 +476,9 @@ impl Game {
                 if !self.near_npc(k) && k != 0 {
                     Err("Çok uzaktasın".into())
                 } else {
+                    if k != 0 && v["opt"].as_str().unwrap_or("").is_empty() {
+                        self.play_pose(crate::game::A_POINT, 0.9);
+                    }
                     Ok(self.talk(k, v["opt"].as_str().unwrap_or("")).to_string())
                 }
             }
@@ -877,6 +880,9 @@ impl Game {
             _ => return Err("Bu eşya kullanılamaz".into()),
         }
         self.progress.inv.remove(s.item as usize, 1);
+        if d.id != "fuel" {
+            self.play_pose(crate::game::A_DRINK, 0.8);
+        }
         self.story_event(crate::story::Ev::Use(d.id));
         Ok(format!("{} kullanıldı", d.name))
     }

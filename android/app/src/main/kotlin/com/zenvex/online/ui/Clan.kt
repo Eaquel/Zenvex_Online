@@ -120,10 +120,20 @@ private fun ClanRow(o: JSONObject, action: String, sub: String? = null, onAction
     }
 }
 
-/** Klan arması: seviye rakamı, ilk 3 klanda renkli taç halkası */
+/** Klan arması: V10 seviye kalkanı (1 tahta … 9 alevli altın), ortasında klan rengi ve seviye; ilk 3 klanın rakamı renkli */
 @Composable
-fun ClanEmblem(level: Int, top: Int, size: androidx.compose.ui.unit.Dp = 38.dp) {
+fun ClanEmblem(level: Int, top: Int, size: androidx.compose.ui.unit.Dp = 38.dp, color: Int? = null) {
     val col = when (top) { 1 -> Color(0xFFFFC83A); 2 -> Color(0xFFD8DEE6); 3 -> Color(0xFFCD7F32); else -> Color(0xFF5A5A50) }
+    val name = "clan_${level.coerceIn(1, 9)}"
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (remember(name) { UiArt.image(ctx, name) } != null) {
+        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
+            ArtImage(name, Modifier.fillMaxSize())
+            if (color != null) Box(Modifier.size(size * 0.3f).clip(CircleShape).background(Color(color or 0xFF000000.toInt()).copy(alpha = 0.85f)))
+            PT("$level", (size.value * 0.3f).sp, if (top in 1..3) col else Color.White, outline = true)
+        }
+        return
+    }
     Box(Modifier.size(size).clip(CircleShape).background(col).padding(3.dp).clip(CircleShape).background(Color(0xFF201F1C)), contentAlignment = Alignment.Center) {
         PT("$level", (size.value * 0.42f).sp, if (top in 1..3) col else Px.Text)
     }
@@ -165,7 +175,7 @@ private fun ClanOverview(c: JSONObject, myRank: Int, changed: () -> Unit) {
     Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ClanEmblem(c.optInt("level"), c.optInt("top"), 64.dp)
+                ClanEmblem(c.optInt("level"), c.optInt("top"), 72.dp, c.optInt("color").takeIf { c.has("color") })
                 Spacer(Modifier.width(12.dp))
                 Column {
                     PT(c.optString("name"), 24.sp, Px.Clan, outline = true)

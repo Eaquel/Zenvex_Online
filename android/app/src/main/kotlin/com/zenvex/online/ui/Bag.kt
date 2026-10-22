@@ -97,16 +97,20 @@ fun PxFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable 
 fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String? = null, glow: Boolean = false, modifier: Modifier = Modifier, ghost: String? = null) {
     val r = item?.optInt("rarity") ?: 0
     val col = Pal.rarity(r)
+    // V10 yuva çerçeveleri: sıradan/nadir kızıl, epik mor ışıltılı, efsanevi ve sezonluk altın ışıltılı
+    val frame = when { item == null || r < 2 -> "slot_common"; r == 2 -> "slot_epic"; else -> "slot_legend" }
+    val old = Modifier.clip(RoundedCornerShape(3.dp))
+        .background(if (item == null) Color(0xB81C1B17) else Color(0xE62A2924))
+        .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
+        .padding(2.dp)
+        .border(1.dp, if (item == null) Color(0x14FFFFFF) else col.copy(alpha = 0.55f), RoundedCornerShape(2.dp))
     Box(
-        modifier.size(size).clip(RoundedCornerShape(3.dp))
-            .background(if (item == null) Color(0xB81C1B17) else Color(0xE62A2924))
-            .border(2.dp, if (selected) Color.White else if (glow) Px.Clan else Px.Edge, RoundedCornerShape(3.dp))
-            .padding(2.dp)
-            .border(1.dp, if (item == null) Color(0x14FFFFFF) else col.copy(alpha = 0.55f), RoundedCornerShape(2.dp)),
+        modifier.size(size).artBehind(frame, alpha = if (item == null) 0.7f else 1f, fallback = old)
+            .then(if (selected || glow) Modifier.border(2.dp, if (selected) Color.White else Px.Clan, RoundedCornerShape(3.dp)) else Modifier),
         contentAlignment = Alignment.Center,
     ) {
         if (item != null) {
-            SpriteImage("i/${item.optString("id")}", Modifier.padding(size * 0.12f).fillMaxSize())
+            SpriteImage("i/${item.optString("id")}", Modifier.padding(size * 0.17f).fillMaxSize())
             val cd = item.optDouble("cd", 0.0).toFloat()
             val max = item.optDouble("cdmax", 0.0).toFloat()
             if (cd > 0f && max > 0f) {

@@ -116,6 +116,14 @@ pub const STATIC_NAMES: &[&str] = &[
     // 77+ V8 kullanıcı görselleri (art/v8/props): bölge simge yapıları, üs yapıları, kişisel üs eşyaları
     "burnt_tree", "burnt_stump", "desert_wreck", "swamp_shack", "harbor_containers", "hangar", "bunker", "watchtower",
     "helipad", "supply_crate", "bed", "stove", "fence_wood", "base_gate", "weapon_rack", "rain_barrel",
+    // 93+ V10 bölge dekorları (art/v10/props): donmuş liman, yanık orman, çöl, kara bataklık, askerî bölge, eski şehir, kamp çadırları
+    "snow_pine", "ice_boulder", "frozen_boat", "anchor_snow", "snow_barrels",
+    "burnt_pine", "smolder_log", "charred_log", "deer_skeleton", "ember_rocks",
+    "cactus", "cow_skull", "road_sign", "cone_pile", "gas_can",
+    "moss_tree", "mushroom_log", "rowboat", "reeds", "toxic_puddle",
+    "mil_tent", "jeep_wreck", "radar_dish", "ammo_stack", "jeep_wreck2", "sandbag_nest",
+    "street_lamp", "bus_stop", "burnt_car", "dumpster", "billboard",
+    "tent_patched", "tent_olive", "tent_tarp",
 ];
 pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
@@ -436,6 +444,65 @@ pub fn region_road(tx: usize, ty: usize) -> (bool, bool, bool) {
     (v.is_some() || h.is_some(), v == Some(true) && h.is_none(), h == Some(true) && v.is_none())
 }
 
+/// V10 bölge dekorları: eski nesnenin yerine bölgesine ve konumuna göre yeni görsel (rastgele sayı dizisi değişmez,
+/// böylece ağaç/bina yerleşimi aynı kalır). Büyük yapılara uygun çarpışma alanı verilir.
+fn v10_variant(name: &str, x: f32, y: f32, shape: Shape) -> (&str, Shape) {
+    let t = TILE;
+    let (tx, ty) = ((x / t).max(0.0) as usize, (y / t).max(0.0) as usize);
+    let h = ((x as i64).wrapping_mul(73_856_093) ^ (y as i64).wrapping_mul(19_349_663)).unsigned_abs() >> 3;
+    let pick = |opts: &[&'static str]| opts[(h % opts.len() as u64) as usize];
+    let z = zone_at_tile(tx.min(MAP_TILES - 1), ty.min(MAP_TILES - 1));
+    let city = matches!(z, Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::SafeCity);
+    let out: &str = match (name, z) {
+        ("tent", _) => pick(&["tent_olive", "tent_patched", "tent_tarp"]),
+        ("pine0" | "pine1" | "pine2", Zone::Harbor) => "snow_pine",
+        ("barrel", Zone::Harbor) => "snow_barrels",
+        ("trash", Zone::Harbor) => pick(&["anchor_snow", "ice_boulder", "frozen_boat", "trash"]),
+        ("burnt_tree", _) => pick(&["burnt_tree", "burnt_pine"]),
+        ("log", Zone::BurntForest) => pick(&["smolder_log", "charred_log"]),
+        ("burnt_stump", _) => pick(&["burnt_stump", "deer_skeleton", "ember_rocks", "burnt_stump"]),
+        ("dead0" | "dead1", Zone::BlackSwamp) => pick(&["moss_tree", "dead0", "moss_tree"]),
+        ("reeds0" | "reeds1", Zone::BlackSwamp) => pick(&["reeds", name_static(name)]),
+        ("barrel_tox", Zone::BlackSwamp) => pick(&["toxic_puddle", "mushroom_log", "rowboat", "barrel_tox"]),
+        ("dead1", Zone::Desert) => "cactus",
+        ("rock_small0" | "rock_small1" | "rock_small2" | "grass2", Zone::Desert) => {
+            pick(&["cow_skull", "cone_pile", "gas_can", "road_sign", name_static(name), name_static(name)])
+        }
+        ("wreck0" | "wreck1", Zone::Military) => pick(&["jeep_wreck", "jeep_wreck2"]),
+        ("sandbags", Zone::Military) => pick(&["sandbag_nest", "sandbags"]),
+        ("barricade", Zone::Military) => "ammo_stack",
+        ("barrel", Zone::Military) => pick(&["radar_dish", "mil_tent", "ammo_stack"]),
+        ("wreck0" | "wreck1", _) if city => pick(&["burnt_car", name_static(name)]),
+        ("trash", _) if city => pick(&["dumpster", "bus_stop", "billboard", "trash", "street_lamp"]),
+        _ => name_static(name),
+    };
+    let shape = match out {
+        "frozen_boat" => Shape::Rect(1.8 * t, 0.7 * t),
+        "ice_boulder" => Shape::Circle(0.7 * t),
+        "anchor_snow" => Shape::Circle(0.5 * t),
+        "rowboat" => Shape::Rect(1.1 * t, 0.4 * t),
+        "toxic_puddle" | "deer_skeleton" | "ember_rocks" | "cow_skull" | "cone_pile" | "reeds" => Shape::None,
+        "mil_tent" => Shape::Rect(1.4 * t, 0.9 * t),
+        "radar_dish" => Shape::Circle(0.6 * t),
+        "ammo_stack" => Shape::Rect(0.7 * t, 0.5 * t),
+        "sandbag_nest" => Shape::Circle(0.9 * t),
+        "jeep_wreck" | "jeep_wreck2" | "burnt_car" => Shape::Rect(1.4 * t, 0.7 * t),
+        "bus_stop" => Shape::Rect(1.5 * t, 0.5 * t),
+        "billboard" => Shape::Rect(1.4 * t, 0.4 * t),
+        "dumpster" => Shape::Rect(0.9 * t, 0.5 * t),
+        "street_lamp" => Shape::Circle(0.2 * t),
+        "gas_can" => Shape::Circle(0.25 * t),
+        "road_sign" => Shape::Circle(0.15 * t),
+        _ => shape,
+    };
+    (out, shape)
+}
+
+/// Görsel adını 'static ömre çevirir (STATIC_NAMES içindeki eşi; yoksa ilk ad).
+fn name_static(name: &str) -> &'static str {
+    STATIC_NAMES.iter().find(|n| **n == name).copied().unwrap_or(STATIC_NAMES[0])
+}
+
 pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
     let x = tx as f32 * TILE + TILE / 2.0;
     let y = ty as f32 * TILE + TILE / 2.0;
@@ -528,6 +595,7 @@ impl World {
     }
 
     fn push(&mut self, name: &str, kind: Kind, x: f32, y: f32, shape: Shape, hp: f32, phase: f32) {
+        let (name, shape) = v10_variant(name, x, y, shape);
         let sort_off = match shape {
             // zemine yatık yapılar (helikopter pisti) her şeyin altında çizilir
             _ if name == "helipad" => -1.0e7,
@@ -2106,6 +2174,20 @@ pub const ZONES_ALL: [Zone; 17] = [
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// V10 bölge dekorlarının her biri dünyada en az bir kez yer alır; çadırlar üç görsele dağılır.
+    #[test]
+    fn v10_decor_placed() {
+        let w = World::generate(7);
+        let mut n = std::collections::HashMap::new();
+        for s in &w.statics {
+            *n.entry(STATIC_NAMES[s.sprite as usize]).or_insert(0u32) += 1;
+        }
+        let first = STATIC_NAMES.iter().position(|s| *s == "snow_pine").unwrap();
+        let missing: Vec<_> = STATIC_NAMES[first..].iter().filter(|k| n.get(*k).copied().unwrap_or(0) == 0).collect();
+        assert!(missing.is_empty(), "yerleşmeyen: {missing:?}");
+        assert_eq!(n.get("tent").copied().unwrap_or(0), 0);
+    }
 
     #[test]
     fn layout() {

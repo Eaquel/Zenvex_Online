@@ -24,6 +24,14 @@ pub const A_RIDE: u8 = 12;
 pub const A_ROLL: u8 = 13;
 pub const A_KNOCK: u8 = 14;
 pub const A_GETUP: u8 = 15;
+// V10 elle çizilmiş etkileşim pozları (oyuncu dururken oynar; hareket ya da saldırı keser)
+pub const A_PICKUP: u8 = 16;
+pub const A_CHOP: u8 = 17;
+pub const A_MINE: u8 = 18;
+pub const A_OPEN: u8 = 19;
+pub const A_DRINK: u8 = 20;
+pub const A_CHEER: u8 = 21;
+pub const A_POINT: u8 = 22;
 // zombi animasyonları
 pub const Z_IDLE: u8 = 0;
 pub const Z_WALK: u8 = 1;
@@ -271,6 +279,9 @@ pub struct Player {
     pub invis: bool,
     /// Titan dalgasıyla yere düştü (kalkma animasyonu için)
     pub knocked: bool,
+    /// etkileşim pozu (toplama, içme, sevinç...) ve kalan süresi
+    pub pose: u8,
+    pub pose_t: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -714,6 +725,16 @@ impl Game {
         }
     }
 
+    /// Etkileşim pozu: yalnız yaya, ayakta ve boşta iken (hareket/saldırı/araç pozu keser).
+    pub fn play_pose(&mut self, a: u8, dur: f32) {
+        let p = &self.player;
+        if p.dead || p.vehicle.is_some() || self.passenger || p.knocked || p.roll_t > 0.0 || p.hurt_t > 0.0 || p.atk_active || p.moving {
+            return;
+        }
+        self.player.pose = a;
+        self.player.pose_t = dur;
+    }
+
     pub fn quests_done(&mut self, done: Vec<String>) {
         for t in done {
             self.events.push(Event::Quest { title: t });
@@ -826,6 +847,20 @@ impl Game {
         }
         if self.player.cast_t > 0.0 {
             return;
+        }
+        if self.player.pose_t > 0.0 {
+            self.player.pose_t -= dt;
+            if input.attacking || input.move_x.hypot(input.move_y) > 0.08 {
+                self.player.pose_t = 0.0;
+            } else {
+                if self.player.anim != self.player.pose {
+                    self.player.anim = self.player.pose;
+                    self.player.anim_t = 0.0;
+                }
+                self.player.moving = false;
+                self.pickup_drops();
+                return;
+            }
         }
         let w = self.weapon();
         let ranged = matches!(
@@ -1459,6 +1494,7 @@ impl Game {
             }
             let left = self.progress.inv.add(item, cnt);
             if left < cnt {
+                self.play_pose(A_PICKUP, 0.3);
                 self.story_event(crate::story::Ev::Loot);
                 self.events.push(Event::Pickup {
                     x: dx,

@@ -118,6 +118,9 @@ impl Game {
         // PvP: üslerde ve yüksek seviyeli bölgelerde düşman oyunculara (klan arkadaşı hariç)
         hit_any |= self.melee_players(base * mult, range, arc);
         if hit_any {
+            if matches!(self.player.anim, A_CHOP | A_MINE) {
+                self.player.anim = A_PUNCH;
+            }
             self.player.combat_t = 0.0;
             self.events.push(Event::Hit {
                 x: px + fx * 30.0,
@@ -158,6 +161,14 @@ impl Game {
             }
         }
         if let Some((i, _)) = best {
+            // yumrukla ağaç/taş: elle çizilmiş balta ve kazma pozu (vuruş zamanlaması aynı anim_t'den)
+            if matches!(self.player.anim, A_PUNCH | A_CHOP | A_MINE) {
+                self.player.anim = match self.world.statics[i].kind {
+                    Kind::Tree => A_CHOP,
+                    Kind::Rock => A_MINE,
+                    _ => A_PUNCH,
+                };
+            }
             let dmg = if self.player.one_hit {
                 1e6
             } else {
@@ -770,6 +781,7 @@ impl Game {
             });
         }
         if ups > 0 {
+            self.play_pose(A_CHEER, 1.2);
             self.player.hp = self.progress.max_hp();
             self.player.stamina = self.progress.max_stamina();
             self.events.push(Event::LevelUp {

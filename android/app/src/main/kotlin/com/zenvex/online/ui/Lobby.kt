@@ -326,11 +326,13 @@ fun copy(ctx: Context, text: String) {
 fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Composable () -> Unit) {
     Dim(close) {
         // perçinli metal çerçeveli pencere (köşeler esnemez)
-        Column(Modifier.width(width).metalFrame().clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 24.dp, vertical = 22.dp)) {
+        // V10 kurukafa köşeli pencere çerçevesi (yoksa eski metal çerçeve)
+        Column(Modifier.width(width).metalFrame(px = 0.9.dp, name = "frame_panel", corner = 32)
+            .clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 30.dp, vertical = 26.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PT(title, 22.sp, Px.Orange)
                 Spacer(Modifier.weight(1f))
-                PxIcon("close", size = 36.dp) { close() }
+                CloseButton(36.dp) { close() }
             }
             Spacer(Modifier.height(8.dp))
             content()

@@ -516,8 +516,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "knock" -> { shake(12f, 0.35f); vibrate(120, 255); floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, "YERE DÜŞTÜN", 0xFFFF8A50.toInt(), 22f) }
                 "dmg" -> {
-                    fx("blood", x, y + 50, 90f, (Math.random() * 360).toFloat())
+                    fx("blood", x, y + 50, 90f, (Math.random() * 50 - 25).toFloat())
                     fx("spark", x, y + 30, if (e.optBoolean("crit")) 105f else 78f, (Math.random() * 4).toInt() * 90f)
+                    if (e.optBoolean("crit")) fx("crit", x, y + 30, 95f)
+                    // Donmuş Liman: vuruşta buz kırıkları
+                    if (hud[Native.ZONE].toInt() == ZONE_HARBOR) fx("frost", x, y + 30, 80f)
                     if (s.damageNumbers) floaters += Floater(x, y, e.getInt("v").toString(),
                         if (e.optBoolean("crit")) 0xFFFFD040.toInt() else Color.WHITE, if (e.optBoolean("crit")) 30f else 22f)
                     burst(x, y + 60, 6, 0xFF7A1A14.toInt(), 160f, 4f)
@@ -560,6 +563,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "treefall" -> { Audio.play("treefall", near(x, y)); burst(x, y, 24, 0xFF4E8A34.toInt(), 260f, 5f, 0, 1.0f) }
                 "kill" -> {
                     fx("blood", x, y - 40, 150f)
+                    if (Settings.current.particles) { if (pools.size > 30) pools.removeAt(0); pools += Pool(x, y, 95f) }
                     fx("dust", x, y - 12, 140f)
                     Audio.play("zdeath", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
                     burst(x, y, 16, 0xFF6A1410.toInt(), 220f, 5f)
@@ -594,6 +598,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val r = e.getDouble("r").toFloat()
                     fx("explosion", x, y - r * 0.4f, r * 2.8f)
                     fx("shockwave", x, y, r * 3.2f)
+                    fx("fire", x, y + 10, r * 1.1f, dur = 2.6f)
+                    fx("smoke", x, y, r * 1.5f)
                     Audio.play("explosion", max(0.35f, near(x, y)))
                     flashes += Light(x, y - 40, r * 3f, 0xFFFFA040.toInt(), 0.5f, 0.5f)
                     burst(x, y, 30, 0xFFFF8A20.toInt(), r * 2.4f, 7f, 1, 0.7f)
@@ -605,7 +611,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     fx("teleport", x, y - 70, 220f)
                     Audio.play("teleport", near(x, y)); burst(x, y, 26, 0xFFB070FF.toInt(), 260f, 5f, 1, 0.8f) }
                 "toxic" -> {
-                    fx("toxic", x, y - 30, 300f, dur = 5f)
+                    fx("toxic", x, y + 10, 90f, dur = 5f)
                     Audio.play("toxic", near(x, y)); burst(x, y, 30, 0xFF9AFF40.toInt(), 180f, 9f, 1, 1.4f) }
                 "slam" -> {
                     fx("shockwave", x, y, e.getDouble("r").toFloat() * 2.4f)
@@ -687,6 +693,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         drawGround(c)
         drawTracks(c, dt)
+        drawPools(c, dt)
         drawChests(c)
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
@@ -797,7 +804,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val lightSources = ArrayList<FloatArray>()
 
     private val heroIds = arrayOf("kaan", "nova", "rady", "elif")
-    private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride", "roll", "knockdown", "getup")
+    private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride", "roll", "knockdown", "getup",
+        "pickup", "chop", "mine", "open", "drink", "cheer", "point")
     private val zAnimNames = arrayOf("idle", "walk", "attack", "hurt", "death")
     private val tiers = arrayOf("", "basic", "police", "military", "titan")
     private val keyBuf = StringBuilder(48)
@@ -1064,6 +1072,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     @Volatile private var baseNear: JSONObject? = null
     private var baseNearT = 0f
 
+    /** V10 asker karelerinde namlu ucu (sağa bakan görselde genişlik/yükseklik oranı) */
+    private val soldierTip = mapOf(
+        "npc/soldier_aim_s" to (0.99f to 0.2f), "npc/soldier_fire" to (0.8f to 0.23f), "npc/soldier_crouch" to (0.99f to 0.27f),
+        "npc/sniper_aim_s" to (0.99f to 0.26f), "npc/sniper_kneel" to (0.99f to 0.24f), "npc/sniper_recoil" to (0.8f to 0.27f))
+
     /**
      * Devlet üssü askeri: asker görseli ızgarayla nefes alır, yürürken sallanır, ateşte geri teper; elde çizimle tüfek
      * (keskin nişancıda dürbünlü uzun namlu) nişan açısına döner. Keskin nişancı nişan alırken kırmızı lazer çizer.
@@ -1081,15 +1094,25 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sx < -300 || sx > sw + 300 || sy < -300 || sy > sh + 400) return
         val dirX0 = cos(face); val dirY0 = sin(face)
         val who = if (sniper) "sniper" else "soldier"
-        // V8 asker kareleri: nişan (3/4 ön, tüfekli), yukarı bakarken arka, beklemede duruş; M4'lü düşerken ayrı kare
+        // V10 yan görünüm pozları (sağa bakar): devriye, nişan, ateş, kulede çömelme, şarjör, dürbün, vurulma, düşüş, ölü.
+        // Yukarı bakarken V8 sırt, kameraya doğru nişanda V8 ön karesi.
         val key = when {
-            state == 4 && !sniper && atlas["npc/soldier_fall"] != null -> "npc/soldier_fall"
-            state == 4 -> "npc/${who}_idle"
-            state == 0 -> "npc/${who}_idle"
-            dirY0 < -0.55f -> "npc/${who}_back"
-            else -> "npc/${who}_aim"
-        }.let { if (atlas[it] != null) it else "npc/soldier" }
+            state == 4 -> when {
+                extra < 0.2f -> "npc/${who}_hit"
+                !sniper && extra < 0.5f -> "npc/soldier_falling"
+                else -> "npc/${who}_dead"
+            }
+            fxf == 1 && state != 3 -> "npc/${who}_hit"
+            dirY0 < -0.55f && state != 0 -> "npc/${who}_back"
+            dirY0 > 0.75f && state >= 2 -> "npc/${who}_aim"
+            state == 3 -> if (sniper) "npc/sniper_recoil" else if (tower) "npc/soldier_crouch" else "npc/soldier_fire"
+            state == 2 -> if (sniper) (if (tower) "npc/sniper_kneel" else "npc/sniper_aim_s") else if (tower) "npc/soldier_crouch" else "npc/soldier_aim_s"
+            state == 1 -> if (sniper) "npc/sniper_idle" else if ((t * 4f).toInt() % 2 == 0) "npc/soldier_walk1" else "npc/soldier_walk2"
+            sniper -> if ((t / 5f).toInt() % 3 == 2) "npc/sniper_bolt" else "npc/sniper_scan"
+            else -> if ((t / 6f).toInt() % 4 == 3) "npc/soldier_reload" else "npc/soldier_walk1"
+        }.let { if (atlas[it] != null) it else if (atlas["npc/${who}_idle"] != null) "npc/${who}_idle" else "npc/soldier" }
         val v8 = key != "npc/soldier"
+        val tip = soldierTip[key]
         val sp = atlas[key] ?: run { placeholder(c, sx, sy, if (hostile) 0xFF8A3A2A.toInt() else 0xFF3A6AAA.toInt()); return }
         val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return
         val k = sp.k * scale
@@ -1105,7 +1128,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (state == 1) oy -= kotlin.math.abs(sin(t * 9f)) * 4f * scale
         if (dead) {
             val f = (extra / 0.45f).coerceIn(0f, 1f)
-            if (key != "npc/soldier_fall") c.rotate((if (flip) 1f else -1f) * 84f * f, sx, sy)
+            if (key.endsWith("_idle") || key == "npc/soldier") c.rotate((if (flip) 1f else -1f) * 84f * f, sx, sy)
             deadPaint.alpha = (255 * (1f - ((extra - 3f) / 3f).coerceIn(0f, 1f))).toInt()
         }
         val left = sx + ox - sp.ax * k; val top = sy + oy - sp.ay * k
@@ -1129,7 +1152,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val shx = sx + ox + (if (flip) -1f else 1f) * w * 0.08f
             val shy = top + h * 0.45f
             val len = (if (sniper) 66f else 46f) * scale
-            val ex = shx + dirX * len; val ey = shy + dirY * len * 0.55f
+            // V10 karelerde namlu ucu görselden (sağa bakan karede oran); aynalanınca simetriği
+            val ex = if (tip != null) { val tx = left + tip.first * w; if (flip) 2 * (sx + ox) - tx else tx } else shx + dirX * len
+            val ey = if (tip != null) top + tip.second * h else shy + dirY * len * 0.55f
             if (!v8) {
             stroke.strokeCap = Paint.Cap.ROUND
             stroke.color = 0xFF15140F.toInt(); stroke.strokeWidth = 6.5f * scale; c.drawLine(shx, shy, ex, ey, stroke)
@@ -1140,7 +1165,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
             stroke.strokeCap = Paint.Cap.BUTT
             }
-            if (state == 3) {
+            if (state == 3 && key != "npc/soldier_fire") {
                 fill.color = 0xFFFFE08A.toInt(); c.drawCircle(ex + dirX * 6 * scale, ey + dirY * 3 * scale, 6f * scale, fill)
                 fill.color = 0x80FFB040.toInt(); c.drawCircle(ex + dirX * 6 * scale, ey + dirY * 3 * scale, 12f * scale, fill)
             }
@@ -1611,6 +1636,22 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    private val ZONE_HARBOR = 15  // world::ZONES_ALL sırası
+
+    /** Kan gölü: öldürülen zombinin altında yayılır, 12 sn'de söner (zemin katmanı, her şeyin altında). */
+    private class Pool(val x: Float, val y: Float, val size: Float, var t: Float = 0f)
+    private val pools = ArrayList<Pool>()
+
+    private fun drawPools(c: Canvas, dt: Float) {
+        val it = pools.iterator()
+        while (it.hasNext()) {
+            val p = it.next()
+            p.t += dt
+            if (p.t > 12f) { it.remove(); continue }
+            drawFxSprite(c, "blood_pool", p.x, p.y, p.size, p.t, alpha = (255 * ((12f - p.t) / 3f).coerceIn(0f, 1f) * 0.85f).toInt())
+        }
+    }
+
     private fun drawTracks(c: Canvas, dt: Float) {
         if (tracks.isEmpty()) return
         val it = tracks.iterator()
@@ -1728,7 +1769,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (Settings.current.particles && Math.random() < 0.15) particles += Particle(x + (Math.random().toFloat() - 0.5f) * r / scale, y + (Math.random().toFloat() - 0.5f) * r / scale * 0.5f, 0f, 0f, 0f, 30f, 0.8f, 0.8f, 0xFFB0FF60.toInt(), 3f, 3)
             }
             1 -> { // zehir bulutu
-                drawFxSprite(c, "toxic", x, y - 30, drawBuf[o + 7] * 2.4f, age, alpha = (200 * fade).toInt())
+                drawFxSprite(c, "toxic", x, y + 10, drawBuf[o + 7] * 0.9f, age, alpha = (200 * fade).toInt())
                 for (k in 0..4) {
                     val a = age * 0.6f + k * 1.3f
                     val cx = sx + cos(a) * r * 0.35f; val cy = sy - 40 * scale + sin(a * 1.3f) * r * 0.2f
@@ -1738,7 +1779,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 fill.shader = null
             }
             2 -> { // şifa alanı
-                drawFxSprite(c, "heal", x, y - drawBuf[o + 7] * 0.6f, drawBuf[o + 7] * 2.2f, age, alpha = (230 * fade).toInt())
+                drawFxSprite(c, "heal", x, y + 8, drawBuf[o + 7] * 0.7f, age, alpha = (230 * fade).toInt())
                 stroke.color = alphaC(0xFF60FF90.toInt(), 0.8f * fade); stroke.strokeWidth = 3 * density
                 c.save(); c.scale(1f, 0.55f, sx, sy)
                 c.drawCircle(sx, sy, r, stroke)
@@ -1825,7 +1866,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (hud[Native.IN_VEHICLE] > 0.5f || hud[Native.DEAD] > 0.5f) return
         val px = hud[Native.PX]; val py = hud[Native.PY] - 60
         val hl = hud[Native.HEAL_T]
-        if (hl > 0f) drawFxSprite(c, "heal", px, py, 220f, time, alpha = (230 * (hl / 1.2f).coerceIn(0f, 1f)).toInt())
+        if (hl > 0f) drawFxSprite(c, "heal", px, py + 64, 62f, time, alpha = (230 * (hl / 1.2f).coerceIn(0f, 1f)).toInt())
         // hız: bedeni saran camgöbeği rüzgâr girdabı; güç: ayak altında alev halkası (V7 piksel efektler, döngü)
         fun ring(left: Float, name: String, y: Float, size: Float, ph: Float) {
             if (left <= 0f) return
@@ -1983,7 +2024,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             drawText(c, p.text, p.x, y, ts, p.color, center = true)
             var top = y - ts
             if (p.sub != null) { drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true); top -= ts }
-            if (p.title != null) { drawTitle(c, p.title, p.titleRank, p.x, top - 1 * d, ts * 0.85f); top -= ts }
+            if (p.title != null) { drawTitle(c, p.title, p.titleRank, p.x, top - 4 * d, ts * 0.85f); top -= ts * 1.6f }
             // konuşma balonu (oyuncular)
             bubbles[p.text]?.let { (msg, until) ->
                 if (until < time) { bubbles.remove(p.text); return@let }
@@ -1998,9 +2039,33 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    private val plateSrc = android.graphics.Rect()
+    private val plateDst = RectF()
+
     /** Sıralama unvanı: ilk 3 altın/gümüş/bronz parıltılı ve yanlarında dönen yıldız, 4-10 sade mavi. */
     private fun drawTitle(c: Canvas, t: String, rank: Int, x: Float, y: Float, size: Float) {
         val base = when (rank) { 1 -> 0xFFFFC83A.toInt(); 2 -> 0xFFDCE4EE.toInt(); 3 -> 0xFFE0904A.toInt(); else -> 0xFF8CC8FF.toInt() }
+        // V10 unvan şeridi (kanatlı altın / gümüş, boynuzlu bronz, sade çelik): uçlar oranlı, orta yazıya göre esner
+        val pl = com.zenvex.online.ui.Plate.of(rank)
+        val bmp = com.zenvex.online.ui.UiArt.bitmap(context, pl.name)
+        if (bmp != null) {
+            val tw = text.apply { typeface = fontBold; textSize = size }.measureText(t) + 8 * density
+            val k = size * 1.25f / (pl.barBot - pl.barTop)
+            val cl = pl.capL * k; val cr = pl.capR * k
+            val top = y - size * 0.36f - (pl.barTop + pl.barBot) / 2f * k
+            val left = x - tw / 2 - cl
+            val h = bmp.height * k
+            fun part(sx: Int, sw: Int, dx: Float, dw: Float) {
+                plateSrc.set(sx, 0, sx + sw, bmp.height); plateDst.set(dx, top, dx + dw, top + h)
+                c.drawBitmap(bmp, plateSrc, plateDst, pixelPaint)
+            }
+            part(0, pl.capL, left, cl)
+            part(pl.capL, bmp.width - pl.capL - pl.capR, left + cl, tw)
+            part(bmp.width - pl.capR, pl.capR, left + cl + tw, cr)
+            val col = if (rank in 1..3) lerpColor(0xFFFFFFFF.toInt(), base, 0.25f + 0.25f * sin(time * 3f + x * 0.01f)) else 0xFFCFE6FF.toInt()
+            drawText(c, t, x, y, size, col, center = true)
+            return
+        }
         if (rank !in 1..3) { drawText(c, t, x, y, size, base, center = true); return }
         val k = 0.5f + 0.5f * sin(time * 3f + x * 0.01f)
         val col = lerpColor(base, 0xFFFFFFFF.toInt(), k * 0.55f)

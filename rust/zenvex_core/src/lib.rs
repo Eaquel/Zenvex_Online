@@ -266,6 +266,20 @@ mod tests {
         }
     }
 
+    /// V10 etkileşim pozu: yiyecek kullanınca dururken içme pozu oynar, hareket edince kesilir.
+    #[test]
+    fn v10_pose() {
+        let mut g = Game::new(1, Progress::default(), 0);
+        g.progress.inv.add_id("food", 1);
+        let slot = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| data::ITEMS[s.item as usize].id == "food")).unwrap();
+        let r: serde_json::Value = serde_json::from_str(&g.command(&format!(r#"{{"cmd":"use","slot":{slot}}}"#))).unwrap();
+        assert_eq!(r["ok"], true, "{r}");
+        g.step(1.0 / 60.0, Input::default());
+        assert_eq!(g.player.anim, game::A_DRINK);
+        g.step(1.0 / 60.0, Input { move_x: 1.0, ..Input::default() });
+        assert_ne!(g.player.anim, game::A_DRINK);
+    }
+
     /// Harita görüntüsünü ham ARGB olarak yazar (ZX_DUMP_MAP=dosya; görsel kontrol için).
     #[test]
     fn dump_map() {

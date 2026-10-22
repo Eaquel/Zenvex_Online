@@ -43,16 +43,16 @@ import org.json.JSONObject
 import kotlin.math.sin
 
 /** Etkinlik türü: tema rengi, simge, kısa hikâye, puan kuralı, ödül eşyası öneki (data.rs ev_<önek>_ring/neck/helm) */
-data class EventInfo(val color: Color, val icon: String, val story: String, val rule: String, val prefix: String)
+data class EventInfo(val color: Color, val icon: String, val story: String, val rule: String, val prefix: String, val art: String = "")
 
 val EVENT_INFO = mapOf(
     "blood_moon" to EventInfo(Color(0xFFE0302A), "skull", "Kızıl ay doğdu, zombiler kudurdu. Ne kadar çok ve ne kadar güçlü zombi devirirsen o kadar yükselirsin.",
-        "Aylak 1 · Koşucu 2 · Köpek 2 · Zehirli 3 · Karanlık 4 · Tank 8 · Gizemli 10 · Titan 50", "blood"),
-    "titan_hunt" to EventInfo(Color(0xFFE0904A), "flame", "Titanlar uyandı. Dev avcılarının en iyisi kim?", "Her Titan 1.000 Puan", "titan"),
-    "base_storm" to EventInfo(Color(0xFF6AB8FF), "shield", "Devlet üslerine fırtına gibi gir. Askerleri düşür, üsleri ele geçir.", "Asker 10 · Üs Ele Geçirme 500", "base"),
-    "scavengers" to EventInfo(Color(0xFF9AD84A), "hammer", "Şehir yağmalanmayı bekliyor. Topla, aç, üret.", "Ağaç 2 · Sandık 5 · Üretim 10", "scrap"),
-    "pack_leader" to EventInfo(Color(0xFFC07AFF), "paw", "Köpeğinle birlikte avlan. Sürünün lideri ol.", "Köpeğinin Her Avı 5 Puan", "pack"),
-    "last_breath" to EventInfo(Color(0xFF7FE0FF), "heart", "Güvenli bölgenin dışında ne kadar dayanabilirsin?", "Güvenli Bölge Dışında Her Saniye 1 Puan", "breath"),
+        "Aylak 1 · Koşucu 2 · Köpek 2 · Zehirli 3 · Karanlık 4 · Tank 8 · Gizemli 10 · Titan 50", "blood", "ev_blood"),
+    "titan_hunt" to EventInfo(Color(0xFFE0904A), "flame", "Titanlar uyandı. Dev avcılarının en iyisi kim?", "Her Titan 1.000 Puan", "titan", "ev_titan"),
+    "base_storm" to EventInfo(Color(0xFF6AB8FF), "shield", "Devlet üslerine fırtına gibi gir. Askerleri düşür, üsleri ele geçir.", "Asker 10 · Üs Ele Geçirme 500", "base", "ev_base"),
+    "scavengers" to EventInfo(Color(0xFF9AD84A), "hammer", "Şehir yağmalanmayı bekliyor. Topla, aç, üret.", "Ağaç 2 · Sandık 5 · Üretim 10", "scrap", "ev_scrap"),
+    "pack_leader" to EventInfo(Color(0xFFC07AFF), "paw", "Köpeğinle birlikte avlan. Sürünün lideri ol.", "Köpeğinin Her Avı 5 Puan", "pack", "ev_pack"),
+    "last_breath" to EventInfo(Color(0xFF7FE0FF), "heart", "Güvenli bölgenin dışında ne kadar dayanabilirsin?", "Güvenli Bölge Dışında Her Saniye 1 Puan", "breath", "ev_breath"),
 )
 
 /** HUD üst ortadaki etkinlik afişi (etkinlik sürüyorsa): dokununca etkinlik penceresi */
@@ -65,7 +65,9 @@ fun EventBanner(modifier: Modifier, onClick: () -> Unit) {
     var now by remember { mutableLongStateOf(Pass.now()) }
     LaunchedEffect(Unit) { while (true) { now = Pass.now(); kotlinx.coroutines.delay(1000) } }
     val k = 0.5f + 0.5f * sin(t * 3f)
-    Row(modifier.clip(RoundedCornerShape(3.dp)).background(Brush.horizontalGradient(listOf(info.color.copy(alpha = 0.55f + 0.2f * k), Color(0xCC15140F))))
+    // V10 afiş görseli zeminde (koyulaştırılmış), üstünde etkinlik rengi geçişi
+    Row(modifier.clip(RoundedCornerShape(3.dp)).artCover(info.art, 0.35f, 0.4f)
+        .background(Brush.horizontalGradient(listOf(info.color.copy(alpha = 0.35f + 0.2f * k), Color(0x8015140F))))
         .border(2.dp, info.color.copy(alpha = 0.6f + 0.4f * k), RoundedCornerShape(3.dp)).clickable { onClick() }.padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Icon(info.icon, 16.dp, Color.White)
@@ -90,16 +92,17 @@ internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit
     Box(Modifier.fillMaxSize().background(Color(0xF00A0806)).clickable(remember { MutableInteractionSource() }, null) {}) {
         if (b == null || !b.optBoolean("active")) {
             Column(Modifier.fillMaxSize().padding(14.dp)) {
-                PxIcon("close", size = 40.dp) { close() }
+                CloseButton(40.dp) { close() }
                 Spacer(Modifier.height(30.dp))
                 PT(if (b == null) err.ifEmpty { "Yükleniyor…" } else "Şu An Etkinlik Yok. Yeni Etkinlik Başlayınca Bildirim Alırsın.", 16.sp, Px.Sub, maxLines = 2)
             }
             return@Box
         }
         val info = EVENT_INFO[b.optString("kind")] ?: EVENT_INFO.values.first()
-        // tema: etkinlik renginde gökyüzü + yükselen kıvılcımlar
+        // tema: V10 etkinlik afişi tam ekran (karartılmış), etkinlik renginde geçiş + yükselen kıvılcımlar
+        SceneBackground(info.art, t, dim = 0.62f)
         Canvas(Modifier.fillMaxSize()) {
-            drawRect(Brush.verticalGradient(listOf(info.color.copy(alpha = 0.35f), Color(0xFF0A0806)), 0f, size.height * 0.8f))
+            drawRect(Brush.verticalGradient(listOf(info.color.copy(alpha = 0.25f), Color(0xC00A0806)), 0f, size.height * 0.8f))
             for (i in 0 until 36) {
                 val x = ((i * 71) % 100) / 100f * size.width
                 val y = size.height * (1f - ((t * (0.04f + (i % 5) * 0.01f) + i * 0.19f) % 1f))
@@ -110,13 +113,17 @@ internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit
             // sol: başlık, süre, puanım, kurallar, ödüller
             Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState())) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PxIcon("close", size = 40.dp) { close() }
+                    CloseButton(40.dp) { close() }
                     Spacer(Modifier.width(10.dp))
                     Icon(info.icon, 30.dp, info.color)
                     Spacer(Modifier.width(8.dp))
                     PT(b.optString("title"), 26.sp, info.color, outline = true)
                 }
                 PT("Bitimine: ${fmtLeft(b.optLong("ends") - now)}", 14.sp, Px.Clan)
+                Spacer(Modifier.height(4.dp))
+                // etkinlik afişi (V10 çizim)
+                Box(Modifier.fillMaxWidth().height(96.dp).clip(RoundedCornerShape(3.dp)).artCover(info.art)
+                    .border(2.dp, info.color.copy(alpha = 0.7f), RoundedCornerShape(3.dp)))
                 Spacer(Modifier.height(4.dp))
                 PT(info.story, 12.sp, Px.Text, maxLines = 3)
                 Spacer(Modifier.height(6.dp))

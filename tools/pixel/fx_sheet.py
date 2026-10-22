@@ -22,6 +22,7 @@ from ai_clean import fit_offset, pixel_size  # noqa: E402
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v7", "fx")
 UP = os.path.join(OUT, "src")
+V10 = os.path.join("..", "..", "..", "v10u") + os.sep
 
 # ad: (kaynak, kesim, saydamlık, fps, döngü, blend, çapa (x, y oranı), [kare sayısı])
 SHEETS = {
@@ -47,7 +48,25 @@ SHEETS = {
     "road_snow": ("road_snow.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
     "road_swamp": ("road_swamp.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
     "road_dirt": ("road_dirt.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
+    # V10 (art/v10u): kan, kan gölü, kıvılcım, namlu ateşi, alev, duman, yer sarsıntısı, patlama, kritik vuruş,
+    # şifa, buz ve zehir; aynı adlı eski efektlerin yerine geçer
+    "blood": (V10 + "fx_blood.jpg", ("grid", 3, 2), "whitealpha", 18, False, "normal", (0.3, 0.45)),
+    "blood_pool": (V10 + "fx_blood_pool.jpg", ("graybox",), "red", 6, False, "normal", (0.5, 0.5)),
+    "spark": (V10 + "fx_sparks.jpg", ("grid", 5, 1), "add", 20, False, "add", (0.5, 0.5)),
+    "muzzle": (V10 + "fx_muzzle.jpg", ("grid", 5, 1), "keyblack", 24, False, "normal", (0.1, 0.5), [0, 1, 2]),
+    "fire": (V10 + "fx_fire.jpg", ("grid", 5, 1), "add", 10, True, "add", (0.5, 0.95)),
+    "smoke": (V10 + "fx_smoke.jpg", ("grid", 5, 1), "smoke", 6, False, "normal", (0.5, 0.97)),
+    "shockwave": (V10 + "fx_shockwave.jpg", ("blobs",), "keyblack", 14, False, "normal", (0.5, 0.55)),
+    "explosion": (V10 + "fx_explosion.jpg", ("grid", 5, 2), "keyblack", 16, False, "normal", (0.5, 0.6)),
+    "crit": (V10 + "fx_flash.jpg", ("grid", 5, 1), "keyblack", 20, False, "normal", (0.5, 0.5), [0, 1, 2]),
+    "heal": (V10 + "fx_heal.jpg", ("grid", 8, 1), "whitealpha", 12, True, "normal", (0.5, 0.9)),
+    "frost": (V10 + "fx_frost.jpg", ("grid", 7, 1), "add", 18, False, "add", (0.5, 0.5), [0, 1, 2]),
+    "toxic": (V10 + "fx_toxic.jpg", ("grid", 8, 1), "keyblack", 8, False, "normal", (0.5, 0.92)),
 }
+
+
+# V10 efekt sayfaları 512 px'e küçültülmüş: ızgaraya indirilmez
+NATIVE = {"blood", "blood_pool", "spark", "muzzle", "fire", "smoke", "shockwave", "explosion", "crit", "heal", "frost", "toxic"}
 
 
 def boxes(a):
@@ -92,6 +111,24 @@ def build(name):
         cols, rows = cut[1], cut[2]
         cells = [(int(c * W / cols), int(r * H / rows), int((c + 1) * W / cols), int((r + 1) * H / rows))
                  for r in range(rows) for c in range(cols)]
+    elif cut[0] == "blobs":
+        # düzensiz aralıklı kareler: siyah olmayan alanın genişletilmiş bileşenleri, satır satır soldan sağa
+        lab, n = ndimage.label(ndimage.binary_dilation(a.max(-1) > 22, iterations=5))
+        cells = []
+        for sl in ndimage.find_objects(lab):
+            ys, xs = sl
+            if (ys.stop - ys.start) * (xs.stop - xs.start) > 0.004 * H * W:
+                cells.append((xs.start, ys.start, xs.stop, ys.stop))
+        cells.sort(key=lambda b: (round((b[1] + b[3]) / 2 / (H / 2)), b[0]))
+    elif cut[0] == "graybox":
+        # gri zemin kareleri (siyah sayfa üstünde): her kare bir hücre, kenardan biraz içeri
+        lab, n = ndimage.label(a.mean(-1) > 30)
+        cells = []
+        for sl in ndimage.find_objects(lab):
+            ys, xs = sl
+            if (ys.stop - ys.start) * (xs.stop - xs.start) > 0.02 * H * W:
+                cells.append((xs.start + 3, ys.start + 3, xs.stop - 3, ys.stop - 3))
+        cells.sort()
     elif cut[0] == "cells":
         cells = [(x0 + 6, y0 + 6, x1 - 6, y1 - 4) for x0, y0, x1, y1 in cut[1]]
     else:
@@ -107,10 +144,13 @@ def build(name):
         for x0, y0, x1, y1 in cells:
             keep[y0:y1, x0:x1] = True
         work[~keep] = 0
-    s = pixel_size(work)
-    if s < 3.5:  # yarı harmonik
-        s *= 2
-    ox, oy = fit_offset(work, s)
+    if name in NATIVE:
+        s, ox, oy = 1.0, 0.0, 0.0  # küçültülmüş kaynak: piksel ızgarası yok, olduğu gibi
+    else:
+        s = pixel_size(work)
+        if s < 3.5:  # yarı harmonik
+            s *= 2
+        ox, oy = fit_offset(work, s)
     nat = native(work, s, ox, oy)
     frames = []
     for x0, y0, x1, y1 in cells:
@@ -125,6 +165,17 @@ def build(name):
             col = c
         elif mode == "keyblack":
             al = np.where(c.max(-1) < 22, 0, 255)
+            col = c
+        elif mode == "whitealpha":
+            # beyaz zemin: alfa beyazdan uzaklık, renk beyazın önünden geri açılır (açık sis beyaz leke bırakmaz)
+            al = np.clip((255 - c.min(-1)) * 1.6, 0, 255)
+            al = np.where(al < 20, 0, al)
+            a1 = np.maximum(al[..., None] / 255.0, 1e-3)
+            col = np.clip((c - (1 - a1) * 255) / a1, 0, 255)
+        elif mode == "red":
+            # kan gölü: gri zemin atılır, kırmızılık alfa olur
+            red = r - np.maximum(g, b)
+            al = np.clip((red - 18) * 4.0, 0, 255)
             col = c
         elif mode == "dustonly":
             # tekerlek (gri/koyu, doygunluksuz) ve kenar karası silinir; kum/kar/çamur/toprak kalır
@@ -161,6 +212,14 @@ def build(name):
             cy = (390 - (y0 - oy)) / s if False else (0.508 * H - oy) / s - Y0
             disc = (yy - cy) ** 2 + (xx - ww / 2) ** 2 < (128 / s) ** 2
             f[disc, 3] = 0
+        if name == "muzzle":
+            # namlu ucu (gri silindir, solda): doygunluksuz koyu-orta griler silinir
+            hh, ww = f.shape[:2]
+            sat = c.max(-1) - c.min(-1)
+            lum = c @ np.array([0.3, 0.59, 0.11])
+            barrel = (sat < 30) & (lum < 215)
+            barrel[:, int(ww * 0.3):] = False
+            f[barrel, 3] = 0
         if name == "teleport":
             # kenarlardaki büyücü asası kalıntısı
             w = f.shape[1]
@@ -168,6 +227,17 @@ def build(name):
             f[:, int(w * 0.78):, 3] = 0
         frames.append(f)
     # ortak sınır kutusu
+    if cut[0] == "blobs":
+        # farklı boyutlu kareler: en büyüğe ortalanarak doldurulur
+        hh = max(f.shape[0] for f in frames)
+        ww = max(f.shape[1] for f in frames)
+        padded = []
+        for f in frames:
+            z = np.zeros((hh, ww, 4), np.uint8)
+            y0, x0 = (hh - f.shape[0]) // 2, (ww - f.shape[1]) // 2
+            z[y0:y0 + f.shape[0], x0:x0 + f.shape[1]] = f
+            padded.append(z)
+        frames = padded
     hh = min(f.shape[0] for f in frames)
     ww = min(f.shape[1] for f in frames)
     frames = [f[:hh, :ww] for f in frames]

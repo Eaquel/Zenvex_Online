@@ -31,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -93,7 +94,8 @@ internal fun PassView(
     val t = rememberTime()
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF241A10), Color(0xFF120E0A), Color(0xFF0A0806))))
         .clickable(remember { MutableInteractionSource() }, null) {}) {
-        // arka plan: yükselen kor parçacıkları
+        // V10 arka plan: ufuktaki kaleye giden yıkık otoyol (karartılmış); üstünde yükselen korlar
+        SceneBackground("pass_bg", t, dim = 0.5f, ay = 0.35f)
         Canvas(Modifier.fillMaxSize()) {
             for (i in 0 until 40) {
                 val sx = ((i * 97) % 100) / 100f * size.width
@@ -109,9 +111,9 @@ internal fun PassView(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 val claimable = countClaimable(p)
                 PassTab("Ödüller", "crown", tab == 0, claimable) { tab = 0 }
-                PassTab("Günlük", "calendar", tab == 1, 0) { tab = 1 }
-                PassTab("Haftalık", "star", tab == 2, 0) { tab = 2 }
-                PassTab("Sezon", "flame", tab == 3, 0) { tab = 3 }
+                PassTab("Günlük", "calendar", tab == 1, 0, "q_daily") { tab = 1 }
+                PassTab("Haftalık", "star", tab == 2, 0, "q_weekly") { tab = 2 }
+                PassTab("Sezon", "flame", tab == 3, 0, "q_season") { tab = 3 }
                 Spacer(Modifier.weight(1f))
                 when (tab) {
                     1 -> PT("Yenilenmeye: ${fmtLeft(nextDay(now) - now)}", 13.sp, Px.Sub)
@@ -147,7 +149,7 @@ private fun countClaimable(p: JSONObject): Int {
 @Composable
 private fun PassHeader(p: JSONObject, season: String, ends: Long, now: Long, back: () -> Unit, buy: (Boolean, Int) -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        PxIcon("close", size = 40.dp) { back() }
+        CloseButton(40.dp) { back() }
         Spacer(Modifier.width(10.dp))
         TierBadge(p.optInt("tier"), 62.dp)
         Spacer(Modifier.width(10.dp))
@@ -208,6 +210,22 @@ private fun TierBadge(tier: Int, size: Dp) {
 @Composable
 private fun XpBar(k: Float, label: String, modifier: Modifier) {
     val t = rememberTime()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val frame = remember { UiArt.image(ctx, "pass_bar") }
+    if (frame != null) {
+        // V10 altın uçlu metal şerit: dolgu iç yuvaya (kaynak px: sol 23, sağ 17, üst/alt 9) çizilir
+        Box(modifier.height(22.dp).drawBehind {
+            drawSlice3(frame, 0f, 0f, size.width, size.height, 51, 59)
+            val q = size.height / frame.height
+            val x0 = 23 * q; val x1 = size.width - 17 * q; val y0 = 9 * q; val y1 = size.height - 9 * q
+            val w = (x1 - x0) * k.coerceIn(0f, 1f)
+            drawRect(Brush.verticalGradient(listOf(Color(0xFFFFE07A), PGOLD, Color(0xFFC07A10)), y0, y1), Offset(x0, y0), Size(w, y1 - y0))
+            val sx = x0 + (t * 0.6f % 1.4f) * (x1 - x0) - (x1 - x0) * 0.2f
+            if (sx in x0..(x0 + w)) drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.55f), Color.Transparent), sx, sx + 40f),
+                Offset(sx, y0), Size(minOf(40f, x0 + w - sx), y1 - y0))
+        }) { PT(label, 11.sp, Color.White, Modifier.align(Alignment.Center), outline = true) }
+        return
+    }
     Box(modifier.height(18.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF15140F)).padding(2.dp)) {
         Canvas(Modifier.fillMaxSize()) {
             drawRect(Color(0xFF2A241A))
@@ -267,13 +285,13 @@ private fun TicketCard(title: String, sub: String, price: Int, owned: Boolean, e
 }
 
 @Composable
-private fun PassTab(name: String, icon: String, on: Boolean, badge: Int, onClick: () -> Unit) {
+private fun PassTab(name: String, icon: String, on: Boolean, badge: Int, art: String? = null, onClick: () -> Unit) {
     Box {
         Row(Modifier.clip(RoundedCornerShape(3.dp))
             .background(if (on) Brush.verticalGradient(listOf(Color(0xFF6A4A16), Color(0xFF3A2808))) else Brush.verticalGradient(listOf(Color(0xFF2E2A22), Color(0xFF1E1B16))))
             .border(2.dp, if (on) PGOLD.copy(alpha = 0.8f) else Color(0xFF3A362C), RoundedCornerShape(3.dp))
             .clickable { onClick() }.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, 16.dp, if (on) PGOLD else Px.Sub)
+            if (art != null) ArtImage(art, Modifier.size(20.dp)) else Icon(icon, 16.dp, if (on) PGOLD else Px.Sub)
             Spacer(Modifier.width(6.dp))
             PT(name, 14.sp, if (on) Px.Text else Px.Sub)
         }
@@ -319,9 +337,10 @@ private fun RewardTrack(p: JSONObject, t: Float, claim: (Int, Boolean, Boolean) 
                             val y = size.height / 2
                             drawLine(if (reached) PGOLD else Color(0xFF3A362C), Offset(-6f, y), Offset(size.width + 6f, y), 5f)
                         }
-                        Box(Modifier.size(24.dp).clip(RoundedCornerShape(3.dp)).background(if (reached) PGOLD else Color(0xFF2A2620))
-                            .border(2.dp, if (tr == tier) Color.White else Color(0xFF15140F), RoundedCornerShape(3.dp)), contentAlignment = Alignment.Center) {
-                            PT("$tr", 11.sp, if (reached) Color(0xFF2A1A04) else Px.Sub)
+                        // V10 altın kademe düğümü (ulaşılmamışsa soluk)
+                        Box(Modifier.size(26.dp), contentAlignment = Alignment.Center) {
+                            ArtImage("pass_node", Modifier.fillMaxSize().alpha(if (reached) 1f else 0.35f))
+                            PT("$tr", 11.sp, if (tr == tier) Color.White else if (reached) Color(0xFFFFF0C0) else Px.Sub, outline = true)
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -341,10 +360,10 @@ private fun RewardSlot(r: JSONObject, reached: Boolean, claimed: Boolean, allowe
     val ready = reached && allowed && !claimed
     val rc = rarityCol(r.optInt("rarity"))
     val pulse = if (ready) 0.5f + 0.5f * sin(t * 5f) else 0f
-    Box(modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp))
-        .background(Brush.verticalGradient(if (gold) listOf(Color(0xFF4A3410), Color(0xFF1E160A)) else listOf(Color(0xFF26303A), Color(0xFF14181E))))
-        .border(2.dp, if (ready) lerp(rc, Color.White, pulse * 0.6f) else if (gold) PGOLD.copy(alpha = 0.45f) else Color(0xFF3A4048), RoundedCornerShape(3.dp))
-        .clickable(enabled = ready) { claim() }.padding(4.dp), contentAlignment = Alignment.Center) {
+    // V10 kademe kartı: ücretsiz çelik, premium taçlı altın (dokuz parça; köşeler esnemez)
+    Box(modifier.fillMaxWidth().metalFrame(px = 1.dp, name = if (gold) "card_premium" else "card_free", corner = 14)
+        .then(if (ready) Modifier.border(2.dp, lerp(rc, Color.White, pulse * 0.6f), RoundedCornerShape(3.dp)) else Modifier)
+        .clickable(enabled = ready) { claim() }.padding(6.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) {
                 if (ready) Canvas(Modifier.fillMaxSize()) {
@@ -360,8 +379,12 @@ private fun RewardSlot(r: JSONObject, reached: Boolean, claimed: Boolean, allowe
             PT("×${fmt(r.optInt("count", 1))}", 11.sp, Px.Text)
         }
         when {
-            claimed -> Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) { Icon("check", 26.dp, Px.Name) }
-            !allowed -> Box(Modifier.align(Alignment.TopEnd)) { Icon("lock", 14.dp, Px.Sub) }
+            claimed -> Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.Center) { ArtImage("pass_check", Modifier.size(34.dp)) }
+            // kilitli premium: zincirli kart üstte (yarı saydam, ödül seçilebilir), köşede asma kilit
+            !allowed -> {
+                Box(Modifier.matchParentSize().artBehind("card_locked", alpha = 0.55f))
+                ArtImage("pass_lock", Modifier.align(Alignment.TopEnd).size(18.dp))
+            }
             ready -> Box(Modifier.align(Alignment.BottomCenter).offset(y = 2.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFF3E8A2A)).padding(horizontal = 8.dp, vertical = 1.dp)) {
                 PT("Al", 11.sp, Color.White)
             }
@@ -413,7 +436,7 @@ private fun QuestRow(q: JSONObject) {
         RewardChip("coin", fmt(q.optInt("gold")), Color(0xFFFFE07A))
         if (q.optInt("xp") > 0) { Spacer(Modifier.width(6.dp)); RewardChip("star", "${fmt(q.optInt("xp"))} XP", Color(0xFF8CE0FF)) }
         Spacer(Modifier.width(8.dp))
-        if (done) Icon("check", 24.dp, Px.Name) else Spacer(Modifier.width(24.dp))
+        if (done) ArtImage("pass_check", Modifier.size(28.dp)) else Spacer(Modifier.width(28.dp))
     }
 }
 

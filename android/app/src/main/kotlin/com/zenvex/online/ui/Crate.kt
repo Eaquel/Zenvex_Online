@@ -106,7 +106,7 @@ private fun CrateView(
         CrateBackground(t)
         Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PxIcon("close", size = 40.dp) { back() }
+                CloseButton(40.dp) { back() }
                 Spacer(Modifier.width(12.dp))
                 PT("Elmas Sandığı", 26.sp, DIA, outline = true)
                 Spacer(Modifier.width(14.dp))
@@ -136,8 +136,12 @@ private fun CrateView(
 /** Kasa odası: derin mavi-mor gradyan, sandığın arkasından dönen ışık huzmeleri, yükselen elmas tozu, kenar karartma */
 @Composable
 private fun CrateBackground(t: Float) {
+    // V10 kasa odası (kürsü, zırhlı kapı, kızıl-altın çizgiler); yoksa kodla gradyan
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val vault = remember { UiArt.image(ctx, "crate_vault") } != null
+    if (vault) SceneBackground("crate_vault", t, dim = 0.28f, zoom = 1.02f, drift = 0f)
     Canvas(Modifier.fillMaxSize()) {
-        drawRect(Brush.radialGradient(listOf(Color(0xFF2A2F6A), Color(0xFF14123A), Color(0xFF07060F)), Offset(size.width * 0.38f, size.height * 0.55f), size.width * 0.7f))
+        if (!vault) drawRect(Brush.radialGradient(listOf(Color(0xFF2A2F6A), Color(0xFF14123A), Color(0xFF07060F)), Offset(size.width * 0.38f, size.height * 0.55f), size.width * 0.7f))
         val c = Offset(size.width * 0.38f, size.height * 0.56f)
         rotate(t * 8f, c) {
             for (i in 0 until 14) {
@@ -224,6 +228,29 @@ private fun CrateMain(data: JSONObject, phase: Phase, pity: Int, t: Float, open:
  */
 @Composable
 private fun DiamondCrate(t: Float, open: Float, modifier: Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val closed = remember { UiArt.image(ctx, "crate_closed") }
+    val opened = remember { UiArt.image(ctx, "crate_open") }
+    if (closed != null && opened != null) {
+        // V10 çizim sandık: sallanır, kapak açılınca ışık patlar
+        Canvas(modifier) {
+            val w = size.width; val h = size.height
+            val shake = if (open in 0.01f..0.9f) sin(open * 70f) * open * 9f else 0f
+            val bob = if (open == 0f) sin(t * 2f) * 4f else 0f
+            val lid = ((open - 0.9f) / 0.5f).coerceIn(0f, 1f)
+            val img = if (lid > 0f) opened else closed
+            val k = minOf(w / img.width, h / img.height) * 0.92f
+            val iw = img.width * k; val ih = img.height * k
+            val cx = w / 2 + shake; val bottom = h * 0.9f + bob
+            drawOval(Color.Black.copy(alpha = 0.45f), Offset(cx - iw * 0.45f, bottom - h * 0.05f), Size(iw * 0.9f, h * 0.1f))
+            drawCircle(Brush.radialGradient(listOf(Color(0xFFFF3040).copy(alpha = 0.25f + 0.1f * sin(t * 3f)), Color.Transparent), Offset(cx, bottom - ih * 0.5f), w * 0.5f),
+                w * 0.5f, Offset(cx, bottom - ih * 0.5f))
+            if (lid > 0f) drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = lid), DIA.copy(alpha = 0.6f * lid), Color.Transparent),
+                Offset(cx, bottom - ih * 0.6f), w * 0.7f * lid), w * 0.7f * lid, Offset(cx, bottom - ih * 0.6f))
+            drawArt(img, cx - iw / 2, bottom - ih, iw, ih)
+        }
+        return
+    }
     Canvas(modifier) {
         val w = size.width; val h = size.height
         val shake = if (open in 0.01f..0.9f) sin(open * 70f) * open * 9f else 0f
@@ -301,12 +328,14 @@ private fun OpenButton(label: String, price: Int, ribbon: String?, enabled: Bool
                 drawRect(Color.White.copy(alpha = 0.35f), Offset(3f, 3f), Size(size.width - 6f, 3f))
                 drawRect(Color.Black.copy(alpha = 0.35f), Offset(3f, size.height - 8f), Size(size.width - 6f, 5f))
             }
-            .clickable(enabled = enabled) { onClick() }.padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            .clickable(enabled = enabled) { onClick() }.padding(start = 30.dp, top = 6.dp, bottom = 6.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             PT(label, 17.sp, Color.White)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon("gem", 15.dp, Color.White); Spacer(Modifier.width(4.dp)); PT(fmt(price), 15.sp, Color.White)
             }
         }
+        // V10 hediye kutusu: tek açılış kapalı, onlu açılış açık kutu
+        ArtImage(if (ribbon != null) "gift_open" else "gift_closed", Modifier.align(Alignment.CenterStart).padding(start = 6.dp).size(38.dp))
         if (ribbon != null) Box(Modifier.align(Alignment.TopEnd).padding(top = 0.dp).graphicsLayer { translationY = -18f; translationX = 10f; rotationZ = 8f }
             .clip(RoundedCornerShape(2.dp)).background(Color(0xFFE0302A)).padding(horizontal = 6.dp, vertical = 2.dp)) { PT(ribbon, 10.sp, Color.White) }
     }
@@ -418,6 +447,22 @@ private fun BoxScope.RevealOverlay(results: List<String>, data: JSONObject, t: F
     }
 }
 
+/** Nadirlik ışını: ui/beam_<r>.png şeridinden 7 kare, 12 fps döngü (ışık toplamalı çizilir). */
+@Composable
+private fun RarityBeam(r: Int, t: Float, modifier: Modifier) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val img = remember(r) { UiArt.image(ctx, "beam_$r") } ?: return
+    Canvas(modifier) {
+        val fw = img.width / 7
+        val f = (t * 12f).toInt() % 7
+        val k = minOf(size.width / fw, size.height / img.height)
+        val w = fw * k; val h = img.height * k
+        drawImage(img, androidx.compose.ui.unit.IntOffset(f * fw, 0), androidx.compose.ui.unit.IntSize(fw, img.height),
+            androidx.compose.ui.unit.IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()), androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()),
+            blendMode = androidx.compose.ui.graphics.BlendMode.Plus, filterQuality = androidx.compose.ui.graphics.FilterQuality.None)
+    }
+}
+
 @Composable
 private fun RevealCard(code: String, skin: JSONObject?, flip: Float, t: Float) {
     val itemId = code.substringBefore(':'); val count = code.substringAfter(':', "1")
@@ -438,6 +483,8 @@ private fun RevealCard(code: String, skin: JSONObject?, flip: Float, t: Float) {
                 Canvas(Modifier.fillMaxSize()) {
                     drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.6f), Color.Transparent)), size.width * 0.55f)
                 }
+                // V10 nadirlik ışını (beyaz / mavi / mor / altın)
+                RarityBeam(when (rarity) { 3 -> 4; 2 -> 3; 1 -> 2; else -> 0 }, t, Modifier.fillMaxSize())
                 when {
                     skin != null -> SkinPreview(code, Modifier.size(66.dp), t, small = true)
                     itemId == "gold" -> Icon("coin", 46.dp, LEG)
