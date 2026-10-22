@@ -384,7 +384,10 @@ object Online {
             .filter { it.dist < maxD }.minByOrNull { it.dist }
     }
 
-    fun position(u: String): FloatArray? = synchronized(remotes) { remotes[u]?.cur?.copyOf() }
+    /** Uzak oyuncunun son bildirdiği konum (son 10 sn içinde yayın geldiyse; uzaktaysa da) */
+    fun position(u: String): FloatArray? = synchronized(remotes) {
+        remotes[u]?.takeIf { it.ts > 0L && SystemClock.elapsedRealtime() - it.ts < 10000 }?.target?.copyOf()
+    }
 
     // =========================================================== PvP
     @Volatile private var lastPvpFrom = ""

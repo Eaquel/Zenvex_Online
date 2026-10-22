@@ -218,7 +218,7 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
         PxButton("Yanına Işınlan", color = Px.Green, height = 36.dp, size = 13.sp, icon = "map") {
             val pos = Online.position("a$target")
             when {
-                pos != null && pos[9] >= 1f -> {
+                pos != null -> {
                     val r = GameSession.cmd("cheat", "text" to "tp ${(pos[0] / 64f).toInt()} ${(pos[1] / 64f).toInt()}")
                     Toaster.show(if (r.ok) "${d.optString("name")} Yanına Işınlandın" else r.msg, r.ok)
                 }
