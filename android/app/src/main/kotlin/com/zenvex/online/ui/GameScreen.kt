@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
 }
 
 /**
@@ -179,6 +179,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)
             Overlay.Crate -> CrateScreen(close)
+            Overlay.Event -> EventDialog(close)
             Overlay.Skills -> TreeScreen(close)
             Overlay.Dog -> DogDialog(close)
             Overlay.Npc -> NpcDialogScreen(npcKind, close) { o ->
@@ -268,6 +269,8 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("gem", size = 46.dp, tint = Color(0xFF7FE0FF), color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
+    // etkinlik afişi: üst orta, bölge adı ve PvP uyarısının altında
+    EventBanner(Modifier.align(Alignment.TopCenter).padding(top = 54.dp)) { open(Overlay.Event) }
     // görev takipçisi: simge satırının altında
     QuestTracker(story, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 140.dp)) { open(Overlay.Quests) }
     // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)

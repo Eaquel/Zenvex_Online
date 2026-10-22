@@ -229,4 +229,16 @@ class UiShotsTest {
     fun crateCollection() {
         paparazzi.snapshot { CratePreview(sample("skins"), tab = 1) }
     }
+
+    @Test
+    fun eventScreen() {
+        val now = 1_793_000_000_000L
+        val top = org.json.JSONArray()
+        listOf("Karanlık", "Bozkurt", "Gölge", "Yılmaz", "ZeroOne", "Kaan", "Ateş", "Demir", "Fırtına", "Ayaz", "Toprak", "Bora").forEachIndexed { i, n ->
+            top.put(JSONObject().put("name", n).put("id", 100 + i).put("score", 18450L - i * 1230))
+        }
+        val b = JSONObject().put("active", true).put("kind", "blood_moon").put("title", "Kan Ayı").put("ends", now + 9 * 86_400_000L + 4 * 3_600_000L)
+            .put("my_score", 7390).put("my_rank", 23).put("top", top)
+        paparazzi.snapshot { EventView(b, "", now, {}) }
+    }
 }

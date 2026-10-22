@@ -1,5 +1,7 @@
 package com.zenvex.online.game
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import com.zenvex.online.net.Supa
 import com.zenvex.online.ui.Toaster
 import org.json.JSONArray
@@ -12,8 +14,10 @@ import org.json.JSONObject
  * Puan, Rust'taki sayaçların (profile.ev) son gönderimden bu yana artışından hesaplanır.
  */
 object Events {
-    @Volatile var current: JSONObject = JSONObject()
+    /** etkin etkinlik (HUD afişi bunu izler) */
+    var current by androidx.compose.runtime.mutableStateOf(JSONObject())
         private set
+    private var idle = 0
     private var base: JSONObject? = null
     private var pending = 0
 
@@ -62,7 +66,9 @@ object Events {
         val ev = GameSession.ui("profile").optJSONObject("ev") ?: return
         val b = base
         base = ev
-        if (b == null || !current.optBoolean("active")) return
+        // etkinlik yokken 2 dakikada bir yeni başlayan var mı bak
+        if (!current.optBoolean("active")) { if (++idle % 6 == 0) refresh(); return }
+        if (b == null) return
         if (current.optLong("ends") < System.currentTimeMillis()) { refresh(); return }
         pending += points(current.optString("kind"), ev, b)
         if (pending <= 0) return
