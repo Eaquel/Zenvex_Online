@@ -188,6 +188,19 @@ pub const ITEMS: &[ItemDef] = &[
     item!("ev_breath_ring", "Son Nefes Kralı Yüzüğü", Ring, Seasonal, 1, 0, "Son Nefes etkinliğinde 1. sırada bitirerek elde edilir. +%25 hasar, +%15 kritik şansı. Sınırlı sürelidir (30 gün), takas edilemez.", 0.25, 0.15),
     item!("ev_breath_neck", "Son Nefes Şampiyonu Kolyesi", Necklace, Seasonal, 1, 0, "Son Nefes etkinliğinde 2. sırada bitirerek elde edilir. +250 can, +%40 can yenilenmesi. Sınırlı sürelidir (30 gün), takas edilemez.", 250.0, 0.40),
     item!("ev_breath_helm", "Son Nefes Muhafız Kaskı", Helmet, Seasonal, 1, 0, "Son Nefes etkinliğinde 3. sırada bitirerek elde edilir. +40 zırh, +%15 can. Sınırlı sürelidir (30 gün), takas edilemez.", 40.0, 0.15),
+    // V9 bölgeye özel eşyalar: yalnız kendi bölgesindeki zombilerden düşer (combat.rs region_drop), tariflerde kullanılır
+    item!("frozen_fish", "Donmuş Balık", Consumable, Rare, 10, 40, "Donmuş Liman'dan. 14 sn boyunca saniyede +3 can.", 0.0, 0.0),
+    item!("ice_shard", "Buz Kristali", Material, Rare, 30, 60, "Donmuş Liman'dan. Koruyucu Muska yapımında kullanılır."),
+    item!("scorched_resin", "Yanık Reçine", Material, Rare, 30, 45, "Yanık Orman'dan. Hız İksiri yapımında kullanılır."),
+    item!("charcoal", "Kömür", Material, Common, 30, 30, "Yanık Orman'dan. Güç İksiri yapımında kullanılır."),
+    item!("scorpion_venom", "Akrep Zehri", Material, Rare, 20, 70, "Çöl Otoyolu'ndan. İksir yapımında kullanılır."),
+    item!("dried_hide", "Kurutulmuş Deri", Material, Common, 30, 35, "Çöl Otoyolu'ndan. İlk Yardım Kiti yapımında kullanılır."),
+    item!("swamp_moss", "Bataklık Yosunu", Material, Common, 30, 30, "Kara Bataklık'tan. Şifa ve muska yapımında kullanılır."),
+    item!("bog_iron", "Bataklık Demiri", Material, Rare, 30, 65, "Kara Bataklık'tan. Yüzük ve kask yapımında kullanılır."),
+    item!("circuit_board", "Askerî Devre Kartı", Material, Epic, 20, 120, "Askerî Bölge'den. Askerî Kask yapımında kullanılır."),
+    item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Askerî Bölge'den. Güç İksiri yapımında kullanılır."),
+    item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Avcı Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
+    item!("rusty_key", "Paslı Anahtar", Material, Rare, 10, 90, "Eski şehirden. Askerî Sandık yapımında kullanılır."),
 ];
 
 /// Oyundan kaldırılan eşyalar (ateşli silahlar, mermiler): hile panelinde de listelenmez.
@@ -558,6 +571,14 @@ pub struct Recipe {
 }
 
 pub const RECIPES: &[Recipe] = &[
+    // V9 bölge eşyalı tarifler
+    Recipe { out: "neck_amulet", count: 1, inputs: &[("ice_shard", 3), ("swamp_moss", 2)], bench: true },
+    Recipe { out: "ring_hunter", count: 1, inputs: &[("gold_watch", 1), ("bog_iron", 2)], bench: true },
+    Recipe { out: "potion_power", count: 2, inputs: &[("charcoal", 2), ("powder_pouch", 1)], bench: true },
+    Recipe { out: "potion_speed", count: 2, inputs: &[("scorpion_venom", 1), ("scorched_resin", 2)], bench: true },
+    Recipe { out: "helm_military", count: 1, inputs: &[("circuit_board", 2), ("bog_iron", 3), ("scrap", 10)], bench: true },
+    Recipe { out: "medkit", count: 2, inputs: &[("dried_hide", 2), ("swamp_moss", 1), ("cloth", 2)], bench: false },
+    Recipe { out: "chest_military", count: 1, inputs: &[("rusty_key", 1), ("scrap", 15)], bench: true },
     Recipe {
         out: "potion_heal",
         count: 1,

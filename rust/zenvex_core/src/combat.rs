@@ -606,6 +606,25 @@ impl Game {
         self.kill_rewards(z);
     }
 
+    /// Bölgeye özel eşya: %10 (seçkinlerde %30) şansla, zombinin öldüğü bölgenin iki eşyasından biri.
+    fn region_drop(&mut self, z: &Zombie) {
+        let pair: [&str; 2] = match self.world.zone(z.x, z.y) {
+            Zone::Harbor => ["frozen_fish", "ice_shard"],
+            Zone::BurntForest => ["scorched_resin", "charcoal"],
+            Zone::Desert => ["scorpion_venom", "dried_hide"],
+            Zone::BlackSwamp => ["swamp_moss", "bog_iron"],
+            Zone::Military => ["circuit_board", "powder_pouch"],
+            Zone::Downtown | Zone::Suburb | Zone::Industrial => ["gold_watch", "rusty_key"],
+            _ => return,
+        };
+        let pc = if matches!(z.kind, ZKind::Tank | ZKind::Mystery | ZKind::Titan) { 0.3 } else { 0.1 };
+        if self.rng.chance(pc) {
+            // değerli olan (ikinci) daha nadir
+            let id = if self.rng.chance(0.65) { pair[0] } else { pair[1] };
+            self.spawn_drop_id(id, 1, z.x, z.y);
+        }
+    }
+
     /// Öldürme ödülleri (yerel ya da ağdan gelen öldürme için).
     pub fn kill_rewards(&mut self, z: Zombie) {
         let def = &ZOMBIES[z.kind as usize];
@@ -621,6 +640,7 @@ impl Game {
             let id = pots[self.rng.below(pots.len() as u32) as usize];
             self.spawn_drop_id(id, 1, z.x, z.y);
         }
+        self.region_drop(&z);
         self.progress.kills += 1;
         self.progress.kills_by[z.kind as usize] += 1;
         if self.dog_hit {

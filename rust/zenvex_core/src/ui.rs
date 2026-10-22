@@ -846,6 +846,7 @@ impl Game {
                 });
             }
             "food" => p.food_t = 10.0,
+            "frozen_fish" => p.food_t = 14.0,
             "energy" => {
                 p.stamina = self.progress.max_stamina();
                 p.energy_t = 10.0;
