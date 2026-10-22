@@ -79,7 +79,7 @@ class Atlas private constructor(ctx: Context) {
         }
     }
 
-    operator fun get(key: String): Sprite? = sprites[key]
+    operator fun get(key: String): Sprite? = sprites[key] ?: ITEM_STANDIN[key]?.let { sprites[it] }
 
     fun has(key: String) = sprites.containsKey(key)
 
@@ -129,7 +129,7 @@ class Atlas private constructor(ctx: Context) {
 
     /** Tek bir görseli ayrı Bitmap olarak keser (Compose arayüzü için). */
     fun extract(key: String): Bitmap? {
-        val sp = sprites[key] ?: return null
+        val sp = get(key) ?: return null
         val page = synchronized(softPages) {
             softPages[sp.page] ?: runCatching { am.open("v2/" + pageFiles[sp.page]).use { BitmapFactory.decodeStream(it, null, softOpts) } }
                 .getOrNull()?.also { softPages[sp.page] = it } ?: return null
@@ -150,3 +150,12 @@ class Atlas private constructor(ctx: Context) {
         fun get(ctx: Context): Atlas = inst ?: synchronized(this) { inst ?: Atlas(ctx.applicationContext).also { inst = it } }
     }
 }
+
+/** Görseli henüz çizilmemiş V11 eşyaları: kendi simgesi atlasa girene dek yakın bir simge (istemler: docs/15_PROMPTLAR_V11.md) */
+private val ITEM_STANDIN = mapOf(
+    "i/t_axe_stone" to "i/stone", "i/t_axe_iron" to "i/w_knife", "i/t_pick_stone" to "i/stone", "i/t_pick_iron" to "i/scrap",
+    "i/v_wheel" to "i/gear", "i/v_engine" to "i/electronics", "i/v_frame_moto" to "i/scrap", "i/v_frame_car" to "i/scrap",
+    "i/veh_moto" to "i/rusty_key", "i/veh_car" to "i/rusty_key",
+    "i/ev_blood_weapon" to "i/w_katana", "i/ev_titan_weapon" to "i/w_katana", "i/ev_base_weapon" to "i/w_katana",
+    "i/ev_scrap_weapon" to "i/w_knife", "i/ev_pack_weapon" to "i/w_knife", "i/ev_breath_weapon" to "i/w_katana",
+)

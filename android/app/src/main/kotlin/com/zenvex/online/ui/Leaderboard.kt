@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +26,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenvex.online.game.Account
+import com.zenvex.online.game.Pass
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.PI
@@ -285,9 +288,21 @@ fun BoardDialog(close: () -> Unit, preview: JSONArray? = null) {
 private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit) {
     var rows by remember(cat.kind) { mutableStateOf(preview) }
     var err by remember(cat.kind) { mutableStateOf("") }
-    LaunchedEffect(cat.kind) { if (preview == null) Account.board(cat.kind) { r -> r.onSuccess { rows = it }.onFailure { err = it.message ?: "Bağlantı Yok" } } }
+    // sunucu tabloyu 15 dakikada bir hesaplar: ekran açıkken yenileme anı gelince kendiliğinden yeniden yüklenir
+    var next by remember(cat.kind) { mutableLongStateOf(0L) }
+    var now by remember { mutableLongStateOf(Pass.now()) }
+    LaunchedEffect(cat.kind) {
+        if (preview != null) return@LaunchedEffect
+        while (true) {
+            Account.board(cat.kind) { r -> r.onSuccess { rows = it; err = "" }.onFailure { if (rows == null) err = it.message ?: "Bağlantı Yok" } }
+            Account.boardNext(cat.kind) { next = it }
+            do { kotlinx.coroutines.delay(1000); now = Pass.now() } while (next == 0L || now < next + 2000)
+        }
+    }
     Row(verticalAlignment = Alignment.CenterVertically) {
         PT(cat.name, 18.sp, Px.Orange)
+        Spacer(Modifier.width(8.dp))
+        if (next > 0) PT("Yenilenme ${fmtLeft(next - now)}", 11.sp, Px.Sub)
         Spacer(Modifier.weight(1f))
         PT("İlk 10 Unvanı:", 12.sp, Px.Sub)
         Spacer(Modifier.width(6.dp))
@@ -370,6 +385,10 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
                     PT(if (o.optBoolean("online")) "Çevrimiçi" else "Çevrimdışı", 12.sp, Px.Sub)
                 }
                 PT("ID: ${fmtId(o.optLong("id"))}", 12.sp, Px.Sub)
+                // tuş sabit yerde (avatarın altında): unvan sayısı arttıkça aşağı kaymaz
+                Spacer(Modifier.height(8.dp))
+                if (mine) PxButton("Profili Düzenle", Modifier.fillMaxWidth(), icon = "profile", height = 40.dp, size = 14.sp) { edit() }
+                else if (!banned) PxButton("Arkadaş Ekle", Modifier.fillMaxWidth(), icon = "people", color = Px.Blue, height = 40.dp, size = 14.sp) { addFriend(o.optString("name")) }
             }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -399,17 +418,14 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
                     Spacer(Modifier.height(8.dp))
                     PT("Kazanılan Unvanlar", 13.sp, Px.Sub)
                     Spacer(Modifier.height(3.dp))
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // çok unvan varsa alan büyümez, kendi içinde kayar
+                    FlowRow(Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         for (i in 0 until titles.length()) TitleChip(titles.getJSONObject(i), 10f)
                     }
                 }
                 TagRow(o.optJSONArray("tags"), Modifier.padding(top = 6.dp))
             }
-        }
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            if (mine) PxButton("Profili Düzenle", icon = "profile", height = 42.dp, size = 15.sp) { edit() }
-            else if (!banned) PxButton("Arkadaş Ekle", icon = "people", color = Px.Blue, height = 42.dp, size = 15.sp) { addFriend(o.optString("name")) }
         }
     }
 }

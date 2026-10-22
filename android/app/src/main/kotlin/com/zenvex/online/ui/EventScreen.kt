@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -42,7 +43,7 @@ import com.zenvex.online.game.Pass
 import org.json.JSONObject
 import kotlin.math.sin
 
-/** Etkinlik türü: tema rengi, simge, kısa hikâye, puan kuralı, ödül eşyası öneki (data.rs ev_<önek>_ring/neck/helm) */
+/** Etkinlik türü: tema rengi, simge, kısa hikâye, puan kuralı, ödül eşyası öneki (data.rs ev_<önek>_ring/neck/weapon) */
 data class EventInfo(val color: Color, val icon: String, val story: String, val rule: String, val prefix: String, val art: String = "")
 
 val EVENT_INFO = mapOf(
@@ -55,7 +56,15 @@ val EVENT_INFO = mapOf(
     "last_breath" to EventInfo(Color(0xFF7FE0FF), "heart", "Güvenli bölgenin dışında ne kadar dayanabilirsin?", "Güvenli Bölge Dışında Her Saniye 1 Puan", "breath", "ev_breath"),
 )
 
-/** HUD üst ortadaki etkinlik afişi (etkinlik sürüyorsa): dokununca etkinlik penceresi */
+/** 3. sıra ödülü etkinlik silahları (data.rs ev_<önek>_weapon) */
+val EVENT_WEAPON = mapOf("blood" to "Kan Ayı Orağı", "titan" to "Titan Kırıcı Balyoz", "base" to "Fırtına Baltası",
+    "scrap" to "Hurdacı Testere Kılıcı", "pack" to "Sürü Lideri Pençesi", "breath" to "Son Nefes Tırpanı")
+
+/**
+ * HUD üst ortadaki etkinlik afişi (etkinlik sürüyorsa): dokununca etkinlik penceresi.
+ * Canlı: afiş görseli yavaşça kayar, üstünden ışık geçer, alttan etkinlik renginde kıvılcımlar yükselir, simge zıplar;
+ * son saatte süre kırmızı yanıp söner. Açılışta yukarıdan kayarak gelir.
+ */
 @Composable
 fun EventBanner(modifier: Modifier, onClick: () -> Unit) {
     val e = Events.current
@@ -64,17 +73,48 @@ fun EventBanner(modifier: Modifier, onClick: () -> Unit) {
     val t = rememberTime()
     var now by remember { mutableLongStateOf(Pass.now()) }
     LaunchedEffect(Unit) { while (true) { now = Pass.now(); kotlinx.coroutines.delay(1000) } }
+    val enter by androidx.compose.animation.core.animateFloatAsState(1f, androidx.compose.animation.core.tween(700), label = "evIn")
     val k = 0.5f + 0.5f * sin(t * 3f)
-    // V10 afiş görseli zeminde (koyulaştırılmış), üstünde etkinlik rengi geçişi
-    Row(modifier.clip(RoundedCornerShape(3.dp)).artCover(info.art, 0.35f, 0.4f)
-        .background(Brush.horizontalGradient(listOf(info.color.copy(alpha = 0.35f + 0.2f * k), Color(0x8015140F))))
-        .border(2.dp, info.color.copy(alpha = 0.6f + 0.4f * k), RoundedCornerShape(3.dp)).clickable { onClick() }.padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Icon(info.icon, 16.dp, Color.White)
-        Spacer(Modifier.width(6.dp))
-        PT(e.optString("title"), 13.sp, Color.White)
-        Spacer(Modifier.width(8.dp))
-        PT(fmtLeft(e.optLong("ends") - now), 12.sp, Px.Clan)
+    val left = e.optLong("ends") - now
+    val urgent = left in 1..3_600_000
+    Box(modifier.graphicsLayer { translationY = (1f - enter) * -60f * density; alpha = enter }
+        .clip(RoundedCornerShape(3.dp)).clickable { onClick() }) {
+        // zemin: afiş görseli (yavaş kayan), etkinlik rengi geçişi, geçen ışık, kıvılcımlar
+        Box(Modifier.matchParentSize().artCover(info.art, 0.4f + 0.2f * sin(t * 0.25f), 0.42f))
+        Canvas(Modifier.matchParentSize()) {
+            val w = size.width; val h = size.height
+            drawRect(Brush.horizontalGradient(listOf(info.color.copy(alpha = 0.45f + 0.2f * k), Color(0x9015140F), info.color.copy(alpha = 0.3f))))
+            val u = ((t * 0.3f) % 1.6f) * (w + 120f) - 60f
+            drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.28f), Color.Transparent), Offset(u - 50f, 0f), Offset(u + 10f, h)))
+            for (i in 0 until 14) {
+                val x = ((i * 37 + 11) % 100) / 100f * w
+                val p = (t * (0.5f + (i % 4) * 0.15f) + i * 0.27f) % 1f
+                val sz = 2.5f + (i % 3)
+                drawRect(info.color.copy(alpha = (1f - p) * 0.9f), Offset(x + sin(t * 2f + i) * 4f, h * (1f - p)), Size(sz, sz))
+            }
+            val bw = 2.dp.toPx()
+            drawRect(info.color.copy(alpha = 0.55f + 0.45f * k), style = androidx.compose.ui.graphics.drawscope.Stroke(bw))
+            // köşe perçinleri
+            for ((cx, cy) in listOf(4f to 4f, w - 4f to 4f, 4f to h - 4f, w - 4f to h - 4f)) drawRect(Color(0xFFE8D8A0), Offset(cx - 2f, cy - 2f), Size(4f, 4f))
+        }
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.graphicsLayer { translationY = -kotlin.math.abs(sin(t * 4f)) * 3f * density; rotationZ = sin(t * 2f) * 6f }) {
+                Icon(info.icon, 18.dp, Color.White)
+            }
+            Spacer(Modifier.width(6.dp))
+            Column {
+                PT(e.optString("title"), 14.sp, Color.White, outline = true)
+                PT("Etkinlik · Dokun", 9.sp, Color(0xCCFFFFFF))
+            }
+            Spacer(Modifier.width(10.dp))
+            val blink = if (urgent) (sin(t * 8f) > 0f) else true
+            Row(Modifier.clip(RoundedCornerShape(2.dp)).background(Color(0xA0000000)).padding(horizontal = 6.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon("clock", 12.dp, if (urgent) Px.Hard else Px.Clan)
+                Spacer(Modifier.width(4.dp))
+                PT(fmtLeft(left), 12.sp, if (urgent && blink) Color(0xFFFF5040) else Px.Clan)
+            }
+        }
     }
 }
 
@@ -149,7 +189,8 @@ internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit
                 val title = b.optString("title")
                 RewardLine(1, "ev_${info.prefix}_ring", "$title Kralı Yüzüğü", "+1.000 Elmas · 30 Gün")
                 RewardLine(2, "ev_${info.prefix}_neck", "$title Şampiyonu Kolyesi", "+700 Elmas · 30 Gün")
-                RewardLine(3, "ev_${info.prefix}_helm", "$title Muhafız Kaskı", "+500 Elmas · 30 Gün")
+                RewardLine(3, "ev_${info.prefix}_weapon", EVENT_WEAPON[info.prefix] ?: "$title Silahı", "+500 Elmas · 30 Gün")
+                PT("İlk 3 Ayrıca 30 Gün Takabileceği Etkinlik Unvanı Alır ($title Kralı / Şampiyonu / Savaşçısı).", 11.sp, Px.Sub, maxLines = 2)
                 RewardLine(10, "titan_shard", "İlk 10", "300 Elmas · Titan Parçası ×5 · Güç İksiri ×5 · İlk Yardım ×10")
                 RewardLine(100, "medkit", "İlk 100", "100 Elmas · İlk Yardım ×5")
                 PT("Ödüller etkinlik bitince postana gelir. Hile ile kazanılan puanlar silinir.", 10.sp, Px.Sub, maxLines = 2)

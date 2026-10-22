@@ -216,6 +216,13 @@ pub const ITEMS: &[ItemDef] = &[
     // V11 araç anahtarları: kullanınca aracın yanına gelir (eskisi kaybolur); dünyada artık sahipsiz araç yok
     item!("veh_moto", "Motosiklet Anahtarı", Tool, Epic, 1, 0, "Kullan: motosikletin yanına gelir. Tamirci Viktor üretir."),
     item!("veh_car", "Araba Anahtarı", Tool, Legendary, 1, 0, "Kullan: araban yanına gelir. Tamirci Viktor üretir."),
+    // V11 etkinlik silahları (3. sıra ödülü; kaskların yerine)
+    item!("ev_blood_weapon", "Kan Ayı Orağı", Weapon, Seasonal, 1, 0, "Kan Ayı etkinliğinde 3. sırada bitirerek elde edilir. Geniş kızıl kesik, birden çok düşmana vurur. Sınırlı sürelidir (30 gün), takas edilemez."),
+    item!("ev_titan_weapon", "Titan Kırıcı Balyoz", Weapon, Seasonal, 1, 0, "Titan Avı etkinliğinde 3. sırada bitirerek elde edilir. Yavaş ama sersemleten ağır darbe. Sınırlı sürelidir (30 gün), takas edilemez."),
+    item!("ev_base_weapon", "Fırtına Baltası", Weapon, Seasonal, 1, 0, "Üs Fırtınası etkinliğinde 3. sırada bitirerek elde edilir. Dengeli, sert vuruşlu savaş baltası. Sınırlı sürelidir (30 gün), takas edilemez."),
+    item!("ev_scrap_weapon", "Hurdacı Testere Kılıcı", Weapon, Seasonal, 1, 0, "Hurdacılar etkinliğinde 3. sırada bitirerek elde edilir. Hızlı dönen dişli bıçak. Sınırlı sürelidir (30 gün), takas edilemez."),
+    item!("ev_pack_weapon", "Sürü Lideri Pençesi", Weapon, Seasonal, 1, 0, "Sürü Lideri etkinliğinde 3. sırada bitirerek elde edilir. Çok hızlı pençe darbeleri. Sınırlı sürelidir (30 gün), takas edilemez."),
+    item!("ev_breath_weapon", "Son Nefes Tırpanı", Weapon, Seasonal, 1, 0, "Son Nefes etkinliğinde 3. sırada bitirerek elde edilir. Uzun menzilli, önündeki her şeyi biçer. Sınırlı sürelidir (30 gün), takas edilemez."),
 ];
 
 /// Malzemenin nereden çıktığı (üretim ekranında malzemenin altında yazar).
@@ -276,7 +283,9 @@ pub const VEHICLE_BUILDS: &[(&str, &str, &[(&str, u32)], u32)] = &[
 /// Oyundan kaldırılan eşyalar (ateşli silahlar, mermiler): hile panelinde de listelenmez.
 /// V8: kask, ceket, bot, çanta ve pelerin çanta ekipman slotlarıyla geri döndü.
 /// V11: vida motor üretiminde kullanılır (sandıklardan); pelerin slotu kalktığı için pelerin listede yok.
-pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "cloak"];
+pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "cloak",
+    // etkinlik kaskları yerine etkinlik silahları geldi (elde olanlar süresi dolana dek çalışır)
+    "ev_blood_helm", "ev_titan_helm", "ev_base_helm", "ev_scrap_helm", "ev_pack_helm", "ev_breath_helm"];
 
 /// Eşya şu an oyunda elde edilebilir mi
 pub fn item_in_game(id: &str) -> bool {
@@ -471,6 +480,97 @@ pub const WEAPONS: &[WeaponDef] = &[
         reload: 0.0,
         spread: 0.0,
         pierce: 2,
+        splash_m: 0.0,
+        stun: 0.05,
+        sprite: "katana",
+    },
+    // etkinlik silahları: görsel gelene dek katana / bıçak çizimiyle (istemler: docs/15_PROMPTLAR_V11.md)
+    WeaponDef {
+        item: "ev_blood_weapon",
+        class: WeaponClass::Melee,
+        damage: 38.0,
+        rate: 1.7,
+        range_m: 2.5,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 2,
+        splash_m: 0.0,
+        stun: 0.05,
+        sprite: "katana",
+    },
+    WeaponDef {
+        item: "ev_titan_weapon",
+        class: WeaponClass::Melee,
+        damage: 54.0,
+        rate: 1.1,
+        range_m: 2.2,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 2,
+        splash_m: 0.0,
+        stun: 0.3,
+        sprite: "katana",
+    },
+    WeaponDef {
+        item: "ev_base_weapon",
+        class: WeaponClass::Melee,
+        damage: 44.0,
+        rate: 1.4,
+        range_m: 2.2,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 2,
+        splash_m: 0.0,
+        stun: 0.1,
+        sprite: "katana",
+    },
+    WeaponDef {
+        item: "ev_scrap_weapon",
+        class: WeaponClass::Melee,
+        damage: 24.0,
+        rate: 3.0,
+        range_m: 1.8,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 1,
+        splash_m: 0.0,
+        stun: 0.0,
+        sprite: "knife",
+    },
+    WeaponDef {
+        item: "ev_pack_weapon",
+        class: WeaponClass::Melee,
+        damage: 21.0,
+        rate: 3.6,
+        range_m: 1.6,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 1,
+        splash_m: 0.0,
+        stun: 0.0,
+        sprite: "knife",
+    },
+    WeaponDef {
+        item: "ev_breath_weapon",
+        class: WeaponClass::Melee,
+        damage: 40.0,
+        rate: 1.4,
+        range_m: 2.9,
+        ammo: "",
+        mag: 0,
+        reload: 0.0,
+        spread: 0.0,
+        pierce: 3,
         splash_m: 0.0,
         stun: 0.05,
         sprite: "katana",

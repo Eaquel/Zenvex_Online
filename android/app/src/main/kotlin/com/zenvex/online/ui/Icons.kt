@@ -174,6 +174,11 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawRoundRect(c, p(0.32f, 0.56f), Size(w * 0.36f, w * 0.3f), CornerRadius(w * 0.06f))
             drawCircle(Color.Black.copy(alpha = 0.7f), w * 0.09f, p(0.38f, 0.44f)); drawCircle(Color.Black.copy(alpha = 0.7f), w * 0.09f, p(0.62f, 0.44f))
         }
+        "clock" -> {
+            drawCircle(c, w * 0.36f, p(0.5f, 0.5f), style = thin)
+            drawLine(c, p(0.5f, 0.5f), p(0.5f, 0.28f), w * 0.08f, StrokeCap.Round)
+            drawLine(c, p(0.5f, 0.5f), p(0.66f, 0.58f), w * 0.08f, StrokeCap.Round)
+        }
         "calendar" -> {
             drawRoundRect(c, p(0.14f, 0.2f), Size(w * 0.72f, w * 0.66f), CornerRadius(w * 0.1f), style = thin)
             drawRect(c, p(0.14f, 0.2f), Size(w * 0.72f, w * 0.16f))

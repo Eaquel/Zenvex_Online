@@ -355,7 +355,7 @@ internal fun ProfileEditorView(
                 PT("Unvan", 15.sp, Px.Clan)
                 Spacer(Modifier.height(4.dp))
                 val titles = p.optJSONArray("titles") ?: JSONArray()
-                if (titles.length() == 0) PT("Bir Kategoride İlk 10'a Girince Unvan Kazanırsın (Sıralama).", 12.sp, Px.Sub, maxLines = 2)
+                if (titles.length() == 0) PT("Sıralamada İlk 10'a Ya Da Bir Etkinlikte İlk 3'e Girince Unvan Kazanırsın. Etkinlik Unvanları 30 Gün Geçerlidir.", 12.sp, Px.Sub, maxLines = 2)
                 else FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (title == null) Color(0x553A6AB0) else Color(0x33000000))
                         .clickable { setTitle("") }.padding(horizontal = 8.dp, vertical = 5.dp)) { PT("Unvansız", 12.sp, Px.Sub) }
@@ -364,7 +364,13 @@ internal fun ProfileEditorView(
                         val on = title?.optString("kind") == t.optString("kind")
                         Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Color(0x553A6AB0) else Color(0x33000000))
                             .border(if (on) 2.dp else 0.dp, if (on) Color.White else Color.Transparent, RoundedCornerShape(3.dp))
-                            .clickable { setTitle(t.optString("kind")) }.padding(4.dp)) { TitleChip(t, 11f) }
+                            .clickable { setTitle(t.optString("kind")) }.padding(4.dp)) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                TitleChip(t, 11f)
+                                // etkinlik unvanı: kalan gün
+                                if (t.has("until")) PT("${((t.optLong("until") - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0) + 1} Gün", 9.sp, Px.Sub)
+                            }
+                        }
                     }
                 }
                 Spacer(Modifier.height(10.dp))
