@@ -168,3 +168,28 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
   9 klan seviyesi amblemi; 6 etkinlik afişi; elmas sandığı, kasa odası, nadirlik ışınları, hediye kutuları; Sezon Bileti arka planı,
   kademe kartları, ilerleme şeridi, düğüm, mühür, kilit ve görev simgeleri.
 - **Uygulama simgesi:** katanalı kapüşonlu savaşçı ve köpeği (`tools/pixel/v10_icon.py`).
+
+## V11 — Oynanış ve sunucu güncellemesi (Ekim 2026)
+- **Ağ:** zombiler ve diğer oyuncular 5 Hz yayın arasında hızla ileri tahmin edilir (en çok 0,35 sn), kare hızından bağımsız
+  yumuşak takip; ping göstergesi (Realtime kalp atışı). Bölgeler ve pencereler: dokunma pencerenin altındaki oyun tuşlarına geçmez,
+  pencere açıkken oyun tuşları başka pencere açmaz, diyaloglar yalnız X/geri ile kapanır.
+- **Üretim:** sekmeler (Şifa, İksir, Silah Ve Alet, Ekipman, Takı, Malzeme, Araç, Üs), aynı eşyanın tarifleri tek satır,
+  malzemelerin nereden çıktığı (`data::item_source`), tuşlar her zaman görünür.
+- **Ağaç/kaya:** 500 can; vuruş gücü çantadaki en iyi baltadan/kazmadan (yumruk 25, taş 50, demir 100).
+- **Araçlar:** dünyada sahipsiz araç yok. Parçalar (tekerlek, motor, şasi) üretilir, Tamirci Viktor'a verilir; motosiklet 10, araba 30 dk
+  sonra anahtar postayla gelir (`vehicle_orders`, nabızda tembel teslim). Anahtar kullanılınca araç yanına gelir; parçalanan aracı
+  Viktor uzaktan çekip onarır. İsteğe bağlı 8 yön görselleri: `x8/moto/0-7`, `x8/car/0-7`.
+- **Etkinlik:** 1. yüzük, 2. kolye, 3. etkinlik silahı (6 yeni silah; kasklar emekli). İlk 3 ayrıca 30 gün takılabilen etkinlik unvanı
+  alır (`event_titles`). HUD afişi canlandırıldı.
+- **Sıralama:** tablolar 15 dakikada bir hesaplanır (`board_cache` + `board_meta`, nabızdan tembel yenileme; DELETE yok, kuşak
+  zaman damgasıyla). Unvanlar önbellekten okunur. Ekran açıkken yenileme anında kendiliğinden yüklenir.
+- **Profil:** yalnız NPC portreleri (Aldric eklendi; kaldırılanlar Tüccar görünür, varsayılan 1). Oyun içinden isim değişir; ad
+  sonraki konum paketiyle diğer oyunculara gider.
+- **Dünya:** harita 900 karo. Ana dünya (720) karantina duvarıyla çevrili; şehir surunun batı ucu ve şehrin doğusu kapatıldı;
+  hızlı hareket alt adımlarla çözülür (`World::resolve_move`). Doğu ve güney şerit **Cephe Hattı**: 50 üsün hepsi orada (kimlik,
+  seviye, sahiplik aynı), güneydoğuda Cephe Karargâhı (pazar, Aldric). Girişi yalnız Aldric, Sv 10'dan. Sis 150×3 kelime; V8-V10
+  kayıtları hücre hücre taşınır.
+- **Öğretici:** Sv 1-5 rehbere taş balta, ağaç kesme ve Aldric eklendi (eski kayıtların sırası `migrate_guide_index`).
+  Sv 10: şehirde Komutan Ece → Titan Arenası → yerel Eğitim Üssü (6 zayıf asker, klansız 10 sn ele geçirme, bomba, şehirde uyanış).
+  Eğitim üssü `base_defs()`'in son elemanı (`TRAIN_BASE`), sunucuya gitmez.
+- **Görsel istemleri:** `docs/15_PROMPTLAR_V11.md`.
