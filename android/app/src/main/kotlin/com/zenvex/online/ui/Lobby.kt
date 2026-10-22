@@ -61,7 +61,7 @@ val HERO_COLORS = listOf(Color(0xFFFF7A4A), Color(0xFF4AD8FF), Color(0xFFB277FF)
 fun fmt(n: Int): String = "%,d".format(n).replace(',', '.')
 
 /** 6 039 464 biçimi */
-/** 7 haneli gösterim: 1000001 → "1 000 001", yönetici 0 → "0 000 000"; hesap yoksa "—" */
+/** 7 haneli gösterim: 1 → "0 000 001", yönetici 0 → "0 000 000"; hesap yoksa "—" */
 fun fmtId(id: Long): String = if (id < 0) "—" else id.toString().padStart(7, '0').reversed().chunked(3).joinToString(" ").reversed()
 
 /**
@@ -289,7 +289,7 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                 }
             } else {
                 PT("Zenvex ID", 14.sp, Px.Sub)
-                Field(idText, { idText = it.filter { c -> c.isDigit() }.take(12) }, "örn: 1000001", Modifier.fillMaxWidth())
+                Field(idText, { idText = it.filter { c -> c.isDigit() }.take(12) }, "örn: 0000001", Modifier.fillMaxWidth())
                 Spacer(Modifier.height(6.dp))
                 PT("Hesap anahtarı", 14.sp, Px.Sub)
                 Field(keyText, { keyText = it.take(16) }, "12 harfli anahtar", Modifier.fillMaxWidth())
