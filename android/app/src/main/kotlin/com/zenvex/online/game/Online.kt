@@ -54,7 +54,7 @@ object Online {
     private var name = "Oyuncu"
     private var tag = ""
 
-    private class Remote(var name: String, var clan: String = "", var title: String = "", var titleRank: Int = 0) {
+    private class Remote(var name: String, var clan: String = "", var title: String = "", var titleRank: Int = 0, var skin: String = "") {
         val cur = FloatArray(Native.REMOTE_STRIDE)
         val target = FloatArray(Native.REMOTE_STRIDE)
         var ts = 0L
@@ -80,6 +80,9 @@ object Online {
         private set
     /** Görünen oyuncuların seçili unvanı ("Canavar Avcısı #1") ve sırası (isim etiketinin üstünde, ilk 3 efektli) */
     @Volatile var lastTitles: Array<Pair<String, Int>> = emptyArray()
+        private set
+    /** görünen oyuncuların karakter kaplaması (Elmas Sandığı) */
+    @Volatile var lastSkins: Array<String> = emptyArray()
         private set
     @Volatile var lastIds: Array<String> = emptyArray()
         private set
@@ -140,7 +143,7 @@ object Online {
     private fun trackMe() {
         val t = Account.profile.value.optJSONObject("title")
         channel?.track(JSONObject().put("n", name).put("g", Account.clan.value?.name ?: tag)
-            .put("tt", t?.optString("name") ?: "").put("tr", t?.optInt("rank") ?: 0))
+            .put("tt", t?.optString("name") ?: "").put("tr", t?.optInt("rank") ?: 0).put("sk", Skins.char))
     }
 
     // =========================================================== gelen
@@ -152,7 +155,7 @@ object Online {
                 val meta = joins.optJSONObject(k)?.optJSONArray("metas")?.optJSONObject(0) ?: continue
                 val r = remotes.getOrPut(k) { Remote("") }
                 r.name = meta.optString("n", "Oyuncu"); r.clan = if (meta.isNull("g")) "" else meta.optString("g"); r.present = true
-                r.title = meta.optString("tt"); r.titleRank = meta.optInt("tr")
+                r.title = meta.optString("tt"); r.titleRank = meta.optInt("tr"); r.skin = meta.optString("sk")
             }
             for (k in leaves.keys()) remotes.remove(k)
             if (full) remotes.values.removeAll { !it.present }
@@ -344,6 +347,7 @@ object Online {
             val nm = ArrayList<String>()
             val cl = ArrayList<String>()
             val tl = ArrayList<Pair<String, Int>>()
+            val sk = ArrayList<String>()
             val ids = ArrayList<String>()
             for ((k, r) in remotes) {
                 if (r.ts == 0L || now - r.ts > 10000) continue
@@ -357,12 +361,14 @@ object Online {
                 nm += r.name
                 cl += r.clan
                 tl += r.title to r.titleRank
+                sk += r.skin
                 ids += k
                 n++
             }
             lastNames = nm.toTypedArray()
             lastClans = cl.toTypedArray()
             lastTitles = tl.toTypedArray()
+            lastSkins = sk.toTypedArray()
             lastIds = ids.toTypedArray()
             return n
         }

@@ -857,11 +857,19 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sp == null) sp = atlas[key]
         if (sp == null) { key = spriteKey(prefix, "idle", kdir, 0); sp = atlas[key] }
         if (sp == null) { placeholder(c, sx, sy, 0xFF4A7AB0.toInt()); return }
+        // Elmas Sandığı kaplaması: kendi kahramanın ve diğer oyuncuların
+        val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
         val paint = when {
             flash == 1f -> flashPaint
             flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            skin.isNotEmpty() -> skinPaint(skin, prefix.startsWith("h/"))
             prefix.startsWith("h/") -> pixelPaint
             else -> bmpPaint
+        }
+        if (skin.isNotEmpty() && Settings.current.particles) {
+            val tc = Skins.trail(skin)
+            if (tc != 0 && Math.random() < 0.18) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 50f, y, 20f + Math.random().toFloat() * 90f,
+                (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
         }
         // ekipman kodları
         val e0 = drawBuf[o + 8].toInt(); val e1 = drawBuf[o + 9].toInt(); val e2 = drawBuf[o + 10].toInt()
@@ -1454,7 +1462,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val id = vehicleIds.getOrElse(kind) { "car" }
         val sp = atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
         if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
-        val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint } else bmpPaint
+        // kendi aracın: Elmas Sandığı araç kaplaması
+        val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
+        val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
+            else if (mine) skinPaint(Skins.vehicle, false) else bmpPaint
+        if (mine && speed > 40 && Settings.current.particles) {
+            val tc = Skins.trail(Skins.vehicle)
+            if (tc != 0 && Math.random() < 0.5) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 60f, y, 10f, (Math.random().toFloat() - 0.5f) * 40f, 0f,
+                20f, 0.6f, 0.6f, tc, 3f, 3)
+        }
         val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
         // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
         val rider = driver >= 0 && kind <= 1
@@ -1809,6 +1825,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
             }
             path.close(); c.drawPath(path, fill)
+        }
+    }
+
+    /** Kaplama boyası: kaplama başına önbellekli renk matrisi filtresi (piksel kahramanda bulanıksız) */
+    private val skinPaints = HashMap<String, Paint>()
+    private fun skinPaint(id: String, pixel: Boolean): Paint = skinPaints.getOrPut(id + pixel) {
+        Paint(if (pixel) 0 else Paint.FILTER_BITMAP_FLAG).apply {
+            Skins.matrix(id)?.let { colorFilter = android.graphics.ColorMatrixColorFilter(it) }
         }
     }
 

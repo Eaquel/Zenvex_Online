@@ -263,6 +263,9 @@ pub struct Progress {
     pub costume: [String; 4],
     /// silah kimliği → kaplama kimliği
     pub skins: Vec<(String, String)>,
+    /// Elmas Sandığı kaplamaları: giyili karakter ve araç kaplaması (sahiplik `cosmetics` içinde, sunucuyla eşitlenir)
+    pub skin_char: String,
+    pub skin_vehicle: String,
     pub drone_targets: [bool; 3],
     // istatistikler
     pub kills: u32,
@@ -402,6 +405,8 @@ impl Default for Progress {
             tag: String::new(),
             costume: Default::default(),
             skins: Vec::new(),
+            skin_char: String::new(),
+            skin_vehicle: String::new(),
             drone_targets: [true, true, true],
             kills: 0,
             kills_by: [0; 8],

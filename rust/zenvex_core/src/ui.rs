@@ -165,7 +165,7 @@ impl Game {
                     "char_level": g.char_level[c], "frame": g.frame, "tag": g.tag,
                     "xp_total": (1..g.level).map(|l| progress::xp_to_next(l) as u64).sum::<u64>() + g.xp as u64,
                     "tag_name": COSMETICS.iter().find(|x| x.id == g.tag).map_or("", |x| x.name),
-                    "costume": g.costume[c], "pass_tier": g.pass_tier(), "pass_normal": g.pass.normal, "pass_elite": g.pass.elite,
+                    "costume": g.costume[c], "skin_char": g.skin_char, "skin_vehicle": g.skin_vehicle, "pass_tier": g.pass_tier(), "pass_normal": g.pass.normal, "pass_elite": g.pass.elite,
                     "city": g.level >= progress::CITY_LEVEL, "zone": world::ZONES_ALL[self.player.zone as usize].name(),
                     "stats": { "kills": g.kills, "deaths": g.deaths, "trees": g.trees, "crates": g.crates, "crafted": g.crafted,
                                "boss": g.boss_kills, "gold_earned": g.gold_earned, "time": g.play_time as u64 },
@@ -330,6 +330,11 @@ impl Game {
                     .collect();
                 json!({ "items": list, "gems": g.gems })
             }
+            "skins" => {
+                let list: Vec<Value> = data::SKINS.iter().map(|s| json!({ "id": s.id, "name": s.name, "kind": s.kind, "rarity": s.rarity, "desc": s.desc,
+                    "owned": g.cosmetics.iter().any(|c| c == s.id), "equipped": g.skin_char == s.id || g.skin_vehicle == s.id })).collect();
+                json!({ "skins": list, "gems": g.gems, "price": data::CRATE_PRICE, "price10": data::CRATE_PRICE10 })
+            }
             k if k == "chests" || k.starts_with("chest:") => self.chests_json(k).unwrap_or(Value::Null),
             _ => json!({ "error": "bilinmeyen görünüm" }),
         };
@@ -489,6 +494,55 @@ impl Game {
             "select_char" => self.select_char(int("i")),
             "unlock_char" => self.unlock_char(int("i")),
             "pass_buy" => self.buy_pass(v["elite"].as_bool().unwrap_or(false)),
+            // Elmas Sandığı: sunucunun attığı zar sonucu uygulanır (elmas düşer, ödüller verilir)
+            "crate_apply" => {
+                let cost = v["cost"].as_u64().unwrap_or(0) as u32;
+                if self.progress.gems < cost {
+                    return reply(false, "Yetersiz elmas");
+                }
+                self.progress.gems -= cost;
+                let mut got = Vec::new();
+                for r in v["rewards"].as_array().cloned().unwrap_or_default() {
+                    let r = r.as_str().unwrap_or("");
+                    if data::skin(r).is_some() {
+                        if !self.progress.cosmetics.iter().any(|c| c == r) {
+                            self.progress.cosmetics.push(r.to_string());
+                        }
+                        got.push(data::skin(r).unwrap().name.to_string());
+                    } else if r.contains(':') {
+                        got.push(self.progress.grant(r));
+                    }
+                }
+                Ok(got.join(" · "))
+            }
+            // sunucudaki kaplama listesi tek doğru kaynak
+            "skins_sync" => {
+                let owned: Vec<String> = v["owned"].as_array().cloned().unwrap_or_default().iter().filter_map(|x| x.as_str().map(String::from)).collect();
+                let p = &mut self.progress;
+                p.cosmetics.retain(|c| data::skin(c).is_none() || owned.contains(c));
+                for o in &owned {
+                    if data::skin(o).is_some() && !p.cosmetics.contains(o) {
+                        p.cosmetics.push(o.clone());
+                    }
+                }
+                if !p.skin_char.is_empty() && !p.cosmetics.contains(&p.skin_char) {
+                    p.skin_char.clear();
+                }
+                if !p.skin_vehicle.is_empty() && !p.cosmetics.contains(&p.skin_vehicle) {
+                    p.skin_vehicle.clear();
+                }
+                Ok(String::new())
+            }
+            "skin_equip" => {
+                let id = v["id"].as_str().unwrap_or("");
+                let kind = v["kind"].as_str().unwrap_or("char");
+                let p = &mut self.progress;
+                if !id.is_empty() && (data::skin(id).map(|s| s.kind) != Some(kind) || !p.cosmetics.iter().any(|c| c == id)) {
+                    return reply(false, "Bu kaplamaya sahip değilsin");
+                }
+                if kind == "vehicle" { p.skin_vehicle = id.to_string() } else { p.skin_char = id.to_string() }
+                Ok(if id.is_empty() { "Kaplama Çıkarıldı".into() } else { format!("{} Giyildi", data::skin(id).unwrap().name) })
+            }
             "pass_sync" => {
                 let reset = self.progress.sync_season(v["season"].as_u64().unwrap_or(0) as u32);
                 // sunucu bileti kayıtlı gösteriyor ama yerelde yoksa (satın alma sonrası kayıt yetişmediyse) şimdi uygula
@@ -1462,6 +1516,10 @@ mod v4_tests {
         g.progress.quest_event(crate::data::QuestKind::Crate, 4);
         g.progress.quest_event(crate::data::QuestKind::Soldier, 9);
         std::fs::write(format!("{dir}/pass.json"), g.ui_json("pass")).unwrap();
+        // Elmas Sandığı: iki kaplama sahip, biri giyili
+        g.command(r#"{"cmd":"skins_sync","owned":["sk_gold","vs_neon","sk_toxic"]}"#);
+        g.command(r#"{"cmd":"skin_equip","id":"sk_gold","kind":"char"}"#);
+        std::fs::write(format!("{dir}/skins.json"), g.ui_json("skins")).unwrap();
         g.step(1.0 / 30.0, crate::game::Input::default());
         // harita: başlangıçtan kuzeye bir yol keşfedilmiş
         let (sx, sy) = (g.player.x, g.player.y);

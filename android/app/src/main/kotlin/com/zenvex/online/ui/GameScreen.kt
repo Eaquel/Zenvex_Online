@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
+    Quests, Pass, Crate, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
 }
 
 /**
@@ -178,6 +178,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Merchant -> ShopScreen(close)
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)
+            Overlay.Crate -> CrateScreen(close)
             Overlay.Skills -> TreeScreen(close)
             Overlay.Dog -> DogDialog(close)
             Overlay.Npc -> NpcDialogScreen(npcKind, close) { o ->
@@ -264,6 +265,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
         PassButton { open(Overlay.Pass) }
+        PxIcon("gem", size = 46.dp, tint = Color(0xFF7FE0FF), color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // görev takipçisi: simge satırının altında
@@ -340,7 +342,8 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
             val items = listOf(
                 Triple("Devam Et", "play", Overlay.None), Triple("Klan", "people", Overlay.Clan),
                 Triple("Profil", "profile", Overlay.Me), Triple("Sıralama", "trophy", Overlay.Top),
-                Triple("Battle Pass", "crown", Overlay.Pass), Triple("Ayarlar", "gear", Overlay.Settings),
+                Triple("Battle Pass", "crown", Overlay.Pass), Triple("Elmas Sandığı", "gem", Overlay.Crate),
+                Triple("Ayarlar", "gear", Overlay.Settings),
             )
             // iki sütun: küçük ekranda da taşmaz
             for (row in items.chunked(2)) {

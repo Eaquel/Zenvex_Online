@@ -986,6 +986,37 @@ pub const SEASON_QUESTS: &[QuestDef] = &[
     QuestDef { id: "s_level", title: "Seviye 30'a Ulaş", kind: QuestKind::Level, goal: 30, gold: 3000, xp: 0, pass_xp: 4000 },
 ];
 
+/// Elmas Sandığı kaplamaları (kind: "char" karakter, "vehicle" araç; rarity 2 destansı, 3 efsanevi).
+/// supabase zx_crate_open ile aynı liste.
+pub struct SkinDef {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub kind: &'static str,
+    pub rarity: u8,
+    pub desc: &'static str,
+}
+
+pub const SKINS: &[SkinDef] = &[
+    SkinDef { id: "sk_night", name: "Gece Avcısı", kind: "char", rarity: 3, desc: "Gece mavisi zırh, yıldız tozu izi bırakır." },
+    SkinDef { id: "sk_blood", name: "Kan Ayı Savaşçısı", kind: "char", rarity: 3, desc: "Kızıl ayın lanetiyle kaplı zırh, kor parçacıkları saçar." },
+    SkinDef { id: "sk_frost", name: "Buz Kurdu", kind: "char", rarity: 3, desc: "Buzul rüzgârıyla dövülmüş zırh, kar taneleri döker." },
+    SkinDef { id: "sk_gold", name: "Altın Savaşçı", kind: "char", rarity: 3, desc: "Saf altın kaplama, her adımda ışıldar." },
+    SkinDef { id: "sk_toxic", name: "Zehir Uzmanı", kind: "char", rarity: 2, desc: "Toksik bölgede hayatta kalanların yeşil zırhı." },
+    SkinDef { id: "sk_shadow", name: "Gölge", kind: "char", rarity: 2, desc: "Karanlıkta kaybolan kömür siyahı zırh." },
+    SkinDef { id: "vs_gold", name: "Altın Kaplama", kind: "vehicle", rarity: 3, desc: "Motor ve araban altın kaplanır, sürerken parıldar." },
+    SkinDef { id: "vs_flame", name: "Alev Desenli", kind: "vehicle", rarity: 3, desc: "Kızgın alev boyası, egzozdan kıvılcım saçar." },
+    SkinDef { id: "vs_camo", name: "Kamuflaj", kind: "vehicle", rarity: 2, desc: "Askerî kamuflaj boyası." },
+    SkinDef { id: "vs_neon", name: "Neon", kind: "vehicle", rarity: 2, desc: "Gece parlayan neon boya." },
+];
+
+pub fn skin(id: &str) -> Option<&'static SkinDef> {
+    SKINS.iter().find(|s| s.id == id)
+}
+
+/// Elmas Sandığı fiyatı (1 ve 10 açılış)
+pub const CRATE_PRICE: u32 = 120;
+pub const CRATE_PRICE10: u32 = 1080;
+
 pub struct Cosmetic {
     pub id: &'static str,
     pub name: &'static str,

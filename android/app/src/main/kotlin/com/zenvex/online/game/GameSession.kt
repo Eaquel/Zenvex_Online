@@ -54,6 +54,7 @@ object GameSession {
             // hile komutları yalnız sunucunun yönetici dediği hesapta (ve hata ayıklama gösteriminde) açılır
             Native.command(handle, JSONObject().put("cmd", "set_admin").put("on", Account.admin.value || com.zenvex.online.ui.Demo.on).toString())
         }
+        runCatching { Skins.refresh() }
     }
 
     /**

@@ -214,4 +214,19 @@ class UiShotsTest {
         val now = 1_793_000_000_000L
         paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, { _, _ -> }, { _, _, _ -> }, startTab = 2) }
     }
+
+    @Test
+    fun crateMain() {
+        paparazzi.snapshot { CratePreview(sample("skins")) }
+    }
+
+    @Test
+    fun crateReveal() {
+        paparazzi.snapshot { CratePreview(sample("skins"), reveal = listOf("sk_frost", "medkit:5", "gold:1000", "potion_power:3", "vs_camo", "dark_crystal:2", "potion_heal:3", "chest_military:1", "titan_shard:2", "gold:1000")) }
+    }
+
+    @Test
+    fun crateCollection() {
+        paparazzi.snapshot { CratePreview(sample("skins"), tab = 1) }
+    }
 }

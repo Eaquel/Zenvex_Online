@@ -31,6 +31,7 @@ object Events {
         }
         refresh()
         Pass.sync()
+        Skins.sync()
     }
 
     fun refresh() = Account.eventCurrent { r -> r.onSuccess { current = it } }
