@@ -174,7 +174,7 @@ fun LoadingScreen(back: () -> Unit = {}, done: () -> Unit) {
 
 private val RARITY_NAMES = listOf("Sıradan", "Nadir", "Destansı", "Efsanevi", "Sezonluk")
 private val KIND_NAMES = mapOf("Material" to "Malzeme", "Consumable" to "Tüketilebilir", "Ammo" to "Mermi", "Weapon" to "Silah", "Helmet" to "Kask",
-    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Pants" to "Pantolon", "Ring" to "Yüzük", "Necklace" to "Kolye", "Currency" to "Para")
+    "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Pants" to "Pantolon", "Ring" to "Yüzük", "Necklace" to "Kolye", "Currency" to "Para", "Tool" to "Alet")
 
 @Composable
 fun ItemDetail(item: JSONObject) {
@@ -196,58 +196,133 @@ fun ItemDetail(item: JSONObject) {
 
 
 // =========================================================================== üretim
+/**
+ * Üretim: üstte sekmeler (Şifa, İksir, Silah Ve Alet, Ekipman, Takı, Malzeme, Araç, Üs), solda sekmenin tarifleri
+ * (aynı eşyanın farklı tarifleri tek satırda), sağda seçili eşya: Üret tuşları en üstte (kaydırmadan görünür),
+ * altında malzemeler ve her malzemenin nereden çıktığı.
+ */
 @Composable
 fun CraftScreen(back: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     val data = remember(tick) { GameSession.ui("craft") }
-    val recipes = data.optJSONArray("recipes").objs()
-    var sel by remember { mutableIntStateOf(0) }
-    ScreenFrame("ÜRETİM", "craft", back, right = {
-        Chip("craft", if (data.optBoolean("near_bench")) "Tezgâh yakında" else "Tezgâh yok", if (data.optBoolean("near_bench")) Pal.Green else Pal.Sub)
+    val all = data.optJSONArray("recipes").objs()
+    val tabs = data.optJSONArray("tabs")?.let { a -> List(a.length()) { a.optString(it) } } ?: emptyList()
+    var tab by remember { mutableIntStateOf(0) }
+    var onlyCan by remember { mutableStateOf(false) }
+    var selId by remember { mutableStateOf<String?>(null) }
+    var variant by remember { mutableIntStateOf(0) }
+    val list = all.filter { it.optInt("tab") == tab && (!onlyCan || it.optBoolean("can")) }
+    val r = list.firstOrNull { it.optJSONObject("out")?.optString("id") == selId } ?: list.firstOrNull()
+    val bench = data.optBoolean("near_bench")
+
+    fun craft(v: JSONObject, n: Int) {
+        val res = GameSession.cmd("craft", "i" to v.optInt("i"), "n" to n)
+        Toaster.show(res.msg, res.ok); tick++
+        if (res.ok) com.zenvex.online.game.Audio.play("craft")
+    }
+
+    PxFrame("Üretim", "craft", back, right = {
+        PxButton(if (onlyCan) "Yapılabilenler" else "Hepsi", height = 36.dp, size = 12.sp, color = if (onlyCan) Px.Green else Px.Dark, icon = "check") {
+            onlyCan = !onlyCan
+        }
+        Spacer(Modifier.width(8.dp))
+        PT(if (bench) "Tezgâh Yakında" else "Tezgâh Yok", 13.sp, if (bench) Px.Green else Px.Sub)
     }, bg = "bg_craft") {
-        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            LazyColumn(Modifier.weight(1f).fillMaxHeight().glass(20.dp).padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(recipes.size) { i ->
-                    val r = recipes[i]
-                    val out = r.optJSONObject("out") ?: JSONObject()
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (sel == i) Color(0x553A6AB0) else Color(0x33000000))
-                        .clickable { sel = i }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        ItemSlot(out.optString("id"), r.optInt("count"), out.optInt("rarity"), 46.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
-                            T(out.optString("name"), 14.sp, Pal.rarity(out.optInt("rarity")), bold = true)
-                            T(if (r.optBoolean("bench")) "Tezgâh gerekli" else "Her yerde", 11.sp, Pal.Sub)
+        // sekmeler (her sekmede yapılabilir tarif sayısı)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            tabs.forEachIndexed { i, name ->
+                val ready = all.count { it.optInt("tab") == i && it.optBoolean("can") }
+                val on = i == tab
+                Row(Modifier.height(36.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
+                    .border(2.dp, if (on) Px.Clan else Px.Edge, RoundedCornerShape(3.dp))
+                    .clickable { com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); tab = i; selId = null; variant = 0 }
+                    .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    PT(name, 13.sp, if (on) Px.Text else Px.Sub)
+                    if (ready > 0) { Spacer(Modifier.width(6.dp)); PT("$ready", 11.sp, Px.Green) }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PxPanel(Modifier.weight(1f).fillMaxHeight(), color = Color(0xB4201F1C), pad = 6.dp) {
+                if (list.isEmpty()) PT(if (onlyCan) "Bu Sekmede Şu An Yapabileceğin Bir Şey Yok" else "Tarif Yok", 13.sp, Px.Sub)
+                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    items(list.size) { k ->
+                        val g = list[k]
+                        val out = g.optJSONObject("out") ?: JSONObject()
+                        val on = g === r
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0x80524428) else Color(0x40000000))
+                            .clickable { selId = out.optString("id"); variant = 0 }.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PxSlot(out, 42.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Column(Modifier.weight(1f)) {
+                                PT(out.optString("name"), 14.sp, Pal.rarity(out.optInt("rarity")))
+                                val vs = g.optJSONArray("variants").objs()
+                                PT(when {
+                                    vs.size > 1 -> "${vs.size} Farklı Tarif"
+                                    vs.firstOrNull()?.optBoolean("bench") == true -> "Tezgâh Gerekli"
+                                    else -> "Her Yerde"
+                                } + if (g.optInt("have") > 0) " · Çantada ${g.optInt("have")}" else "", 11.sp, Px.Sub)
+                            }
+                            if (g.optBoolean("can")) Icon("check", 20.dp, Px.Green)
                         }
-                        if (r.optBoolean("can")) Icon("check", 20.dp, Pal.Green)
                     }
                 }
             }
-            val r = recipes.getOrNull(sel)
-            Column(Modifier.width(320.dp).fillMaxHeight().glass(20.dp).padding(14.dp)) {
+            PxPanel(Modifier.width(340.dp).fillMaxHeight(), color = Color(0xC0201F1C), pad = 8.dp) {
                 if (r != null) {
                     val out = r.optJSONObject("out") ?: JSONObject()
-                    ItemDetail(out)
-                    Spacer(Modifier.height(10.dp))
-                    SectionTitle("Malzemeler")
-                    for (inp in r.optJSONArray("inputs").objs()) {
-                        val ok = inp.optInt("have") >= inp.optInt("need")
-                        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                            ItemSlot(inp.optString("id"), 0, 0, 36.dp)
-                            Spacer(Modifier.width(8.dp))
-                            T(inp.optString("name"), 13.sp, modifier = Modifier.weight(1f))
-                            T("${inp.optInt("have")} / ${inp.optInt("need")}", 13.sp, if (ok) Pal.Green else Pal.Red, bold = true)
+                    val vs = r.optJSONArray("variants").objs()
+                    val v = vs.getOrNull(variant) ?: vs.firstOrNull() ?: JSONObject()
+                    val can = v.optBoolean("can")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PxSlot(out, 52.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Column(Modifier.weight(1f)) {
+                            PT(out.optString("name"), 15.sp, Pal.rarity(out.optInt("rarity")))
+                            PT("${RARITY_NAMES.getOrElse(out.optInt("rarity")) { "" }} · ×${v.optInt("count", 1)} · Çantada ${r.optInt("have")}", 11.sp, Px.Sub)
                         }
                     }
-                    Spacer(Modifier.weight(1f))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GButton("ÜRET", Modifier.weight(1f), if (r.optBoolean("can")) Tone.Green else Tone.Dark, icon = "craft") {
-                            val res = GameSession.cmd("craft", "i" to sel, "n" to 1); Toaster.show(res.msg, res.ok); tick++
-                            if (res.ok) com.zenvex.online.game.Audio.play("craft")
+                    Spacer(Modifier.height(6.dp))
+                    // tuşlar her zaman görünür (malzeme listesi uzasa da kaydırma gerekmez)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PxButton("Üret", Modifier.weight(1f), color = Px.Green, icon = "craft", height = 40.dp, size = 15.sp, enabled = can) { craft(v, 1) }
+                        PxButton("×5", Modifier.width(76.dp), color = Px.Blue, height = 40.dp, size = 15.sp, enabled = can) { craft(v, 5) }
+                    }
+                    if (!can) {
+                        Spacer(Modifier.height(4.dp))
+                        PT(if (v.optBoolean("bench") && !bench) "Bir Tezgâhın Yanına Git (Şehirde Ya Da Üssünde)" else "Malzemeler Eksik", 12.sp, Px.Hard)
+                    }
+                    if (vs.size > 1) {
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            vs.forEachIndexed { i, o ->
+                                val on = i == variant
+                                Box(Modifier.height(28.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
+                                    .border(1.dp, if (o.optBoolean("can")) Px.Green else Px.Edge, RoundedCornerShape(3.dp))
+                                    .clickable { variant = i }.padding(horizontal = 10.dp), contentAlignment = Alignment.Center) {
+                                    PT("Tarif ${i + 1}", 12.sp, if (on) Px.Text else Px.Sub)
+                                }
+                            }
                         }
-                        GButton("×5", Modifier.width(80.dp), if (r.optBoolean("can")) Tone.Blue else Tone.Dark) {
-                            val res = GameSession.cmd("craft", "i" to sel, "n" to 5); Toaster.show(res.msg, res.ok); tick++
-                            if (res.ok) com.zenvex.online.game.Audio.play("craft")
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    PT("Malzemeler" + if (v.optBoolean("bench")) " · Tezgâh Gerekli" else "", 13.sp, Px.Clan)
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                        for (inp in v.optJSONArray("inputs").objs()) {
+                            val ok = inp.optInt("have") >= inp.optInt("need")
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                ItemSlot(inp.optString("id"), 0, 0, 34.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Column(Modifier.weight(1f)) {
+                                    PT(inp.optString("name"), 13.sp)
+                                    PT(inp.optString("src"), 10.sp, Px.Sub, maxLines = 2)
+                                }
+                                PT("${inp.optInt("have")}/${inp.optInt("need")}", 13.sp, if (ok) Px.Green else Px.Hard)
+                            }
                         }
+                        Spacer(Modifier.height(6.dp))
+                        PT(out.optString("desc"), 11.sp, Px.Sub, maxLines = 5)
                     }
                 }
             }

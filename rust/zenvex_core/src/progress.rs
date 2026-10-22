@@ -596,6 +596,18 @@ impl Progress {
             1.0
         }
     }
+    /// Ağaç (t_axe_) ya da kaya (t_pick_) vuruş gücü: çantadaki en iyi alet, yoksa yumruk 25
+    pub fn tool_power(&self, prefix: &str) -> f32 {
+        let mut best = 25.0f32;
+        for s in self.inv.slots.iter().flatten() {
+            let d = &crate::data::ITEMS[s.item as usize];
+            if d.id.starts_with(prefix) {
+                best = best.max(d.armor);
+            }
+        }
+        best
+    }
+
     pub fn gather_mult(&self) -> f32 {
         1.0 + 0.1 * self.skill(9)
     }

@@ -367,7 +367,7 @@ impl Inventory {
 fn kind_order(k: ItemKind) -> u8 {
     match k {
         ItemKind::Weapon => 0,
-        ItemKind::Ammo => 1,
+        ItemKind::Ammo | ItemKind::Tool => 1,
         ItemKind::Helmet | ItemKind::Jacket | ItemKind::Pants | ItemKind::Boots | ItemKind::Bag | ItemKind::Cloak | ItemKind::Ring | ItemKind::Necklace => 2,
         ItemKind::Consumable => 3,
         ItemKind::Chest => 4,

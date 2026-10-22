@@ -381,8 +381,9 @@ internal fun BagView(
                             val equippable = kind in EQUIP_KINDS
                             val usable = kind == "Consumable" || item.optString("id") == "fuel"
                             val placeable = kind == "Chest" && inGame
+                            val key = item.optString("id").startsWith("veh_") && inGame
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (equippable || usable || placeable) PxButton(when { equippable -> "Kuşan"; placeable -> "Üsse Kur"; else -> "Kullan" },
+                                if (equippable || usable || placeable || key) PxButton(when { equippable -> "Kuşan"; placeable -> "Üsse Kur"; key -> "Aracı Çağır"; else -> "Kullan" },
                                     Modifier.fillMaxWidth(), height = 38.dp, size = 14.sp) {
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
                                 }
@@ -515,7 +516,7 @@ private fun PxStat(icon: String, v: String, col: Color) {
 private val RARITY_NAMES = listOf("Sıradan", "Nadir", "Destansı", "Efsanevi", "Sezonluk")
 private val KIND_NAMES = mapOf("Material" to "Malzeme", "Consumable" to "Tüketilebilir", "Ammo" to "Mermi", "Weapon" to "Silah", "Helmet" to "Kask",
     "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Cloak" to "Pelerin", "Pants" to "Pantolon", "Chest" to "Sandık", "Currency" to "Para", "Ring" to "Yüzük", "Necklace" to "Kolye",
-    "Chest" to "Sandık")
+    "Tool" to "Alet")
 
 @Composable
 fun PxItemDetail(item: JSONObject) {

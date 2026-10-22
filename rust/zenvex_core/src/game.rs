@@ -408,6 +408,8 @@ pub struct Vehicle {
     pub fuel: f32,
     pub driver: bool,
     pub wrecked: bool,
+    /// oyuncunun kendi aracı (anahtarla çağrılan; ikinci kez çağrılınca yeni araç doğmaz, bu yanına gelir)
+    pub owned: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -518,21 +520,8 @@ impl Game {
             speed_cheat: 1.0,
             ..Default::default()
         };
-        let vehicles = world
-            .vehicle_spawns
-            .iter()
-            .map(|&(k, x, y, a)| Vehicle {
-                kind: k,
-                x,
-                y,
-                angle: a,
-                speed: 0.0,
-                hp: data::VEHICLES[k].hp,
-                fuel: 60.0,
-                driver: false,
-                wrecked: false,
-            })
-            .collect();
+        // V11: dünyada sahipsiz araç yok; araç Tamirci Viktor'a parçalar verilerek üretilir, anahtarla çağrılır
+        let vehicles: Vec<Vehicle> = Vec::new();
         let mut npcs: Vec<Npc> = world
             .snipers
             .iter()

@@ -129,6 +129,8 @@ pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
 }
 pub const STUMP: &str = "stump";
+/// ağaç ve kaya canı (yumruk 25, taş alet 50, demir alet 100 vurur)
+pub const TREE_HP: f32 = 500.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -596,6 +598,8 @@ impl World {
 
     fn push(&mut self, name: &str, kind: Kind, x: f32, y: f32, shape: Shape, hp: f32, phase: f32) {
         let (name, shape) = v10_variant(name, x, y, shape);
+        // V11: ağaç ve kaya 500 can (vuruş gücü alete bağlı, bkz. Game::hit_static)
+        let hp = if matches!(kind, Kind::Tree | Kind::Rock) { TREE_HP } else { hp };
         let sort_off = match shape {
             // zemine yatık yapılar (helikopter pisti) her şeyin altında çizilir
             _ if name == "helipad" => -1.0e7,

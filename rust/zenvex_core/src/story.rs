@@ -483,6 +483,7 @@ impl Game {
                 });
             }
             "shop" => open = "merchant",
+            "garage" => open = "garage",
             "dailies" => open = "quests",
             "dog" => open = "dog",
             "heal" => match self.npc_doctor() {
@@ -573,7 +574,10 @@ impl Game {
                     N_MERCHANT => opts.push(("shop".into(), "Alışveriş Yap".into())),
                     N_QUEST => opts.push(("dailies".into(), "Günlük Görevler".into())),
                     N_DOCTOR => opts.push(("heal".into(), format!("Tedavi Ol ({} Altın)", crate::ui::DOCTOR_PRICE))),
-                    N_MECHANIC => opts.push(("repair".into(), format!("Aracımı Onar ({} Altın)", crate::ui::MECHANIC_PRICE))),
+                    N_MECHANIC => {
+                        opts.push(("garage".into(), "Araç Üret".into()));
+                        opts.push(("repair".into(), format!("Aracımı Onar ({} Altın)", crate::ui::MECHANIC_PRICE)));
+                    }
                     N_TRAINER => opts.push(("dog".into(), if self.progress.dog_owned { "Köpeğimi Geliştir".into() } else { "Köpek Sahiplen".into() })),
                     N_WIZARD => {
                         opts.push(("tp".into(), "Işınlan".into()));

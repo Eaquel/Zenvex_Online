@@ -76,6 +76,61 @@ impl Game {
     }
 
     /// Kamp tamircisi: 12 m içindeki araçları onarır ve yakıtı 100'e tamamlar (30 altın).
+    /// Viktor'a araç parçalarını ver: parçalar düşülür; üretim süresi ve teslim (posta) sunucuda (zx_vehicle_order)
+    fn vehicle_order(&mut self, k: usize) -> Result<String, String> {
+        let (_, name, parts, mins) = *data::VEHICLE_BUILDS.get(k).ok_or("Araç yok")?;
+        if !self.near_npc(4) {
+            return Err("Tamirci Viktor'un yanına git".into());
+        }
+        if !parts.iter().all(|(id, n)| self.progress.inv.count_id(id) >= *n) {
+            return Err("Parçalar eksik".into());
+        }
+        for (id, n) in parts {
+            self.progress.inv.remove_id(id, *n);
+        }
+        Ok(format!("{name} üretime girdi: {mins} dakika sonra postana gelecek"))
+    }
+
+    /// Sunucu siparişi alamadıysa parçalar geri verilir
+    fn vehicle_refund(&mut self, k: usize) -> Result<String, String> {
+        let (_, _, parts, _) = *data::VEHICLE_BUILDS.get(k).ok_or("Araç yok")?;
+        for (id, n) in parts {
+            self.progress.inv.add_id(id, *n);
+        }
+        Ok("Parçalar geri verildi".into())
+    }
+
+    /// Anahtar: kendi aracın yanına gelir (yoksa doğar; varsa türü güncellenip buraya taşınır, onarılmaz)
+    pub(crate) fn summon_vehicle(&mut self, kind: usize) -> Result<String, String> {
+        if self.player.dead || self.player.vehicle.is_some() || self.passenger {
+            return Err("Şimdi olmaz".into());
+        }
+        if !self.world.zone(self.player.x, self.player.y).safe() && self.player.combat_t < 3.0 {
+            return Err("Savaşırken araç çağrılamaz".into());
+        }
+        let (mut x, mut y) = (self.player.x + 90.0, self.player.y + 10.0);
+        self.world.resolve(&mut x, &mut y, 40.0, self.progress.level >= crate::progress::CITY_LEVEL, &mut self.scratch);
+        let def = &data::VEHICLES[kind];
+        match self.vehicles.iter().position(|v| v.owned) {
+            Some(i) => {
+                let v = &mut self.vehicles[i];
+                if v.wrecked && v.kind == kind {
+                    return Err("Aracın parçalandı. Tamirci Viktor'a git, uzaktan çekip onarır".into());
+                }
+                if v.kind != kind {
+                    v.kind = kind;
+                    v.hp = def.hp;
+                    v.wrecked = false;
+                }
+                v.x = x;
+                v.y = y;
+                v.speed = 0.0;
+            }
+            None => self.vehicles.push(Vehicle { kind, x, y, angle: 0.0, speed: 0.0, hp: def.hp, fuel: 100.0, driver: false, wrecked: false, owned: true }),
+        }
+        Ok(format!("{} yanına geldi", def.name))
+    }
+
     pub(crate) fn npc_mechanic(&mut self) -> Result<String, String> {
         if !self.near_npc(4) {
             return Err("Tamirci benzin istasyonunda".into());
@@ -85,7 +140,8 @@ impl Game {
         let near: Vec<usize> = (0..self.vehicles.len())
             .filter(|&i| {
                 let v = &self.vehicles[i];
-                (v.x - px).hypot(v.y - py) < r && (v.hp < data::VEHICLES[v.kind].hp || v.fuel < 100.0 || v.wrecked)
+                // kendi aracın parçalandıysa nerede olursa olsun çekilir
+                (v.owned && v.wrecked) || ((v.x - px).hypot(v.y - py) < r && (v.hp < data::VEHICLES[v.kind].hp || v.fuel < 100.0 || v.wrecked))
             })
             .collect();
         if near.is_empty() {
@@ -99,6 +155,11 @@ impl Game {
             let v = &mut self.vehicles[i];
             v.hp = data::VEHICLES[v.kind].hp;
             v.fuel = 100.0;
+            if v.owned && v.wrecked {
+                v.x = px + crate::game::m(3.0);
+                v.y = py + crate::game::m(1.0);
+                v.speed = 0.0;
+            }
             v.wrecked = false;
         }
         Ok(format!("{} araç onarıldı (-{MECHANIC_PRICE} altın)", near.len()))
@@ -225,22 +286,51 @@ impl Game {
                 })
             }
             "craft" => {
+                // aynı eşyanın tarifleri tek satırda (varyantlar), sekmelere göre; her malzemenin kaynağı yazılır
                 let bench = self.near_bench();
-                let list: Vec<Value> = RECIPES
-                    .iter()
-                    .enumerate()
-                    .map(|(i, r)| {
-                        let inputs: Vec<Value> = r
-                            .inputs
-                            .iter()
-                            .map(|(id, n)| json!({ "id": id, "name": data::item(id).name, "need": n, "have": g.inv.count_id(id) }))
-                            .collect();
-                        let has = r.inputs.iter().all(|(id, n)| g.inv.count_id(id) >= *n as u32);
-                        json!({ "i": i, "out": item_json(r.out), "count": r.count, "inputs": inputs, "bench": r.bench,
-                                "can": has && (!r.bench || bench) })
+                let mut groups: Vec<(&str, Vec<Value>)> = Vec::new();
+                for (i, r) in RECIPES.iter().enumerate() {
+                    let inputs: Vec<Value> = r
+                        .inputs
+                        .iter()
+                        .map(|(id, n)| json!({ "id": id, "name": data::item(id).name, "need": n, "have": g.inv.count_id(id),
+                                               "src": data::item_source(id) }))
+                        .collect();
+                    let has = r.inputs.iter().all(|(id, n)| g.inv.count_id(id) >= *n as u32);
+                    let v = json!({ "i": i, "count": r.count, "inputs": inputs, "bench": r.bench, "can": has && (!r.bench || bench) });
+                    match groups.iter_mut().find(|(o, _)| *o == r.out) {
+                        Some((_, vs)) => vs.push(v),
+                        None => groups.push((r.out, vec![v])),
+                    }
+                }
+                let list: Vec<Value> = groups
+                    .into_iter()
+                    .map(|(out, vs)| {
+                        let can = vs.iter().any(|v| v["can"] == true);
+                        json!({ "out": item_json(out), "tab": data::recipe_tab(out), "variants": vs, "can": can,
+                                "have": g.inv.count_id(out) })
                     })
                     .collect();
-                json!({ "near_bench": bench, "recipes": list })
+                json!({ "near_bench": bench, "recipes": list,
+                        "tabs": ["Şifa", "İksir", "Silah Ve Alet", "Ekipman", "Takı", "Malzeme", "Araç", "Üs"] })
+            }
+            "garage" => {
+                // Tamirci Viktor: araç üretimi için parçalar (elde / gereken) ve sahip olunan anahtarlar
+                let builds: Vec<Value> = data::VEHICLE_BUILDS
+                    .iter()
+                    .enumerate()
+                    .map(|(k, (key, name, parts, mins))| {
+                        let parts: Vec<Value> = parts
+                            .iter()
+                            .map(|(id, n)| json!({ "id": id, "name": data::item(id).name, "need": n, "have": g.inv.count_id(id),
+                                                   "src": data::item_source(id) }))
+                            .collect();
+                        let can = data::VEHICLE_BUILDS[k].2.iter().all(|(id, n)| g.inv.count_id(id) >= *n);
+                        json!({ "kind": k, "key": key, "name": name, "parts": parts, "mins": mins, "can": can,
+                                "owned": g.inv.count_id(key) > 0 })
+                    })
+                    .collect();
+                json!({ "near": self.near_npc(4), "builds": builds })
             }
             "merchant" => {
                 let buy: Vec<Value> = MERCHANT
@@ -639,6 +729,8 @@ impl Game {
             "dog_buy" => self.dog_buy(),
             "doctor" => self.npc_doctor(),
             "mechanic" => self.npc_mechanic(),
+            "vehicle_order" => self.vehicle_order(int("kind")),
+            "vehicle_refund" => self.vehicle_refund(int("kind")),
             "dog_up" => self.dog_upgrade(int("stat")),
             "set_rules" => {
                 self.hardcore = v["hardcore"].as_bool().unwrap_or(false);
@@ -819,6 +911,8 @@ impl Game {
                     .map_err(String::from);
             }
             ItemKind::Chest => return self.place_chest(slot),
+            ItemKind::Tool if d.id.starts_with("veh_") => return self.summon_vehicle(if d.id == "veh_car" { 2 } else { 1 }),
+            ItemKind::Tool => return Err("Alet çantanda durdukça işe yarar".into()),
             ItemKind::Consumable => {}
             _ if d.id == "fuel" => {
                 let vi = self.player.vehicle.ok_or("Önce bir araca bin")?;
@@ -1336,7 +1430,7 @@ impl Game {
                 };
                 let (mut x, mut y) = (px + 120.0, py);
                 self.world.resolve(&mut x, &mut y, data::VEHICLES[k].radius, true, &mut self.scratch);
-                self.vehicles.push(Vehicle { kind: k, x, y, angle: 0.0, speed: 0.0, hp: data::VEHICLES[k].hp, fuel: 100.0, driver: false, wrecked: false });
+                self.vehicles.push(Vehicle { kind: k, x, y, angle: 0.0, speed: 0.0, hp: data::VEHICLES[k].hp, fuel: 100.0, driver: false, wrecked: false, owned: false });
                 Ok(format!("{} getirildi", data::VEHICLES[k].name))
             }
             "points" | "puan" => {

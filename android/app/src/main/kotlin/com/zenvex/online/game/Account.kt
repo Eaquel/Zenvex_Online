@@ -197,6 +197,10 @@ object Account {
     // ------------------------------------------------------------------ etkinlikler
     fun eventCurrent(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_event_current") { r -> done(obj(r)) }
     fun eventBoard(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_event_board", auth()) { r -> done(obj(r)) }
+    /** Tamirci Viktor: araç siparişi (0 motosiklet, 1 araba) ve bekleyen siparişler */
+    fun vehicleOrder(kind: Int, done: (Result<JSONObject>) -> Unit) =
+        Supa.rpc("zx_vehicle_order", auth().put("p_sid", Session.sid).put("p_kind", kind)) { r -> done(obj(r)) }
+    fun vehicleOrders(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_vehicle_orders", auth()) { r -> done(arr(r)) }
     fun adminEventStart(kind: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_start", auth().put("p_kind", kind)) { r -> done(txt(r)) }
     fun adminEventStop(done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_stop", auth()) { r -> done(txt(r)) }
     fun adminVip(target: Long, days: Int, done: (Result<String>) -> Unit) =

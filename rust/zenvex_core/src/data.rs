@@ -24,6 +24,8 @@ pub enum ItemKind {
     Chest,
     /// V9: pantolon (armor = zırh, bonus = hız %)
     Pants,
+    /// V11: alet (balta / kazma: çantada durması yeter, armor = ağaç/taş başına vuruş gücü) ve araç anahtarı (kullanınca araç gelir)
+    Tool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -201,11 +203,80 @@ pub const ITEMS: &[ItemDef] = &[
     item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Askerî Bölge'den. Güç İksiri yapımında kullanılır."),
     item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Avcı Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
     item!("rusty_key", "Paslı Anahtar", Material, Rare, 10, 90, "Eski şehirden. Askerî Sandık yapımında kullanılır."),
+    // V11 aletler: çantada olması yeter, en iyisi kullanılır (armor = ağaç/kaya başına vuruş gücü; yumruk 25)
+    item!("t_axe_stone", "Taş Balta", Tool, Common, 1, 30, "Çantandayken ağaçları 2 kat hızlı kesersin.", 50.0, 0.0),
+    item!("t_axe_iron", "Demir Balta", Tool, Rare, 1, 120, "Çantandayken ağaçları 4 kat hızlı kesersin.", 100.0, 0.0),
+    item!("t_pick_stone", "Taş Kazma", Tool, Common, 1, 30, "Çantandayken kayaları 2 kat hızlı kırarsın.", 50.0, 0.0),
+    item!("t_pick_iron", "Demir Kazma", Tool, Rare, 1, 120, "Çantandayken kayaları 4 kat hızlı kırarsın.", 100.0, 0.0),
+    // V11 araç parçaları: Tamirci Viktor'a verilir, araç belirli sürede üretilip postayla gelir
+    item!("v_wheel", "Tekerlek", Material, Rare, 8, 60, "Araç parçası. Motosiklete 2, arabaya 4 gerekir."),
+    item!("v_engine", "Motor", Material, Epic, 2, 250, "Araç parçası. Her araca 1 gerekir."),
+    item!("v_frame_moto", "Motosiklet Gövdesi", Material, Rare, 1, 150, "Araç parçası: motosikletin şasisi."),
+    item!("v_frame_car", "Araba Gövdesi", Material, Epic, 1, 400, "Araç parçası: arabanın şasisi."),
+    // V11 araç anahtarları: kullanınca aracın yanına gelir (eskisi kaybolur); dünyada artık sahipsiz araç yok
+    item!("veh_moto", "Motosiklet Anahtarı", Tool, Epic, 1, 0, "Kullan: motosikletin yanına gelir. Tamirci Viktor üretir."),
+    item!("veh_car", "Araba Anahtarı", Tool, Legendary, 1, 0, "Kullan: araban yanına gelir. Tamirci Viktor üretir."),
+];
+
+/// Malzemenin nereden çıktığı (üretim ekranında malzemenin altında yazar).
+pub fn item_source(id: &str) -> &'static str {
+    match id {
+        "wood" => "Ağaç kes (balta ile hızlı)",
+        "stone" => "Kaya kır (kazma ile hızlı)",
+        "resin" => "Çam ağaçları",
+        "cloth" => "Zombiler, sandıklar, tüccar",
+        "glue" => "Üret (2 reçine), sandıklar, tüccar",
+        "tape" => "Üret (kumaş + yapıştırıcı), sandıklar, tüccar",
+        "leather" => "Köpek zombiler, sandıklar",
+        "scrap" => "Tank zombiler, kayalar, sandıklar",
+        "screw" | "nails" => "Sandıklar",
+        "rope" | "plastic" => "Sandıklar",
+        "copper" => "Sandıklar, şehir zombileri, tüccar",
+        "tooth" | "bone" => "Zombiler",
+        "toxic" => "Zehirli zombiler (Bataklık)",
+        "dark_crystal" => "Karanlık zombiler, Gizemli Maskeli, Titan",
+        "titan_shard" => "Titan (Titan Arenası)",
+        "gear" => "Tank zombiler, sandıklar",
+        "spring" | "battery" => "Sandıklar, şehir zombileri",
+        "electronics" => "Sandıklar, Gizemli Maskeli",
+        "fuel" => "Sandıklar, tüccar",
+        "bandage" | "energy" | "food" => "Sandıklar, tüccar",
+        "medkit" => "Üret, sandıklar, tüccar",
+        "ice_shard" | "frozen_fish" => "Donmuş Liman zombileri",
+        "scorched_resin" | "charcoal" => "Yanık Orman zombileri",
+        "scorpion_venom" | "dried_hide" => "Çöl Otoyolu zombileri",
+        "swamp_moss" | "bog_iron" => "Kara Bataklık zombileri",
+        "circuit_board" | "powder_pouch" => "Askerî Bölge zombileri",
+        "gold_watch" | "rusty_key" => "Şehir zombileri",
+        "v_wheel" | "v_engine" | "v_frame_moto" | "v_frame_car" => "Üret (Araç sekmesi)",
+        _ => "Üret ya da sandıklar",
+    }
+}
+
+/// Üretim sekmesi: 0 şifa, 1 iksir, 2 silah ve alet, 3 ekipman, 4 takı, 5 malzeme, 6 araç, 7 üs
+pub fn recipe_tab(out: &str) -> u8 {
+    match out {
+        "bandage" | "medkit" | "potion_heal" | "antidote" => 0,
+        "potion_speed" | "potion_power" => 1,
+        o if o.starts_with("w_") || o.starts_with("t_") => 2,
+        o if ["helm_", "jacket_", "boots_", "bag_", "pants_"].iter().any(|p| o.starts_with(p)) => 3,
+        o if o.starts_with("ring_") || o.starts_with("neck_") => 4,
+        o if o.starts_with("v_") => 6,
+        o if o.starts_with("chest_") => 7,
+        _ => 5,
+    }
+}
+
+/// Tamirci Viktor'un araç üretimi: (anahtar, ad, parçalar, süre dk)
+pub const VEHICLE_BUILDS: &[(&str, &str, &[(&str, u32)], u32)] = &[
+    ("veh_moto", "Motosiklet", &[("v_frame_moto", 1), ("v_wheel", 2), ("v_engine", 1)], 10),
+    ("veh_car", "Araba", &[("v_frame_car", 1), ("v_wheel", 4), ("v_engine", 1), ("battery", 2)], 30),
 ];
 
 /// Oyundan kaldırılan eşyalar (ateşli silahlar, mermiler): hile panelinde de listelenmez.
 /// V8: kask, ceket, bot, çanta ve pelerin çanta ekipman slotlarıyla geri döndü.
-pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "screw"];
+/// V11: vida motor üretiminde kullanılır (sandıklardan); pelerin slotu kalktığı için pelerin listede yok.
+pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "cloak"];
 
 /// Eşya şu an oyunda elde edilebilir mi
 pub fn item_in_game(id: &str) -> bool {
@@ -656,6 +727,15 @@ pub const RECIPES: &[Recipe] = &[
     Recipe { out: "neck_bone", count: 1, inputs: &[("bone", 6), ("rope", 1)], bench: false },
     Recipe { out: "neck_amulet", count: 1, inputs: &[("bone", 8), ("toxic", 2), ("copper", 3), ("rope", 1)], bench: true },
     Recipe { out: "neck_dark", count: 1, inputs: &[("dark_crystal", 3), ("bone", 10), ("copper", 4)], bench: true },
+    // V11 aletler (taş: her yerde, demir: tezgâhta) ve araç parçaları (tezgâhta)
+    Recipe { out: "t_axe_stone", count: 1, inputs: &[("wood", 6), ("stone", 4), ("rope", 1)], bench: false },
+    Recipe { out: "t_pick_stone", count: 1, inputs: &[("wood", 6), ("stone", 6), ("rope", 1)], bench: false },
+    Recipe { out: "t_axe_iron", count: 1, inputs: &[("wood", 4), ("scrap", 8), ("leather", 1), ("nails", 2)], bench: true },
+    Recipe { out: "t_pick_iron", count: 1, inputs: &[("wood", 4), ("scrap", 10), ("leather", 1), ("nails", 2)], bench: true },
+    Recipe { out: "v_wheel", count: 1, inputs: &[("scrap", 4), ("plastic", 3), ("rope", 1)], bench: true },
+    Recipe { out: "v_engine", count: 1, inputs: &[("scrap", 10), ("gear", 4), ("spring", 2), ("electronics", 2), ("screw", 4)], bench: true },
+    Recipe { out: "v_frame_moto", count: 1, inputs: &[("scrap", 12), ("spring", 2), ("leather", 2), ("nails", 6)], bench: true },
+    Recipe { out: "v_frame_car", count: 1, inputs: &[("scrap", 30), ("gear", 2), ("spring", 4), ("nails", 12), ("plastic", 6)], bench: true },
     // V8 sandıklar (kişisel üsse kurulur)
     Recipe { out: "chest_wood", count: 1, inputs: &[("wood", 30), ("nails", 6), ("rope", 1)], bench: true },
     Recipe { out: "chest_iron", count: 1, inputs: &[("scrap", 16), ("wood", 10), ("nails", 10), ("spring", 2)], bench: true },

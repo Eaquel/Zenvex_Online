@@ -4,7 +4,6 @@ use crate::game::*;
 use crate::world::{Kind, Zone};
 
 /// Ağaç/taşa vuruş oranı (kesim hızı)
-pub const GATHER_HIT: f32 = 0.4;
 
 impl Game {
     /// PvP açık mı: devlet üssü çevresi ya da yüksek seviyeli bölge (Askerî Bölge, Donmuş Liman); güvenli bölgede asla.
@@ -180,9 +179,14 @@ impl Game {
 
     pub fn hit_static(&mut self, i: usize, dmg: f32) {
         let gather = self.progress.gather_mult();
+        // V11: ağaç ve kaya 500 can; vuruş gücü silaha değil alete bağlı (yumruk 25, taş alet 50, demir 100)
+        let tool = match self.world.statics[i].kind {
+            Kind::Tree => Some(self.progress.tool_power("t_axe_")),
+            Kind::Rock => Some(self.progress.tool_power("t_pick_")),
+            _ => None,
+        };
         let s = &mut self.world.statics[i];
-        // ağaç kesmek ve taş kırmak emek ister: vuruşların yalnız bir kısmı işler (~2.5 kat uzun)
-        let dmg = if matches!(s.kind, Kind::Tree | Kind::Rock) { dmg * GATHER_HIT } else { dmg };
+        let dmg = if self.player.one_hit { dmg } else { tool.unwrap_or(dmg) };
         s.hp -= dmg;
         s.shake = 0.3;
         let (sx, sy, kind) = (s.x, s.y, s.kind);
@@ -254,6 +258,7 @@ impl Game {
         let common: &[(&str, u32)] = &[
             ("cloth", 3),
             ("scrap", 3),
+            ("screw", 3),
             ("tape", 2),
             ("nails", 3),
             ("rope", 2),
