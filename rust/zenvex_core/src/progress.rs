@@ -218,6 +218,10 @@ pub struct QuestState {
     pub main_progress: u32,
     pub day: u32,
     pub daily: Vec<(String, u32, bool)>,
+    pub week: u32,
+    pub weekly: Vec<(String, u32, bool)>,
+    /// sezon görevleri (sezon değişince sıfırlanır)
+    pub season: Vec<(String, u32, bool)>,
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -228,6 +232,8 @@ pub struct PassState {
     pub elite: bool,
     pub claimed_free: Vec<u32>,
     pub claimed_premium: Vec<u32>,
+    /// sunucudaki sezon kimliği (değişince bilet ve sezon görevleri sıfırlanır)
+    pub season: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -679,45 +685,78 @@ impl Progress {
     }
 
     // ---- görevler
+    /// Günlük (3) ve haftalık (4) görevleri gün numarasına göre yeniler; hafta Pazartesi başlar.
     pub fn ensure_dailies(&mut self, day: u32) {
-        if self.quests.day == day && !self.quests.daily.is_empty() {
-            return;
+        if self.quests.day != day || self.quests.daily.is_empty() {
+            self.quests.day = day;
+            let n = data::DAILY_POOL.len();
+            let picks = [(day as usize * 7) % n, (day as usize * 7 + 3) % n, (day as usize * 7 + 5) % n];
+            self.quests.daily = picks.iter().map(|&i| (data::DAILY_POOL[i].id.to_string(), 0, false)).collect();
         }
-        self.quests.day = day;
-        let n = data::DAILY_POOL.len();
-        let picks = [
-            (day as usize * 7) % n,
-            (day as usize * 7 + 3) % n,
-            (day as usize * 7 + 5) % n,
-        ];
-        self.quests.daily = picks
-            .iter()
-            .map(|&i| (data::DAILY_POOL[i].id.to_string(), 0, false))
-            .collect();
+        let week = (day + 3) / 7;
+        if self.quests.week != week || self.quests.weekly.is_empty() {
+            self.quests.week = week;
+            let n = data::WEEKLY_POOL.len();
+            self.quests.weekly = (0..4).map(|k| (data::WEEKLY_POOL[(week as usize * 3 + k * 2) % n].id.to_string(), 0, false)).collect();
+            self.quests.weekly.dedup_by(|a, b| a.0 == b.0);
+        }
+        if self.quests.season.len() != data::SEASON_QUESTS.len() {
+            self.quests.season = data::SEASON_QUESTS.iter().map(|q| (q.id.to_string(), 0, false)).collect();
+        }
     }
 
-    /// Görev ilerlemesi; tamamlanan görevlerin başlıklarını döndürür.
+    /// Sunucudaki sezon değiştiyse bilet, ödüller ve sezon görevleri sıfırlanır.
+    pub fn sync_season(&mut self, season: u32) -> bool {
+        if season == 0 || self.pass.season == season {
+            return false;
+        }
+        let first = self.pass.season == 0;
+        // ilk eşitlemede (sezon sistemi öncesi kayıt) kademe korunur; ödül tablosu değiştiği için alınanlar sıfırlanır
+        let xp = if first { self.pass.xp } else { 0 };
+        self.pass = PassState { season, xp, ..Default::default() };
+        if !first {
+            self.quests.season.clear();
+        }
+        self.quests.season = data::SEASON_QUESTS.iter().map(|q| (q.id.to_string(), 0, false)).collect();
+        !first
+    }
+
+    /// Görev ilerlemesi (günlük, haftalık, sezon); tamamlanan görevlerin başlıklarını döndürür.
     pub fn quest_event(&mut self, kind: data::QuestKind, amount: u32) -> Vec<String> {
         let mut done = Vec::new();
         let mut bonus_xp = 0;
-        // ana görevler artık görevci NPC'den konuşarak alınır (story.rs)
-        for (id, prog, claimed) in self.quests.daily.iter_mut() {
-            if *claimed {
-                continue;
-            }
-            if let Some(q) = data::DAILY_POOL.iter().find(|q| q.id == id) {
+        let level = self.level;
+        let lists: [(&mut Vec<(String, u32, bool)>, &[data::QuestDef]); 3] = [
+            (&mut self.quests.daily, data::DAILY_POOL),
+            (&mut self.quests.weekly, data::WEEKLY_POOL),
+            (&mut self.quests.season, data::SEASON_QUESTS),
+        ];
+        let mut gold = 0u32;
+        let mut pass_xp = 0u32;
+        for (list, pool) in lists {
+            for (id, prog, claimed) in list.iter_mut() {
+                if *claimed {
+                    continue;
+                }
+                let Some(q) = pool.iter().find(|q| q.id == id) else { continue };
                 if q.kind == kind {
-                    *prog += amount;
+                    if kind == data::QuestKind::Level {
+                        *prog = (*prog).max(level);
+                    } else {
+                        *prog += amount;
+                    }
                 }
                 if *prog >= q.goal {
                     *claimed = true;
-                    self.gold = self.gold.saturating_add(q.gold);
-                    self.pass.xp += q.pass_xp;
+                    gold = gold.saturating_add(q.gold);
+                    pass_xp += q.pass_xp;
                     done.push(q.title.to_string());
                     bonus_xp += q.xp;
                 }
             }
         }
+        self.gold = self.gold.saturating_add(gold);
+        self.pass.xp += pass_xp;
         if bonus_xp > 0 {
             self.add_xp(bonus_xp);
         }

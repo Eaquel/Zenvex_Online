@@ -754,6 +754,10 @@ pub enum QuestKind {
     Level,
     EnterCity,
     Boss,
+    /// devlet üssü askeri etkisiz bırak
+    Soldier,
+    /// devlet üssü ele geçir
+    BaseCap,
 }
 
 pub struct QuestDef {
@@ -919,41 +923,67 @@ pub const DAILY_POOL: &[QuestDef] = &[
 // --------------------------------------------------------------------------- sezon / pass
 pub const PASS_TIERS: u32 = 30;
 pub const PASS_XP_PER_TIER: u32 = 1000;
-pub const PASS_PRICE_NORMAL: &str = "49,99 TL";
-pub const PASS_PRICE_ELITE: &str = "99,99 TL";
+/// Sezon Bileti elmasla alınır (sunucu kaydı tutar, elmas düşüşünü doğrular)
+pub const PASS_PRICE_NORMAL: u32 = 600;
+pub const PASS_PRICE_ELITE: u32 = 1500;
 
-/// (kademe, ücretsiz ödül, premium ödül) — ödül biçimi: "eşya:adet" | "gold:n" | "gem:n" | "cos:kimlik"
+/// (kademe, ücretsiz ödül, premium ödül) — ödül biçimi: "eşya:adet" | "gold:n" | "gem:n"
+/// Elmas ödülleri sunucudan onaylanır (supabase _zx_pass_gems ile aynı tablo).
 pub const PASS_REWARDS: &[(u32, &str, &str)] = &[
-    (1, "gold:100", "cos:frame_bronze"),
+    (1, "gold:200", "chest_wood:2"),
     (2, "bandage:5", "gem:20"),
-    (3, "gold:150", "cos:tag_survivor"),
-    (4, "ammo_9mm:60", "cos:skin_glock_camo"),
-    (5, "cloth:20", "gold:500"),
-    (6, "gold:200", "cos:kaan_night"),
-    (7, "glue:10", "gem:30"),
-    (8, "food:5", "medkit:3"),
-    (9, "gold:250", "cos:skin_ak_gold"),
-    (10, "bag_basic:1", "cos:frame_silver"),
-    (11, "gold:300", "gem:40"),
-    (12, "scrap:20", "cos:nova_neon"),
-    (13, "gold:300", "ammo_762:120"),
-    (14, "energy:5", "cos:tag_hunter"),
-    (15, "gold:400", "helm_police:1"),
+    (3, "food:5", "potion_heal:3"),
+    (4, "gold:300", "ring_copper:1"),
+    (5, "gem:10", "chest_iron:1"),
+    (6, "cloth:20", "neck_bone:1"),
+    (7, "gold:400", "gem:30"),
+    (8, "medkit:2", "pants_police:1"),
+    (9, "energy:5", "potion_speed:3"),
+    (10, "chest_iron:1", "ring_hunter:1"),
+    (11, "gold:500", "gem:40"),
+    (12, "scrap:20", "chest_military:1"),
+    (13, "antidote:3", "potion_power:3"),
+    (14, "gold:600", "neck_amulet:1"),
+    (15, "gem:15", "helm_military:1"),
     (16, "powder:15", "gem:50"),
-    (17, "gold:400", "cos:rady_crimson"),
-    (18, "medkit:2", "cos:skin_m4_neon"),
-    (19, "gold:500", "gem:60"),
-    (20, "boots_police:1", "cos:frame_gold"),
-    (21, "gold:500", "cos:elif_snow"),
-    (22, "electronics:10", "gem:70"),
-    (23, "gold:600", "cos:skin_sniper_titan"),
-    (24, "antidote:3", "jacket_military:1"),
-    (25, "gold:700", "cos:tag_legend"),
+    (17, "gold:700", "boots_military:1"),
+    (18, "medkit:3", "chest_military:2"),
+    (19, "electronics:10", "gem:60"),
+    (20, "chest_military:1", "jacket_military:1"),
+    (21, "gold:800", "pants_military:1"),
+    (22, "battery:5", "gem:70"),
+    (23, "gold:900", "neck_dark:1"),
+    (24, "titan_shard:1", "potion_power:5"),
+    (25, "gem:25", "w_katana:1"),
     (26, "dark_crystal:2", "gem:100"),
-    (27, "gold:800", "cos:skin_rpg_gold"),
+    (27, "gold:1000", "chest_military:3"),
     (28, "medkit:5", "titan_shard:3"),
-    (29, "gold:1000", "gem:150"),
-    (30, "cos:frame_s1", "cloak:1"),
+    (29, "gold:1200", "gem:150"),
+    (30, "chest_military:2", "ring_titan:1"),
+];
+
+/// Haftalık havuz: her hafta 4 tanesi seçilir.
+pub const WEEKLY_POOL: &[QuestDef] = &[
+    QuestDef { id: "w_kill", title: "300 Zombi Öldür", kind: QuestKind::Kill, goal: 300, gold: 800, xp: 1500, pass_xp: 1200 },
+    QuestDef { id: "w_dark", title: "40 Karanlık Zombi Öldür", kind: QuestKind::KillType(4), goal: 40, gold: 900, xp: 1600, pass_xp: 1200 },
+    QuestDef { id: "w_dog", title: "60 Zombi Köpek Öldür", kind: QuestKind::KillType(2), goal: 60, gold: 800, xp: 1400, pass_xp: 1000 },
+    QuestDef { id: "w_soldier", title: "25 Asker Etkisiz Bırak", kind: QuestKind::Soldier, goal: 25, gold: 1200, xp: 2000, pass_xp: 1500 },
+    QuestDef { id: "w_base", title: "2 Devlet Üssü Ele Geçir", kind: QuestKind::BaseCap, goal: 2, gold: 1500, xp: 2500, pass_xp: 2000 },
+    QuestDef { id: "w_crate", title: "30 Sandık Aç", kind: QuestKind::Crate, goal: 30, gold: 700, xp: 1200, pass_xp: 1000 },
+    QuestDef { id: "w_craft", title: "25 Eşya Üret", kind: QuestKind::Craft, goal: 25, gold: 700, xp: 1200, pass_xp: 1000 },
+    QuestDef { id: "w_titan", title: "1 Titan Yen", kind: QuestKind::KillType(7), goal: 1, gold: 2000, xp: 3000, pass_xp: 2000 },
+];
+
+/// Sezon görevleri: sezon boyunca hepsi açık.
+pub const SEASON_QUESTS: &[QuestDef] = &[
+    QuestDef { id: "s_kill", title: "3.000 Zombi Öldür", kind: QuestKind::Kill, goal: 3000, gold: 3000, xp: 8000, pass_xp: 4000 },
+    QuestDef { id: "s_titan", title: "10 Titan Yen", kind: QuestKind::KillType(7), goal: 10, gold: 3000, xp: 10000, pass_xp: 5000 },
+    QuestDef { id: "s_base", title: "15 Devlet Üssü Ele Geçir", kind: QuestKind::BaseCap, goal: 15, gold: 3000, xp: 9000, pass_xp: 5000 },
+    QuestDef { id: "s_soldier", title: "300 Asker Etkisiz Bırak", kind: QuestKind::Soldier, goal: 300, gold: 3000, xp: 9000, pass_xp: 4000 },
+    QuestDef { id: "s_craft", title: "200 Eşya Üret", kind: QuestKind::Craft, goal: 200, gold: 3000, xp: 6000, pass_xp: 3000 },
+    QuestDef { id: "s_crate", title: "300 Sandık Aç", kind: QuestKind::Crate, goal: 300, gold: 3000, xp: 6000, pass_xp: 3000 },
+    QuestDef { id: "s_chop", title: "1.000 Ağaç Kes", kind: QuestKind::Chop, goal: 1000, gold: 3000, xp: 6000, pass_xp: 3000 },
+    QuestDef { id: "s_level", title: "Seviye 30'a Ulaş", kind: QuestKind::Level, goal: 30, gold: 3000, xp: 0, pass_xp: 4000 },
 ];
 
 pub struct Cosmetic {
@@ -1079,13 +1109,10 @@ mod tests {
                 let (k, _) = r.split_once(':').unwrap();
                 match k {
                     "gold" | "gem" => {}
-                    "cos" => assert!(
-                        COSMETICS
-                            .iter()
-                            .any(|c| c.id == r.split(':').nth(1).unwrap()),
-                        "{r}"
-                    ),
-                    _ => assert!(item_index(k).is_some(), "{r}"),
+                    _ => {
+                        assert!(item_index(k).is_some(), "{r}");
+                        assert!(!matches!(ITEMS[item_index(k).unwrap()].kind, ItemKind::Ammo | ItemKind::Cloak), "{r}");
+                    }
                 }
             }
         }

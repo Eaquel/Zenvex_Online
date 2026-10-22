@@ -725,6 +725,8 @@ impl Game {
             self.events.push(Event::BotDown { x, y });
             if by_player {
                 self.progress.ev.soldier_kills += 1;
+                let done = self.progress.quest_event(data::QuestKind::Soldier, 1);
+                self.quests_done(done);
                 self.give_xp(x, y, 40 + lv);
                 if self.rng.chance(0.3) {
                     let id = if self.rng.chance(0.3) { "medkit" } else { "bandage" };
@@ -818,6 +820,8 @@ impl Game {
             if st.capture_t >= CAPTURE_TIME {
                 st.cap_sent = true;
                 self.progress.ev.base_caps += 1;
+                let done = self.progress.quest_event(data::QuestKind::BaseCap, 1);
+                self.quests_done(done);
                 self.events.push(Event::BaseCapture { id: i as u32 });
                 self.events.push(Event::Msg { text: "Üs ele geçiriliyor… Karargâha bildirildi".into() });
             }

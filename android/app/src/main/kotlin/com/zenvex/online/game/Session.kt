@@ -147,11 +147,13 @@ object Session {
     /**
      * Kaydı sunucuya yollar (arka planda). Sunucu reddedip son geçerli kaydı dönerse [rollback] ana iş parçacığında çağrılır.
      */
-    fun save(level: Int, data: String, kills: Int, xp: Long, rollback: (String, String) -> Unit) {
-        if (state.value == State.Off || sid.isEmpty()) return
+    fun save(level: Int, data: String, kills: Int, xp: Long, rollback: (String, String) -> Unit, done: ((Boolean) -> Unit)? = null) {
+        if (state.value == State.Off || sid.isEmpty()) { done?.invoke(false); return }
         val args = signedSave(level, data, kills, xp)
         Supa.bg {
             val r = runCatching { JSONObject(Supa.rpcSync("zx_save3", args)) }
+            val ok = r.getOrNull()?.optBoolean("ok", true) == true
+            if (done != null) main.post { done(ok) }
             r.onSuccess { o ->
                 if (!o.optBoolean("ok", true) && o.has("rollback")) main.post { rollback(o.optString("rollback"), o.optString("msg")) }
             }.onFailure { e ->

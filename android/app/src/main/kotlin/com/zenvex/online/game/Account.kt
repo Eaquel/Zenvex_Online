@@ -95,6 +95,13 @@ object Account {
 
     fun topPlayers(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_top2", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
 
+    // ------------------------------------------------------------------ sezon bileti (oturum gerekir)
+    private fun sess() = auth().put("p_sid", Session.sid)
+    fun passState(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_pass_state", sess()) { r -> done(obj(r)) }
+    fun passBuy(elite: Boolean, done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_pass_buy", sess().put("p_elite", elite)) { r -> done(obj(r)) }
+    fun passClaim(tier: Int, premium: Boolean, done: (Result<JSONObject>) -> Unit) =
+        Supa.rpc("zx_pass_claim", sess().put("p_tier", tier).put("p_premium", premium)) { r -> done(obj(r)) }
+
     /** Sıralama: kategoride ilk 10 (level, kills, pvp, titan, soldiers, bases, dog, crafted, time) */
     fun board(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_board", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
 

@@ -251,12 +251,6 @@ private fun EventTab(report: (String, Boolean) -> Unit) {
     }
 }
 
-fun fmtLeft(ms: Long): String {
-    if (ms <= 0) return "Bitti"
-    val m = ms / 60000; val d = m / 1440; val h = (m % 1440) / 60
-    return when { d > 0 -> "$d Gün $h Saat"; h > 0 -> "$h Saat ${m % 60} Dk"; else -> "${m % 60} Dk" }
-}
-
 // =========================================================================== bakım
 @Composable
 private fun MaintTab(report: (String, Boolean) -> Unit) {

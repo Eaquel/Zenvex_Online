@@ -202,4 +202,16 @@ class UiShotsTest {
             .put("hours", 214).put("title", title("kills", 1)).put("titles", org.json.JSONArray().put(title("kills", 1)).put(title("pvp", 3)).put(title("time", 7)))
         paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { ProfileEditorView(p, {}, {}) { _, _ -> } } } }
     }
+
+    @Test
+    fun passRewards() {
+        val now = 1_793_000_000_000L
+        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, { _, _ -> }, { _, _, _ -> }) }
+    }
+
+    @Test
+    fun passWeekly() {
+        val now = 1_793_000_000_000L
+        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, { _, _ -> }, { _, _, _ -> }, startTab = 2) }
+    }
 }

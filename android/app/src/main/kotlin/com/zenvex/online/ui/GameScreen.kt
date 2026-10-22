@@ -55,7 +55,7 @@ import org.json.JSONObject
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Skills, Profile, Me, Characters, Cosmetics, Mail, Clan, Top, Players, Cheat, Dog, Npc,
+    Quests, Pass, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc,
 }
 
 /**
@@ -183,9 +183,6 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Npc -> NpcDialogScreen(npcKind, close) { o ->
                 overlay = when (o) { "merchant" -> Overlay.Merchant; "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; else -> Overlay.None }
             }
-            Overlay.Profile -> ProfileScreen(close) {}
-            Overlay.Characters -> CharacterScreen(close)
-            Overlay.Cosmetics -> CosmeticsScreen(close)
             // imePadding: klavye açılınca sohbet paneli klavyenin üstüne kayar
             // sohbet: oyun arkada görünür ve oynanır (karartma yok); panel yarı saydam, ekranın yüksekliği boyunca
             Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(start = 8.dp, top = 8.dp, bottom = 8.dp)) {
@@ -197,7 +194,6 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Clan -> ClanScreen({ overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }, inGame = true)
             Overlay.Top -> TopDialog(close)
             Overlay.Me -> PlayerProfileDialog(Account.id.value.toString(), close)
-            Overlay.Players -> PlayersDialog(close)
             Overlay.Cheat -> DevMenu(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
@@ -382,32 +378,6 @@ private fun DeadDialog(respawned: () -> Unit, toLobby: () -> Unit) {
 }
 
 // =========================================================================== harita + seyahat
-
-// =========================================================================== posta
-// =========================================================================== oyuncular
-@Composable
-private fun PlayersDialog(close: () -> Unit) {
-    var list by remember { mutableStateOf(Online.players()) }
-    LaunchedEffect(Unit) { while (true) { list = Online.players(); delay(1500) } }
-    PxDialog("Sunucudaki Oyuncular", close) {
-        PT("${GameSession.server.value.title} · ${Online.status.value} · ${Online.role.value}", 13.sp, if (Online.online.value) Px.Name else Px.Sub, maxLines = 2)
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.height(230.dp).verticalScroll(rememberScrollState())) {
-            Row(Modifier.fillMaxWidth().background(Px.RowHi).padding(horizontal = 8.dp, vertical = 5.dp)) {
-                Account.clan.value?.let { PT(it.name + " ", 15.sp, Px.Clan) }
-                PT(Account.name.value.ifEmpty { "Sen" } + " (sen)", 15.sp, Px.Name)
-            }
-            if (list.isEmpty()) PT(if (Online.online.value) "Şu an bu sunucuda başka kimse yok." else "Çevrimdışısın.", 15.sp, Px.Sub, maxLines = 2)
-            list.forEachIndexed { i, (n, c) ->
-                Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(horizontal = 8.dp, vertical = 5.dp)) {
-                    if (c.isNotEmpty()) PT("$c ", 15.sp, Px.Clan)
-                    PT(n, 15.sp)
-                }
-            }
-        }
-        PT("Takas için oyuncuya yaklaş, takas tuşu çıkar.", 12.sp, Px.Sub)
-    }
-}
 
 // =========================================================================== köpek
 @Composable

@@ -494,6 +494,7 @@ impl Game {
         progress.inv.migrate();
         progress.relayout_inv();
         progress.ensure_dailies(day_index);
+        let _ = progress.quest_event(data::QuestKind::Level, 0);
         let (x, y) = world::camp_spawn();
         let player = Player {
             x,

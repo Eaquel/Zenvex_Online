@@ -23,7 +23,8 @@ object GameSession {
     @Volatile private var lastCloud = 0L
 
     /** Gün indeksi (günlük görevler için) */
-    private fun today(): Int = (System.currentTimeMillis() / 86_400_000L).toInt()
+    /** Gün numarası: Türkiye saatiyle gece yarısı değişir (sunucu saatiyle düzeltilmiş). Haftalık görevler Pazartesi yenilenir. */
+    private fun today(): Int = ((Pass.now() + 3 * 3_600_000L) / 86_400_000L).toInt()
 
     private fun saveFile(id: String) = File(appCtx.filesDir, "save_$id.json")
 
@@ -102,8 +103,9 @@ object GameSession {
      * Kayıt: cihazda önbellek dosyası (yalnız lobide gösterim için) + oturum açıksa sunucuya imzalı kayıt (30 sn'de bir ya da [cloud]).
      * Sunucu kaydı reddederse oyun sunucudaki son geçerli kayda döner.
      */
-    fun save(cloud: Boolean = false) {
-        if (handle == 0L) return
+    /** [done]: yalnız bulut kaydı denendiğinde, sunucu kabul ettiyse true (satın alma gibi akışlar önce kaydı bekler). */
+    fun save(cloud: Boolean = false, done: ((Boolean) -> Unit)? = null) {
+        if (handle == 0L) { done?.invoke(false); return }
         val snap = snapshot()
         val f = saveFile(server.value.id)
         runCatching {
@@ -115,11 +117,11 @@ object GameSession {
         if (Session.state.value != Session.State.Off && (cloud || now - lastCloud > 30_000)) {
             lastCloud = now
             Account.levels[server.value.id] = snap.level
-            Session.save(snap.level, snap.data, snap.kills, snap.xp) { data, msg ->
+            Session.save(snap.level, snap.data, snap.kills, snap.xp, { data, msg ->
                 openFromServer(data)
                 com.zenvex.online.ui.Toaster.show(msg, false)
-            }
-        }
+            }, done)
+        } else done?.invoke(false)
     }
 
     /** Oturum açılınca: oyun sunucudaki kayıttan başlar (boşsa yeni karakter). */

@@ -299,17 +299,8 @@ impl Game {
                     json!({ "title": q.title, "goal": q.goal, "progress": prog.min(q.goal), "gold": q.gold, "xp": q.xp, "pass_xp": q.pass_xp,
                             "index": g.quests.main + 1, "total": data::MAIN_QUESTS.len() })
                 });
-                let daily: Vec<Value> = g
-                    .quests
-                    .daily
-                    .iter()
-                    .filter_map(|(id, prog, done)| {
-                        let q = data::DAILY_POOL.iter().find(|q| q.id == id)?;
-                        Some(json!({ "title": q.title, "goal": q.goal, "progress": (*prog).min(q.goal), "done": done,
-                                     "gold": q.gold, "xp": q.xp, "pass_xp": q.pass_xp }))
-                    })
-                    .collect();
-                json!({ "main": main, "daily": daily, "story": self.story_json() })
+                json!({ "main": main, "daily": quest_list(&g.quests.daily, data::DAILY_POOL), "weekly": quest_list(&g.quests.weekly, data::WEEKLY_POOL),
+                        "season": quest_list(&g.quests.season, data::SEASON_QUESTS), "story": self.story_json() })
             }
             "pass" => {
                 let tier = g.pass_tier();
@@ -321,9 +312,11 @@ impl Game {
                                 "reached": *t <= tier })
                     })
                     .collect();
-                json!({ "season": "Sezon 1: Tanrıların Düşüşü", "tier": tier, "xp": g.pass.xp % data::PASS_XP_PER_TIER,
+                json!({ "season_id": g.pass.season, "tier": tier, "xp": g.pass.xp % data::PASS_XP_PER_TIER, "xp_total": g.pass.xp,
                         "xp_per_tier": data::PASS_XP_PER_TIER, "tiers": data::PASS_TIERS, "normal": g.pass.normal, "elite": g.pass.elite,
-                        "price_normal": data::PASS_PRICE_NORMAL, "price_elite": data::PASS_PRICE_ELITE, "rewards": rewards })
+                        "price_normal": data::PASS_PRICE_NORMAL, "price_elite": data::PASS_PRICE_ELITE, "gems": g.gems, "rewards": rewards,
+                        "daily": quest_list(&g.quests.daily, data::DAILY_POOL), "weekly": quest_list(&g.quests.weekly, data::WEEKLY_POOL),
+                        "season": quest_list(&g.quests.season, data::SEASON_QUESTS) })
             }
             "cosmetics" => {
                 let list: Vec<Value> = COSMETICS
@@ -495,6 +488,21 @@ impl Game {
             "reset_skills" => self.progress.reset_skills().map(|_| "Yetenekler sıfırlandı".into()).map_err(String::from),
             "select_char" => self.select_char(int("i")),
             "unlock_char" => self.unlock_char(int("i")),
+            "pass_buy" => self.buy_pass(v["elite"].as_bool().unwrap_or(false)),
+            "pass_sync" => {
+                let reset = self.progress.sync_season(v["season"].as_u64().unwrap_or(0) as u32);
+                // sunucu bileti kayıtlı gösteriyor ama yerelde yoksa (satın alma sonrası kayıt yetişmediyse) şimdi uygula
+                let (n, e) = (v["normal"].as_bool().unwrap_or(false), v["elite"].as_bool().unwrap_or(false));
+                if e && !self.progress.pass.elite {
+                    let price = if self.progress.pass.normal { data::PASS_PRICE_ELITE - data::PASS_PRICE_NORMAL } else { data::PASS_PRICE_ELITE };
+                    self.progress.gems = self.progress.gems.saturating_sub(price);
+                    self.activate_pass(true);
+                } else if n && !self.progress.pass.normal {
+                    self.progress.gems = self.progress.gems.saturating_sub(data::PASS_PRICE_NORMAL);
+                    self.activate_pass(false);
+                }
+                Ok(if reset { "Yeni Sezon Başladı!".into() } else { String::new() })
+            }
             "claim_pass" => self.claim_pass(v["tier"].as_u64().unwrap_or(0) as u32, v["premium"].as_bool().unwrap_or(false)),
             "buy_pass" => Err("Ödeme sistemi (Google Play Faturalandırma) henüz bağlı değil. Test için geliştirici menüsü: \"pass buy\"".into()),
             "equip_cosmetic" => self.equip_cosmetic(v["id"].as_str().unwrap_or("")),
@@ -982,9 +990,22 @@ impl Game {
         if elite && !p.pass.elite {
             p.pass.elite = true;
             p.pass.xp += 10 * data::PASS_XP_PER_TIER;
-            p.grant("cos:tag_legend");
-            p.grant("cos:frame_s1");
         }
+    }
+
+    /// Elmasla bilet: önce sunucu kaydı (zx_pass_buy) alınır, sonra bu komut elması düşer ve bileti açar.
+    fn buy_pass(&mut self, elite: bool) -> Result<String, String> {
+        let p = &self.progress;
+        if elite && p.pass.elite || !elite && p.pass.normal {
+            return Err("Bu bilet zaten sende".into());
+        }
+        let price = if elite && p.pass.normal { data::PASS_PRICE_ELITE - data::PASS_PRICE_NORMAL } else if elite { data::PASS_PRICE_ELITE } else { data::PASS_PRICE_NORMAL };
+        if p.gems < price {
+            return Err(format!("{price} elmas gerekli"));
+        }
+        self.progress.gems -= price;
+        self.activate_pass(elite);
+        Ok(if elite { "Elit Bilet Açıldı! +10 Kademe".into() } else { "Premium Bilet Açıldı!".into() })
     }
 
     fn equip_cosmetic(&mut self, id: &str) -> Result<String, String> {
@@ -1385,6 +1406,7 @@ mod v4_tests {
         let Ok(dir) = std::env::var("ZX_DUMP_UI") else { return };
         let mut g = Game::new(7, Progress::default(), 1);
         g.cheat("level 30").unwrap();
+        g.progress.gems = 5000;
         // birkaç dalda ilerlemiş bir ağaç
         for _ in 0..3 {
             for id in 1..crate::rpg::tree().len() as u16 {
@@ -1425,6 +1447,21 @@ mod v4_tests {
         let rc = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "ring_copper")).unwrap();
         g.progress.chest_put(ci, rc, None).unwrap();
         std::fs::write(format!("{dir}/chest.json"), g.ui_json(&format!("chest:{ci}"))).unwrap();
+        // sezon bileti: kademe 7, premium açık, ilk ödüller alınmış, görevlerde ilerleme
+        g.progress.sync_season(1);
+        g.progress.pass.xp = 7450;
+        g.progress.gems = 1240;
+        g.command(r#"{"cmd":"pass_buy","elite":false}"#);
+        for t in 1..=3 {
+            let _ = g.command(&format!(r#"{{"cmd":"claim_pass","tier":{t},"premium":false}}"#));
+            let _ = g.command(&format!(r#"{{"cmd":"claim_pass","tier":{t},"premium":true}}"#));
+        }
+        for _ in 0..12 {
+            g.progress.quest_event(crate::data::QuestKind::Kill, 1);
+        }
+        g.progress.quest_event(crate::data::QuestKind::Crate, 4);
+        g.progress.quest_event(crate::data::QuestKind::Soldier, 9);
+        std::fs::write(format!("{dir}/pass.json"), g.ui_json("pass")).unwrap();
         g.step(1.0 / 30.0, crate::game::Input::default());
         // harita: başlangıçtan kuzeye bir yol keşfedilmiş
         let (sx, sy) = (g.player.x, g.player.y);
@@ -1609,4 +1646,15 @@ mod v4_tests {
         let c: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
         assert!(c["items"].as_array().unwrap().iter().all(|i| i[0] != "w_sniper" && !i[0].as_str().unwrap().starts_with("ammo_")));
     }
+}
+
+/// Görev listesi görünümü (günlük / haftalık / sezon).
+fn quest_list(list: &[(String, u32, bool)], pool: &[data::QuestDef]) -> Vec<Value> {
+    list.iter()
+        .filter_map(|(id, prog, done)| {
+            let q = pool.iter().find(|q| q.id == id)?;
+            Some(json!({ "id": q.id, "title": q.title, "goal": q.goal, "progress": (*prog).min(q.goal), "done": done,
+                         "gold": q.gold, "xp": q.xp, "pass_xp": q.pass_xp }))
+        })
+        .collect()
 }
