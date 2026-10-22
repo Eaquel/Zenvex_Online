@@ -16,6 +16,10 @@ use std::f32::consts::TAU;
 use std::sync::OnceLock;
 
 pub const BASE_N: usize = 50;
+/// V11 şehir öğreticisinin yerel eğitim üssü (base_defs'in son elemanı; sunucuda yok, haritada gösterilmez)
+pub const TRAIN_BASE: usize = BASE_N;
+/// eğitim askerleri: 6 M4'lü, düşük can ve hasar
+pub const TRAIN_HP: f32 = 140.0;
 /// yerleşkenin yarı genişliği (karo)
 pub const BASE_HALF: f32 = 11.0;
 pub const GARRISON: usize = 15;
@@ -62,6 +66,9 @@ impl BaseDef {
         (self.tx * TILE, self.ty * TILE)
     }
     pub fn name(&self) -> String {
+        if self.id as usize == TRAIN_BASE {
+            return "Eğitim Üssü".into();
+        }
         let r = if self.tx >= world::WORLD_TILES as f32 { "Doğu Cephesi" } else { "Güney Cephesi" };
         format!("{r} Üssü {}", self.id + 1)
     }
@@ -110,6 +117,7 @@ fn generate_defs() -> Vec<BaseDef> {
             out.push(BaseDef { id, tx, ty, level: level + (id as u32 % 3), region: zone });
         }
     }
+    out.push(BaseDef { id: TRAIN_BASE as u16, tx: world::WORLD_TILES as f32 + 146.0, ty: world::WORLD_TILES as f32 + 40.0, level: 10, region: Zone::Front });
     out
 }
 
@@ -297,7 +305,7 @@ impl Game {
             kind,
             x,
             y,
-            hp: SOLDIER_HP,
+            hp: if i == TRAIN_BASE { TRAIN_HP } else { SOLDIER_HP },
             level: b.level,
             inv_t: if at_post { 0.0 } else { SPAWN_INV },
             cd: self.rng.range(0.5, 2.5),
@@ -339,6 +347,13 @@ impl Game {
 
     /// Yakına gelince üs canlanır: garnizon (geçen süreye göre yeniden dolmuş haliyle) mevzilerine yerleşir.
     fn activate_base(&mut self, i: usize) {
+        if i == TRAIN_BASE {
+            self.bases[i].active = true;
+            for p in 5..11 {
+                self.spawn_soldier(i, p, true);
+            }
+            return;
+        }
         let now_s = self.time;
         let clock = self.base_clock;
         let st = &mut self.bases[i];
@@ -380,14 +395,23 @@ impl Game {
     }
 
     pub fn update_bases(&mut self, dt: f32) {
-        if self.bases.len() != BASE_N {
-            self.bases = vec![BaseState { left_at: -1.0, ..Default::default() }; BASE_N];
+        if self.bases.len() != base_defs().len() {
+            self.bases = vec![BaseState { left_at: -1.0, ..Default::default() }; base_defs().len()];
         }
         self.base_clock += dt as f64 * 1000.0;
         let (px, py) = (self.player.x, self.player.y);
         for (i, b) in base_defs().iter().enumerate() {
             let (bx, by) = b.pos();
             let d = (bx - px).hypot(by - py);
+            // eğitim üssü yalnız öğretici sürerken canlı; takviye gelmez
+            if i == TRAIN_BASE {
+                if self.train == 1 && !self.bases[i].active {
+                    self.activate_base(i);
+                } else if self.train == 0 && self.bases[i].active {
+                    self.deactivate_base(i);
+                }
+                continue;
+            }
             if !self.bases[i].active && d < ACT_R {
                 self.activate_base(i);
             } else if self.bases[i].active && d > DEACT_R {
@@ -635,7 +659,8 @@ impl Game {
         let acc = acc.clamp(0.0, 0.92);
         let hit = self.rng.chance(acc);
         let lvl = 1.0 + 0.012 * s.level as f32;
-        let dmg = if s.kind == K_SNIPER { SNIPER_DMG } else { M4_DMG } * lvl * self.rng.range(0.9, 1.1);
+        let train = if s.base as usize == TRAIN_BASE { 0.5 } else { 1.0 };
+        let dmg = if s.kind == K_SNIPER { SNIPER_DMG } else { M4_DMG } * lvl * train * self.rng.range(0.9, 1.1);
         let (ix, iy) = if hit {
             (tx, ty - 50.0)
         } else {
@@ -766,6 +791,17 @@ impl Game {
             st.capture_t = 0.0;
             return;
         }
+        if inside && alive == 0 && i == TRAIN_BASE {
+            // eğitim üssü: klan gerekmez, sunucuya gitmez
+            if self.train == 1 {
+                st.capture_t += dt;
+                if st.capture_t >= CAPTURE_TIME {
+                    st.capture_t = 0.0;
+                    self.train_captured();
+                }
+            }
+            return;
+        }
         if inside && alive == 0 {
             // savunan klan üyesi halkadaysa ele geçirme durur (klan savaşı)
             if self.capture_blocked {
@@ -824,7 +860,7 @@ impl Game {
             let aim_d = if s.kind == K_SNIPER && s.aim_t > 0.0 { (s.ax - s.x).hypot(s.ay - s.y) } else { 0.0 };
             self.draw_tmp.push((
                 s.y + if s.post < 4 { 40.0 } else { 0.0 },
-                [D_SOLDIER, s.kind as f32 + tower, s.x, s.y, s.face, state, s.anim_t, fx, s.hp / SOLDIER_HP, s.level as f32,
+                [D_SOLDIER, s.kind as f32 + tower, s.x, s.y, s.face, state, s.anim_t, fx, s.hp / if s.base as usize == TRAIN_BASE { TRAIN_HP } else { SOLDIER_HP }, s.level as f32,
                  if hostile { 1.0 } else { 0.0 } + aim_d.round() * 2.0, extra],
             ));
         }
@@ -912,7 +948,7 @@ mod tests {
     #[test]
     fn fifty_bases_in_valid_places() {
         let d = base_defs();
-        assert_eq!(d.len(), BASE_N);
+        assert_eq!(d.len(), BASE_N + 1);
         for (i, b) in d.iter().enumerate() {
             let z = zone_at_tile(b.tx as usize, b.ty as usize);
             assert!(!z.safe(), "üs {i} güvenli bölgede");

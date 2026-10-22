@@ -212,6 +212,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     /** kule askerinin fırlattığı mızrak: (x1,y1)→(x2,y2) yay çizerek dur sn'de uçar */
     private class Spear(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val dur: Float) { var t = 0f }
     private val spears = ArrayList<Spear>()
+    /** V11 eğitim üssüne düşen bomba (x, y hedef; dur düşüş süresi) */
+    private class Bomb(val x: Float, val y: Float, val dur: Float) { var t = 0f }
+    private val bombs = ArrayList<Bomb>()
     /** takla art görüntüsü: kahramanın son karelerinden mor, sönen kopyalar */
     private class Ghost(val x: Float, val y: Float, val key: String, val flip: Boolean, var life: Float)
     private val ghosts = ArrayList<Ghost>()
@@ -398,12 +401,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     guideStep = q.optString("id"); guideN = q.optInt("n"); guideGoal = q.optInt("goal")
                 }
                 if (q.optBoolean("guide") && q.optBoolean("ready")) guideReady = true
-                if (q.optBoolean("guide") && !q.optBoolean("on") && q.has("x")) guideOffer = true
+                if (q.optBoolean("guide") && !q.optBoolean("on") && q.has("x")) { guideOffer = true; guideGiver = q.optInt("giver_kind") }
                 val ch = 4 + q.optInt("giver_kind")
                 if (q.optBoolean("ready")) questMarks[ch] = "?"
                 else if (!q.optBoolean("on") && q.has("x")) questMarks.putIfAbsent(ch, "!")
             }
         }
+        bombs.removeAll { b -> b.t += dt; b.t >= b.dur }
         spears.removeAll { s -> s.t += dt; if (s.t >= s.dur) { burst(s.x2, s.y2 + 50, 6, 0xFF9A8A70.toInt(), 120f, 4f); Audio.play("hit", near(s.x2, s.y2) * 0.7f, 0.8f) }; s.t >= s.dur }
         bolts.removeAll { it.life -= dt; it.life <= 0 }
         ghosts.removeAll { it.life -= dt; it.life <= 0 }
@@ -631,6 +635,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         if (e.optBoolean("safe")) 0xFF7FE0A0.toInt() else 0xFFFFE9A8.toInt())
                 }
                 "locked" -> ui.onToast("Şehir kapısı kilitli: Seviye 10 gerekli")
+                "bomb" -> {
+                    bombs += Bomb(x, y, e.optDouble("dur", 2.4).toFloat())
+                    Audio.play("rocket", 0.8f, 0.6f)  // ıslık gibi alçak tonlu roket sesi
+                    shake(4f, 0.4f)
+                }
                 "spear" -> {
                     val x1 = e.getDouble("x1").toFloat(); val y1 = e.getDouble("y1").toFloat()
                     spears += Spear(x1, y1, e.getDouble("x2").toFloat(), e.getDouble("y2").toFloat(), e.getDouble("dur").toFloat())
@@ -720,6 +729,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawParticles(c)
         drawTracers(c)
         drawSpears(c)
+        drawBombs(c)
         drawBolts(c)
         drawLighting(c)
         drawPlates(c)
@@ -974,9 +984,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     // ------------------------------------------------------------------ V6 NPC'ler
     // rehber (tür 6) şimdilik asker görseliyle
-    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard")
+    // V11 komutan (tür 8): kendi görseli gelene dek asker görseliyle ("npc/commander" atlasa girince o kullanılır)
+    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard", "commander")
     private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
-        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma")
+        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma",
+        "Komutan Ece" to "Komutan")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
     private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
     private val questTargets = ArrayList<QuestTarget>()
@@ -1037,7 +1049,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun drawNpc6(c: Canvas, ch: Int, x: Float, y: Float, sx: Float, sy: Float, dir: Int, t: Float): Boolean {
         val name = npc6Names.getOrNull(ch - 4) ?: return false
         // büyücü görseli yoksa görevci görseli mor tonla
-        val key = if (name == "wizard" && atlas["npc/wizard"] == null) "npc/quest" else "npc/$name"
+        val key = when {
+            name == "wizard" && atlas["npc/wizard"] == null -> "npc/quest"
+            name == "commander" && atlas["npc/commander"] == null -> "npc/soldier"
+            else -> "npc/$name"
+        }
         val sp = atlas[key] ?: return false
         val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return false
         val k = sp.k * scale
@@ -1934,6 +1950,36 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    /**
+     * Düşen bomba: hedefte büyüyen kırmızı halka ve gölge, gökten inen kanatçıklı bomba (düştükçe hızlanır).
+     * Görsel gelirse (atlas "s/air_bomb") onu kullanır; yoksa kodla çizilir.
+     */
+    private fun drawBombs(c: Canvas) {
+        for (b in bombs) {
+            val f = (b.t / b.dur).coerceIn(0f, 1f)
+            val sx = wx(b.x); val sy = wy(b.y)
+            // hedef halkası (yanıp söner) ve büyüyen gölge
+            val pulse = 0.5f + 0.5f * sin(time * 14f)
+            stroke.color = alphaC(0xFFFF3020.toInt(), 0.5f + 0.5f * pulse); stroke.strokeWidth = 3f * density
+            val rr = (260f - 120f * f) * scale
+            c.drawOval(sx - rr, sy - rr * 0.45f, sx + rr, sy + rr * 0.45f, stroke)
+            fill.color = alphaC(0xFF000000.toInt(), 0.15f + 0.4f * f)
+            val sr = (20f + 70f * f) * scale
+            c.drawOval(sx - sr, sy - sr * 0.4f, sx + sr, sy + sr * 0.4f, fill)
+            // bomba: yükseklik f² ile azalır (ivmelenme)
+            val alt = (1f - f * f) * 1400f * scale
+            val by = sy - alt - 40f * scale
+            val sp = atlas["s/air_bomb"]
+            if (sp != null) { atlas.draw(c, sp, sx, by + 40f * scale, scale, pixelPaint); continue }
+            val w = 16f * scale; val h = 44f * scale
+            fill.color = 0xFF3A3F2E.toInt(); c.drawOval(sx - w, by - h, sx + w, by + h * 0.6f, fill)
+            fill.color = 0xFF5A6244.toInt(); c.drawOval(sx - w * 0.55f, by - h * 0.9f, sx + w * 0.2f, by + h * 0.2f, fill)
+            fill.color = 0xFFC83020.toInt(); c.drawRect(sx - w, by - h * 0.25f, sx + w, by - h * 0.1f, fill)
+            fill.color = 0xFF2A2E22.toInt()
+            for (k in listOf(-1f, 1f)) c.drawRect(sx + k * w * 0.2f - (if (k < 0) w * 0.9f else 0f), by - h * 1.25f, sx + k * w * 0.2f + (if (k > 0) w * 0.9f else 0f), by - h * 0.95f, fill)
+        }
+    }
+
     private fun drawSpears(c: Canvas) {
         for (s in spears) {
             val f = (s.t / s.dur).coerceIn(0f, 1f)
@@ -2378,6 +2424,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     @Volatile private var guideGoal = 0
     @Volatile private var guideReady = false
     @Volatile private var guideOffer = false
+    @Volatile private var guideGiver = 0
     private var tutMoved = false
     private var tutAttacked = false
     private var tutKey = ""
@@ -2446,7 +2493,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val x0 = sw / 2f - bw / 2; val y0 = 58 * d - (1f - a) * 10 * d
         fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
         stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
+        drawText(c, if (guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)) "Komutan Ece" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
         for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
     }
 
@@ -2467,9 +2514,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             guideStep == "g2" -> { if (btnAbility.visible) ringAt = Triple(btnAbility.r.centerX(), btnAbility.r.centerY(), btnAbility.r.width() / 2); "Takla tuşuna bas: baktığın yöne yuvarlanırsın ve o an hasar almazsın$prog." }
             guideStep == "g3" -> "Yerde parlayan eşyaların üstünden geç, kendiliğinden çantana girer$prog."
             guideStep == "g4" -> "Çantayı aç, Üretim bölümünden Bandaj'ı seç ve üret."
+            guideStep == "g4b" -> "Çanta → Üret → Silah Ve Alet sekmesinden Taş Balta'yı üret. Malzemeyi ben verdim."
+            guideStep == "g4a" -> "Bir ağaca yürü ve vurmaya devam et: 500 canı var, balta her vuruşta 50 götürür."
             guideStep == "g5" -> "Çantada bir eşyaya basılı tut ve soldaki ceplerden birine sürükle."
             guideStep == "g6" -> "Tüccar Marco'yu bul ve onunla konuş."
+            guideStep == "g6b" -> "Ateşin doğusundaki mor cüppeli Büyücü Aldric'le konuş."
+            guideStep == "g8" -> "Haritadaki işarete, Titan Arenası'nın yanındaki Arena Kampı'na git."
+            guideStep == "g9" && guideN == 0 -> "Askerleri indir, sonra ortadaki bayrak halkasında 10 saniye dur."
             guideStep == "g7" -> "5. seviyeye ulaş: Yaşlı Silas'ın görevlerini yap, ormanda avlan."
+            guideOffer && guideGiver == 8 -> "Şehrin güvenli bölgesinde Komutan Ece seni bekliyor: şehri ve üsleri o anlatacak."
             guideOffer && hud[Native.LEVEL] < 5f -> "Buraya gel, sana anlatacaklarım var."
             else -> null
         }

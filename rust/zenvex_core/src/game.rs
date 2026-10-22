@@ -213,6 +213,9 @@ pub enum Event {
     /// takviye helikopteri yola çıktı (piste iner)
     #[serde(rename = "heli")]
     Heli { x: f32, y: f32 },
+    /// V11 eğitim üssüne hava saldırısı: bomba dur sn içinde (x, y)'ye düşer
+    #[serde(rename = "bomb")]
+    Bomb { x: f32, y: f32, dur: f32 },
     /// ele geçirme süresi doldu: Kotlin sunucuya bildirir
     #[serde(rename = "basecap")]
     BaseCapture { id: u32 },
@@ -501,6 +504,9 @@ pub struct Game {
     pub base_clock: f64,
     /// büyücü ışınlanma bekleme süresi
     pub wiz_cd: f32,
+    /// V11 eğitim üssü öğreticisi: 0 kapalı, 1 çatışma, 2 bomba düşüyor, 3 patladı (bkz. training.rs)
+    pub train: u8,
+    pub train_t: f32,
 }
 
 impl Game {
@@ -508,6 +514,7 @@ impl Game {
         progress.character = 0;
         let world = World::generate(seed);
         progress.inv.migrate();
+        progress.story.migrate();
         progress.relayout_inv();
         progress.ensure_dailies(day_index);
         let _ = progress.quest_event(data::QuestKind::Level, 0);
@@ -567,6 +574,13 @@ impl Game {
             let (hx, hy) = world::home_spawn();
             npcs.push(Npc { kind: 7, x: hx + m(2.2), y: hy - m(9.5), dir: 0, cd: 0.0, anim_t: 1.3, hit_t: 0.0, hit_id: 0 });
         }
+        // şehir güvenli bölgesinde Komutan Ece (Sv 10 şehir öğreticisi)
+        {
+            let (cx, cy) = world::city_spawn();
+            let (mut x, mut y) = (cx + m(5.0), cy - m(3.0));
+            world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
+            npcs.push(Npc { kind: crate::story::N_COMMANDER, x, y, dir: 0, cd: 0.0, anim_t: 0.6, hit_t: 0.0, hit_id: 0 });
+        }
         // Cephe Karargâhı'ndaki büyücü (geri dönüş); tüccar ve diğerleri world.merchants ile gelir
         {
             let (fx, fy) = world::front_spawn();
@@ -617,6 +631,8 @@ impl Game {
             my_clan: 0,
             base_clock: 0.0,
             wiz_cd: 0.0,
+            train: 0,
+            train_t: 0.0,
         }
     }
 
@@ -694,6 +710,7 @@ impl Game {
         self.update_statics(dt);
         self.update_spawning(dt);
         self.update_bases(dt);
+        self.update_training(dt);
         self.wiz_cd = (self.wiz_cd - dt).max(0.0);
     }
 

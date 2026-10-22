@@ -47,7 +47,7 @@ import kotlin.math.sin
 
 /** NPC portre görseli (atlas npc/<ad>) */
 fun npcSprite(kind: Int) = when (kind) {
-    1 -> "npc/merchant"; 2 -> "npc/quest"; 3 -> "npc/doctor"; 4 -> "npc/mechanic"; 5 -> "npc/trainer"; 7 -> "npc/quest"; else -> "npc/soldier"
+    1 -> "npc/merchant"; 2 -> "npc/quest"; 3 -> "npc/doctor"; 4 -> "npc/mechanic"; 5 -> "npc/trainer"; 7 -> "npc/wizard"; else -> "npc/soldier"
 }
 
 /** Oyun içinde NPC'ye dokununca: konuşma (Rust talk komutu). */

@@ -323,7 +323,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
                 // öğretici: üretim ve cep adımlarında çantayı göster
                 val step = (0 until story.length()).map { story.getJSONObject(it) }
                     .firstOrNull { it.optBoolean("guide") && it.optBoolean("on") && !it.optBoolean("ready") }?.optString("id")
-                if (step == "g4" || step == "g5") {
+                if (step == "g4" || step == "g4b" || step == "g5") {
                     TutPulse(Modifier.matchParentSize())
                     TutArrow("Çantayı Aç", Modifier.align(Alignment.TopCenter))
                 }

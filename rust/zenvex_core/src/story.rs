@@ -15,6 +15,8 @@ pub const N_TRAINER: u8 = 5;
 pub const N_GUIDE: u8 = 6;
 /// V8: büyücü (kampta ve kişisel üste; ışınlanma)
 pub const N_WIZARD: u8 = 7;
+/// V11: şehir güvenli bölgesindeki komutan (Sv 10 şehir öğreticisi: arena, eğitim üssü)
+pub const N_COMMANDER: u8 = 8;
 
 /// NPC adı ve unvanı
 pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
@@ -26,6 +28,7 @@ pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
         N_TRAINER => ("Eğitmen Jack", "Köpek Eğitmeni"),
         N_GUIDE => ("Rehber Nova", "Rehber"),
         N_WIZARD => ("Büyücü Aldric", "Büyücü"),
+        N_COMMANDER => ("Komutan Ece", "Komutan"),
         _ => ("Kule Askeri", "Muhafız"),
     }
 }
@@ -51,6 +54,8 @@ pub enum Goal {
     Cleanse(&'static str),
     Level,
     Dog,
+    /// V11: eğitim üssünü ele geçir (bombalanıp şehirde uyanınca tamamlanır)
+    Train,
 }
 
 pub struct Quest {
@@ -103,6 +108,17 @@ pub const GUIDE: &[Quest] = &[
         "Çantadaki Üretim bölümünden Bandaj'ı seç ve üret. Bandaj her yerde üretilir; bazı tarifler tezgâh ister."],
        "Harika! Kendi bandajını yapan biri kolay kolay ölmez.",
        Goal::Craft("bandage"), 1, 1, 20, 50, &[], &[("cloth", 2), ("tape", 1)]),
+    q!("g4b", N_GUIDE, "Taş Balta", "Üret: 1 Taş Balta (Silah Ve Alet Sekmesi)",
+       ["Ağaçlar sağlamdır: her birinin 500 canı var. Yumrukla 20 kez vurman gerekir.",
+        "Sana odun, taş ve ip veriyorum. Üretimdeki Silah Ve Alet sekmesinden Taş Balta yap.",
+        "Balta çantanda durdukça işe yarar: ağaca her vuruşun 50 can götürür. Demir balta 100 götürür, onu tezgâhta yaparsın."],
+       "İşte gerçek bir hayatta kalan aleti! Kazmayı da aynı yerden yaparsın; kayalara işler.",
+       Goal::Craft("t_axe_stone"), 1, 1, 15, 40, &[], &[("wood", 6), ("stone", 4), ("rope", 1)]),
+    q!("g4a", N_GUIDE, "Odun Topla", "1 Ağaç Kes",
+       ["Şimdi baltanı dene. Kampın çevresindeki ağaçlardan birine yürü ve vurmaya devam et.",
+        "Ağaç devrilince odun düşer; çamlardan reçine de çıkar. Odun üretimin temelidir."],
+       "Gördün mü? Balta olunca iş hızlanıyor. Odun ve taş her zaman lazım olacak.",
+       Goal::Chop, 1, 1, 15, 40, &[], &[]),
     q!("g5", N_GUIDE, "Cebini Hazırla", "Çantada Bir Eşyayı Cebe Sürükle",
        ["Savaşın ortasında çantayı açmaya vaktin olmaz.",
         "Çantayı aç, bir bandaja ya da iksire basılı tut ve soldaki ceplerden birine sürükle.",
@@ -114,13 +130,41 @@ pub const GUIDE: &[Quest] = &[
         "Git, onunla bir konuş."],
        "Marco'yla anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
        Goal::Talk(N_MERCHANT), 1, 1, 10, 30, &[], &[]),
+    q!("g6b", N_GUIDE, "Büyücüyle Tanış", "Büyücü Aldric ile Konuş",
+       ["Ateşin doğusunda mor cüppeli biri durur: Büyücü Aldric.",
+        "Keşfettiğin güvenli yerlere ve kişisel üssüne seni ışınlar. 10. seviyede seni Cephe Hattı'na, üslerin olduğu yere de götürür.",
+        "Git, kendini tanıt."],
+       "Aldric tuhaf adamdır ama sözünü tutar. Uzak yolları onunla kısaltırsın.",
+       Goal::Talk(N_WIZARD), 1, 1, 10, 30, &[], &[]),
     q!("g7", N_GUIDE, "Ayakta Kal", "Seviye 5'e Ulaş",
        ["Sana öğreteceklerim bu kadar. Gerisi tecrübe.",
         "Yaşlı Silas'ın görevlerini yap, ormanda zombi avla. 5. seviyeye ulaşınca gel, seni uğurlayayım.",
         "5. seviyede sohbet de açılır; diğer hayatta kalanlarla konuşabilirsin."],
        "Artık benim yardımıma ihtiyacın yok. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
+    // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Ece
+    q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Titan Arenası'nı Gör (Arena Kampı)",
+       ["Şehre hoş geldin asker. Ben Komutan Ece; bu surların ardında hayatta kalanları ben toplarım.",
+        "Şehir üç kuşaktır: banliyö, merkez ve sanayi. Kuzeydoğuda Titan Arenası var; titanlar orada uyanır.",
+        "Arena Kampı'na kadar git, gözünle gör. Haritanda işaretledim. Titana tek başına dalma; önce yerini bil."],
+       "Gördün mü o devi? Titanlar büyük ganimet bırakır ama klansız gidene mezar olur.",
+       Goal::Reach("arena_post"), 1, 10, 150, 200, &[("medkit", 2)], &[]),
+    q!("g9", N_COMMANDER, "Eğitim Üssü", "Eğitim Üssündeki Askerleri Yen Ve Üssü Ele Geçir",
+       ["Asıl savaş Cephe Hattı'nda: devlet üsleri ve klanların kapıştığı yer. Oraya Büyücü Aldric götürür.",
+        "Ama önce eğitim. Seni Cephe Karargâhı'nın yanındaki eğitim üssüne gönderiyorum; yalnız sen göreceksin.",
+        "İçerideki askerleri indir, sonra ortadaki bayrak halkasında 10 saniye dur. Üs senin olacak… bakalım ne kadar."],
+       "Hava saldırısını sağ atlattın! Gerçek üslerde de olur: tuttuğun üssü klanınla savunmalısın. Artık hazırsın asker.",
+       Goal::Train, 1, 10, 300, 300, &[("medkit", 3), ("potion_power", 1)], &[]),
 ];
+
+/// V10 kayıtlarındaki rehber sırası (g1..g7, 7 = bitti) → V11 sırası (g4b, g4a, g6b eklendi; şehir adımları sonda)
+pub fn migrate_guide_index(old: usize) -> usize {
+    match old {
+        0..=3 => old,
+        4 | 5 => old + 2,
+        _ => old + 3,
+    }
+}
 
 /// Görevcinin ana zinciri (sıradan ve sıra dışı görevler).
 pub const MAIN: &[Quest] = &[
@@ -184,6 +228,18 @@ pub struct StoryState {
     pub main: usize,
     pub main_on: bool,
     pub main_n: u32,
+    /// rehber zinciri sürümü (V11: 1)
+    pub guide_v: u32,
+}
+
+impl StoryState {
+    /// Eski kayıtların rehber sırasını yeni zincire taşır
+    pub fn migrate(&mut self) {
+        if self.guide_v < 1 {
+            self.guide = migrate_guide_index(self.guide);
+            self.guide_v = 1;
+        }
+    }
 }
 
 /// Hikâye ilerleme olayı
@@ -198,6 +254,7 @@ pub enum Ev {
     Loot,
     Talk(u8),
     Dog,
+    Train,
 }
 
 fn chain(which: u8) -> &'static [Quest] {
@@ -259,7 +316,7 @@ impl Game {
                 (Goal::Chop, Ev::Chop) | (Goal::Pocket, Ev::Pocket) | (Goal::Roll, Ev::Roll) | (Goal::Loot, Ev::Loot) => true,
                 (Goal::Craft(a), Ev::Craft(b)) | (Goal::Use(a), Ev::Use(b)) => a == b,
                 (Goal::Talk(a), Ev::Talk(b)) => a == b,
-                (Goal::Dog, Ev::Dog) => true,
+                (Goal::Dog, Ev::Dog) | (Goal::Train, Ev::Train) => true,
                 _ => false,
             };
             if hit {
@@ -372,10 +429,12 @@ impl Game {
         }
         // bu NPC'nin verdiği görev (rehber: 0, görevci: 1)
         let which = match kind {
-            N_GUIDE => Some(0u8),
+            N_GUIDE | N_COMMANDER => Some(0u8),
             N_QUEST => Some(1u8),
             _ => None,
-        };
+        }
+        // zincirin sıradaki görevi bu NPC'nin değilse (ör. rehber zincirinde şehir adımları komutandadır) görev seçeneği yok
+        .filter(|&w| chain(w).get(self.story_slot(w).0).is_some_and(|q| q.giver == kind));
         // menü türü: ana menü, konu menüsü ya da tek çıkış
         enum Menu {
             Main,
@@ -410,6 +469,10 @@ impl Game {
                         lines.push("Hedefin sol üstteki takipçide ve haritada işaretli. İşin bitince bana dön.".into());
                         self.events.push(Event::Quest { title: format!("Yeni Görev: {}", q.title) });
                         self.story_tick();
+                        if q.goal == Goal::Train {
+                            self.start_training();
+                            lines.push("Kapıyı açıyorum… Bol şans asker!".into());
+                        }
                         menu = Menu::Leave;
                     } else if opt == "turnin" && on && self.quest_progress(q, n) >= q.count {
                         lines.push(q.done.to_string());
@@ -603,8 +666,11 @@ impl Game {
         let s = &self.progress.story;
         let lv = self.progress.level;
         if let Some(q) = GUIDE.get(s.guide) {
+            let (who, _) = npc_name(q.giver);
             if s.guide_on {
-                out.push(format!("Rehber Nova'nın verdiği işi bitir: {}.", q.hint));
+                out.push(format!("{who}'nin verdiği işi bitir: {}.", q.hint));
+            } else if lv >= q.min_level && q.giver == N_COMMANDER {
+                out.push("Komutan Ece seni şehrin güvenli bölgesinde bekliyor: şehri ve üsleri o anlatır.".into());
             } else if lv >= q.min_level {
                 out.push("Rehber Nova seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
             }
@@ -718,7 +784,7 @@ mod tests {
         assert!(d["lines"].as_array().unwrap().iter().all(|l| !l.as_str().unwrap().contains("Tamamlandı")));
         assert!(g.progress.story.guide_on);
         // anında tamamlanan seviye görevi: teslim de sunulur
-        g.progress.story = StoryState { guide: 6, ..Default::default() };
+        g.progress.story = StoryState { guide: GUIDE.iter().position(|q| q.id == "g7").unwrap(), guide_v: 1, ..Default::default() };
         g.progress.level = 6;
         let d = g.talk(N_GUIDE, "accept");
         let ids: Vec<&str> = d["opts"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap()).collect();

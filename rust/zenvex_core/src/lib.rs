@@ -18,6 +18,7 @@ pub mod world;
 mod combat;
 mod draw;
 mod home;
+mod training;
 pub mod net;
 mod vehicles;
 mod zombies;
@@ -72,7 +73,7 @@ pub fn world_json(g: &Game) -> String {
         "camp": world::CAMP,
         "travel": travel,
         "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y, l.safe]) }).collect::<Vec<_>>(),
-        "bases": bases::base_defs().iter().map(|b| { let (x, y) = b.pos(); json!([b.id, b.name(), x, y, b.level]) }).collect::<Vec<_>>(),
+        "bases": bases::base_defs().iter().take(bases::BASE_N).map(|b| { let (x, y) = b.pos(); json!([b.id, b.name(), x, y, b.level]) }).collect::<Vec<_>>(),
         "base_half": bases::BASE_HALF * world::TILE,
         "home": [world::HOME_X0 as f32 * world::TILE, world::HOME_Y0 as f32 * world::TILE, (world::HOME_X1 + 1) as f32 * world::TILE, (world::HOME_Y1 + 1) as f32 * world::TILE],
         "boss": world::BOSS,

@@ -1,6 +1,6 @@
 //! NPC sohbet konuları: her NPC'nin kendi bölgesi, geçmişi, söylentileri ve oyun ipuçları.
 //! Satırlar normal cümledir; seçenek etiketleri Baş Harfi Büyük yazılır.
-use crate::story::{N_DOCTOR, N_GUIDE, N_MECHANIC, N_MERCHANT, N_QUEST, N_TRAINER, N_WIZARD};
+use crate::story::{N_COMMANDER, N_DOCTOR, N_GUIDE, N_MECHANIC, N_MERCHANT, N_QUEST, N_TRAINER, N_WIZARD};
 
 /// Sohbet menüsü konuları (kimlik, etiket). "todo" oyuncunun durumuna göre story.rs'de üretilir.
 pub fn topics(kind: u8) -> &'static [(&'static str, &'static str)] {
@@ -12,6 +12,7 @@ pub fn topics(kind: u8) -> &'static [(&'static str, &'static str)] {
         N_TRAINER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Köpekler Hakkında"), ("rumor", "Söylenti Var Mı?")],
         N_GUIDE => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Temel Bilgiler"), ("rumor", "Söylenti Var Mı?")],
         N_WIZARD => &[("todo", "Ne Yapmalıyım?"), ("area", "Kişisel Üs Nedir?"), ("self", "Kendinden Bahset"), ("tip", "Devlet Üsleri"), ("rumor", "Söylenti Var Mı?")],
+        N_COMMANDER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Devlet Üsleri"), ("rumor", "Söylenti Var Mı?")],
         _ => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Kuleler Hakkında"), ("rumor", "Söylenti Var Mı?")],
     }
 }
@@ -26,6 +27,7 @@ pub fn chat_intro(kind: u8) -> &'static str {
         N_TRAINER => "Köpekler dinlenirken ben de biraz soluklanayım. Ne konuşalım?",
         N_GUIDE => "Sorularını sevdim; soru soran hayatta kalır. Ne öğrenmek istersin?",
         N_WIZARD => "Otur, ateş sıcak. Sorularının cevabı bende; ama bazı cevaplar soru sormaktan daha ağırdır.",
+        N_COMMANDER => "Nöbet değişimine kadar vaktim var. Sor asker, ama kısa kes.",
         _ => "Nöbetteyim ama gözüm ufukta, kulağım sende. Çabuk sor.",
     }
 }
@@ -180,7 +182,8 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
               "Uyandığımda ellerimde mavi bir ışık vardı. O günden beri yolcuları taşırım."],
         ]),
         (N_WIZARD, "tip") => vec![
-            "Haritada elli devlet üssü var. Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
+            "Elli devlet üssünün hepsi Cephe Hattı'nda; oraya yürüyerek gidilmez, 10. seviyeden sonra seni ben götürürüm.",
+            "Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
             "Keskin nişancının kırmızı lazerini görürsen yerinden kıpırda ya da takla at; mermi lazerin olduğu yere gider.",
             "Askerleri temizleyip klanınla bayrağın dibinde on saniye durursan üs klanının olur.",
             "Klanının üssü dakikada 60 klan tecrübesi verir; ödül süresi dolunca eşya klan deposuna düşer.",
@@ -207,6 +210,25 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
         (_, "rumor") => pick(&[
             &["Dün gece kuzeyde bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
             &["Titan arenasından gelen kükremeyi kulede bile hissettim.", "Hazır olmadan oraya gitme."],
+        ]),
+        // ------------------------------------------------------------------ komutan (şehir)
+        (N_COMMANDER, "area") => vec![
+            "Bu surların içi şehrin tek güvenli yeri. Pazar, doktor, tamirci; hepsi burada.",
+            "Güneyde kapı, kuzeyde banliyö, merkez ve en tepede sanayi. Kuzeydoğu köşede Titan Arenası.",
+            "Cephe Hattı haritanın doğusunda ve güneyinde, karantina duvarının ardında. Oraya yalnız Aldric götürür.",
+        ],
+        (N_COMMANDER, "self") => vec![
+            "Salgından önce sınır karakolundaydım. Emir gelmedi, ben de emir vermeye başladım.",
+            "Şehre giren her hayatta kalanı kayda geçiririm. Sen de artık kayıtlısın asker.",
+        ],
+        (N_COMMANDER, "tip") => vec![
+            "Üs almak için önce askerleri temizle, sonra bayrak halkasında on saniye dur. Klanın yoksa üs tutamazsın.",
+            "Keskin nişancının lazeri üstündeyse yer değiştir ya da takla at.",
+            "Tuttuğun üssü boş bırakma: devlet geri almak için helikopterle asker indirir, bazen de bombalar.",
+        ],
+        (N_COMMANDER, "rumor") => pick(&[
+            &["Cephe Hattı'nda klanların gece boyu çatıştığı söyleniyor.", "Sabah olunca bayrakların yarısı el değiştirmiş oluyor."],
+            &["Karargâhtaki telsizci, güneyde kimsenin tutamadığı bir üs olduğunu söyledi.", "Her alan kişi bir hafta içinde kaybediyormuş."],
         ]),
         _ => vec!["Bunu bilmiyorum, kusura bakma."],
     }
