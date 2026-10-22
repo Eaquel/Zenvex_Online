@@ -107,12 +107,12 @@ fun SceneBackground(
  * orta panel iki eksende esner. 1 kaynak piksel = [px] dp. İçerik için en az ~22 dp iç boşluk bırakılmalı.
  */
 @Composable
-fun Modifier.metalFrame(px: Dp = 1.6.dp): Modifier {
+fun Modifier.metalFrame(px: Dp = 1.6.dp, name: String = "frame", corner: Int = 18): Modifier {
     val ctx = LocalContext.current
-    val img = remember { UiArt.image(ctx, "frame") } ?: return this.pxPanel(Px.Panel)
+    val img = remember(name) { UiArt.image(ctx, name) } ?: return this.pxPanel(Px.Panel)
     return this.drawBehind {
         val k = px.toPx()
-        val c = 18 // köşe kaynak boyu
+        val c = corner // köşe kaynak boyu
         val sw = img.width; val sh = img.height
         val dc = (c * k).toInt()
         val W = size.width.toInt(); val H = size.height.toInt()

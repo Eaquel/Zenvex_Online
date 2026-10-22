@@ -77,7 +77,8 @@ object GameSession {
     fun reload(done: () -> Unit) = switchServer(server.value, done)
 
     private fun loadGroundTextures() {
-        val names = listOf("grass", "dark_grass", "dry_grass", "dirt", "gravel", "asphalt", "sidewalk", "concrete", "mud")
+        val names = listOf("grass", "dark_grass", "dry_grass", "dirt", "gravel", "asphalt", "sidewalk", "concrete", "mud",
+            "snow_dock", "ash", "desert_road", "swamp", "base_dirt")
         var size = 0
         var all: IntArray? = null
         names.forEachIndexed { i, n ->

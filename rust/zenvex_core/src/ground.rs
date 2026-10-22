@@ -104,7 +104,7 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
             c = shade(c, k);
             // bölge tonu (kenarları zeminle aynı bükülmeyle organik)
             let z = world.zone(wx + nx * warp * 1.6, wy + ny * warp * 1.6);
-            if !matches!(z, Zone::Camp | Zone::Forest | Zone::DeepForest | Zone::Swamp | Zone::Wall | Zone::SafeCity | Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::BossArena | Zone::Home) {
+            if !ground::own_color(m) && !matches!(z, Zone::Camp | Zone::Forest | Zone::DeepForest | Zone::Swamp | Zone::Wall | Zone::SafeCity | Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::BossArena | Zone::Home) {
                 c = zone_tint(z, c);
             }
             // yol şeritleri

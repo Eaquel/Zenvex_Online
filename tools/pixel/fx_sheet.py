@@ -34,6 +34,19 @@ SHEETS = {
     "sparkle": ("sparkle.jpg", ("boxes",), "add", 12, False, "add", (0.5, 0.5)),
     "dust": ("dust.jpg", ("grid", 5, 1), "smoke", 14, False, "normal", (0.5, 0.62)),
     "toxic": ("toxic.jpg", ("grid", 3, 2), "magenta", 6, True, "normal", (0.5, 0.55)),
+    # V8 (art/v8u): beyaz zeminli namlu ateşi/mermi izi, siyah zeminli kalkan, ele geçirme halkası, ıska, iniş tozu,
+    # ışınlanma (büyücüsüz kareler seçilir), yüzeye göre teker tozu (tekerlek silinir, yalnız toz kalır)
+    "muzzle": ("muzzle.jpg", ("grid", 4, 1), "white", 24, False, "normal", (0.12, 0.5)),
+    "tracer": ("tracer.jpg", ("grid", 1, 1), "white", 1, True, "normal", (0.0, 0.5)),
+    "shield": ("shield.jpg", ("grid", 6, 1), "add70", 10, True, "add", (0.5, 0.6)),
+    "capture": ("capture.jpg", ("grid", 6, 1), "add", 6, False, "add", (0.5, 0.5)),
+    "miss": ("miss.jpg", ("grid", 4, 1), "keyblack", 16, False, "normal", (0.5, 0.8)),
+    "heli_dust": ("heli_dust.jpg", ("grid", 6, 1), "keyblack", 12, False, "normal", (0.5, 0.5)),
+    "teleport": ("teleport.jpg", ("grid", 8, 2), "add", 14, False, "add", (0.5, 0.9), [2, 3, 4, 13, 14, 15]),
+    "road_sand": ("road_sand.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
+    "road_snow": ("road_snow.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
+    "road_swamp": ("road_swamp.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
+    "road_dirt": ("road_dirt.jpg", ("grid", 5, 1), "dustonly", 14, False, "normal", (0.5, 0.85)),
 }
 
 
@@ -72,7 +85,7 @@ def native(a, s, ox, oy):
 
 
 def build(name):
-    src, cut, mode, fps, loop, blend, anc = SHEETS[name]
+    src, cut, mode, fps, loop, blend, anc, *pick = SHEETS[name]
     a = np.asarray(Image.open(os.path.join(UP, src)).convert("RGB")).astype(float)
     H, W, _ = a.shape
     if cut[0] == "grid":
@@ -83,8 +96,12 @@ def build(name):
         cells = [(x0 + 6, y0 + 6, x1 - 6, y1 - 4) for x0, y0, x1, y1 in cut[1]]
     else:
         cells = boxes(a)
+    if pick:
+        cells = [cells[i] for i in pick[0]]
     # kutu dışını (beyaz sayfa / çerçeve) karart, sonra piksel ızgarası
     work = a.copy()
+    if mode == "white":
+        work = 255 - work  # beyaz zemin: ızgara bulmak için ters çevir (renk aşağıda kaynaktan)
     if cut[0] in ("boxes", "cells"):
         keep = np.zeros((H, W), bool)
         for x0, y0, x1, y1 in cells:
@@ -100,8 +117,28 @@ def build(name):
         X0, Y0 = int(np.ceil((x0 - ox) / s)), int(np.ceil((y0 - oy) / s))
         X1, Y1 = int((x1 - ox) // s), int((y1 - oy) // s)
         c = nat[Y0:Y1, X0:X1]
+        if mode == "white":
+            c = 255 - c
         r, g, b = c[..., 0], c[..., 1], c[..., 2]
-        if mode == "add":
+        if mode == "white":
+            al = np.where(c.min(-1) > 228, 0, 255)
+            col = c
+        elif mode == "keyblack":
+            al = np.where(c.max(-1) < 22, 0, 255)
+            col = c
+        elif mode == "dustonly":
+            # tekerlek (gri/koyu, doygunluksuz) ve kenar karası silinir; kum/kar/çamur/toprak kalır
+            lum = c @ np.array([0.3, 0.59, 0.11])
+            sat = c.max(-1) - c.min(-1)
+            wheel = ((sat < 20) & (lum < 160)) | (lum < 28)
+            al = np.where(wheel, 0, 255)
+            col = c
+        elif mode == "add70":
+            # yalnız parlak kalkan ışıltısı; içindeki koyu figür atılır
+            al = c.max(-1)
+            al = np.where(al < 95, 0, al)
+            col = np.where(al[..., None] > 0, c * 255.0 / np.maximum(al[..., None], 1), 0)
+        elif mode == "add":
             al = c.max(-1)
             al = np.where(al < 14, 0, al)
             col = np.where(al[..., None] > 0, c * 255.0 / np.maximum(al[..., None], 1), 0)
@@ -117,6 +154,18 @@ def build(name):
             al = np.where(key | spill, 0, 255)
             col = c
         f = np.dstack([np.clip(col, 0, 255), al]).astype(np.uint8)
+        if name.startswith("road_"):
+            # tekerlek dairesi (hücre ortası, görsel yüksekliğinin ~%51'i, yarıçap ~125 kaynak px) tamamen boş
+            hh, ww = f.shape[:2]
+            yy, xx = np.mgrid[0:hh, 0:ww]
+            cy = (390 - (y0 - oy)) / s if False else (0.508 * H - oy) / s - Y0
+            disc = (yy - cy) ** 2 + (xx - ww / 2) ** 2 < (128 / s) ** 2
+            f[disc, 3] = 0
+        if name == "teleport":
+            # kenarlardaki büyücü asası kalıntısı
+            w = f.shape[1]
+            f[:, :int(w * 0.22), 3] = 0
+            f[:, int(w * 0.78):, 3] = 0
         frames.append(f)
     # ortak sınır kutusu
     hh = min(f.shape[0] for f in frames)

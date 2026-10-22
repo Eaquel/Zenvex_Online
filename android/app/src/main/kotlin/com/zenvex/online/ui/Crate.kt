@@ -312,13 +312,13 @@ private fun OpenButton(label: String, price: Int, ribbon: String?, enabled: Bool
     }
 }
 
-/** Kaplama önizlemesi: karakter (kahraman çizimi) ya da araç (motor) renk matrisiyle; efsanevide dönen hale */
+/** Kaplama önizlemesi: karakter (kahraman çizimi) ya da araç (V8 cip) renk matrisiyle; efsanevide dönen hale */
 @Composable
 fun SkinPreview(id: String, modifier: Modifier, t: Float, small: Boolean = false) {
     val ctx = LocalContext.current
     val vehicle = id.startsWith("vs_")
-    val key = if (vehicle) "v/car/2" else "l/kaan/0_0"
-    val img = remember(key) { SpriteCache.get(ctx, key) ?: SpriteCache.get(ctx, if (vehicle) "v/moto/2" else "h/kaan/idle_0_0") }
+    val key = if (vehicle) "x/car" else "l/kaan/0_0"
+    val img = remember(key) { SpriteCache.get(ctx, key) ?: SpriteCache.get(ctx, if (vehicle) "v/car/2" else "h/kaan/idle_0_0") }
     val mtx = remember(id) { Skins.matrix(id)?.let { ColorFilter.colorMatrix(ColorMatrix(it)) } }
     val rar = com.zenvex.online.game.Skins.trail(id) != 0
     Box(modifier.clip(RoundedCornerShape(3.dp)).background(Brush.radialGradient(listOf(if (rar) LEG.copy(alpha = 0.35f) else EPIC.copy(alpha = 0.3f), Color(0xFF10101C))))

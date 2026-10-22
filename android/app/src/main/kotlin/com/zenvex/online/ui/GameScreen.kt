@@ -225,8 +225,11 @@ private fun PassButton(onClick: () -> Unit) {
     val p = remember { GameSession.ui("pass") }
     val ready = p.optJSONArray("rewards").objs().count { it.optBoolean("reached") && !it.optBoolean("free_claimed") }
     Box(contentAlignment = Alignment.Center) {
-        Box(Modifier.size(52.dp).border(2.dp, Px.Clan.copy(alpha = 0.35f + 0.35f * kotlin.math.sin(t * 3f)), CircleShape))
-        PxIcon("crown", size = 46.dp, badge = ready, tint = Px.Clan, color = Color(0xCC3A2A10)) { onClick() }
+        Box(Modifier.size(54.dp).border(2.dp, Px.Clan.copy(alpha = 0.35f + 0.35f * kotlin.math.sin(t * 3f)), CircleShape))
+        // V8 piksel tuş (taç); alınabilir ödül sayısı köşede
+        ArtImage("btn_pass", Modifier.size(50.dp).clickable(remember { MutableInteractionSource() }, null) { com.zenvex.online.game.Audio.play("click", 0.6f, bus = com.zenvex.online.game.Audio.Bus.Ui); onClick() })
+        if (ready > 0) Box(Modifier.align(Alignment.TopEnd).size(18.dp).background(Px.Red, CircleShape).border(1.dp, Color.Black, CircleShape),
+            contentAlignment = Alignment.Center) { PT("$ready", 10.sp, Color.White) }
     }
 }
 

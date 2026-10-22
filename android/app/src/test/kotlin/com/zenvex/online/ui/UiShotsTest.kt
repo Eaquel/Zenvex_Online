@@ -92,7 +92,7 @@ class UiShotsTest {
         val marks = mapMarks(w, JSONObject()) + baseMarks(sample("bases")) +
             MapMark(me.getDouble("x").toFloat() + 900f, me.getDouble("y").toFloat() - 1400f, 3, "Gizemli Ağaç")
         paparazzi.snapshot {
-            WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}, {})
+            WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}) {}
         }
     }
 
@@ -107,7 +107,7 @@ class UiShotsTest {
             for (i in 0 until 50) put(org.json.JSONObject(sample("bases").getJSONArray("bases").getJSONObject(i).toString()).put("found", true))
         })
         paparazzi.snapshot {
-            WorldMapView(img, null, w, b.getDouble("x").toFloat(), b.getDouble("y").toFloat(), 30, mapMarks(w, JSONObject()) + baseMarks(all), {}, {})
+            WorldMapView(img, null, w, b.getDouble("x").toFloat(), b.getDouble("y").toFloat(), 30, mapMarks(w, JSONObject()) + baseMarks(all), {}, baseMarks(all).firstOrNull { it.icon == "map_war" }) {}
         }
     }
 

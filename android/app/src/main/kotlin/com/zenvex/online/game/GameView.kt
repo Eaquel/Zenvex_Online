@@ -491,7 +491,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     fx("muzzle", x1, y1, if (sniper) 95f else 62f, Math.toDegrees((-a + PI / 2).toDouble()).toFloat(), dur = 0.06f, frame = (0..2).random())
                     flashes += Light(x1, y1, 180f, 0xFFFFC870.toInt(), 0.05f, 0.05f)
                     Audio.play(if (sniper) "shot_sniper" else "shot_rifle", near(x1, y1) * 0.8f, 0.9f + Math.random().toFloat() * 0.2f)
-                    if (!e.optBoolean("hit")) { burst(x2, y2 + 40, 4, 0xFF9A8A70.toInt(), 90f, 3f, 0, 0.5f, 120f); fx("dust", x2, y2 + 30, 50f) }
+                    if (!e.optBoolean("hit")) { burst(x2, y2 + 40, 4, 0xFF9A8A70.toInt(), 90f, 3f, 0, 0.5f, 120f); fx(if (atlas.fx["miss"] != null) "miss" else "dust", x2, y2 + 30, 60f) }
                 }
                 "botdown" -> {
                     burst(x, y - 40, 14, 0xFF7A1A14.toInt(), 180f, 4f); fx("dust", x, y, 120f)
@@ -946,7 +946,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     // ------------------------------------------------------------------ V6 NPC'ler
     // rehber (tür 6) şimdilik asker görseliyle
-    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "quest")
+    private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard")
     private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
         "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
@@ -982,9 +982,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             for ((i, m) in chestMarks.withIndex()) {
                 val sx = wx(m.x); val sy = wy(m.y)
                 if (sx < -200 || sy < -200 || sx > sw + 200 || sy > sh + 300) continue
-                val sp = atlas[if (m.id == "chest_wood") "s/crate" else "s/crate_mil"] ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
+                // V8 sandık görselleri (ahşap / demir / askerî); yanındayken kapağı açık
+                val base = when (m.id) { "chest_wood" -> "s/chest_wood"; "chest_iron" -> "s/chest_iron"; else -> "s/chest_mil" }
+                val sp = atlas[if (i == nearChest) base + "_open" else base] ?: atlas[base]
+                    ?: atlas[if (m.id == "chest_wood") "s/crate" else "s/crate_mil"] ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
                 fill.color = 0x50000000; c.drawOval(sx - 30 * scale, sy - 6 * scale, sx + 30 * scale, sy + 6 * scale, fill)
-                if (sp != null) atlas.draw(c, sp, sx, sy, scale * if (m.id == "chest_military") 1.15f else 1f, pixelPaint)
+                if (sp != null) atlas.draw(c, sp, sx, sy, scale, pixelPaint)
                 if (i == nearChest) drawText(c, "Sandık ${m.used}/${m.cap}", sx - 34 * density, sy - 70 * scale, 12 * density, 0xFFFFD34A.toInt())
             }
         }
@@ -1005,7 +1008,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
      */
     private fun drawNpc6(c: Canvas, ch: Int, x: Float, y: Float, sx: Float, sy: Float, dir: Int, t: Float): Boolean {
         val name = npc6Names.getOrNull(ch - 4) ?: return false
-        val key = "npc/$name"
+        // büyücü görseli yoksa görevci görseli mor tonla
+        val key = if (name == "wizard" && atlas["npc/wizard"] == null) "npc/quest" else "npc/$name"
         val sp = atlas[key] ?: return false
         val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return false
         val k = sp.k * scale
@@ -1028,7 +1032,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
         fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
-        c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, if (ch == 11) wizardPaint else pixelPaint)
+        c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, if (ch == 11 && key == "npc/quest") wizardPaint else pixelPaint)
         // büyücü: çevresinde yükselen mavi-mor kıvılcımlar
         if (ch == 11 && Settings.current.particles && Math.random() < 0.25)
             particles += Particle(x + ((Math.random() - 0.5) * 70).toFloat(), y - 20f, 10f, 0f, 0f, 90f, 1.1f, 1.1f,
@@ -1073,13 +1077,24 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x); var sy = wy(y)
         if (tower) sy -= 235f * scale
         if (sx < -300 || sx > sw + 300 || sy < -300 || sy > sh + 400) return
-        val key = "npc/soldier"
+        val dirX0 = cos(face); val dirY0 = sin(face)
+        val who = if (sniper) "sniper" else "soldier"
+        // V8 asker kareleri: nişan (3/4 ön, tüfekli), yukarı bakarken arka, beklemede duruş; M4'lü düşerken ayrı kare
+        val key = when {
+            state == 4 && !sniper && atlas["npc/soldier_fall"] != null -> "npc/soldier_fall"
+            state == 4 -> "npc/${who}_idle"
+            state == 0 -> "npc/${who}_idle"
+            dirY0 < -0.55f -> "npc/${who}_back"
+            else -> "npc/${who}_aim"
+        }.let { if (atlas[it] != null) it else "npc/soldier" }
+        val v8 = key != "npc/soldier"
         val sp = atlas[key] ?: run { placeholder(c, sx, sy, if (hostile) 0xFF8A3A2A.toInt() else 0xFF3A6AAA.toInt()); return }
         val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return
         val k = sp.k * scale
         val w = sp.w * k; val h = sp.h * k
         val dirX = cos(face); val dirY = sin(face)
-        val flip = dirX < 0f
+        // nişan karesi sağa bakar; arka karede tüfek sola dönük
+        val flip = if (key.endsWith("_back")) dirX > 0f else dirX < 0f
         val dead = state == 4
         if (!dead) { fill.color = 0x40000000; c.drawOval(sx - w * 0.3f, sy - 5 * scale, sx + w * 0.3f, sy + 5 * scale, fill) }
         c.save()
@@ -1088,7 +1103,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (state == 1) oy -= kotlin.math.abs(sin(t * 9f)) * 4f * scale
         if (dead) {
             val f = (extra / 0.45f).coerceIn(0f, 1f)
-            c.rotate((if (flip) 1f else -1f) * 84f * f, sx, sy)
+            if (key != "npc/soldier_fall") c.rotate((if (flip) 1f else -1f) * 84f * f, sx, sy)
             deadPaint.alpha = (255 * (1f - ((extra - 3f) / 3f).coerceIn(0f, 1f))).toInt()
         }
         val left = sx + ox - sp.ax * k; val top = sy + oy - sp.ay * k
@@ -1107,12 +1122,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         val paint = when { dead -> deadPaint; fxf == 1 -> flashPaint; !hostile -> friendPaint; else -> pixelPaint }
         c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, paint)
-        // tüfek: omuzdan nişan yönüne
+        // tüfek: omuzdan nişan yönüne (V8 karelerde tüfek çizimin içinde; yalnız namlu ucu hesaplanır)
         if (!dead) {
             val shx = sx + ox + (if (flip) -1f else 1f) * w * 0.08f
             val shy = top + h * 0.45f
             val len = (if (sniper) 66f else 46f) * scale
             val ex = shx + dirX * len; val ey = shy + dirY * len * 0.55f
+            if (!v8) {
             stroke.strokeCap = Paint.Cap.ROUND
             stroke.color = 0xFF15140F.toInt(); stroke.strokeWidth = 6.5f * scale; c.drawLine(shx, shy, ex, ey, stroke)
             stroke.color = if (sniper) 0xFF5A5040.toInt() else 0xFF3A3C3E.toInt(); stroke.strokeWidth = 3.5f * scale; c.drawLine(shx, shy, ex, ey, stroke)
@@ -1121,6 +1137,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 fill.color = 0xFF101010.toInt(); c.drawRect(mx - 6 * scale, my - 6 * scale, mx + 6 * scale, my - 1 * scale, fill)
             }
             stroke.strokeCap = Paint.Cap.BUTT
+            }
             if (state == 3) {
                 fill.color = 0xFFFFE08A.toInt(); c.drawCircle(ex + dirX * 6 * scale, ey + dirY * 3 * scale, 6f * scale, fill)
                 fill.color = 0x80FFB040.toInt(); c.drawCircle(ex + dirX * 6 * scale, ey + dirY * 3 * scale, 12f * scale, fill)
@@ -1141,6 +1158,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    private var heliDustT = 0f
+
     /** Takviye helikopteri: zeminde gölge, gövde + kuyruk + kızaklar, dönen pervane; alçalınca toz kaldırır. */
     private fun drawHeli(c: Canvas, o: Int) {
         val x = drawBuf[o + 2]; val y = drawBuf[o + 3]; val alt = drawBuf[o + 4]; val ang = drawBuf[o + 5]; val t = drawBuf[o + 6]
@@ -1151,6 +1170,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         fill.color = alphaC(0xFF000000.toInt(), 0.35f * sh2)
         c.drawOval(gx - 90 * s * sh2, gy - 26 * s * sh2, gx + 90 * s * sh2, gy + 26 * s * sh2, fill)
         val hy = gy - alt * s
+        val body = atlas["x/heli"]
+        if (body != null) {
+            // V8 gövde görseli (burnu sola); sağa giderken aynalanır, hafif yatış
+            val right = cos(ang) > 0f
+            c.save(); c.rotate((if (right) 1f else -1f) * 4f * sin(t * 1.3f), gx, hy)
+            atlas.draw(c, body, gx, hy, s, pixelPaint, right)
+            c.restore()
+        } else {
         c.save(); c.translate(gx, hy); c.rotate(Math.toDegrees(ang.toDouble()).toFloat())
         val r = RectF()
         fill.color = 0xFF1A1C14.toInt(); r.set(-142 * s, -9 * s, -50 * s, 9 * s); c.drawRoundRect(r, 6 * s, 6 * s, fill)
@@ -1168,6 +1195,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         stroke.color = 0xA0202020.toInt(); stroke.strokeWidth = 3 * s
         c.drawLine(-140 * s + cos(ta) * 14 * s, sin(ta) * 14 * s + 0f, -140 * s - cos(ta) * 14 * s, -sin(ta) * 14 * s, stroke)
         c.restore()
+        }
         // ana pervane: bulanık disk + dört kanat
         fill.color = 0x22000000; c.drawCircle(gx, hy - 4 * s, 120 * s, fill)
         stroke.color = 0xB0181818.toInt(); stroke.strokeWidth = 5 * s
@@ -1179,6 +1207,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         fill.color = 0xFF202020.toInt(); c.drawCircle(gx, hy - 4 * s, 7 * s, fill)
         if (alt < 150f && Settings.current.particles && Math.random() < 0.5)
             burst(x + ((Math.random() - 0.5) * 220).toFloat(), y, 2, 0xFFA89878.toInt(), 220f, 5f, 0, 0.8f, 40f)
+        // iniş tozu halkası
+        heliDustT -= 1f / 60f
+        if (alt < 120f && heliDustT <= 0f) { heliDustT = 0.45f; fx("heli_dust", x, y - 10, 300f) }
     }
 
     /**
@@ -1198,11 +1229,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         stroke.pathEffect = android.graphics.DashPathEffect(floatArrayOf(10 * density, 8 * density), time * 20f)
         c.drawCircle(sx, sy, rr, stroke)
         stroke.pathEffect = null
-        if (cap > 0f) {
+        if (cap > 0f && atlas.fx["capture"] == null) {
             stroke.color = 0xFFFFD34A.toInt(); stroke.strokeWidth = 6 * density
             c.drawArc(sx - rr, sy - rr, sx + rr, sy + rr, -90f, 360f * cap.coerceIn(0f, 1f), false, stroke)
         }
         c.restore()
+        // V8 ele geçirme halkası: ilerlemeye göre dolan altın halka kareleri
+        if (cap > 0f) drawFxSprite(c, "capture", x, y, rr * 2.1f / scale, 0f, fixedFrame = (cap.coerceIn(0f, 1f) * 5.99f).toInt())
         val poleH = 170f * s
         stroke.color = 0xFF2A2622.toInt(); stroke.strokeWidth = 5 * s; c.drawLine(sx, sy, sx, sy - poleH, stroke)
         stroke.color = 0xFF9A948A.toInt(); stroke.strokeWidth = 2.5f * s; c.drawLine(sx, sy, sx, sy - poleH, stroke)
@@ -1461,7 +1494,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -300 || sy > sh + 300) return
         val id = vehicleIds.getOrElse(kind) { "car" }
-        val sp = atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
+        // V8: yandan çizilmiş motor ve açık cip (yön: sağa/sola çevrilir, dikey giderken son yön korunur)
+        val v8 = if (kind == 1) atlas["x/moto"] else if (kind >= 2) atlas["x/car"] else null
+        val sp = v8 ?: atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
         if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
         // kendi aracın: Elmas Sandığı araç kaplaması
         val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
@@ -1473,14 +1508,36 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 20f, 0.6f, 0.6f, tc, 3f, 3)
         }
         val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
-        // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
-        val rider = driver >= 0 && kind <= 1
-        val riderFront = rider && (dir == 0 || dir == 4)
-        if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
-        if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
-        if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
-        if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
-        if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
+        if (v8 != null) {
+            // motorun resmi sağa, cipin resmi sola bakar
+            val right = when (dir) { in 1..3 -> true; in 5..7 -> false; else -> vehFace[driver] ?: (dir == 0) }
+            if (driver >= 0) vehFace[driver] = right
+            val flip = if (kind == 1) !right else right
+            val sgn = if (right) 1f else -1f
+            fill.color = 0x50000000
+            val shw = sp.w * sp.k * scale * 0.46f
+            c.drawOval(sx - shw, sy - 9 * scale, sx + shw, sy + 7 * scale, fill)
+            // hafif öne eğilme (hızlanırken) ve yol sarsıntısı
+            val tilt = if (wreck) 0f else (speed / 600f).coerceIn(0f, 1f) * 1.5f * sgn
+            c.save(); if (tilt != 0f) c.rotate(tilt, sx, sy)
+            atlas.draw(c, sp, sx, sy + vib, scale, paint, flip)
+            if (driver >= 0) drawSeated(c, driver, kind, right, sx, sy + vib)
+            c.restore()
+            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+            if (driver >= 0 && speed > 20 && !wreck) {
+                surfaceFx(x, y, dir, speed, kind)
+                wheelSpray(x, y, kind, sgn, speed)
+            }
+        } else {
+            // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
+            val rider = driver >= 0 && kind <= 1
+            val riderFront = rider && (dir == 0 || dir == 4)
+            if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
+            if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
+            if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
+            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+            if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
+        }
         if (driver >= 0 && speed > 30) {
             val bx = -sin(dir * PI.toFloat() / 4); val by = -cos(dir * PI.toFloat() / 4)
             val back = if (kind >= 2) 120f else 55f
@@ -1585,6 +1642,51 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val ax = sx + ox * scale - (seat?.get(0) ?: 0f) * scale * (if (flip) -1f else 1f)
         val ay = sy + oy * scale - (seat?.get(1) ?: -45f) * scale
         atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
+    }
+
+    /** sürücü başına son bakış yönü (dikey giderken araç ters dönmesin) */
+    private val vehFace = HashMap<Int, Boolean>()
+
+    /**
+     * V8 motor/cip sürücüsü: kalça noktası eyere oturur. Cipte gövde kapısının altı kırpılır (yalnız gövde ve baş görünür).
+     * Ölçüler araç resminin kaynak pikselinde (çapaya göre), x resmin baktığı yönde.
+     */
+    private fun drawSeated(c: Canvas, driver: Int, kind: Int, right: Boolean, sx: Float, sy: Float) {
+        val actor = "h/" + heroIds.getOrElse(driver) { "kaan" }
+        val hs = atlas[spriteKey(actor, "ride", 0, 0)] ?: return
+        val car = kind >= 2
+        val vs = (if (car) atlas["x/car"] else atlas["x/moto"]) ?: return
+        // eyer (kaynak px, çapaya göre): motor resmi sağa → arka (sol) tarafta; cip resmi sola → ön koltuk
+        val seatX = if (car) 110f else 64f; val seatY = if (car) 52f else 37f
+        val dx = (seatX - vs.ax) * vs.k * (if (car) -1f else 1f)  // resmin "ileri" eksenine göre
+        val hx = sx + dx * (if (right) 1f else -1f) * scale
+        val hy = sy + (seatY - vs.ay) * vs.k * scale
+        // binici resmi sola bakar; kalça kaynakta (47, 115) civarı
+        val hipX = (47f - hs.ax) * hs.k; val hipY = (115f - hs.ay) * hs.k
+        val flip = right
+        val ax = hx - hipX * scale * (if (flip) -1f else 1f)
+        val ay = hy - hipY * scale
+        if (car) {
+            c.save(); c.clipRect(0f, 0f, sw.toFloat(), sy + (60f - vs.ay) * vs.k * scale)
+            atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
+            c.restore()
+        } else atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
+    }
+
+    private var sprayT = 0f
+
+    /** Arka teker sıçraması (V8 piksel efektleri): kum, kar, çamur, toprak/kül */
+    private fun wheelSpray(x: Float, y: Float, kind: Int, sgn: Float, speed: Float) {
+        if (!Settings.current.particles) return
+        val name = when (surface()) { 2 -> "road_sand"; 3 -> "road_snow"; 4 -> "road_swamp"; 1, 5 -> "road_dirt"; else -> return }
+        sprayT += 1f / 60f
+        val every = if (speed > 250) 0.07f else 0.12f
+        if (sprayT < every) return
+        sprayT = 0f
+        // arka teker: motorda resmin solu (−46), cipte resmin sağı (+86); ileri yön sgn
+        val back = if (kind >= 2) 86f else 46f
+        val wheel = if (kind >= 2) 50f else 34f
+        fx(name, x - sgn * back, y + 2f, wheel * 2.1f)
     }
 
     private fun drawDrone(c: Canvas, o: Int) {
@@ -1794,9 +1896,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     private fun drawTracers(c: Canvas) {
+        val sp = atlas["fx/tracer/0"]
         for (t in tracers) {
-            stroke.color = alphaC(t.color, t.life / 0.12f); stroke.strokeWidth = t.width * density
-            c.drawLine(wx(t.x1), wy(t.y1), wx(t.x2), wy(t.y2), stroke)
+            val k = t.life / 0.12f
+            val x1 = wx(t.x1); val y1 = wy(t.y1); val x2 = wx(t.x2); val y2 = wy(t.y2)
+            stroke.color = alphaC(t.color, k * (if (sp != null) 0.35f else 1f)); stroke.strokeWidth = t.width * density
+            c.drawLine(x1, y1, x2, y2, stroke)
+            if (sp == null) continue
+            // V8 iz mermisi: parlak baş namludan hedefe uçar, kuyruk geriye uzanır
+            val p = ((1f - k) * 1.4f).coerceIn(0f, 1f)
+            val hx = x1 + (x2 - x1) * p; val hy = y1 + (y2 - y1) * p
+            val deg = Math.toDegrees(atan2((y2 - y1).toDouble(), (x2 - x1).toDouble())).toFloat() + 180f
+            val len = (if (t.width > 2f) 150f else 100f) * scale
+            c.save(); c.rotate(deg, hx, hy)
+            atlas.draw(c, sp, hx, hy, len / (sp.w * sp.k), fxPixPaint)
+            c.restore()
         }
     }
 

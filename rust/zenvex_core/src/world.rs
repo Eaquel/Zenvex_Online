@@ -21,7 +21,17 @@ pub mod ground {
     pub const SIDEWALK: u8 = 6;
     pub const CONCRETE: u8 = 7;
     pub const MUD: u8 = 8;
-    pub const COUNT: usize = 9;
+    // V8 bölge dokuları (art/v8u, tools/pixel/ground_v8.py)
+    pub const SNOW_DOCK: u8 = 9;
+    pub const ASH: u8 = 10;
+    pub const DESERT_ROAD: u8 = 11;
+    pub const SWAMP: u8 = 12;
+    pub const BASE_DIRT: u8 = 13;
+    pub const COUNT: usize = 14;
+    /// kendi rengini taşıyan (bölge tonu uygulanmayan) dokular
+    pub fn own_color(m: u8) -> bool {
+        m >= SNOW_DOCK
+    }
 }
 
 /// Kotlin bu isimleri sprite atlasındaki görsellerle eşler. Sıra değişmemeli.
@@ -103,6 +113,9 @@ pub const STATIC_NAMES: &[&str] = &[
     "mystery_tree",
     "gas_station", // 73-75 (V7 piksel yer işaretleri)
     "portal", // 76 (V8 kişisel üs dönüş kapısı)
+    // 77+ V8 kullanıcı görselleri (art/v8/props): bölge simge yapıları, üs yapıları, kişisel üs eşyaları
+    "burnt_tree", "burnt_stump", "desert_wreck", "swamp_shack", "harbor_containers", "hangar", "bunker", "watchtower",
+    "helipad", "supply_crate", "bed", "stove", "fence_wood", "base_gate", "weapon_rack", "rain_barrel",
 ];
 pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
@@ -516,6 +529,8 @@ impl World {
 
     fn push(&mut self, name: &str, kind: Kind, x: f32, y: f32, shape: Shape, hp: f32, phase: f32) {
         let sort_off = match shape {
+            // zemine yatık yapılar (helikopter pisti) her şeyin altında çizilir
+            _ if name == "helipad" => -1.0e7,
             Shape::Rect(_, hh) if kind == Kind::Building => hh,
             _ => 0.0,
         };
@@ -607,18 +622,18 @@ impl World {
                         if near < 3.0 { ground::GRAVEL } else { ground::DIRT }
                     }
                     Zone::BurntForest => {
+                        // kül zemin; aralarda kurumuş çimen ve toprak lekeleri
                         let d = fbm(seed ^ 0xB1, fx / 10.0, fy / 10.0);
                         if d > 0.64 {
-                            ground::MUD
-                        } else if d > 0.47 {
                             ground::DIRT
-                        } else if d < 0.3 {
+                        } else if d < 0.26 {
                             ground::DRY_GRASS
                         } else {
-                            ground::DARK_GRASS
+                            ground::ASH
                         }
                     }
-                    Zone::Desert | Zone::Military | Zone::Harbor if region_road(tx, ty).0 => ground::ASPHALT,
+                    Zone::Desert if region_road(tx, ty).0 => ground::DESERT_ROAD,
+                    Zone::Military | Zone::Harbor if region_road(tx, ty).0 => ground::ASPHALT,
                     Zone::Desert => {
                         let d = fbm(seed ^ 0xDE5, fx / 12.0, fy / 12.0);
                         if d > 0.62 {
@@ -631,18 +646,18 @@ impl World {
                     }
                     Zone::BlackSwamp => {
                         let m = fbm(seed ^ 0xB5, fx / 8.0, fy / 8.0);
-                        if m > 0.5 {
+                        if m > 0.4 {
+                            ground::SWAMP
+                        } else if m > 0.3 {
                             ground::MUD
-                        } else if m > 0.36 {
-                            ground::DARK_GRASS
                         } else {
-                            ground::GRASS
+                            ground::DARK_GRASS
                         }
                     }
                     Zone::Military => {
                         let d = fbm(seed ^ 0x3171, fx / 9.0, fy / 9.0);
                         if d > 0.62 {
-                            ground::DIRT
+                            ground::BASE_DIRT
                         } else if d > 0.42 {
                             ground::GRAVEL
                         } else {
@@ -651,17 +666,15 @@ impl World {
                     }
                     Zone::Harbor => {
                         let d = fbm(seed ^ 0x4A2, fx / 9.0, fy / 9.0);
-                        if d > 0.56 {
-                            ground::CONCRETE
-                        } else if d > 0.36 {
-                            ground::GRAVEL
+                        if d > 0.3 {
+                            ground::SNOW_DOCK
                         } else {
-                            ground::DIRT
+                            ground::GRAVEL
                         }
                     }
                     Zone::Home => {
                         let (cx, cy) = ((HOME_X0 + HOME_X1) as f32 / 2.0, (HOME_Y0 + HOME_Y1) as f32 / 2.0);
-                        if (fx - cx).abs() < 9.0 && (fy - cy).abs() < 9.0 { ground::GRAVEL } else { ground::GRASS }
+                        if (fx - cx).abs() < 9.0 && (fy - cy).abs() < 9.0 { ground::BASE_DIRT } else { ground::GRASS }
                     }
                     Zone::Wall => ground::CONCRETE,
                     Zone::SafeCity => ground::CONCRETE,
@@ -1656,13 +1669,13 @@ impl World {
                         let dens = fbm(self.seed ^ 0xB2, x / 800.0, y / 800.0);
                         let p_tree = ((dens - 0.3) * 1.1).clamp(0.08, 0.5);
                         if r < p_tree {
-                            self.push(["dead0", "dead1"][rng.below(2) as usize], Kind::Tree, x, y, Shape::Circle(0.22 * t), 25.0, ph);
+                            self.push(["burnt_tree", "dead1"][rng.below(2) as usize], Kind::Tree, x, y, Shape::Circle(0.22 * t), 25.0, ph);
                         } else if r < p_tree + 0.05 {
                             self.push("log", Kind::Prop, x, y, Shape::Rect(1.0 * t, 0.25 * t), 0.0, 0.0);
                         } else if r < p_tree + 0.08 {
                             self.push(["rock_big0", "rock_big1"][rng.below(2) as usize], Kind::Rock, x, y, Shape::Circle(0.55 * t), 60.0, 0.0);
                         } else if r < p_tree + 0.14 {
-                            self.push("stump", Kind::Deco, x, y, Shape::None, 0.0, ph);
+                            self.push("burnt_stump", Kind::Deco, x, y, Shape::None, 0.0, ph);
                         } else if r < p_tree + 0.2 {
                             self.push(["rock_small0", "rock_small1", "grass2"][rng.below(3) as usize], Kind::Deco, x, y, Shape::None, 0.0, ph);
                         } else if r < p_tree + 0.21 {
@@ -1682,14 +1695,23 @@ impl World {
                         } else if r < 0.39 {
                             self.push(["bush2", "bush3"][rng.below(2) as usize], Kind::Bush, x, y, Shape::None, 1.0, ph);
                         } else if r < 0.4 {
-                            self.push("barrel_tox", Kind::Prop, x, y, Shape::Circle(0.3 * t), 0.0, 0.0);
+                            if (gx + gy) % 3 == 0 {
+                                self.push("swamp_shack", Kind::Building, x, y, Shape::Rect(2.0 * t, 1.5 * t), 0.0, 0.0);
+                            } else {
+                                self.push("barrel_tox", Kind::Prop, x, y, Shape::Circle(0.3 * t), 0.0, 0.0);
+                            }
                         } else if r < 0.41 {
                             self.push("crate", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
                         }
                     }
                     Zone::Desert => {
                         if r < 0.03 {
-                            self.push(["rock_big0", "rock_big1", "rock_big2"][rng.below(3) as usize], Kind::Rock, x, y, Shape::Circle(0.55 * t), 60.0, 0.0);
+                            let nm = ["desert_wreck", "rock_big1", "rock_big2"][rng.below(3) as usize];
+                            if nm == "desert_wreck" {
+                                self.push(nm, Kind::Prop, x, y, Shape::Rect(2.0 * t, 0.9 * t), 0.0, 0.0);
+                            } else {
+                                self.push(nm, Kind::Rock, x, y, Shape::Circle(0.55 * t), 60.0, 0.0);
+                            }
                         } else if r < 0.1 {
                             self.push(["rock_small0", "rock_small1", "rock_small2", "grass2"][rng.below(4) as usize], Kind::Deco, x, y, Shape::None, 0.0, ph);
                         } else if r < 0.12 {
@@ -1723,7 +1745,8 @@ impl World {
                         } else if r < 0.065 {
                             self.push("barrel", Kind::Prop, x, y, Shape::Circle(0.3 * t), 0.0, 0.0);
                         } else if r < 0.075 {
-                            self.push(["wreck0", "wreck1"][rng.below(2) as usize], Kind::Prop, x, y, Shape::Rect(0.9 * t, 2.0 * t), 0.0, 0.0);
+                            let _ = rng.below(2);
+                            self.push("harbor_containers", Kind::Building, x, y, Shape::Rect(3.0 * t, 1.4 * t), 0.0, 0.0);
                         } else if r < 0.085 {
                             self.push("trash", Kind::Prop, x, y, Shape::Circle(0.4 * t), 0.0, 0.0);
                         } else if r < 0.1 {
@@ -1747,14 +1770,14 @@ impl World {
                 });
                 if matches!(z, Zone::Military | Zone::Harbor) && !near_road && !avoid(cx * t, cy * t) && rng.chance(0.55) {
                     let (name, hw, hh) = match (z, rng.below(3)) {
-                        (Zone::Military, 0) => ("police", 3.7, 2.9),
-                        (Zone::Military, 1) => ("tent", 1.1, 1.1),
-                        (Zone::Military, _) => ("apartment0", 4.9, 3.5),
+                        (Zone::Military, 0) => ("bunker", 2.6, 2.0),
+                        (Zone::Military, 1) => ("watchtower", 1.2, 1.2),
+                        (Zone::Military, _) => ("hangar", 4.2, 2.4),
                         (_, 0) => ("shop0", 3.7, 2.9),
-                        (_, 1) => ("shop1", 3.7, 2.9),
+                        (_, 1) => ("harbor_containers", 3.0, 1.4),
                         _ => ("apartment1", 4.9, 3.5),
                     };
-                    let kind = if name == "tent" { Kind::Prop } else { Kind::Building };
+                    let kind = if name == "watchtower" { Kind::Prop } else { Kind::Building };
                     self.push(name, kind, cx * t, cy * t, Shape::Rect(hw * t, hh * t), 0.0, 0.0);
                     for k in 0..3 {
                         let (ox, oy) = (rng.range(-hw - 2.5, hw + 2.5), hh + 1.5 + k as f32 * 0.8);
@@ -1840,7 +1863,10 @@ impl World {
         let (cx, cy) = ((x0 + x1) / 2.0, (y0 + y1) / 2.0);
         self.push("portal", Kind::Prop, cx * t, (cy - 8.0) * t, Shape::Rect(1.0 * t, 0.4 * t), 0.0, 0.0);
         self.push("campfire", Kind::Fire, cx * t, (cy + 0.5) * t, Shape::Circle(0.5 * t), 0.0, 0.0);
-        self.push("tent", Kind::Prop, (cx - 6.0) * t, (cy - 2.0) * t, Shape::Rect(1.1 * t, 1.1 * t), 0.0, 0.0);
+        self.push("bed", Kind::Prop, (cx - 6.0) * t, (cy - 2.0) * t, Shape::Rect(1.0 * t, 0.5 * t), 0.0, 0.0);
+        self.push("stove", Kind::Prop, (cx - 3.0) * t, (cy - 3.0) * t, Shape::Rect(0.5 * t, 0.35 * t), 0.0, 0.0);
+        self.push("weapon_rack", Kind::Prop, (cx + 3.0) * t, (cy - 6.0) * t, Shape::Rect(0.9 * t, 0.3 * t), 0.0, 0.0);
+        self.push("rain_barrel", Kind::Prop, (cx + 8.5) * t, (cy + 4.0) * t, Shape::Circle(0.35 * t), 0.0, 0.0);
         self.push("workbench", Kind::Bench, (cx + 6.0) * t, (cy - 2.0) * t, Shape::Rect(0.9 * t, 0.5 * t), 0.0, 0.0);
         self.benches.push(((cx + 6.0) * t, (cy - 1.0) * t));
         for (ox, oy) in [(-9.0, -9.0), (9.0, -9.0), (-9.0, 9.0), (9.0, 9.0)] {
@@ -1888,14 +1914,15 @@ impl World {
                 y += 4.0;
             }
             for (ox, oy) in [(-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0), (1.0, 1.0)] {
-                self.push("tower", Kind::Tower, (cx + ox * (h - 1.6)) * t, (cy + oy * (h - 1.6)) * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0);
+                self.push("watchtower", Kind::Tower, (cx + ox * (h - 1.6)) * t, (cy + oy * (h - 1.6)) * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0);
             }
             for (ox, oy) in [(-4.5, 3.0), (4.5, 3.0), (0.0, 6.5), (-7.0, -1.0), (7.0, -1.0)] {
                 self.push("sandbags", Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Rect(1.4 * t, 0.35 * t), 0.0, 0.0);
             }
-            for (ox, oy) in [(-6.5, -6.5), (6.5, -6.5)] {
-                self.push("tent", Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Rect(1.1 * t, 1.1 * t), 0.0, 0.0);
-            }
+            // komuta sığınağı, ödül sandığı ve helikopter pisti (zemin betonunun üstünde)
+            self.push("bunker", Kind::Building, (cx - 6.5) * t, (cy - 6.5) * t, Shape::Rect(2.6 * t, 1.8 * t), 0.0, 0.0);
+            self.push("supply_crate", Kind::Prop, (cx + 6.5) * t, (cy - 6.5) * t, Shape::Rect(0.8 * t, 0.45 * t), 0.0, 0.0);
+            self.push("helipad", Kind::Deco, cx * t, (cy - 5.0) * t, Shape::None, 0.0, 0.0);
             for (ox, oy) in [(-8.0, 5.5), (8.0, 5.5), (-3.0, -8.5)] {
                 self.push("crate_mil", Kind::Crate, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.45 * t), 40.0, 0.0);
             }
@@ -2037,6 +2064,11 @@ impl World {
             "sidewalk",
             "concrete",
             "mud",
+            "snow_dock",
+            "ash",
+            "desert_road",
+            "swamp",
+            "base_dirt",
         ]
     }
 

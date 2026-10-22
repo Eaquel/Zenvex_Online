@@ -65,6 +65,7 @@ impl Game {
             let mut sprite = s.sprite as f32;
             if s.broken {
                 match s.kind {
+                    Kind::Tree if s.sprite == crate::world::sprite("burnt_tree") => sprite = crate::world::sprite("burnt_stump") as f32,
                     Kind::Tree => sprite = crate::world::sprite("stump") as f32,
                     Kind::Rock | Kind::Crate => continue,
                     _ => {}

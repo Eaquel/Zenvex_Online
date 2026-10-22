@@ -53,7 +53,7 @@ import kotlin.math.min
 import kotlin.math.sin
 
 /** Haritadaki bir işaret (dünya pikseli). kind: 0 oyuncu, 1 seyahat, 2 titan, 3 görev, 4 kamp NPC'si, 5 devlet üssü */
-data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "", val sub: String = "", val color: Int = 0)
+data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "", val sub: String = "", val color: Int = 0, val icon: String = "")
 
 /** Keşif bulutu maskesi: keşfedilmemiş hücre opak (yumuşak kenar için küçük bitmap büyütülerek çizilir). */
 fun fogMask(fog: JSONObject): ImageBitmap? {
@@ -127,8 +127,10 @@ fun baseMarks(b: JSONObject): List<MapMark> {
         val owner = if (mine) "Klanının Üssü" else "Sahibi: ${o.optString("owner")}"
         val col = when { mine -> 0xFF60E080.toInt(); o.optLong("clan") == 0L -> 0xFF6E7A3E.toInt(); else -> 0xFF000000.toInt() or (o.optInt("color") and 0xFFFFFF) }
         val reward = if (o.optString("reward").isNotEmpty()) "Ödül: ${o.optString("reward")} ×${o.optInt("n", 1)}$time" else "Ödül Bilgisi Bekleniyor"
+        // rozet: devlet (yeşil yıldız), kendi klanın (kalkan), başka klan (çapraz tüfek)
+        val icon = when { mine -> "map_clan"; o.optLong("clan") == 0L -> "map_gov"; else -> "map_war" }
         out += MapMark(o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), 5, "${o.optString("name")} · Sv ${o.optInt("level")}",
-            "$owner\n$reward" + if (o.optLong("clan") == 0L) "\nDevlet Üssü Ödül Vermez; Klanla Ele Geçir" else "\nKlana Dakikada 60 Tecrübe", col)
+            "$owner\n$reward" + if (o.optLong("clan") == 0L) "\nDevlet Üssü Ödül Vermez; Klanla Ele Geçir" else "\nKlana Dakikada 60 Tecrübe", col, icon)
     }
     return out
 }
@@ -157,7 +159,7 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
 @Composable
 internal fun WorldMapView(
     img: ImageBitmap?, fog: ImageBitmap?, w: JSONObject, meX: Float, meY: Float, level: Int, marks: List<MapMark>,
-    close: () -> Unit, travel: (String) -> Unit,
+    close: () -> Unit, initialPick: MapMark? = null, travel: (String) -> Unit,
 ) {
     val mapPx = w.optDouble("map_px", 23040.0).toFloat()
     val travelList = w.optJSONArray("travel") ?: JSONArray()
@@ -167,8 +169,10 @@ internal fun WorldMapView(
     var cx by remember { mutableFloatStateOf(meX) }
     var cy by remember { mutableFloatStateOf(meY) }
     var showTravel by remember { mutableStateOf(false) }
-    var picked by remember { mutableStateOf<MapMark?>(null) }
+    var picked by remember { mutableStateOf(initialPick) }
     val t = rememberTime()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val badges = remember { listOf("map_gov", "map_clan", "map_war", "map_unknown").associateWith { UiArt.image(ctx, it) } }
     fun minZoom() = if (view.width == 0) 0.02f else min(view.width, view.height) / mapPx
     fun clampCam() {
         val z = zoom
@@ -234,6 +238,15 @@ internal fun WorldMapView(
                     }
                     5 -> {
                         val s = 9.dp.toPx()
+                        val b = badges[m.icon]
+                        if (b != null) {
+                            // klan rengi halkası (başka klanın üssü), rozet en yakın komşu ile büyütülür
+                            val r = 15.dp.toPx()
+                            if (m.icon == "map_war") drawCircle(Color(m.color), r + 3.dp.toPx(), p)
+                            drawImage(b, IntOffset.Zero, IntSize(b.width, b.height), IntOffset((p.x - r).toInt(), (p.y - r).toInt()),
+                                IntSize((2 * r).toInt(), (2 * r).toInt()), filterQuality = FilterQuality.None)
+                            continue
+                        }
                         drawRect(Color(0xFF15140F), Offset(p.x - s - 2, p.y - s - 2), Size(2 * s + 4, 2 * s + 4))
                         drawRect(Color(m.color), Offset(p.x - s, p.y - s), Size(2 * s, 2 * s))
                         drawRect(Color(0x80FFFFFF), Offset(p.x - s * 0.35f, p.y - s * 0.35f), Size(s * 0.7f, s * 0.7f))
@@ -261,14 +274,24 @@ internal fun WorldMapView(
         PxPanel(Modifier.align(Alignment.BottomStart).padding(12.dp), color = Color(0xD0201F1C), pad = 8.dp) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Legend(Color(0xFF3A8AFF), "Sen"); Legend(Px.Clan, "Seyahat"); Legend(Color(0xFFFF9A2A), "Görev"); Legend(Color(0xFFE03030), "Titan")
-                Legend(Color(0xFF6E7A3E), "Devlet Üssü")
+                LegendArt("map_gov", "Devlet Üssü"); LegendArt("map_war", "Klan Üssü")
                 PT("İki Parmakla Yakınlaştır", 12.sp, Px.Sub)
             }
         }
         picked?.let { m ->
-            PxPanel(Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp), color = Color(0xE02B2B26), pad = 10.dp) {
+            if (m.kind == 5) {
+                // üs kartı: V8 tehlike şeritli askeri panel + rozet
+                Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 56.dp).metalFrame(1.dp, "panel_base", 32)
+                    .padding(horizontal = 30.dp, vertical = 26.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (m.icon.isNotEmpty()) { ArtImage(m.icon, Modifier.size(44.dp)); Spacer(Modifier.width(10.dp)) }
+                    Column {
+                        PT(m.label, 18.sp, Px.Text, outline = true)
+                        for (l in m.sub.split('\n').filter { it.isNotEmpty() }) PT(l, 14.sp, Px.Clan, maxLines = 2)
+                    }
+                }
+            } else PxPanel(Modifier.align(Alignment.BottomCenter).padding(bottom = 60.dp), color = Color(0xE02B2B26), pad = 10.dp) {
                 PT(m.label.ifEmpty { "İşaret" }, 18.sp, Px.Text)
-                for (l in m.sub.split('\n').filter { it.isNotEmpty() }) PT(l, 14.sp, if (m.kind == 5) Px.Clan else Px.Sub, maxLines = 2)
+                for (l in m.sub.split('\n').filter { it.isNotEmpty() }) PT(l, 14.sp, Px.Sub, maxLines = 2)
             }
         }
         AnimatedVisibility(showTravel, Modifier.align(Alignment.CenterEnd)) {
@@ -295,6 +318,12 @@ internal fun WorldMapView(
             }
         }
     }
+}
+
+@Composable
+private fun LegendArt(name: String, s: String) {
+    ArtImage(name, Modifier.size(16.dp))
+    Spacer(Modifier.width(5.dp)); PT(s, 13.sp); Spacer(Modifier.width(12.dp))
 }
 
 @Composable

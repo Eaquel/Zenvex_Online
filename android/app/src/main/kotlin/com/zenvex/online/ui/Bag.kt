@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
@@ -93,7 +94,7 @@ fun PxFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable 
 
 /** Piksel eşya kutusu; bekleme süresi varsa üstten aşağı kararan perde + kalan saniye. */
 @Composable
-fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String? = null, glow: Boolean = false, modifier: Modifier = Modifier) {
+fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String? = null, glow: Boolean = false, modifier: Modifier = Modifier, ghost: String? = null) {
     val r = item?.optInt("rarity") ?: 0
     val col = Pal.rarity(r)
     Box(
@@ -115,6 +116,10 @@ fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String?
             }
             val n = item.optInt("count")
             if (n > 1) PT("$n", (size.value * 0.22f).sp, Color.White, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp), outline = true)
+        } else if (ghost != null) {
+            // boş ekipman yuvası: soluk piksel siluet + küçük ad
+            ArtImage(ghost, Modifier.padding(size * 0.14f).fillMaxSize().alpha(0.3f))
+            if (hint != null) PT(hint, (size.value * 0.16f).sp, Color(0x80FFFFFF), Modifier.align(Alignment.BottomCenter), outline = true)
         } else if (hint != null) PT(hint, (size.value * 0.2f).sp, Color(0x55FFFFFF))
     }
 }
@@ -442,8 +447,10 @@ private fun BagTab(p: Int, o: JSONObject, selected: Boolean, glow: Boolean, modi
             .clickable(remember { MutableInteractionSource() }, null) { onClick() },
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
     ) {
+        // bölme sekmesi: 4 çanta resmi (bez kese → büyük sefer çantası); kilitli bölmede soluk resim + kilit
         Box(contentAlignment = Alignment.Center) {
-            Icon(if (open) "bag" else "lock", 24.dp, if (open) (if (selected) Px.Clan else Px.Text) else Px.Sub)
+            ArtImage("bagtab_$p", Modifier.size(32.dp).alpha(if (open) 1f else 0.3f))
+            if (!open) Icon("lock", 16.dp, Px.Sub)
         }
         PT(if (open) "${p + 1}" else "Kilitli", if (open) 12.sp else 9.sp, if (open) Px.Text else Px.Sub)
         if (open) PT("${o.optInt("used")}/${o.optInt("len")}", 9.sp, Px.Sub)
@@ -489,7 +496,8 @@ private fun AmountDialog(a: AmountAsk, close: () -> Unit, ok: (Int) -> Unit) {
 
 @Composable
 private fun EqBox(eq: JSONObject, key: String, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    PxSlot(eq.optJSONObject(key), 52.dp, selected, hint = label,
+    val ghost = when (key) { "weapon" -> null; "necklace" -> "slot_neck"; else -> "slot_$key" }
+    PxSlot(eq.optJSONObject(key), 52.dp, selected, hint = label, ghost = ghost,
         modifier = modifier.clickable(remember { MutableInteractionSource() }, null) { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); onClick() })
 }
 

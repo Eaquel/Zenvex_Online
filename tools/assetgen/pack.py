@@ -282,6 +282,40 @@ V7 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art",
 V7_PROPS = {"med_tent": ("med_tent", 3.4, (0.5, 0.93)), "mystery_tree": ("mystery_tree", 6.0, (0.53, 0.97)),
             "gas_station": ("gas_station", 4.6, (0.56, 0.92))}
 V6_NPCS = {"merchant": 1.85, "soldier": 1.75, "quest": 1.72, "doctor": 1.75, "mechanic": 1.78, "trainer": 1.8}
+# V8 kullanıcı görselleri (tools/pixel/v8_objects.py → art/v8): (dosya, genişlik m, çapa x/y oranı)
+V8 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v8")
+V8_PROPS = {"burnt_tree": ("burnt_tree", 3.4, (0.52, 0.97)), "burnt_stump": ("burnt_stump", 1.0, (0.5, 0.88)),
+            "desert_wreck": ("desert_wreck", 5.2, (0.5, 0.86)), "swamp_shack": ("swamp_shack", 5.0, (0.5, 0.96)),
+            "harbor_containers": ("harbor_containers", 7.2, (0.5, 0.9)), "hangar": ("hangar", 9.0, (0.5, 0.95)),
+            "bunker": ("bunker", 6.2, (0.52, 0.93)), "watchtower": ("watchtower", 3.6, (0.5, 0.985)),
+            "helipad": ("helipad", 6.6, (0.5, 0.5)), "supply_crate": ("supply_crate", 1.7, (0.5, 0.9)),
+            "bed": ("bed", 2.0, (0.5, 0.9)), "stove": ("stove", 1.4, (0.45, 0.95)), "fence_wood": ("fence_wood", 2.2, (0.5, 0.95)),
+            "base_gate": ("gate", 2.4, (0.5, 0.96)), "weapon_rack": ("weapon_rack", 2.0, (0.5, 0.95)),
+            "rain_barrel": ("rain_barrel", 0.8, (0.5, 0.95))}
+# NPC'ler: (dosya, boy m) — asker kareleri aynı ölçekte (ön/arka/nişan/düşüş)
+V8_NPCS = {"soldier_aim": ("soldier_front", 1.8), "soldier_idle": ("soldier_side", 1.8), "soldier_back": ("soldier_back", 1.8),
+           "sniper_aim": ("sniper_front", 1.8), "sniper_idle": ("sniper_side", 1.8), "sniper_back": ("sniper_back", 1.8),
+           "wizard": ("wizard", 1.85)}
+# kişisel üs sandıkları: kapalı / açık aynı ölçekte (genişlik m kapalıdan)
+V8_CHESTS = {"chest_wood": 0.9, "chest_iron": 1.05, "chest_mil": 1.25}
+# etkinlik ödülleri: ekipman simgesinden bölge renginde (yüzük / kolye / kask)
+EV_TINT = {"blood": (215, 50, 45), "titan": (230, 140, 60), "base": (80, 150, 230), "scrap": (130, 190, 70),
+           "pack": (170, 110, 220), "breath": (90, 210, 220)}
+PANTS_TINT = {"pants_basic": None, "pants_police": (70, 100, 160), "pants_military": (110, 120, 70), "pants_titan": (210, 130, 60)}
+
+
+def v8_img(*p):
+    return Image.open(os.path.join(V8, *p)).convert("RGBA")
+
+
+def tinted(im, rgb, k=0.55):
+    """Simgeyi renge çek: parlaklık korunur, ton verilen renge kayar (alfa aynen)."""
+    a = np.asarray(im).astype(float)
+    lum = a[..., :3] @ np.array([0.3, 0.59, 0.11]) / 255.0
+    col = np.array(rgb, float)[None, None, :] * (0.35 + lum[..., None] * 1.1)
+    out = a.copy()
+    out[..., :3] = np.clip(a[..., :3] * (1 - k) + col * k, 0, 255)
+    return Image.fromarray(out.astype(np.uint8), "RGBA")
 
 
 def v6_img(*p):
@@ -311,6 +345,21 @@ def main():
         if os.path.exists(f):
             im = Image.open(f).convert("RGBA")
             props.append((f"s/{key}", im, im.width * fx_, im.height * fy_, w_m * PX_PER_M / im.width))
+    for key, (fn, w_m, (fx_, fy_)) in V8_PROPS.items():
+        f = os.path.join(V8, "props", fn + ".png")
+        if os.path.exists(f):
+            im = v8_img("props", fn + ".png")
+            props.append((f"s/{key}", im, im.width * fx_, im.height * fy_, w_m * PX_PER_M / im.width))
+    for key, w_m in V8_CHESTS.items():
+        f = os.path.join(V8, "props", key + ".png")
+        if os.path.exists(f):
+            im = v8_img("props", key + ".png")
+            k = w_m * PX_PER_M / im.width
+            props.append((f"s/{key}", im, im.width / 2, im.height * 0.95, k))
+            fo = os.path.join(V8, "props", key + "_open.png")
+            if os.path.exists(fo):
+                io = v8_img("props", key + "_open.png")
+                props.append((f"s/{key}_open", io, io.width / 2, io.height * 0.95, k))
     keys = {t[0] for t in props}
     world = [t for t in world if t[0] not in keys]
     P.pack_group("world", world)
@@ -324,6 +373,26 @@ def main():
         if os.path.exists(f):
             im = v6_img("npc", name + ".png")
             npcs6.append((f"npc/{name}", im, im.width / 2, im.height - 1, h_m * PX_PER_M / im.height))
+    # V8 askerler (ön nişan / bekleme / arka / düşüş), büyücü; silahlar ve helikopter gövdesi, araçlar
+    sk = None
+    for key, (fn, h_m) in V8_NPCS.items():
+        f = os.path.join(V8, "npc", fn + ".png")
+        if os.path.exists(f):
+            im = v8_img("npc", fn + ".png")
+            k = h_m * PX_PER_M / im.height
+            if key == "soldier_aim":
+                sk = k
+            npcs6.append((f"npc/{key}", im, im.width / 2, im.height - 1, k))
+    if sk and os.path.exists(os.path.join(V8, "npc", "soldier_fall.png")):
+        im = v8_img("npc", "soldier_fall.png")
+        npcs6.append(("npc/soldier_fall", im, im.width * 0.45, im.height * 0.9, sk))
+    for key, (fn, w_m, (fx_, fy_)) in {"x/gun_m4": ("npc/gun_m4", 0.9, (0.3, 0.5)), "x/gun_sniper": ("npc/gun_sniper", 1.25, (0.3, 0.5)),
+                                       "x/heli": ("props/heli", 7.5, (0.48, 0.62)), "x/moto": ("veh/moto", 2.1, (0.5, 0.92)),
+                                       "x/car": ("veh/car", 4.2, (0.5, 0.92)), "x/wheel": ("veh/wheel", 0.7, (0.5, 0.5))}.items():
+        f = os.path.join(V8, fn + ".png")
+        if os.path.exists(f):
+            im = Image.open(f).convert("RGBA")
+            npcs6.append((key, im, im.width * fx_, im.height * fy_, w_m * PX_PER_M / im.width))
     P.pack_group("npc6", npcs6, pixel=True)
     # eşya simgeleri: yeni (yüksek çözünürlük) varsa onu kullan
     items = []
@@ -339,6 +408,19 @@ def main():
                 im = v6_img("items", f)
                 new[f"i/{f[:-4]}"] = (f"i/{f[:-4]}", im, im.width / 2, im.height - 1)
         items = [t for t in items if t[0] not in new] + list(new.values())
+    # V8: pantolon ve etkinlik ödülü simgeleri ekipman setinden (renklendirilmiş)
+    du = os.path.join(V8, "ui")
+    if os.path.isdir(du):
+        extra = {}
+        pants = Image.open(os.path.join(du, "slot_pants.png")).convert("RGBA")
+        for key, rgb in PANTS_TINT.items():
+            im = pants if rgb is None else tinted(pants, rgb)
+            extra[f"i/{key}"] = (f"i/{key}", im, im.width / 2, im.height - 1)
+        for ev, rgb in EV_TINT.items():
+            for part, fn in (("ring", "slot_ring"), ("neck", "slot_neck"), ("helm", "slot_helmet")):
+                im = tinted(Image.open(os.path.join(du, fn + ".png")).convert("RGBA"), rgb, 0.6)
+                extra[f"i/ev_{ev}_{part}"] = (f"i/ev_{ev}_{part}", im, im.width / 2, im.height - 1)
+        items = [t for t in items if t[0] not in extra] + list(extra.values())
     P.pack_group("items", items, pixel=os.path.isdir(d6))
     gear = []
     if not KEEP_GEAR:
