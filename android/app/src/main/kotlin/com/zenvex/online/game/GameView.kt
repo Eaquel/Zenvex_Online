@@ -1517,7 +1517,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val alpha = drawBuf[o + 10]
         val special = drawBuf[o + 11].toInt()
         val enraged = special and 1 == 1
-        val maxHp = special shr 1
+        val showBar = special and 2 == 2
+        val maxHp = special shr 2
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
         val name = zombieSprite.getOrElse(kind) { "walker" }
@@ -1550,11 +1551,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val boss = kind == 7
             // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
             val elite = kind == 5 || kind == 6
-            // seviye her zaman (küçük), seçkin ve boss'ta adıyla; hasar alınca can çubuğu ve "kalan/azami" can
-            val label = when { boss -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; else -> "Sv $lvl" }
-            val hpText = if (hp >= 0f && maxHp > 0) "${(hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0)}/$maxHp" else null
+            // seviye ve canı her zaman yan yana ("Sv 4 · 63/104"); seçkin ve boss'ta adıyla; vurulunca can çubuğu da
+            val cur = if (hp >= 0f && maxHp > 0) (hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0) else -1
+            val hpPart = if (cur >= 0) " · $cur/$maxHp" else ""
+            val label = when { boss || elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" } + hpPart; else -> "Sv $lvl$hpPart" }
+            val hpText: String? = null
             // başın hemen üstü: görselin çapası dünya ölçeğiyle (k) çarpılır; eskiden k unutulduğu için çubuk çok yukarıda kalıyordu
-            plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, hp, boss, null,
+            plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, if (showBar) hp else -1f, boss, null,
                 hpText = hpText, small = !boss && !elite)
         }
         if (kind == 3 && Settings.current.particles && Math.random() < 0.12)

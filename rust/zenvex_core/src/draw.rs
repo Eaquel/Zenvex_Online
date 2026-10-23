@@ -156,14 +156,12 @@ impl Game {
             if z.x < x0 || z.x > x1 || z.y < y0 || z.y > y1 {
                 continue;
             }
-            let hp = if (z.bar_t > 0.0 || z.boss) && z.state != ZState::Dead {
-                z.hp / z.max_hp
-            } else {
-                -1.0
-            };
+            // can her zaman gider (Kotlin seviyenin yanında "kalan/azami" yazar); çubuk yalnız yakın zamanda vurulduysa
+            let bar = (z.bar_t > 0.0 || z.boss) && z.state != ZState::Dead;
+            let hp = if z.state != ZState::Dead { (z.hp / z.max_hp).max(0.0) } else { -1.0 };
             let flash = if z.flash_t > 0.0 { 1.0 } else { 0.0 };
-            // bit 0: öfkeli; üstü: azami can (Kotlin can çubuğunda "kalan/azami" yazar)
-            let special = if z.enraged { 1.0 } else { 0.0 } + 2.0 * z.max_hp.round().min(4_000_000.0);
+            // bit 0: öfkeli, bit 1: can çubuğu görünsün; üstü: azami can
+            let special = if z.enraged { 1.0 } else { 0.0 } + if bar { 2.0 } else { 0.0 } + 4.0 * z.max_hp.round().min(2_000_000.0);
             self.draw_tmp.push((
                 z.y,
                 [
