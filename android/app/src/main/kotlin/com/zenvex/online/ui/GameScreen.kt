@@ -56,7 +56,7 @@ import org.json.JSONObject
 /** Arkasında oyunun her zaman görüneceği katmanlar (yan menü, NPC konuşması, sohbet, ölüm ekranı) */
 private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay.Chat, Overlay.Dead, Overlay.Player)
 
-private enum class Overlay {
+internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
     Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile,
 }
@@ -293,7 +293,7 @@ private fun ConnectionLost() {
 
 // =========================================================================== HUD
 @Composable
-private fun BoxScope.Hud(open: (Overlay) -> Unit) {
+internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     var inv by remember { mutableStateOf(JSONObject()) }
     var points by remember { mutableIntStateOf(0) }
     var story by remember { mutableStateOf(JSONArray()) }

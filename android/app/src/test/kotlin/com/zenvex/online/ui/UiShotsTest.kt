@@ -272,4 +272,13 @@ class UiShotsTest {
             }
         }
     }
+
+    @Test
+    fun playerMenu() {
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF3A4A2A))) {
+                PlayerMenu("a42", "Bozkurt", {}, {}, {})
+            }
+        }
+    }
 }

@@ -2644,15 +2644,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
             }
         } else {
-            val cx = (sl + sr) / 2f; val cy = (st + sb) / 2f
-            val ang = atan2(gy - cy, gx - cx)
-            val kx = ((sr - sl) / 2f) / kotlin.math.abs(kotlin.math.cos(ang)).coerceAtLeast(0.001f)
-            val ky = ((sb - st) / 2f) / kotlin.math.abs(kotlin.math.sin(ang)).coerceAtLeast(0.001f)
-            val r = min(kx, ky)
-            val ex = cx + kotlin.math.cos(ang) * r; val ey = cy + kotlin.math.sin(ang) * r
-            val a = 0.7f + 0.3f * sin(time * 4f)
-            chevron(c, ex + kotlin.math.cos(ang) * 6 * d, ey + kotlin.math.sin(ang) * 6 * d, ang, 13 * d, gold, a)
-            pill(c, "${tgt.label} · $dist m", ex - kotlin.math.cos(ang) * 34 * d, ey - kotlin.math.sin(ang) * 22 * d, 0xFFFFF0C0.toInt(), 0.85f)
+            // ekran dışındaki hedef: oyuncunun çevresinde dönen küçük ok ve mesafe (ad yalnız yakınken)
+            val pxs = wx(px); val pys = wy(py) - 40 * scale
+            val ang = atan2(gy - pys, gx - pxs)
+            val rr = 92 * d
+            val ex = pxs + kotlin.math.cos(ang) * rr; val ey = pys + kotlin.math.sin(ang) * rr
+            val a = 0.65f + 0.35f * sin(time * 4f)
+            chevron(c, ex, ey, ang, 11 * d, gold, a)
+            val label = if (dist <= 60) "${tgt.label} · $dist m" else "$dist m"
+            pill(c, label, ex - kotlin.math.cos(ang) * 24 * d, ey - kotlin.math.sin(ang) * 18 * d + 4 * d, 0xFFFFF0C0.toInt(), 0.75f)
         }
     }
 

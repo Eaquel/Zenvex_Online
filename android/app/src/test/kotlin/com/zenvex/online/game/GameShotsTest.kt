@@ -2,7 +2,13 @@ package com.zenvex.online.game
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
-import android.widget.ImageView
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import com.zenvex.online.ui.Hud
 import app.cash.paparazzi.DeviceConfig
 import app.cash.paparazzi.Paparazzi
 import com.android.resources.ScreenOrientation
@@ -39,7 +45,7 @@ class GameShotsTest {
 
     private fun cmd(o: JSONObject) = synchronized(GameSession.lock) { Native.command(GameSession.handle, o.toString()) }
 
-    private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null) {
+    private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null, hud: Boolean = true) {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
@@ -54,8 +60,14 @@ class GameShotsTest {
             val dir = java.io.File("build/game-shots").apply { mkdirs() }
             java.io.FileOutputStream(java.io.File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
-        val iv = ImageView(paparazzi.context).apply { setImageBitmap(bmp); scaleType = ImageView.ScaleType.FIT_XY }
-        paparazzi.snapshot(iv, name)
+        // oyun görüntüsü + Compose HUD (gerçek oyundaki gibi üst üste)
+        val img = bmp.asImageBitmap()
+        paparazzi.snapshot(name) {
+            Box(Modifier.fillMaxSize()) {
+                Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
+                if (hud) Hud {}
+            }
+        }
     }
 
     @Test fun g01_campSpawn() = shot("camp", { })

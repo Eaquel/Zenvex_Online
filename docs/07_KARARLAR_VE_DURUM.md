@@ -193,3 +193,20 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
   Sv 10: şehirde Komutan Ece → Titan Arenası → yerel Eğitim Üssü (6 zayıf asker, klansız 10 sn ele geçirme, bomba, şehirde uyanış).
   Eğitim üssü `base_defs()`'in son elemanı (`TRAIN_BASE`), sunucuya gitmez.
 - **Görsel istemleri:** `docs/15_PROMPTLAR_V11.md`.
+
+## V11.1 — Oyuncu geri bildirimi düzeltmeleri (Ekim 2026)
+- **Donma:** oyun ekranı kapanırken 1,5 sn gecikmeli oturum kapatma, o arada açılan yeni oturumu kapatıyordu (dünya durur,
+  karakter yürüyemez, takla ortasında kalır). Artık yalnız kendi oturumunu kapatır (`Session.endIf`); oturum oyundayken
+  kapanırsa lobiye dönülür.
+- **HUD:** FPS/ping sağ altta tek satır; altın posta/menü tuşlarının altında (takla tuşuyla çakışmaz); Sezon Bileti en başta;
+  sol taraftaki görev takipçisi ve NPC çağrı balonları kaldırıldı; ekran dışı görev hedefi oyuncunun çevresinde küçük ok + mesafe.
+- **Canavarlar:** can çubuğu başın üstünde (görsel ölçeği k unutulmuştu), seviye her zaman, hasar alınca "kalan/azami" can.
+- **Simgeler:** `tools/pixel/icons_v11.py` piksel simgeler (sikke, elmas, görev, yetenek ağacı, elmas sandığı, çanta, takas,
+  klan, seviye, asker); `Icon()` varsa onları çizer. Boş ekipman yuvaları koyu siluet.
+- **Unvanlar:** baş üstünde plakasız; ilk 3 metal geçişli, kayan ışık, taç ve yıldız parıltısı. Ayarlar → "Oyuncu Unvanlarını Gizle".
+- **Çerçeveler:** yalnız Sv 10 / 25 / 50, Sezon #1 (bilet), Kanlı Ay (etkinlikte ilk 10, geçmiş etkinlikler dahil). Kodla çizilir,
+  animasyonlu; sohbette de görünür. Seviye elması: 2-10 → 25, 11-20 → 50, 21-30 → 100, 31-40 → 150, 41-50 → 250 (`zx_level_gems`, grants).
+- **Oyuncuya dokununca:** Fısıltı, Takas Teklif Et, Arkadaş Ekle, Profili Gör, Şikâyet Et (`zx_report`).
+- **Diğer:** tezgâh yakındayken halka + çekiç rozeti ve dokununca üretim; kamp ateşi piksel kıvılcım; köpek tek görünüm;
+  NPC portreleri yüz merkezli; sıralamada "nasıl girilir" notları; karakollarda yerin adı.
+- **Test:** `GameShotsTest` gerçek oyun ekranını (Rust çekirdeği bilgisayar için derlenir) HUD ile birlikte çizer.
