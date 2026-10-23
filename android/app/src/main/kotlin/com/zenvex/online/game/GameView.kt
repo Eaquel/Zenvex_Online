@@ -1080,7 +1080,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard", "commander")
     private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
         "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma",
-        "Komutan Ece" to "Komutan")
+        "Komutan Diana" to "Komutan")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
     private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
     private val questTargets = ArrayList<QuestTarget>()
@@ -2635,7 +2635,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val x0 = sw / 2f - bw / 2; val y0 = 58 * d - (1f - a) * 10 * d
         fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
         stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, if (guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)) "Komutan Ece" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
+        drawText(c, if (guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)) "Komutan Diana" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
         for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
     }
 

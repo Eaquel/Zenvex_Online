@@ -1,5 +1,5 @@
 //! V11 şehir öğreticisinin eğitim üssü (yalnız yerel; sunucuya gitmez).
-//! Komutan Ece görevi verince oyuncu Cephe Karargâhı'nın yanındaki eğitim üssüne ışınlanır; içerideki 6 zayıf asker
+//! Komutan Diana görevi verince oyuncu Cephe Karargâhı'nın yanındaki eğitim üssüne ışınlanır; içerideki 6 zayıf asker
 //! indirilir, bayrak halkasında 10 sn durulunca üs alınır. Ardından hava saldırısı: bomba düşer, üs yerle bir olur,
 //! oyuncu şehirde uyanır ve görev tamamlanır.
 use crate::bases::{base_defs, BASE_HALF, TRAIN_BASE};
@@ -66,7 +66,7 @@ impl Game {
                 let s = &mut self.progress.story;
                 s.guide_on = false;
                 s.guide_n = 0;
-                self.msg("Eğitim yarıda kaldı. Komutan Ece'den yeniden alabilirsin.");
+                self.msg("Eğitim yarıda kaldı. Komutan Diana'dan yeniden alabilirsin.");
             }
             return;
         }
@@ -82,7 +82,7 @@ impl Game {
             let (x, y) = self.teleport(cx, cy);
             self.events.push(Event::Teleport { x, y });
             self.player.hp = self.progress.max_hp();
-            self.msg("Bomba üssü yerle bir etti. Şehirde uyandın; Komutan Ece'ye rapor ver.");
+            self.msg("Bomba üssü yerle bir etti. Şehirde uyandın; Komutan Diana'ya rapor ver.");
             self.story_event(crate::story::Ev::Train);
         }
     }

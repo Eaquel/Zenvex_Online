@@ -190,7 +190,7 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
   seviye, sahiplik aynı), güneydoğuda Cephe Karargâhı (pazar, Aldric). Girişi yalnız Aldric, Sv 10'dan. Sis 150×3 kelime; V8-V10
   kayıtları hücre hücre taşınır.
 - **Öğretici:** Sv 1-5 rehbere taş balta, ağaç kesme ve Aldric eklendi (eski kayıtların sırası `migrate_guide_index`).
-  Sv 10: şehirde Komutan Ece → Titan Arenası → yerel Eğitim Üssü (6 zayıf asker, klansız 10 sn ele geçirme, bomba, şehirde uyanış).
+  Sv 10: şehirde Komutan Diana → Titan Arenası → yerel Eğitim Üssü (6 zayıf asker, klansız 10 sn ele geçirme, bomba, şehirde uyanış).
   Eğitim üssü `base_defs()`'in son elemanı (`TRAIN_BASE`), sunucuya gitmez.
 - **Görsel istemleri:** `docs/15_PROMPTLAR_V11.md`.
 
@@ -231,5 +231,5 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
 - **Ölünce** öldüğün bölgenin giriş karakolunda doğulur (kişisel üs seçiliyse orada).
 - **Görev oku:** hedef başka bölgedeyse `story_json` "via" ile bu bölgenin büyücüsünü gösterir.
 - **Cephe Hattı'nda zombi doğmaz** (üslerin çevresi yalnız üs askerleri).
-- Komutan Ece'nin sohbet konuları genel kalıbın arkasında kalıp hiç çıkmıyordu; düzeltildi.
+- Komutan Diana'nın sohbet konuları genel kalıbın arkasında kalıp hiç çıkmıyordu; düzeltildi.
 - Görseller: `17_BOLGE_HARITASI_PROMPTLARI.md` (`wizard_map.png`, `region_<id>.png`).

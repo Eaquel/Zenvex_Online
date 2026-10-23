@@ -574,7 +574,7 @@ impl Game {
             let (hx, hy) = world::home_spawn();
             npcs.push(Npc { kind: 7, x: hx + m(2.2), y: hy - m(9.5), dir: 0, cd: 0.0, anim_t: 1.3, hit_t: 0.0, hit_id: 0 });
         }
-        // şehir güvenli bölgesinde Komutan Ece (Sv 10 şehir öğreticisi)
+        // şehir güvenli bölgesinde Komutan Diana (Sv 10 şehir öğreticisi)
         {
             let (cx, cy) = world::city_spawn();
             let (mut x, mut y) = (cx + m(5.0), cy - m(3.0));

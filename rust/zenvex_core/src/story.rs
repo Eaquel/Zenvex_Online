@@ -28,7 +28,7 @@ pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
         N_TRAINER => ("Eğitmen Jack", "Köpek Eğitmeni"),
         N_GUIDE => ("Rehber Nova", "Rehber"),
         N_WIZARD => ("Büyücü Aldric", "Büyücü"),
-        N_COMMANDER => ("Komutan Ece", "Komutan"),
+        N_COMMANDER => ("Komutan Diana", "Komutan"),
         _ => ("Kule Askeri", "Muhafız"),
     }
 }
@@ -142,9 +142,9 @@ pub const GUIDE: &[Quest] = &[
         "5. seviyede sohbet de açılır; diğer hayatta kalanlarla konuşabilirsin."],
        "Artık benim yardımıma ihtiyacın yok. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
-    // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Ece
+    // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Diana
     q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Titan Arenası'nı Gör (Arena Kampı)",
-       ["Şehre hoş geldin asker. Ben Komutan Ece; bu surların ardında hayatta kalanları ben toplarım.",
+       ["Şehre hoş geldin asker. Ben Komutan Diana; bu surların ardında hayatta kalanları ben toplarım.",
         "Şehir üç kuşaktır: banliyö, merkez ve sanayi. Kuzeydoğuda Titan Arenası var; titanlar orada uyanır.",
         "Arena Kampı'na kadar git, gözünle gör. Haritanda işaretledim. Titana tek başına dalma; önce yerini bil."],
        "Gördün mü o devi? Titanlar büyük ganimet bırakır ama klansız gidene mezar olur.",
@@ -680,7 +680,7 @@ impl Game {
             if s.guide_on {
                 out.push(format!("{who}'nin verdiği işi bitir: {}.", q.hint));
             } else if lv >= q.min_level && q.giver == N_COMMANDER {
-                out.push("Komutan Ece seni şehrin güvenli bölgesinde bekliyor: şehri ve üsleri o anlatır.".into());
+                out.push("Komutan Diana seni şehrin güvenli bölgesinde bekliyor: şehri ve üsleri o anlatır.".into());
             } else if lv >= q.min_level {
                 out.push("Rehber Nova seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
             }
