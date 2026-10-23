@@ -2194,7 +2194,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             drawText(c, p.text, p.x, y, ts, p.color, center = true)
             var top = y - ts
             if (p.sub != null) { drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true); top -= ts }
-            if (p.title != null) { drawTitle(c, p.title, p.titleRank, p.x, top - 4 * d, ts * 0.85f); top -= ts * 1.6f }
+            if (p.title != null && !Settings.current.hideTitles) { drawTitle(c, p.title, p.titleRank, p.x, top - 3 * d, ts * 0.85f); top -= ts * 1.25f }
             // konuşma balonu (oyuncular)
             bubbles[p.text]?.let { (msg, until) ->
                 if (until < time) { bubbles.remove(p.text); return@let }
@@ -2213,59 +2213,56 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val plateSrc = android.graphics.Rect()
     private val plateDst = RectF()
 
-    /** Sıralama unvanı: ilk 3 altın/gümüş/bronz parıltılı ve yanlarında dönen yıldız, 4-10 sade mavi. */
+    /**
+     * Oyuncu başındaki unvan: arka plaka yok (oyunu kapatmasın), küçük ve okunaklı yazı.
+     * 1. altın, 2. gümüş, 3. bronz: metal geçişli yazı, üstünden kayan ışık, çevresinde göz kırpan piksel yıldızlar;
+     * 1.'nin önünde küçük taç. 4-10 sade açık mavi.
+     */
     private fun drawTitle(c: Canvas, t: String, rank: Int, x: Float, y: Float, size: Float) {
-        val base = when (rank) { 1 -> 0xFFFFC83A.toInt(); 2 -> 0xFFDCE4EE.toInt(); 3 -> 0xFFE0904A.toInt(); else -> 0xFF8CC8FF.toInt() }
-        // V10 unvan şeridi (kanatlı altın / gümüş, boynuzlu bronz, sade çelik): uçlar oranlı, orta yazıya göre esner
-        val pl = com.zenvex.online.ui.Plate.of(rank)
-        val bmp = com.zenvex.online.ui.UiArt.bitmap(context, pl.name)
-        if (bmp != null) {
-            val tw = text.apply { typeface = fontBold; textSize = size }.measureText(t) + 8 * density
-            val k = size * 1.25f / (pl.barBot - pl.barTop)
-            val cl = pl.capL * k; val cr = pl.capR * k
-            val top = y - size * 0.36f - (pl.barTop + pl.barBot) / 2f * k
-            val left = x - tw / 2 - cl
-            val h = bmp.height * k
-            fun part(sx: Int, sw: Int, dx: Float, dw: Float) {
-                plateSrc.set(sx, 0, sx + sw, bmp.height); plateDst.set(dx, top, dx + dw, top + h)
-                c.drawBitmap(bmp, plateSrc, plateDst, pixelPaint)
-            }
-            // ilk 3: şerit süzülür ve üstünden ışık geçer (yalnız şeridin piksellerine)
-            val bob = if (rank in 1..3) sin(time * 2.2f + rank) * 1.5f * density else 0f
-            c.save(); c.translate(0f, bob)
-            val layer = if (rank in 1..3) c.saveLayer(left, top, left + cl + tw + cr, top + h, null) else -1
-            part(0, pl.capL, left, cl)
-            part(pl.capL, bmp.width - pl.capL - pl.capR, left + cl, tw)
-            part(bmp.width - pl.capR, pl.capR, left + cl + tw, cr)
-            if (layer >= 0) {
-                val w = cl + tw + cr
-                val u = left + ((time * 0.35f + rank * 0.27f) % 1.4f) * (w + 120f) - 60f
-                glintPaint.shader = LinearGradient(u - 30f, top, u + 30f, top + h, intArrayOf(0, 0x90FFFFFF.toInt(), 0), null, Shader.TileMode.CLAMP)
-                c.drawRect(left, top, left + w, top + h, glintPaint)
-                c.restoreToCount(layer)
-            }
-            c.restore()
-            val col = if (rank in 1..3) lerpColor(0xFFFFFFFF.toInt(), base, 0.25f + 0.25f * sin(time * 3f + x * 0.01f)) else 0xFFCFE6FF.toInt()
-            drawText(c, t, x, y, size, col, center = true)
-            return
+        val d = density
+        val ts = size * 0.92f
+        if (rank !in 1..3) { drawText(c, t, x, y, ts, 0xFFAED6FF.toInt(), center = true); return }
+        val (hi, mid, lo) = when (rank) {
+            1 -> Triple(0xFFFFF4B0.toInt(), 0xFFFFC83A.toInt(), 0xFFC07A10.toInt())
+            2 -> Triple(0xFFFFFFFF.toInt(), 0xFFD6DEE8.toInt(), 0xFF7A8696.toInt())
+            else -> Triple(0xFFFFD8B0.toInt(), 0xFFE0904A.toInt(), 0xFF8A4A1E.toInt())
         }
-        if (rank !in 1..3) { drawText(c, t, x, y, size, base, center = true); return }
-        val k = 0.5f + 0.5f * sin(time * 3f + x * 0.01f)
-        val col = lerpColor(base, 0xFFFFFFFF.toInt(), k * 0.55f)
-        drawText(c, t, x, y, size, col, center = true)
-        val hw = text.apply { typeface = fontBold; textSize = size }.measureText(t) / 2 + 7 * density
-        for (sgn in intArrayOf(-1, 1)) {
-            val sx = x + sgn * hw; val sy = y - size * 0.35f
-            val r = size * (0.32f + 0.12f * k)
-            fill.color = alphaC(base, 0.85f)
-            path.reset()
-            for (i in 0 until 8) {
-                val a = time * 2f * sgn + i * (Math.PI.toFloat() / 4f)
-                val rr = if (i % 2 == 0) r else r * 0.4f
-                val px = sx + kotlin.math.cos(a) * rr; val py = sy + sin(a) * rr
-                if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
-            }
-            path.close(); c.drawPath(path, fill)
+        text.typeface = fontBold; text.textSize = ts
+        val tw = text.measureText(t)
+        val left = x - tw / 2; val top = y - ts
+        // koyu kontur
+        textStroke.typeface = fontBold; textStroke.textSize = ts; textStroke.strokeWidth = ts * 0.2f
+        textStroke.textAlign = Paint.Align.CENTER; textStroke.alpha = 230
+        c.drawText(t, x, y, textStroke)
+        // metal geçiş + kayan ışık bandı
+        val u = left + ((time * 0.45f + rank * 0.3f) % 1.6f) * (tw + 80 * d) - 40 * d
+        text.shader = LinearGradient(0f, top, 0f, y, intArrayOf(hi, mid, lo), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        text.textAlign = Paint.Align.CENTER
+        c.drawText(t, x, y, text)
+        text.shader = LinearGradient(u - 18 * d, top, u + 18 * d, y, intArrayOf(0x00FFFFFF, 0xB0FFFFFF.toInt(), 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+        c.drawText(t, x, y, text)
+        text.shader = null; text.textAlign = Paint.Align.LEFT
+        // 1.: küçük piksel taç
+        if (rank == 1) {
+            val cx = left - 9 * d; val cy = y - ts * 0.42f; val k = ts * 0.09f
+            fill.color = 0xFF2A1A08.toInt(); c.drawRect(cx - 5 * k - k, cy - 3 * k - k, cx + 5 * k + k, cy + 3 * k + k, fill)
+            fill.color = mid
+            c.drawRect(cx - 5 * k, cy, cx + 5 * k, cy + 3 * k, fill)
+            for (i in -1..1) c.drawRect(cx + i * 4 * k - k, cy - 3 * k, cx + i * 4 * k + k, cy, fill)
+            fill.color = 0xFFE03A3A.toInt(); c.drawRect(cx - k, cy + k, cx + k, cy + 2 * k, fill)
+        }
+        // göz kırpan piksel yıldızlar (ilk 3; 1.'de daha çok)
+        val n = 4 - rank + 2
+        for (i in 0 until n) {
+            val ph = time * (1.3f + i * 0.21f) + i * 1.7f + rank
+            val a = (sin(ph) * 0.5f + 0.5f)
+            if (a < 0.35f) continue
+            val px = left + ((i * 0.37f + 0.11f) % 1f) * tw + sin(ph * 0.5f) * 4 * d
+            val py = top + (if (i % 2 == 0) -3 * d else ts * 0.95f) + sin(ph * 0.7f) * 2 * d
+            val r = (1.2f + 1.2f * a) * d
+            fill.color = alphaC(hi, a)
+            c.drawRect(px - r * 0.35f, py - r, px + r * 0.35f, py + r, fill)
+            c.drawRect(px - r, py - r * 0.35f, px + r, py + r * 0.35f, fill)
         }
     }
 

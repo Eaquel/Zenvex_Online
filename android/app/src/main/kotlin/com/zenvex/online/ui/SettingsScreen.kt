@@ -83,6 +83,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             Toggle("Pil Tasarrufu (30 FPS)", s.batterySaver) { set(s.copy(batterySaver = it)) }
                             Toggle("FPS Göstergesi", s.showFps) { set(s.copy(showFps = it)) }
                             Toggle("Ping Göstergesi", s.showPing) { set(s.copy(showPing = it)) }
+                            Toggle("Oyuncu Unvanlarını Gizle (Kendininki Dahil)", s.hideTitles) { set(s.copy(hideTitles = it)) }
                             Toggle("Ekran Arka Planlarını Şeffaflaştır", s.uiTransparent) { set(s.copy(uiTransparent = it)) }
                         }
                         1 -> {

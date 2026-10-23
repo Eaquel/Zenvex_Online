@@ -17,6 +17,8 @@ data class Settings(
     val damageNumbers: Boolean = true,
     val showFps: Boolean = false,
     val showPing: Boolean = true,
+    /** oyuncuların (kendin dahil) başındaki unvanları gizle */
+    val hideTitles: Boolean = false,
     /** oyun içi tam ekran pencerelerin (çanta, üretim...) arkasında oyun görünsün mü */
     val uiTransparent: Boolean = false,
     val batterySaver: Boolean = false,
@@ -74,6 +76,7 @@ data class Settings(
                 damageNumbers = p.getBoolean("damageNumbers", d.damageNumbers),
                 showFps = p.getBoolean("showFps", d.showFps),
                 showPing = p.getBoolean("showPing", d.showPing),
+                hideTitles = p.getBoolean("hideTitles", d.hideTitles),
                 uiTransparent = p.getBoolean("uiTransparent", d.uiTransparent),
                 batterySaver = p.getBoolean("batterySaver", d.batterySaver),
                 moveDynamic = p.getBoolean("moveDynamic", d.moveDynamic),
@@ -103,7 +106,7 @@ data class Settings(
                 .putInt("vegetation", s.vegetation).putBoolean("wind", s.wind)
                 .putBoolean("shadows", s.shadows).putBoolean("particles", s.particles)
                 .putBoolean("treeFade", s.treeFade).putFloat("screenShake", s.screenShake)
-                .putBoolean("damageNumbers", s.damageNumbers).putBoolean("showFps", s.showFps).putBoolean("showPing", s.showPing).putBoolean("uiTransparent", s.uiTransparent)
+                .putBoolean("damageNumbers", s.damageNumbers).putBoolean("showFps", s.showFps).putBoolean("showPing", s.showPing).putBoolean("hideTitles", s.hideTitles).putBoolean("uiTransparent", s.uiTransparent)
                 .putBoolean("batterySaver", s.batterySaver).putBoolean("moveDynamic", s.moveDynamic)
                 .putFloat("moveSensitivity", s.moveSensitivity).putFloat("moveDeadZone", s.moveDeadZone)
                 .putFloat("runThreshold", s.runThreshold).putFloat("attackSensitivity", s.attackSensitivity)

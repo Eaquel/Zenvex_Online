@@ -49,6 +49,11 @@ class GameShotsTest {
         val w = 2340; val h = 1080
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         view.previewFrames(Canvas(bmp), w, h, steps, input = input)
+        // tam çözünürlüklü kopya (incelemek için): app/build/game-shots/<ad>.png
+        runCatching {
+            val dir = java.io.File("build/game-shots").apply { mkdirs() }
+            java.io.FileOutputStream(java.io.File(dir, "$name.png")).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
         val iv = ImageView(paparazzi.context).apply { setImageBitmap(bmp); scaleType = ImageView.ScaleType.FIT_XY }
         paparazzi.snapshot(iv, name)
     }
@@ -56,8 +61,13 @@ class GameShotsTest {
     @Test fun g01_campSpawn() = shot("camp", { })
 
     @Test fun g02_forestFight() = shot("fight", {
-        cheat("level 6"); cheat("tp deep"); cheat("spawn walker 4 2"); cheat("spawn runner 2 2")
-    }, steps = 90, input = floatArrayOf(0f, 0f, 1f, 0f, 1f))
+        cheat("level 6"); cheat("god"); cheat("tp deep"); cheat("spawn walker 4 4"); cheat("spawn runner 2 4")
+    }, steps = 150, input = floatArrayOf(0f, 0f, 1f, 0f, 1f))
+
+    @Test fun g11_title() = shot("title", {
+        Account.profile.value = JSONObject().put("title", JSONObject().put("name", "Canavar Avcısı #1").put("rank", 1).put("kind", "kills"))
+        cheat("level 15"); cheat("tp city")
+    }, steps = 170)
 
     @Test fun g03_city() = shot("city", { cheat("level 12"); cheat("tp city") })
 
