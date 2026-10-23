@@ -31,7 +31,7 @@ impl Game {
             }
             let flags = (z.enraged as u8) | ((z.boss as u8) << 1) | (((z.state == ZState::Dead) as u8) << 2);
             let rec = [
-                z.id as f32, z.kind as u8 as f32, z.x, z.y, z.dir as f32, z.anim as f32, z.anim_t, z.hp, z.max_hp,
+                z.id as f32, (z.kind as u8 + z.species * 8) as f32, z.x, z.y, z.dir as f32, z.anim as f32, z.anim_t, z.hp, z.max_hp,
                 z.level as f32, z.alpha, flags as f32,
             ];
             out[n * NET_STRIDE..(n + 1) * NET_STRIDE].copy_from_slice(&rec);
@@ -53,7 +53,10 @@ impl Game {
             let i = match idx {
                 Some(i) => i,
                 None => {
-                    let mut z = self.make_zombie(kind_of(r[1] as u8), r[9] as u32, r[2], r[3]);
+                    // tür alanı: temel tür + 8 × (bölge yaratığı indeksi + 1)
+                    let code = r[1] as u32;
+                    let s = (code / 8) as u8;
+                    let mut z = if crate::data::species(s).is_some() { self.make_species(s, r[9] as u32, r[2], r[3]) } else { self.make_zombie(kind_of((code % 8) as u8), r[9] as u32, r[2], r[3]) };
                     z.id = id;
                     self.zombies.push(z);
                     self.zombies.len() - 1

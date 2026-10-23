@@ -87,6 +87,8 @@ pub fn world_json(g: &Game) -> String {
         "weapons": weapons,
         "zones": zones,
         "chars": chars,
+        // V13 bölge yaratıkları: [kimlik (z/<kimlik> görselleri), ad]
+        "species": data::SPECIES.iter().map(|s| json!([s.id, s.name])).collect::<Vec<_>>(),
         "city_level": progress::CITY_LEVEL,
         // V12 bölgeler: ad ve dünya pikseli dikdörtgenleri (oyun ekranı bölge dışını karartır, harita bölgeye sınırlanır)
         "areas": areas::AREAS.iter().map(|a| json!({ "id": a.id, "name": a.name,

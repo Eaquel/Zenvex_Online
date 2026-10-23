@@ -171,13 +171,22 @@ impl crate::game::Game {
             .enumerate()
             .map(|(i, a)| {
                 let (hx, hy) = hub(i);
-                let mut mobs: Vec<Value> = creatures(i)
+                // V13: önce bölgenin kendi yaratıkları (temel türün seviye aralığıyla)
+                let ranges = creatures(i);
+                let mut mobs: Vec<Value> = crate::data::SPECIES
+                    .iter()
+                    .filter(|s| s.area == a.id)
+                    .map(|s| {
+                        let (lo, hi) = ranges.iter().find(|r| r.0 == s.base).map(|r| (r.1, r.2)).unwrap_or(a.rec);
+                        json!({ "name": s.name, "sprite": format!("z/{}/idle_0_0", s.id), "lo": lo, "hi": hi, "color": ZOMBIES[s.base as usize].color })
+                    })
+                    .collect();
+                mobs.extend(creatures(i)
                     .iter()
                     .map(|&(k, lo, hi)| {
                         let d = &ZOMBIES[k as usize];
                         json!({ "name": d.name, "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": lo, "hi": hi, "color": d.color })
-                    })
-                    .collect();
+                    }));
                 if i == self.titan.1 && !self.titan_dead {
                     let d = &ZOMBIES[ZKind::Titan as usize];
                     mobs.insert(0, json!({ "name": format!("{} (Şimdi Burada!)", d.name), "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": 50, "hi": 50, "color": d.color }));

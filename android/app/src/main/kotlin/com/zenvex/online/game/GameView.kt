@@ -78,6 +78,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val staticSprites: Array<Sprite?>
     private val zombieSprite: Array<String>
     private val zombieName: Array<String>
+    /** V13 bölge yaratıkları: görsel kimliği ve adı (zombi tür alanı = temel tür + 8 × (indeks + 1)) */
+    private val speciesId: Array<String>
+    private val speciesName: Array<String>
     private val zombieColor: IntArray
     private val vehicleIds: Array<String>
     private val weaponSprites: Array<String>
@@ -99,6 +102,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val z = w.getJSONArray("zombies")
         zombieName = Array(z.length()) { z.getJSONArray(it).getString(0) }
         zombieSprite = Array(z.length()) { z.getJSONArray(it).getString(1) }
+        val spj = w.optJSONArray("species") ?: org.json.JSONArray()
+        speciesId = Array(spj.length()) { spj.getJSONArray(it).getString(0) }
+        speciesName = Array(spj.length()) { spj.getJSONArray(it).getString(1) }
         zombieColor = IntArray(z.length()) { z.getJSONArray(it).getLong(2).toInt() }
         val v = w.getJSONArray("vehicles")
         vehicleIds = Array(v.length()) { v.getJSONArray(it).getString(0) }
@@ -1174,29 +1180,44 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             name == "commander" && atlas["npc/commander"] == null -> "npc/soldier"
             else -> "npc/$name"
         }
-        val sp = atlas[key] ?: return false
-        val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return false
-        val k = sp.k * scale
-        val w = sp.w * k; val h = sp.h * k
-        val left = sx - sp.ax * k; val top = sy - sp.ay * k
-        val flip = dir in 5..7
-        val ph = ch * 1.7f
-        val breath = sin(t * 2.1f + ph)
-        val sway = sin(t * 1.05f + ph * 0.6f)
-        var i = 0
-        for (j in 0..meshH) {
-            val v = j.toFloat() / meshH
-            val up = ((0.62f - v) / 0.62f).coerceIn(0f, 1f)
-            for (q in 0..meshW) {
-                val u = q.toFloat() / meshW
-                var vx = left + u * w + (u - 0.5f) * w * 0.014f * breath * up + sway * w * 0.012f * (1 - v) * (1 - v)
-                val vy = top + v * h - h * 0.006f * (breath + 1f) * up
-                if (flip) vx = 2 * sx - vx
-                meshVerts[i++] = vx; meshVerts[i++] = vy
+        // V13 Gezgin Tüccar Marco: 5 yönlü bekleme animasyonu (batı yanı doğunun aynası)
+        val marco = if (ch == 5) {
+            val f = frameOf(atlas.anims("n/marco", atlas.zombieAnims), "idle", t + ch * 0.37f)
+            val (d5, fl) = if (dir >= 5) (8 - dir) to true else dir to false
+            atlas["n/marco/idle_${d5}_$f"]?.let { it to fl }
+        } else null
+        val w: Float; val top: Float
+        if (marco != null) {
+            val (msp, fl) = marco
+            val k = msp.k * scale
+            w = msp.w * k; top = sy - msp.ay * k
+            fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
+            atlas.draw(c, msp, sx, sy, scale, pixelPaint, fl)
+        } else {
+            val sp = atlas[key] ?: return false
+            val bmp = npc6Bmp.getOrPut(key) { atlas.extract(key) } ?: return false
+            val k = sp.k * scale
+            w = sp.w * k; val h = sp.h * k
+            val left = sx - sp.ax * k; top = sy - sp.ay * k
+            val flip = dir in 5..7
+            val ph = ch * 1.7f
+            val breath = sin(t * 2.1f + ph)
+            val sway = sin(t * 1.05f + ph * 0.6f)
+            var i = 0
+            for (j in 0..meshH) {
+                val v = j.toFloat() / meshH
+                val up = ((0.62f - v) / 0.62f).coerceIn(0f, 1f)
+                for (q in 0..meshW) {
+                    val u = q.toFloat() / meshW
+                    var vx = left + u * w + (u - 0.5f) * w * 0.014f * breath * up + sway * w * 0.012f * (1 - v) * (1 - v)
+                    val vy = top + v * h - h * 0.006f * (breath + 1f) * up
+                    if (flip) vx = 2 * sx - vx
+                    meshVerts[i++] = vx; meshVerts[i++] = vy
+                }
             }
+            fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
+            c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, if (ch == 11 && key == "npc/quest") wizardPaint else pixelPaint)
         }
-        fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
-        c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, if (ch == 11 && key == "npc/quest") wizardPaint else pixelPaint)
         // büyücü: çevresinde yükselen mavi-mor kıvılcımlar
         if (ch == 11 && Settings.current.particles && Math.random() < 0.25)
             particles += Particle(x + ((Math.random() - 0.5) * 70).toFloat(), y - 20f, 10f, 0f, 0f, 90f, 1.1f, 1.1f,
@@ -1561,7 +1582,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val zombiePixel = HashMap<String, Boolean>()
 
     private fun drawZombie(c: Canvas, o: Int) {
-        val kind = drawBuf[o + 1].toInt()
+        val code = drawBuf[o + 1].toInt()
+        val kind = code % 8
+        val species = code / 8
         val x = drawBuf[o + 2]; val y = drawBuf[o + 3]
         val dir = drawBuf[o + 4].toInt()
         val anim = zAnimNames.getOrElse(drawBuf[o + 5].toInt()) { "idle" }
@@ -1576,12 +1599,20 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val maxHp = special shr 2
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
-        val name = zombieSprite.getOrElse(kind) { "walker" }
+        val sid = if (species > 0) speciesId.getOrNull(species - 1) else null
+        val name = sid ?: zombieSprite.getOrElse(kind) { "walker" }
         val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, t)
         // piksel zombiler (köpek + V7 örgü iskeletli türler): tek görünüm (sola bakar), sağa bakarken aynalanır
-        val pix = zombiePixel.getOrPut(name) { !atlas.has("z/$name/idle_1_0") && atlas.has("z/$name/idle_0_0") }
-        val zdir = if (pix) viewDir("z/$name", anim, dir, f) else dir
-        val zflip = pix && viewFlip
+        val pix = sid == null && zombiePixel.getOrPut(name) { !atlas.has("z/$name/idle_1_0") && atlas.has("z/$name/idle_0_0") }
+        var zdir = if (pix) viewDir("z/$name", anim, dir, f) else dir
+        var zflip = pix && viewFlip
+        if (sid != null) {
+            // V13 bölge yaratıkları 5 yön (G, GD, D, KD, K) çizildi: batı yanı doğunun aynası; ölüm yalnız G ve D
+            if (anim == "death") {
+                zdir = when (dir) { 2, 3 -> 2; 5, 6 -> 2; else -> 0 }
+                zflip = dir == 5 || dir == 6
+            } else if (dir >= 5) { zdir = 8 - dir; zflip = true }
+        }
         var sp = atlas[spriteKey("z/$name", anim, zdir, f)]
         if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
         if (sp == null) sp = atlas[spriteKey("z/walker", anim, dir, f)]
@@ -1609,7 +1640,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             // seviye ve canı her zaman yan yana ("Sv 4 · 63/104"); seçkin ve boss'ta adıyla; vurulunca can çubuğu da
             val cur = if (hp >= 0f && maxHp > 0) (hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0) else -1
             val hpPart = if (cur >= 0) " · $cur/$maxHp" else ""
-            val label = when { boss || elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" } + hpPart; else -> "Sv $lvl$hpPart" }
+            val label = when {
+                sid != null -> "Sv $lvl " + speciesName.getOrElse(species - 1) { "" } + hpPart
+                boss || elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" } + hpPart
+                else -> "Sv $lvl$hpPart"
+            }
             val hpText: String? = null
             // başın hemen üstü: görselin çapası dünya ölçeğiyle (k) çarpılır; eskiden k unutulduğu için çubuk çok yukarıda kalıyordu
             plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, if (showBar) hp else -1f, boss, null,

@@ -342,6 +342,8 @@ pub struct Zombie {
     pub ret: bool,
     /// köpek ısırdıysa bir süre köpeğe odaklanır
     pub dog_aggro: f32,
+    /// V13 bölge yaratığı (data::SPECIES indeksi + 1; 0 klasik zombi)
+    pub species: u8,
 }
 
 #[derive(Clone, Debug)]

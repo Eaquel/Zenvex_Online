@@ -177,7 +177,8 @@ impl Game {
                 z.y,
                 [
                     D_ZOMBIE,
-                    z.kind as u8 as f32,
+                    // temel tür + 8 × bölge yaratığı (Kotlin ayırır)
+                    (z.kind as u8 + z.species * 8) as f32,
                     z.x,
                     z.y,
                     z.dir as f32,

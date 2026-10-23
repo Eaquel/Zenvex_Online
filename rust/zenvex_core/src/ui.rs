@@ -1347,6 +1347,18 @@ impl Game {
             "spawn" | "zombi" | "boss" | "killall" | "temizle" if self.net == 2 => {
                 Err("Çevrimiçi katılımcısın: zombileri ev sahibi yönetir, bu hile yalnızca ev sahibinde ya da tek başınayken çalışır".into())
             }
+            "spawn" | "zombi" if data::SPECIES.iter().any(|s| s.id == arg(1)) => {
+                // V13 bölge yaratığı: "spawn lumberjack 3 12"
+                let s = data::SPECIES.iter().position(|s| s.id == arg(1)).unwrap() as u8 + 1;
+                let n = (num(2, 1.0) as u32).clamp(1, 30);
+                let lvl = (num(3, self.progress.level as f32) as u32).clamp(1, 60);
+                for k in 0..n {
+                    let a = k as f32 * 0.7 + self.rng.range(0.0, 0.5);
+                    let z = self.make_species(s, lvl, px + a.cos() * 320.0, py + a.sin() * 320.0);
+                    self.zombies.push(z);
+                }
+                Ok(format!("{n}× {} doğdu", data::SPECIES[s as usize - 1].name))
+            }
             "spawn" | "zombi" => {
                 let kind = match arg(1) {
                     "runner" | "kosucu" => data::ZKind::Runner,

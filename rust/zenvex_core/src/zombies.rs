@@ -58,12 +58,40 @@ impl Game {
             home_y: y,
             ret: false,
             dog_aggro: 0.0,
+            species: 0,
         }
     }
 
     pub fn spawn_zombie_at(&mut self, kind: ZKind, level: u32, x: f32, y: f32) {
         let z = self.make_zombie(kind, level, x, y);
         self.zombies.push(z);
+    }
+
+    /// V13 bölge yaratığı: temel türün zombisi, türün can çarpanı ve görseli
+    pub fn make_species(&mut self, s: u8, level: u32, x: f32, y: f32) -> Zombie {
+        let sp = crate::data::species(s).expect("tür");
+        let mut z = self.make_zombie(sp.base, level, x, y);
+        z.species = s;
+        z.hp *= sp.hp;
+        z.max_hp = z.hp;
+        z
+    }
+
+    /// bölgenin yaratık türü: zone tablosunun seçtiği davranışa uyan tür (%75), yoksa bölgenin rastgele bir türü (%40)
+    fn pick_species(&mut self, x: f32, y: f32, kind: ZKind) -> u8 {
+        let area = crate::areas::AREAS[crate::areas::area_at(x, y)].id;
+        let list: Vec<u8> = crate::data::SPECIES.iter().enumerate().filter(|(_, s)| s.area == area).map(|(i, _)| i as u8 + 1).collect();
+        if list.is_empty() {
+            return 0;
+        }
+        let same: Vec<u8> = list.iter().copied().filter(|&s| crate::data::species(s).unwrap().base == kind).collect();
+        if !same.is_empty() && self.rng.chance(0.75) {
+            return same[self.rng.below(same.len() as u32) as usize];
+        }
+        if matches!(kind, ZKind::Walker | ZKind::Runner) && self.rng.chance(0.4) {
+            return list[self.rng.below(list.len() as u32) as usize];
+        }
+        0
     }
 
     pub fn update_spawning(&mut self, dt: f32) {
@@ -149,6 +177,17 @@ impl Game {
             }
             let (lo, hi) = zone.level_range();
             let level = lo + self.rng.below(hi - lo + 1);
+            let s = self.pick_species(x, y, kind);
+            if s > 0 {
+                // sürü hayvanları (kurt, kor tazısı) 2-3'lü gelir
+                let pack = if crate::data::species(s).unwrap().base == ZKind::Dog { 2 + self.rng.below(2) } else { 1 };
+                for k in 0..pack {
+                    let oy = self.rng.range(-30.0, 30.0);
+                    let z = self.make_species(s, level, x + (k as f32 - 0.5) * 44.0, y + oy);
+                    self.zombies.push(z);
+                }
+                return;
+            }
             if kind == ZKind::Dog {
                 let n = 2 + self.rng.below(3);
                 for k in 0..n {
@@ -242,6 +281,7 @@ impl Game {
         for zi in 0..n {
             let mut z = self.zombies[zi].clone();
             let def = &ZOMBIES[z.kind as usize];
+            let (sp_speed, sp_dmg) = crate::data::species(z.species).map_or((1.0, 1.0), |s| (s.speed, s.dmg));
             z.anim_t += dt;
             z.flash_t = (z.flash_t - dt).max(0.0);
             z.bar_t = (z.bar_t - dt).max(0.0);
@@ -358,7 +398,7 @@ impl Game {
                 ZState::Flee => {
                     z.timer -= dt;
                     if dist > 1.0 {
-                        self.move_zombie(&mut z, -dx / dist, -dy / dist, dt, def.chase * 1.2);
+                        self.move_zombie(&mut z, -dx / dist, -dy / dist, dt, def.chase * 1.2 * sp_speed);
                     }
                     if z.timer <= 0.0 || dist > 900.0 {
                         z.state = ZState::Wander;
@@ -374,7 +414,7 @@ impl Game {
                         z.anim = Z_IDLE;
                         z.timer = 1.0;
                     } else {
-                        self.move_zombie(&mut z, mx / md, my / md, dt, def.chase);
+                        self.move_zombie(&mut z, mx / md, my / md, dt, def.chase * sp_speed);
                         if z.anim != Z_WALK {
                             z.anim = Z_WALK;
                             z.anim_t = 0.0;
@@ -424,7 +464,7 @@ impl Game {
                         if md < 6.0 {
                             z.timer = 0.0;
                         } else {
-                            self.move_zombie(&mut z, mx / md, my / md, dt, def.speed);
+                            self.move_zombie(&mut z, mx / md, my / md, dt, def.speed * sp_speed);
                         }
                     }
                 }
@@ -488,7 +528,7 @@ impl Game {
                         z.hit_done = false;
                         z.dir = dir_from_vec(dx, dy);
                     } else if dist >= reach * 0.8 {
-                        let mut sp = def.chase * if z.enraged { 1.4 } else { 1.0 };
+                        let mut sp = def.chase * sp_speed * if z.enraged { 1.4 } else { 1.0 };
                         if z.kind == ZKind::Runner && dist < 260.0 {
                             sp *= 1.35; // atılma
                         }
@@ -518,7 +558,7 @@ impl Game {
                         z.hit_done = true;
                         let (fx, fy) = dir_vec(z.dir);
                         let facing = (dx * fx + dy * fy) / dist.max(1e-3);
-                        let lvl_dmg = (def.dmg + def.dmg_lv * z.level as f32) * ZOMBIE_DMG_MULT;
+                        let lvl_dmg = (def.dmg + def.dmg_lv * z.level as f32) * ZOMBIE_DMG_MULT * sp_dmg;
                         match z.kind {
                             ZKind::Tank => {
                                 slams.push((z.x + fx * 40.0, z.y + fy * 40.0, m(2.0), lvl_dmg));
@@ -671,5 +711,36 @@ impl Game {
         z.x = x;
         z.y = y;
         z.dir = dir_from_vec(nx, ny);
+    }
+}
+
+#[cfg(test)]
+mod species_tests {
+    use crate::data::{species, SPECIES};
+    use crate::game::Game;
+    use crate::Progress;
+
+    /// V13: her yaratık türü bir bölgeye ait; ağ görüntüsünden türü ve canı korunarak geri kurulur
+    #[test]
+    fn species_spawn_and_net_roundtrip() {
+        for s in SPECIES {
+            assert!(crate::areas::AREAS.iter().any(|a| a.id == s.area), "{}", s.id);
+        }
+        let mut g = Game::new(7, Progress::default(), 0);
+        let z = g.make_species(2, 5, g.player.x + 300.0, g.player.y);
+        assert_eq!(species(z.species).unwrap().id, "wolf");
+        let hp = z.max_hp;
+        g.zombies.clear();
+        g.zombies.push(z);
+        let mut buf = vec![0.0f32; 64];
+        let n = g.net_snapshot(&mut buf);
+        assert_eq!(n, 1);
+        let mut c = Game::new(7, Progress::default(), 0);
+        c.zombies.clear();
+        c.net = 2;
+        c.net_apply(&buf[..crate::net::NET_STRIDE]);
+        assert_eq!(c.zombies.len(), 1);
+        assert_eq!(c.zombies[0].species, 2);
+        assert!((c.zombies[0].max_hp - hp).abs() < 0.5);
     }
 }

@@ -732,7 +732,7 @@ impl Game {
             let id = if self.rng.chance(0.5) { "medkit" } else { "energy" };
             self.spawn_drop_id(id, 1, z.x, z.y);
         }
-        let xp = def.xp + z.level * 3;
+        let xp = ((def.xp + z.level * 3) as f32 * crate::data::species(z.species).map_or(1.0, |s| s.xp)).round() as u32;
         self.give_xp(z.x, z.y, xp);
         self.progress.pass.xp += if z.boss { 500 } else { 5 + z.level / 3 };
         self.quests_done(done);

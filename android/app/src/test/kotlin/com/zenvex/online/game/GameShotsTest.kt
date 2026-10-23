@@ -128,5 +128,17 @@ class GameShotsTest {
     @Test fun g17_shop() = shot("shop", { cheat("level 12"); cheat("gold 2000"); goCaravan() }, steps = 420, hud = false,
         overlay = { com.zenvex.online.ui.ShopScreen({}) })
 
+    // V13 bölge yaratıkları (yürür, saldırır; isim ve seviye başlarında)
+    private fun creatures(lv: Int, tp: String, vararg ids: String) {
+        cheat("level $lv"); cheat("tp $tp"); cheat("killall")
+        for (id in ids) cheat("spawn $id 2 $lv")
+    }
+    @Test fun g18_forestCreatures() = shot("cr_forest", { creatures(8, "camp", "lumberjack", "wolf", "shroom") }, steps = 70)
+    @Test fun g19_cityCreatures() = shot("cr_city", { creatures(15, "downtown", "office", "riot", "crawler") }, steps = 70)
+    @Test fun g20_burntCreatures() = shot("cr_burnt", { creatures(20, "burnt", "charred", "emberhound", "ashwraith") }, steps = 70)
+    @Test fun g21_desertCreatures() = shot("cr_desert", { creatures(25, "desert", "mummy", "scorpion", "biker") }, steps = 70)
+    @Test fun g22_swampCreatures() = shot("cr_swamp", { creatures(30, "swamp", "bloater", "boggiant", "witch") }, steps = 70)
+    @Test fun g23_harborCreatures() = shot("cr_harbor", { creatures(45, "harbor", "sailor", "icecrab", "dockbrute") }, steps = 70)
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

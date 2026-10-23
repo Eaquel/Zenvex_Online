@@ -604,6 +604,52 @@ pub enum ZKind {
     Titan = 7,
 }
 
+/// V13 bölge yaratıkları: temel türün davranışını (yetenekler, sürü, zehir…) kullanır, kendi görseli ve çarpanları var.
+pub struct Species {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub base: ZKind,
+    /// areas::AREAS kimliği
+    pub area: &'static str,
+    pub hp: f32,
+    pub dmg: f32,
+    pub speed: f32,
+    pub xp: f32,
+}
+
+macro_rules! sp {
+    ($id:expr, $name:expr, $base:ident, $area:expr, $hp:expr, $dmg:expr, $speed:expr, $xp:expr) => {
+        Species { id: $id, name: $name, base: ZKind::$base, area: $area, hp: $hp, dmg: $dmg, speed: $speed, xp: $xp }
+    };
+}
+
+/// Sıra kayıt/ağ biçiminin parçası (zombinin `species` alanı = indeks + 1): yalnız sona eklenir.
+pub const SPECIES: &[Species] = &[
+    sp!("lumberjack", "Oduncu Zombi", Walker, "forest", 1.25, 1.15, 0.95, 1.2),
+    sp!("wolf", "Kuduz Kurt", Dog, "forest", 1.0, 1.0, 1.05, 1.0),
+    sp!("shroom", "Mantar Zombi", Toxic, "forest", 1.1, 0.9, 0.85, 1.1),
+    sp!("office", "Ofis Zombisi", Walker, "city", 1.0, 1.0, 1.0, 1.0),
+    sp!("riot", "Çevik Kuvvet Zombisi", Tank, "city", 0.85, 0.9, 1.1, 0.9),
+    sp!("crawler", "Sürüngen", Runner, "city", 0.9, 1.1, 1.1, 1.1),
+    sp!("charred", "Kömürleşmiş Zombi", Walker, "burnt", 1.3, 1.25, 1.0, 1.3),
+    sp!("emberhound", "Kor Tazısı", Dog, "burnt", 1.2, 1.25, 1.1, 1.3),
+    sp!("ashwraith", "Kül Hayaleti", Dark, "burnt", 1.0, 1.15, 1.05, 1.2),
+    sp!("mummy", "Mumya", Walker, "desert", 1.45, 1.2, 0.85, 1.35),
+    sp!("scorpion", "Dev Akrep", Runner, "desert", 1.2, 1.3, 1.0, 1.3),
+    sp!("biker", "Motorcu Zombi", Runner, "desert", 1.35, 1.2, 1.05, 1.35),
+    sp!("bloater", "Şişkin", Toxic, "bswamp", 1.5, 1.1, 0.8, 1.4),
+    sp!("boggiant", "Bataklık Devi", Tank, "bswamp", 1.3, 1.25, 0.9, 1.5),
+    sp!("witch", "Bataklık Cadısı", Dark, "bswamp", 1.1, 1.35, 1.0, 1.5),
+    sp!("sailor", "Donmuş Denizci", Walker, "harbor", 1.5, 1.3, 1.0, 1.5),
+    sp!("icecrab", "Buz Yengeci", Runner, "harbor", 1.5, 1.2, 0.95, 1.5),
+    sp!("dockbrute", "Rıhtım Canavarı", Tank, "harbor", 1.45, 1.35, 0.95, 1.7),
+];
+
+/// zombinin tür çarpanları (species 0: klasik zombi)
+pub fn species(s: u8) -> Option<&'static Species> {
+    if s == 0 { None } else { SPECIES.get(s as usize - 1) }
+}
+
 pub struct ZombieDef {
     pub kind: ZKind,
     pub name: &'static str,
