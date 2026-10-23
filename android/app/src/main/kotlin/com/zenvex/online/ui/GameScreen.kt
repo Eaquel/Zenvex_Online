@@ -93,7 +93,7 @@ fun GameScreen(toLobby: () -> Unit) {
                 }
             }
             override fun onToast(msg: String) { v.post { Toaster.show(msg) } }
-            override fun onLevelUp(level: Int) { v.post { Online.system("Seviye $level oldun!") } }
+            override fun onLevelUp(level: Int) { v.post { Online.system("Seviye $level oldun!"); Account.claimLevelGems(); Account.refresh() } }
         })
         v.localName = Account.name.value.ifEmpty { GameSession.ui("profile").optString("name") }
         v.localClan = Account.clan.value?.name ?: ""

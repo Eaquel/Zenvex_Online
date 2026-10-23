@@ -494,7 +494,9 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
         if (channels[tab] == "dm") { FriendsPanel(Modifier.weight(1f).fillMaxWidth()); return@Column }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state) {
             items(lines) { l ->
-                Row(Modifier.padding(vertical = 2.dp)) {
+                Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // gönderenin resmi ve çerçevesi (animasyonlu); sistem satırlarında yok
+                    if (l.channel != "system" && l.avatar >= 0) { ProfileAvatar(l.avatar, l.frame, 30.dp); Spacer(Modifier.width(5.dp)) }
                     if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
                     PT(l.name + ": ", 13.sp, if (l.mine) Px.Name else if (l.channel == "system") Px.Orange else Color(0xFF8CC8FF))
                     PT(l.text, 14.sp, maxLines = 6, outline = true)

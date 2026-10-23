@@ -139,6 +139,25 @@ object Account {
     fun friendRemove(other: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_friend_remove", auth().put("p_other", other)) { r -> done(txt(r)) }
     fun dmSend(to: Long, text: String, done: (Result<JSONObject>) -> Unit) =
         Supa.rpc("zx_dm_send", auth().put("p_to", to).put("p_text", text)) { r -> done(obj(r)) }
+    /**
+     * Seviye ödülü elmasları (2-10: 25, 11-20: 50, 21-30: 100, 31-40: 150, 41-50: 250 her seviye için).
+     * Önce kayıt gönderilir (sunucu yeni seviyeyi görsün), sonra sunucu elması "grant" olarak yazar, oyun elması ekler.
+     */
+    fun claimLevelGems() {
+        if (!loggedIn || Session.state.value != Session.State.Live) return
+        GameSession.save(cloud = true) { ok ->
+            if (!ok) return@save
+            Supa.rpc("zx_level_gems", auth().put("p_sid", Session.sid)) { r ->
+                val g = r.getOrNull()?.let { runCatching { JSONObject(it).optInt("gems") }.getOrNull() } ?: 0
+                if (g > 0) {
+                    GameSession.cmdNoSave("crate_apply", "cost" to 0, "rewards" to JSONArray().put("gem:$g"))
+                    GameSession.save(cloud = true)
+                    com.zenvex.online.ui.Toaster.show("+$g Elmas · Seviye Ödülü")
+                }
+            }
+        }
+    }
+
     /** Oyuncu şikâyeti (yöneticiye düşer) */
     fun report(target: Long, reason: String, done: (String?) -> Unit) =
         Supa.rpc("zx_report", auth().put("p_target", target).put("p_reason", reason)) { r -> done(r.exceptionOrNull()?.message) }

@@ -241,4 +241,35 @@ class UiShotsTest {
             .put("my_score", 7390).put("my_rank", 23).put("top", top)
         paparazzi.snapshot { EventView(b, "", now, {}) }
     }
+
+    @Test
+    fun framesAndAvatars() {
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Column(
+                androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF1E1D19)).padding(18.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp),
+            ) {
+                for (row in FRAMES.chunked(3)) androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(40.dp)) {
+                    row.forEach { f -> ProfileAvatar(listOf(1, 2, 3, 4, 5, 16)[FRAMES.indexOf(f) % 6], f.id, 120.dp) }
+                }
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+                    for (a in listOf(1, 2, 3, 4, 5, 16)) ProfileAvatar(a, "", 90.dp)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun framesLarge() {
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Row(
+                androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF1E1D19)).padding(40.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(60.dp),
+            ) {
+                ProfileAvatar(16, "blood", 220.dp)
+                ProfileAvatar(4, "lv50", 220.dp)
+                ProfileAvatar(5, "season1", 220.dp)
+            }
+        }
+    }
 }

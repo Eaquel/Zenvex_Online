@@ -180,7 +180,7 @@ private fun ClanOverview(c: JSONObject, myRank: Int, changed: () -> Unit) {
                 Column {
                     PT(c.optString("name"), 24.sp, Px.Clan, outline = true)
                     PT("${c.optString("title")} · Seviye ${c.optInt("level")} / 9", 15.sp, Px.Text)
-                    if (c.optInt("top") in 1..3) PT("Genel Sıralama #${c.optInt("top")} · Üyelerine Efektli Çerçeve", 12.sp, Px.Orange)
+                    if (c.optInt("top") in 1..3) PT("Genel Sıralama #${c.optInt("top")}", 12.sp, Px.Orange)
                 }
             }
             Spacer(Modifier.height(10.dp))

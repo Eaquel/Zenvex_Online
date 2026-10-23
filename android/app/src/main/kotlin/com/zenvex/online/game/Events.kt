@@ -34,6 +34,8 @@ object Events {
             }
         }
         refresh()
+        // kaçırılmış seviye ödülleri (çevrimdışıyken atlanan seviyeler)
+        Account.claimLevelGems()
         Pass.sync()
         Skins.sync()
     }
