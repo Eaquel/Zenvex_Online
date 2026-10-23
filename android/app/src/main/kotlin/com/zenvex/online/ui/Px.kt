@@ -211,7 +211,11 @@ fun PxIcon(icon: String, modifier: Modifier = Modifier, size: Dp = 48.dp, badge:
                 .clickable(interactionSource = src, indication = null) { Audio.play("click", bus = Audio.Bus.Ui); onClick() },
             contentAlignment = Alignment.Center,
         ) { Icon(icon, size * (if (icon in PIXEL_ICONS) 0.72f else 0.56f), tint) }
-        if (badge > 0) Box(
+        // posta: kırmızı mühürlü zarf rozeti (V13), sayı üstünde
+        if (badge > 0 && icon == "mail") Box(Modifier.align(Alignment.TopEnd).offset(8.dp, (-8).dp).size(24.dp), contentAlignment = Alignment.Center) {
+            ArtImage("mail_badge", Modifier.fillMaxSize())
+            PT(if (badge > 9) "9+" else "$badge", 10.sp, outline = true, modifier = Modifier.offset(7.dp, 7.dp))
+        } else if (badge > 0) Box(
             Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).clip(CircleShape).background(Color(0xFFE02828))
                 .border(1.5.dp, Color.White, CircleShape),
             contentAlignment = Alignment.Center,

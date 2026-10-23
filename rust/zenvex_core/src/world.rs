@@ -128,6 +128,11 @@ pub const STATIC_NAMES: &[&str] = &[
     "mil_tent", "jeep_wreck", "radar_dish", "ammo_stack", "jeep_wreck2", "sandbag_nest",
     "street_lamp", "bus_stop", "burnt_car", "dumpster", "billboard",
     "tent_patched", "tent_olive", "tent_tarp",
+    // V13 (V11 paketi): cephe ve karargâh, eğitim üssü, karantina sınırı
+    "front_trench", "front_crater", "front_barbed", "front_tank_wreck",
+    "hq_command_tent", "hq_radio_mast", "hq_flag", "hq_sign",
+    "train_dummy", "train_sign", "train_target",
+    "quarantine_wall", "quarantine_post", "quarantine_sign", "border_searchlight", "border_bones",
 ];
 pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
@@ -2037,6 +2042,16 @@ impl World {
                 self.push("barricade", Kind::Prop, (cx + ox) * t, (y1 + 1.6) * t, Shape::Rect(0.8 * t, 0.2 * t), 0.0, 0.0);
                 self.push("lamp", Kind::Lamp, (cx + ox * 0.75) * t, (y1 - 1.5) * t, Shape::Circle(0.15 * t), 0.0, 0.0);
             }
+            // eğitim üssü: kapıda tabela, içeride hedef işaretleri ve saman mankenler
+            if b.id as usize == crate::bases::TRAIN_BASE {
+                self.push("train_sign", Kind::Prop, (cx + 6.5) * t, (y1 + 2.8) * t, Shape::Rect(0.9 * t, 0.2 * t), 0.0, 0.0);
+                for (ox, oy) in [(-5.5f32, 1.5f32), (5.5, 1.5)] {
+                    self.push("train_target", Kind::Deco, (cx + ox) * t, (cy + oy) * t, Shape::None, 0.0, 0.0);
+                }
+                for (ox, oy) in [(-8.5f32, 1.0f32), (8.5, 1.0), (-2.5, 8.0), (2.5, 8.0)] {
+                    self.push("train_dummy", Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.2 * t), 0.0, 0.0);
+                }
+            }
         }
     }
 
@@ -2068,10 +2083,11 @@ impl World {
         let e1 = n - 1.5;
         let mut x = 0.0;
         while x < n {
-            self.push("wall_x", Kind::Prop, (x + 2.0) * t, e0 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            self.push("wall_x", Kind::Prop, (x + 2.0) * t, e1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
+            // V13: beton karantina duvarı (dikenli tel, tehlike şeritleri); dikey kenarlarda eski sur
+            self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, e0 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
+            self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, e1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
             if x < WORLD_TILES as f32 {
-                self.push("wall_x", Kind::Prop, (x + 2.0) * t, w1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
+                self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, w1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
             }
             x += 4.0;
         }
@@ -2099,12 +2115,12 @@ impl World {
                 match k % 3 {
                     0 => self.push("watchtower", Kind::Tower, px * t, py * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0),
                     1 => {
-                        self.push("lamp", Kind::Lamp, px * t, py * t, Shape::Circle(0.15 * t), 0.0, 0.0);
-                        self.push("barricade", Kind::Prop, (px + 2.0) * t, py * t, Shape::Rect(0.8 * t, 0.2 * t), 0.0, 0.0);
+                        self.push("border_searchlight", Kind::Lamp, px * t, py * t, Shape::Circle(0.35 * t), 0.0, 0.0);
+                        self.push("quarantine_sign", Kind::Prop, (px + 2.0) * t, py * t, Shape::Circle(0.15 * t), 0.0, 0.0);
                     }
                     _ => {
-                        self.push("road_sign", Kind::Prop, px * t, py * t, Shape::Circle(0.15 * t), 0.0, 0.0);
-                        self.push("sandbags", Kind::Prop, (px - 2.0) * t, py * t, Shape::Rect(0.9 * t, 0.3 * t), 0.0, 0.0);
+                        self.push("quarantine_post", Kind::Prop, px * t, py * t, Shape::Rect(0.5 * t, 0.4 * t), 0.0, 0.0);
+                        self.push("border_bones", Kind::Deco, (px - 2.2) * t, py * t, Shape::None, 0.0, 0.0);
                     }
                 }
             }
@@ -2142,7 +2158,15 @@ impl World {
                     continue;
                 }
                 let (wx, wy) = (px * t, py * t);
-                if r < 0.025 {
+                if r < 0.008 {
+                    self.push("front_trench", Kind::Prop, wx, wy, Shape::Rect(2.2 * t, 0.6 * t), 0.0, 0.0);
+                } else if r < 0.016 {
+                    self.push("front_crater", Kind::Deco, wx, wy, Shape::None, 0.0, ph);
+                } else if r < 0.022 {
+                    self.push("front_barbed", Kind::Prop, wx, wy, Shape::Rect(1.6 * t, 0.25 * t), 0.0, 0.0);
+                } else if r < 0.0245 {
+                    self.push("front_tank_wreck", Kind::Prop, wx, wy, Shape::Rect(2.3 * t, 0.9 * t), 0.0, 0.0);
+                } else if r < 0.03 {
                     self.push("sandbags", Kind::Prop, wx, wy, Shape::Rect(1.4 * t, 0.35 * t), 0.0, 0.0);
                 } else if r < 0.04 {
                     self.push("barricade", Kind::Prop, wx, wy, Shape::Rect(0.8 * t, 0.2 * t), 0.0, 0.0);
@@ -2168,12 +2192,18 @@ impl World {
             self.push("watchtower", Kind::Tower, (hq.tx + ox * (hq.r + 2.5)) * t, (hq.ty + oy * (hq.r + 2.5)) * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0);
             self.push("lamp", Kind::Lamp, (hq.tx + ox * (hq.r - 1.0)) * t, (hq.ty + oy * (hq.r - 1.0)) * t, Shape::Circle(0.15 * t), 0.0, 0.0);
         }
-        // V12.1 (Askeri Bölge kalktı): karargâhın dışında radar ve askerî çadırlar
+        // V12.1 (Askeri Bölge kalktı): karargâhın dışında komuta çadırı, telsiz direği, radar ve askerî çadırlar
         let (rx, ry) = (hq.tx - hq.r - 7.0, hq.ty - 3.0);
-        self.push("radar_dish", Kind::Prop, rx * t, ry * t, Shape::Circle(0.6 * t), 0.0, 0.0);
-        for k in 0..3 {
-            self.push("mil_tent", Kind::Prop, (rx + 1.0 + k as f32 * 3.2) * t, (ry + 5.0) * t, Shape::Rect(1.4 * t, 0.9 * t), 0.0, 0.0);
+        self.push("hq_radio_mast", Kind::Prop, rx * t, (ry - 4.0) * t, Shape::Circle(0.4 * t), 0.0, 0.0);
+        self.push("radar_dish", Kind::Prop, (rx + 4.5) * t, (ry - 3.0) * t, Shape::Circle(0.6 * t), 0.0, 0.0);
+        self.push("hq_command_tent", Kind::Prop, (rx + 1.5) * t, (ry + 5.0) * t, Shape::Rect(2.2 * t, 1.1 * t), 0.0, 0.0);
+        for k in 0..2 {
+            self.push("mil_tent", Kind::Prop, (rx + 5.5 + k as f32 * 3.2) * t, (ry + 5.0) * t, Shape::Rect(1.4 * t, 0.9 * t), 0.0, 0.0);
         }
+        // karargâh bayrağı ve giriş tabelası
+        self.push("hq_flag", Kind::Prop, (hq.tx + hq.r - 1.5) * t, (hq.ty - hq.r + 1.5) * t, Shape::Circle(0.3 * t), 0.0, 0.0);
+        self.push("hq_flag", Kind::Prop, (hq.tx - hq.r + 1.5) * t, (hq.ty - hq.r + 1.5) * t, Shape::Circle(0.3 * t), 0.0, 0.0);
+        self.push("hq_sign", Kind::Prop, (hq.tx + 3.0) * t, (hq.ty + hq.r + 1.2) * t, Shape::Circle(0.15 * t), 0.0, 0.0);
     }
 
     pub fn build_grid(&mut self) {

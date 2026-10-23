@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.alpha
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -61,6 +62,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 enum class Screen { Splash, Lobby, Settings, Loading, Game }
+
+private val CRAFT_TAB_ICONS = listOf("tab_heal", "tab_potion", "tab_weapon", "tab_gear", "tab_jewel", "tab_material", "tab_vehicle", "tab_base")
 
 fun JSONArray?.objs(): List<JSONObject> = if (this == null) emptyList() else List(length()) { optJSONObject(it) ?: JSONObject() }
 
@@ -251,7 +254,11 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
                 Row(Modifier.height(36.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
                     .border(2.dp, if (on) Px.Clan else Px.Edge, RoundedCornerShape(3.dp))
                     .clickable { com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); tab = i; selId = null; variant = 0 }
-                    .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // V13 sekme simgeleri (Rust sekme sırası: şifa, iksir, silah, ekipman, takı, malzeme, araç, üs)
+                    CRAFT_TAB_ICONS.getOrNull(i)?.let {
+                        ArtImage(it, Modifier.size(24.dp).alpha(if (on) 1f else 0.6f)); Spacer(Modifier.width(6.dp))
+                    }
                     PT(name, 13.sp, if (on) Px.Text else Px.Sub)
                     if (ready > 0) { Spacer(Modifier.width(6.dp)); PT("$ready", 11.sp, Px.Green) }
                 }

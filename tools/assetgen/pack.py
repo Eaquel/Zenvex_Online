@@ -132,6 +132,11 @@ def _save_page(job):
         h = min(PAGE, ((bb[3] + 63) // 64) * 64)
         w = min(PAGE, ((bb[2] + 63) // 64) * 64)
         p = p.crop((0, 0, w, h))
+    if pixel and p.getcolors(256) is None:
+        # çok renkli piksel sanat (yapay zekâ görselleri): 256 renge indirmek bantlaşma yapar → kayıpsız WebP
+        fn = f"page_{i:02d}.webp"
+        p.save(os.path.join(out, fn), "WEBP", lossless=True, quality=100, method=6)
+        return fn
     if pixel:
         # piksel sanat: 256 renkli palet + kayıpsız PNG (WebP'den küçük, kenarlarda leke yok)
         fn = f"page_{i:02d}.png"

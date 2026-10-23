@@ -77,6 +77,9 @@ fun EventBanner(modifier: Modifier, onClick: () -> Unit) {
     val k = 0.5f + 0.5f * sin(t * 3f)
     val left = e.optLong("ends") - now
     val urgent = left in 1..3_600_000
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val frame = remember { UiArt.image(ctx, "event_frame") }
+    val glow = remember { UiArt.image(ctx, "event_frame_glow") }
     Box(modifier.graphicsLayer { translationY = (1f - enter) * -60f * density; alpha = enter }
         .clip(RoundedCornerShape(3.dp)).clickable { onClick() }) {
         // zemin: afiş görseli (yavaş kayan), etkinlik rengi geçişi, geçen ışık, kıvılcımlar
@@ -92,12 +95,22 @@ fun EventBanner(modifier: Modifier, onClick: () -> Unit) {
                 val sz = 2.5f + (i % 3)
                 drawRect(info.color.copy(alpha = (1f - p) * 0.9f), Offset(x + sin(t * 2f + i) * 4f, h * (1f - p)), Size(sz, sz))
             }
-            val bw = 2.dp.toPx()
-            drawRect(info.color.copy(alpha = 0.55f + 0.45f * k), style = androidx.compose.ui.graphics.drawscope.Stroke(bw))
-            // köşe perçinleri
-            for ((cx, cy) in listOf(4f to 4f, w - 4f to 4f, 4f to h - 4f, w - 4f to h - 4f)) drawRect(Color(0xFFE8D8A0), Offset(cx - 2f, cy - 2f), Size(4f, 4f))
+            if (frame != null) {
+                // V13 kurukafa köşeli demir çerçeve + etkinlik rengine boyanmış nabız gibi parlayan dış hat
+                val dst = androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt())
+                if (glow != null) drawImage(glow, dstSize = dst, alpha = 0.35f + 0.55f * k,
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(info.color, androidx.compose.ui.graphics.BlendMode.Modulate),
+                    blendMode = androidx.compose.ui.graphics.BlendMode.Plus)
+                drawImage(frame, dstSize = dst, filterQuality = androidx.compose.ui.graphics.FilterQuality.None)
+            } else {
+                val bw = 2.dp.toPx()
+                drawRect(info.color.copy(alpha = 0.55f + 0.45f * k), style = androidx.compose.ui.graphics.drawscope.Stroke(bw))
+                // köşe perçinleri
+                for ((cx, cy) in listOf(4f to 4f, w - 4f to 4f, 4f to h - 4f, w - 4f to h - 4f)) drawRect(Color(0xFFE8D8A0), Offset(cx - 2f, cy - 2f), Size(4f, 4f))
+            }
         }
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = if (frame != null) 22.dp else 12.dp, vertical = if (frame != null) 9.dp else 5.dp),
+            verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.graphicsLayer { translationY = -kotlin.math.abs(sin(t * 4f)) * 3f * density; rotationZ = sin(t * 2f) * 6f }) {
                 Icon(info.icon, 18.dp, Color.White)
             }

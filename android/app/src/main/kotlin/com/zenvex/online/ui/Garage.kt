@@ -1,6 +1,11 @@
 package com.zenvex.online.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,7 +49,12 @@ fun GarageScreen(close: () -> Unit) {
     LaunchedEffect(tick) { Account.vehicleOrders { r -> r.onSuccess { orders = it } } }
     LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(1000) } }
     PxDialog("Tamirci Viktor · Araç Üretimi", close, 820.dp) {
-        PT("Parçaları tezgâhta üret, bana getir. Aracı hazırlarım, anahtarını postana yollarım.", 13.sp, Px.Sub, maxLines = 2)
+        // atölye manzarası (yarım kalmış cip, lamba ışığı) ve Viktor'un notu
+        SceneBackground("bg_garage", null, Modifier.fillMaxWidth().height(96.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(4.dp)),
+            dim = 0.35f, zoom = 1.0f, ay = 0.62f) {
+            PT("Parçaları tezgâhta üret, bana getir. Aracı hazırlarım, anahtarını postana yollarım.", 14.sp, Px.Text, maxLines = 2,
+                modifier = Modifier.align(Alignment.BottomStart).padding(10.dp))
+        }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().height(250.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             for (b in data.optJSONArray("builds").objs()) {
@@ -93,9 +103,31 @@ fun GarageScreen(close: () -> Unit) {
         PT("Üretimdekiler", 15.sp, Px.Orange)
         val list = orders.objs()
         if (list.isEmpty()) PT("Şu an üretimde araç yok.", 12.sp, Px.Sub)
-        for (o in list) {
-            val left = (o.optLong("ready") - now).coerceAtLeast(0L)
-            PT("${o.optString("name")}: ${if (left > 0) "%d:%02d".format(left / 60000, left / 1000 % 60) + " kaldı" else "Hazır, postana bak"}", 13.sp, Px.Text)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (o in list.take(3)) OrderCard(o, data, now)
         }
+    }
+}
+
+/** Üretimdeki araç: perçinli sipariş kartı (solda simge penceresi, ortada ad/süre, altta ilerleme çubuğu) */
+@Composable
+private fun OrderCard(o: org.json.JSONObject, data: org.json.JSONObject, now: Long) {
+    val left = (o.optLong("ready") - now).coerceAtLeast(0L)
+    val build = data.optJSONArray("builds").objs().firstOrNull { it.optString("name") == o.optString("name") }
+    val total = (build?.optInt("mins") ?: 0) * 60000L
+    val prog = if (total <= 0L) (if (left > 0) 0.5f else 1f) else (1f - left.toFloat() / total).coerceIn(0f, 1f)
+    val w = 260.dp; val h = w / 3.1f
+    Box(Modifier.size(w, h)) {
+        ArtImage("card_order", Modifier.fillMaxSize())
+        Box(Modifier.offset(w * 0.075f, h * 0.24f).size(w * 0.18f, h * 0.55f), contentAlignment = Alignment.Center) {
+            ArtImage("tab_vehicle", Modifier.fillMaxSize().padding(3.dp))
+            build?.let { ItemSlot(it.optString("key"), 0, 3, w * 0.16f) }
+        }
+        Column(Modifier.offset(w * 0.335f, h * 0.24f).width(w * 0.6f)) {
+            PT(o.optString("name"), 14.sp, Px.Orange, maxLines = 1)
+            PT(if (left > 0) "%d:%02d".format(left / 60000, left / 1000 % 60) + " kaldı" else "Hazır, postana bak", 11.sp,
+                if (left > 0) Px.Text else Px.Name, maxLines = 1)
+        }
+        Box(Modifier.offset(w * 0.322f, h * 0.805f).size(w * 0.6f * prog, h * 0.07f).background(if (left > 0) Color(0xFFE0A040) else Color(0xFF7AE07A)))
     }
 }

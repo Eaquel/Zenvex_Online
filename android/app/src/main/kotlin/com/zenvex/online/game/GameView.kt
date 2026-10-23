@@ -572,6 +572,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "invfull" -> ui.onToast("Çanta dolu!")
                 "lvl" -> {
                     fx("levelup", 0f, 0f, 120f, follow = true)
+                    fx("level_ring", hud[Native.PX], hud[Native.PY] + 8, 230f)
                     setBanner("SEVİYE ${e.getInt("level")}", "+5 Can · +1 Yumruk Hasarı", 0xFFFFD34A.toInt())
                     Audio.play("levelup"); vibrate(120, 200)
                     burst(hud[Native.PX], hud[Native.PY], 40, 0xFFFFE070.toInt(), 300f, 5f, 1, 1.2f)
@@ -585,7 +586,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "pvp" -> { Online.sendPvp(e.optInt("k"), e.optDouble("v").toFloat(), e.optBoolean("crit")); Audio.play("hit", 1f, 1.1f) }
                 "hit" -> {
                     val kind = e.getInt("kind")
-                    fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
+                    // V13: ağaçta odun kıymıkları + balta izi, kayada taş kırıkları ve kıvılcım
+                    when (kind) {
+                        1 -> { fx("wood_chips", x, y + 10, 120f, if (Math.random() < 0.5) 0f else 8f); fx("axe_swing", x + 6, y - 30, 130f) }
+                        2 -> fx("rock_chips", x, y + 10, 115f)
+                        else -> fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
+                    }
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
                     burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
@@ -626,7 +632,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "noammo" -> { Audio.play("empty", 0.8f); ui.onToast("Mermi yok!") }
                 "explode" -> {
                     val r = e.getDouble("r").toFloat()
-                    fx("explosion", x, y - r * 0.4f, r * 2.8f)
+                    // büyük patlama (hava bombası): mantar bulutlu ayrı efekt
+                    if (r >= 300f) fx("bomb_blast", x, y, r * 1.9f) else fx("explosion", x, y - r * 0.4f, r * 2.8f)
                     fx("shockwave", x, y, r * 3.2f)
                     fx("fire", x, y + 10, r * 1.1f, dur = 2.6f)
                     fx("smoke", x, y, r * 1.5f)
@@ -780,6 +787,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val t = if (pm < 0) "Ping —" else "Ping $pm ms"
                 x -= text.measureText(t)
                 drawText(c, t, x, y, 11 * d, col)
+                // sinyal çubukları (1 kırmızı … 4 camgöbeği)
+                val bars = when { pm < 0 -> -1; pm < 90 -> 3; pm < 180 -> 2; pm < 300 -> 1; else -> 0 }
+                if (bars >= 0) com.zenvex.online.ui.UiArt.bitmap(context, "ping_$bars")?.let { b ->
+                    val bs = 14 * d
+                    x -= bs + 4 * d
+                    tutOval.set(x, y - bs + 2 * d, x + bs, y + 2 * d); c.drawBitmap(b, null, tutOval, pixelPaint)
+                }
                 x -= 10 * d
             }
             if (s.showFps) {
@@ -2084,8 +2098,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             // bomba: yükseklik f² ile azalır (ivmelenme)
             val alt = (1f - f * f) * 1400f * scale
             val by = sy - alt - 40f * scale
+            // bombardıman uçağının gölgesi yerde hedefin üstünden geçer (ilk yarıda)
+            atlas["s/bomber_shadow"]?.let { sh ->
+                val pf = b.t / 1.6f
+                if (pf < 1f) {
+                    alphaPaint.alpha = (110 * sin(pf * PI.toFloat())).toInt().coerceIn(0, 255)
+                    atlas.draw(c, sh, sx + (pf - 0.35f) * 1500f * scale, sy + (pf - 0.35f) * 300f * scale, scale, alphaPaint)
+                    alphaPaint.alpha = 255
+                }
+            }
             val sp = atlas["s/air_bomb"]
-            if (sp != null) { atlas.draw(c, sp, sx, by + 40f * scale, scale, pixelPaint); continue }
+            if (sp != null) {
+                // düşüş ıslığı: bombanın arkasında beyaz hava izi
+                if (f > 0.15f) drawFxSprite(c, "bomb_whistle", b.x, b.y - alt / scale - 40f - 120f, 120f, b.t)
+                atlas.draw(c, sp, sx, by + 40f * scale, scale, pixelPaint); continue
+            }
             val w = 16f * scale; val h = 44f * scale
             fill.color = 0xFF3A3F2E.toInt(); c.drawOval(sx - w, by - h, sx + w, by + h * 0.6f, fill)
             fill.color = 0xFF5A6244.toInt(); c.drawOval(sx - w * 0.55f, by - h * 0.9f, sx + w * 0.2f, by + h * 0.2f, fill)
@@ -2266,6 +2293,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         text.typeface = fontBold; text.textSize = ts
         val tw = text.measureText(t)
         val left = x - tw / 2; val top = y - ts
+        // etkinlik unvanı: kanatlı kızıl kurdele (ortası yazıya ayrılmış, kenarlar %18'er)
+        com.zenvex.online.ui.UiArt.bitmap(context, "title_ribbon_event")?.let { b ->
+            val rw = tw / 0.64f + 16 * d; val rh = rw * b.height / b.width
+            val cy = y - ts * 0.36f
+            tutOval.set(x - rw / 2, cy - rh / 2, x + rw / 2, cy + rh / 2)
+            pixelPaint.alpha = 225; c.drawBitmap(b, null, tutOval, pixelPaint); pixelPaint.alpha = 255
+        }
         // koyu kontur
         textStroke.typeface = fontBold; textStroke.textSize = ts; textStroke.strokeWidth = ts * 0.2f
         textStroke.textAlign = Paint.Align.CENTER; textStroke.alpha = 230
@@ -2613,6 +2647,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             stroke.color = alphaC(0xFFFFE6A0.toInt(), 0.55f * (1f - ph)); stroke.strokeWidth = 2.5f * density
             c.drawCircle(x, y, r * (1f + 0.3f * ph), stroke)
         }
+        // işaret eden el: parmak ucu halkanın merkezine, hafifçe dokunur gibi iner kalkar
+        com.zenvex.online.ui.UiArt.bitmap(context, "tut_hand")?.let { b ->
+            val h = 46 * density; val w = h * b.width / b.height
+            val bob = (0.5f + 0.5f * sin(time * 5f)) * 8 * density
+            tutOval.set(x - w * 0.32f, y + bob, x - w * 0.32f + w, y + bob + h)
+            c.drawBitmap(b, null, tutOval, pixelPaint)
+        }
     }
 
     /** Rehberin konuşma balonu: üst ortada, sözcük sözcük sarılır; 9 sn sonra söner */
@@ -2633,10 +2674,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val lh = size * 1.3f
         val bw = maxW + 24 * d
         val bh = lines.size * lh + 34 * d
-        val x0 = sw / 2f - bw / 2; val y0 = 58 * d - (1f - a) * 10 * d
+        val diana = guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)
+        // Komutan Diana konuşurken balonun solunda portresi
+        val port = if (diana) com.zenvex.online.ui.UiArt.bitmap(context, "commander_portrait") else null
+        val pw = if (port != null) max(bh, 64 * d) * port.width / port.height else 0f
+        val x0 = sw / 2f - bw / 2 + pw / 2; val y0 = 58 * d - (1f - a) * 10 * d
+        if (port != null) {
+            val ph = max(bh, 64 * d)
+            tutOval.set(x0 - pw - 4 * d, y0, x0 - 4 * d, y0 + ph)
+            fill.color = alphaC(0xD8141310.toInt(), a); c.drawRoundRect(tutOval, 6 * d, 6 * d, fill)
+            pixelPaint.alpha = (255 * a).toInt(); c.drawBitmap(port, null, tutOval, pixelPaint); pixelPaint.alpha = 255
+            stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 6 * d, 6 * d, stroke)
+        }
         fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
         stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, if (guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)) "Komutan Diana" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
+        drawText(c, if (diana) "Komutan Diana" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
         for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
     }
 
