@@ -188,7 +188,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             "Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
             "Keskin nişancının kırmızı lazerini görürsen yerinden kıpırda ya da takla at; mermi lazerin olduğu yere gider.",
             "Askerleri temizleyip klanınla bayrağın dibinde on saniye durursan üs klanının olur.",
-            "Klanının üssü dakikada 60 klan tecrübesi verir; ödül süresi dolunca eşya klan deposuna düşer.",
+            "Klanının üssü dakikada 15 klan tecrübesi verir; ödül süresi dolunca eşya klan deposuna düşer.",
             "Yeni askerler helikopterle iner ve ilk beş saniye hiçbir şey onlara işlemez. Boşuna vurma, siper al.",
         ],
         (N_WIZARD, "rumor") => pick(&[

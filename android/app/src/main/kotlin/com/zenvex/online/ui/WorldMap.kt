@@ -163,7 +163,7 @@ fun baseMarks(b: JSONObject): List<MapMark> {
         // rozet: devlet (yeşil yıldız), kendi klanın (kalkan), başka klan (çapraz tüfek)
         val icon = when { mine -> "map_clan"; o.optLong("clan") == 0L -> "map_gov"; else -> "map_war" }
         out += MapMark(o.getDouble("x").toFloat(), o.getDouble("y").toFloat(), 5, "${o.optString("name")} · Sv ${o.optInt("level")}",
-            "$owner\n$reward" + if (o.optLong("clan") == 0L) "\nDevlet Üssü Ödül Vermez; Klanla Ele Geçir" else "\nKlana Dakikada 60 Tecrübe", col, icon)
+            "$owner\n$reward" + if (o.optLong("clan") == 0L) "\nDevlet Üssü Ödül Vermez; Klanla Ele Geçir" else "\nKlana Dakikada 15 Tecrübe", col, icon)
     }
     return out
 }

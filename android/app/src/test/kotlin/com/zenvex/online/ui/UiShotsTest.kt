@@ -195,6 +195,35 @@ class UiShotsTest {
         paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
     }
 
+    /** Klan seviye armaları 1-9: kalkan her seviyede aynı boyda, rakam ortada */
+    @Test
+    fun clanEmblems() {
+        paparazzi.snapshot {
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.background(androidx.compose.ui.graphics.Color(0xFF2B2B26)).padding(16.dp)) {
+                for (s in listOf(42, 72)) androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    for (l in 1..9) { ClanEmblem(l, if (l <= 3) l else 0, s.dp); androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(6.dp)) }
+                }
+                androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    for (r in 1..8) { RankMedal(r, if (r <= 3) 44.dp else 36.dp); androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.width(10.dp)) }
+                }
+            }
+        }
+    }
+
+    /** 4.-10. sıralar (unvan rozetleri satırdan taşmamalı) */
+    @Test
+    fun leaderboardLower() {
+        val names = listOf("Yılmaz", "ZeroOne", "Kaan", "Ateş", "Demir", "Fırtına", "Ayaz")
+        val rows = org.json.JSONArray()
+        names.forEachIndexed { k, n ->
+            val i = k + 3
+            rows.put(JSONObject().put("rank", i + 1).put("id", 100 + i).put("name", n).put("avatar", i % 6).put("frame", "")
+                .put("photo", "").put("v", 52000L - i * 4100).put("clan", if (i % 3 == 0) "KRT" else "")
+                .put("title", title("kills", i + 1)).put("banned", false).put("vip", false))
+        }
+        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
+    }
+
     @Test
     fun playerProfile() {
         val p = JSONObject().put("id", 1234567).put("name", "Karanlık").put("avatar", 0).put("frame", "gold").put("photo", fakePhoto()).put("vip", true)

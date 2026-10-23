@@ -67,8 +67,8 @@ data class BoardCat(val kind: String, val name: String, val icon: String, val ti
 val BOARD_HOW = mapOf(
     "level" to "Karakterinin seviyesi. Görev yap, zombi avla, üret: her şey tecrübe verir.",
     "kills" to "Öldürdüğün her zombi sayılır. Seçkinler ve titanlar da dahil.",
-    "pvp" to "PvP bölgelerinde (Askerî Bölge, Donmuş Liman, Cephe Hattı) yendiğin oyuncular.",
-    "titan" to "Titan Arenası'nda düşürdüğün titanlar (son vuruş ya da yakında olmak yeter).",
+    "pvp" to "PvP bölgelerinde (Donmuş Liman, Cephe Hattı) yendiğin oyuncular.",
+    "titan" to "Her 15 dakikada başka bir bölgede uyanan Titan'ı düşürdüğün sayı (son vuruş ya da yakında olmak yeter).",
     "soldiers" to "Cephe Hattı'ndaki devlet ve klan üslerinde indirdiğin askerler.",
     "bases" to "Klanınla birlikte bayrağın dibinde durup ele geçirdiğin üsler.",
     "dog" to "Son vuruşu senin köpeğinin yaptığı zombiler. Köpeğini Eğitmen Jack'te geliştir.",
@@ -135,8 +135,9 @@ fun RankMedal(rank: Int, size: Dp = 40.dp) {
                     }) { ArtImage("medal_$rank", Modifier.fillMaxSize()) }
             }
             else {
-                ArtImage("badge_top10", Modifier.fillMaxSize())
-                PT("$rank", (size.value * 0.26f).sp, Px.Text, Modifier.align(Alignment.BottomCenter).padding(bottom = size * 0.13f))
+                // yıldızsız çelik altıgen (badge_rank), numara ortada büyük: rozetin dışına taşmaz
+                ArtImage(if (remember { UiArt.image(ctx, "badge_rank") } != null) "badge_rank" else "badge_top10", Modifier.fillMaxSize())
+                PT("$rank", (size.value * 0.42f).sp, Color(0xFFE8ECF2), outline = true)
             }
         }
         return

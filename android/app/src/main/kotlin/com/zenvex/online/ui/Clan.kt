@@ -1,5 +1,9 @@
 package com.zenvex.online.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -110,7 +114,7 @@ private fun NoClanView(changed: () -> Unit) {
 @Composable
 private fun ClanRow(o: JSONObject, action: String, sub: String? = null, onAction: (Long) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(Px.Row).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        ClanEmblem(o.optInt("level"), o.optInt("top"))
+        ClanEmblem(o.optInt("level"), o.optInt("top"), 42.dp)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
             PT(o.optString("name"), 16.sp, Px.Clan)
@@ -120,17 +124,38 @@ private fun ClanRow(o: JSONObject, action: String, sub: String? = null, onAction
     }
 }
 
-/** Klan arması: V10 seviye kalkanı (1 tahta … 9 alevli altın), ortasında klan rengi ve seviye; ilk 3 klanın rakamı renkli */
+/** Klan seviye görsellerinde kalkanın yeri (görsel pikseli): merkez x, merkez y, kalkan genişliği (kanat ve kurdele hariç) */
+private val CLAN_SHIELD = arrayOf(
+    floatArrayOf(48f, 52f, 96f), floatArrayOf(48f, 52f, 96f), floatArrayOf(48f, 64f, 92f), floatArrayOf(66f, 50f, 82f),
+    floatArrayOf(94f, 74f, 102f), floatArrayOf(96f, 86f, 103f), floatArrayOf(95f, 86f, 100f), floatArrayOf(114f, 72f, 68f),
+    floatArrayOf(114f, 82f, 68f),
+)
+
+/**
+ * Klan arması: V10 seviye kalkanı (1 tahta … 9 alevli altın). Görsellerin boyu çok farklı (kanatlı, kurdeleli) olduğundan
+ * her seviyede **kalkan** aynı boyda ve kutunun ortasında çizilir; kanat ve süsler yanlara taşar (kutu [size] yüksekliğinde,
+ * 1,6 katı genişliğinde). Seviye rakamı kalkanın ortasında, her seviyede aynı boyda; ilk 3 klanın rakamı renkli.
+ */
 @Composable
 fun ClanEmblem(level: Int, top: Int, size: androidx.compose.ui.unit.Dp = 38.dp, color: Int? = null) {
     val col = when (top) { 1 -> Color(0xFFFFC83A); 2 -> Color(0xFFD8DEE6); 3 -> Color(0xFFCD7F32); else -> Color(0xFF5A5A50) }
-    val name = "clan_${level.coerceIn(1, 9)}"
+    val lv = level.coerceIn(1, 9)
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    if (remember(name) { UiArt.image(ctx, name) } != null) {
-        Box(Modifier.size(size), contentAlignment = Alignment.Center) {
-            ArtImage(name, Modifier.fillMaxSize())
+    val img = remember(lv) { UiArt.image(ctx, "clan_$lv") }
+    if (img != null) {
+        Box(Modifier.width(size * 1.6f).height(size), contentAlignment = Alignment.Center) {
+            Canvas(Modifier.fillMaxSize()) {
+                val (sx, sy, sw) = CLAN_SHIELD[lv - 1].let { Triple(it[0], it[1], it[2]) }
+                val h = this.size.height
+                // kalkan kutu yüksekliğinin %72'si genişlikte; çok geniş görseller kutunun 2 katını aşmaz
+                val k = minOf(h * 0.72f / sw, this.size.width * 1.3f / img.width, h * 1.25f / img.height)
+                val dw = img.width * k; val dh = img.height * k
+                val ox = this.size.width / 2 - sx * k; val oy = h * 0.5f - sy * k
+                drawImage(img, IntOffset.Zero, IntSize(img.width, img.height), IntOffset(ox.toInt(), oy.toInt()), IntSize(dw.toInt(), dh.toInt()),
+                    filterQuality = if (k < 1f) FilterQuality.Medium else FilterQuality.None)
+            }
             if (color != null) Box(Modifier.size(size * 0.3f).clip(CircleShape).background(Color(color or 0xFF000000.toInt()).copy(alpha = 0.85f)))
-            PT("$level", (size.value * 0.3f).sp, if (top in 1..3) col else Color.White, outline = true)
+            PT("$level", (size.value * 0.34f).coerceAtLeast(11f).sp, if (top in 1..3) col else Color.White, outline = true)
         }
         return
     }
@@ -454,7 +479,7 @@ fun ClanRanking() {
                 11.sp, Px.Sub, maxLines = 2)
         }
         Spacer(Modifier.height(4.dp))
-        PT("Nasıl Girilir: üyelerin kazandığı her tecrübe ve klanının tuttuğu her üs (dakikada 60) klana tecrübe yazar. Haftalık sıralama Pazartesi sıfırlanır.",
+        PT("Nasıl Girilir: üyelerin kazandığı tecrübenin %5'i ve klanının tuttuğu her üs (dakikada 15) klana tecrübe yazar. Haftalık sıralama Pazartesi sıfırlanır.",
             11.sp, Px.Sub, maxLines = 2)
         Spacer(Modifier.height(6.dp))
         Column(Modifier.verticalScroll(rememberScrollState())) {
@@ -466,7 +491,7 @@ fun ClanRanking() {
                 Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     RankMedal(i + 1, if (i < 3) 44.dp else 36.dp)
                     Spacer(Modifier.width(6.dp))
-                    ClanEmblem(o.optInt("level"), o.optInt("top"), 30.dp)
+                    ClanEmblem(o.optInt("level"), o.optInt("top"), 42.dp)
                     Spacer(Modifier.width(8.dp))
                     PT(o.optString("name"), 16.sp, if (i < 3) rankColor(i + 1) else Px.Clan, Modifier.weight(1f))
                     PT(o.optString("title"), 12.sp, Px.Sub)

@@ -43,7 +43,7 @@ object Bases {
         Account.baseCapture(GameSession.server.value.id, id) { r ->
             r.onSuccess {
                 apply(it)
-                Toaster.show("Devlet Üssü ${id + 1} artık klanının! Dakikada 60 klan tecrübesi.", true)
+                Toaster.show("Devlet Üssü ${id + 1} artık klanının! Dakikada 15 klan tecrübesi.", true)
                 Audio.play("levelup", 0.9f, 0.8f)
             }.onFailure {
                 GameSession.cmd("base_cap_fail", "id" to id)
