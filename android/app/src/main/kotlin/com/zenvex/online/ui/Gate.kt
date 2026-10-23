@@ -36,7 +36,7 @@ import kotlin.math.sin
 
 /**
  * Bakım ve yasak kapıları: uygulama açıkken dakikada bir sunucuya sorulur.
- * Bakım açıkken yöneticiler dışında herkes bakım ekranında kalır.
+ * Bakım açıkken yönetici hesabı ve yönetici cihazı (yönetici hesabının girdiği telefon) dışında herkes bakım ekranında kalır.
  */
 object Gate {
     val maintenance = androidx.compose.runtime.mutableStateOf<JSONObject?>(null)
@@ -58,7 +58,7 @@ fun GateHost() {
     when {
         ban != null -> BanScreen(ban)
         Gate.offline.value && !Demo.on -> NoConnectionScreen()
-        m != null && !Account.admin.value -> MaintenanceScreen(m.optString("msg"))
+        m != null && !Account.admin.value && !Account.adminDevice.value -> MaintenanceScreen(m.optString("msg"))
     }
 }
 

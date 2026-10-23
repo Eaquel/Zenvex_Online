@@ -51,6 +51,7 @@ object Account {
         key = prefs.getString("key", "") ?: ""
         id.value = if (key.isEmpty()) -1L else prefs.getLong("id", -1L)
         name.value = prefs.getString("name", "") ?: ""
+        adminDevice.value = prefs.getBoolean("admin_device", false)
         if (loggedIn) refresh()
     }
 
@@ -92,7 +93,20 @@ object Account {
 
     // ------------------------------------------------------------------ bakım
     /** Bakım durumu: {"on":bool,"msg":".."} (giriş gerekmez) */
-    fun status(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_status") { r -> done(obj(r).map { it.optJSONObject("maintenance") ?: JSONObject() }) }
+    fun status(done: (Result<JSONObject>) -> Unit) {
+        // V13: yönetici hesabının girdiği cihaz "yönetici cihazı"dır; bakımda da girebilir (sunucu cihaz kimliğinden bilir)
+        val dev = appCtx?.let { runCatching { Guard.deviceId(it) }.getOrNull() }.orEmpty()
+        Supa.rpc("zx_status", JSONObject().put("p_device", dev)) { r ->
+            done(obj(r).map { o ->
+                adminDevice.value = o.optBoolean("admin_device")
+                if (::prefs.isInitialized) prefs.edit().putBoolean("admin_device", adminDevice.value).apply()
+                o.optJSONObject("maintenance") ?: JSONObject()
+            })
+        }
+    }
+
+    /** bu cihaz yönetici cihazı mı (bakım ekranı gösterilmez) */
+    val adminDevice = androidx.compose.runtime.mutableStateOf(false)
 
     // ------------------------------------------------------------------ profil
     fun setProfile(avatar: Int, frame: String, done: (String?) -> Unit) =
