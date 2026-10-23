@@ -262,3 +262,24 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
 - **Gezgin Tüccar Marco** (`caravan.rs`): sabit tezgâh yok; her bölgede kamyonetiyle 20 dakikada bir başka karakola gelir
   (sunucu saatiyle herkeste aynı), her gelişinde mallar olasılıkla seçilir (dükkânda "Gelme Olasılığı" ve stok yazar).
 - **Sıralama ve klan armaları:** 4-10 numaraları rozetin içinde; klan kalkanları her seviyede aynı boyda.
+
+## V13 — Büyük görsel güncellemesi (5 paket)
+
+- **V11 paketi** (`tools/pixel/v11_import.py`): ağaç/çalı/kaya yenilendi (aynı dünya boyu), alet ve araç parçası
+  simgeleri, 8 yönlü motor ve cip (`x8/moto`, `x8/car`; yapay zekâ yönleri karıştırdığı için kareler elle eşlendi),
+  Cephe Hattı siper/krater/dikenli tel/tank enkazı, karargâh çadırı/telsiz direği/bayrak/tabela, eğitim üssü
+  manken/hedef/tabela, hava bombası + uçak gölgesi + ıslık izi, karantina duvarı/projektör/uyarı tabelası/kemikler,
+  9 efekt (odun/taş kıymığı, balta izi, egzoz, helikopter tozu, ışınlanma, bomba patlaması, ıslık, seviye halkası),
+  arayüz: üretim sekme simgeleri, garaj arka planı + sipariş kartları, ping çubukları, posta mührü, etkinlik çerçevesi
+  (renge boyanan parıltı), etkinlik unvan kurdelesi, Komutan Diana portresi, öğretici eli.
+- **8 bölge paketi** (`tools/pixel/v13_regions.py`): her bölgenin ana/ikinci/yol/boşluk zemini (yalnız bulunulan
+  bölgeninki yüklenir; sınırın ötesi boşluk dokusu), bölgeye özel sınır parçaları kenar boyunca, dekorlar, iki simge
+  yapı; Aldric'in adaları ve arka planı, bölge afişleri, tezgâh simgesi.
+- **Yaratık paketi** (`tools/pixel/creature_import.py`, `v13_npc.py`): 18 bölge yaratığı + 2 cephe botu, 5 yön (batı
+  yanı ayna) × bekleme/yürüme/saldırı/vurulma/ölüm. Rust `data::SPECIES`: temel davranış + çarpanlar, bölgenin kendi
+  yaratıkları doğar (ağda tür = temel + 8 × (indeks+1)). Marco animasyonlu, kamyonet 8 yön, eksik eşya simgeleri.
+- **Magma Titan** (`tools/pixel/magma_import.py`): 8 yönlü yürüme, bekleme/hasar/ölüm, pençe (alev izi), yere vurma
+  (deprem dalgası + lav patlaması), ateş püskürtme (460 px koni). Ayrı efekt sayfaları `fx/magma_*`.
+- **Cephe botları**: üs mevzilerinde M4 askerleri arasında kalkanlı (önden hasarın %60'ını keser) ve alev makineli
+  (5,5 m, sürekli alev) askerler.
+- Atlas çok renkli piksel sayfaları artık kayıpsız WebP (256 renge indirme bantlaşma yapıyordu). Atlas ~32 MB.

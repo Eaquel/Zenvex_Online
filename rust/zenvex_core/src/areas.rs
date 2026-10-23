@@ -194,6 +194,8 @@ impl crate::game::Game {
                 if i == FRONT {
                     mobs.push(json!({ "name": "Üs Askeri (Bot)", "sprite": "npc/soldier", "lo": 28, "hi": 50, "color": 0xFFC8D0A0u32 }));
                     mobs.push(json!({ "name": "Keskin Nişancı (Bot)", "sprite": "npc/soldier", "lo": 28, "hi": 50, "color": 0xFFE0C080u32 }));
+                    mobs.push(json!({ "name": "Kalkanlı Asker (Bot)", "sprite": "z/shieldbot/idle_0_0", "lo": 28, "hi": 50, "color": 0xFF9AC0E0u32 }));
+                    mobs.push(json!({ "name": "Alev Makineli Asker (Bot)", "sprite": "z/flamebot/idle_0_0", "lo": 28, "hi": 50, "color": 0xFFFF9A4Au32 }));
                 }
                 json!({
                     "id": a.id, "name": a.name, "desc": a.desc, "i": i,

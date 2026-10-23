@@ -522,6 +522,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val x1 = e.getDouble("x1").toFloat(); val y1 = e.getDouble("y1").toFloat()
                     val x2 = e.getDouble("x2").toFloat(); val y2 = e.getDouble("y2").toFloat()
                     val sniper = e.optInt("k") == 1
+                    if (e.optInt("k") == 3) {
+                        // alev makinesi: namludan hedefe alev konisi, ısı ışığı
+                        val ang = Math.toDegrees(atan2((y2 - y1).toDouble(), (x2 - x1).toDouble())).toFloat()
+                        val len = kotlin.math.hypot(x2 - x1, y2 - y1).coerceIn(120f, 380f)
+                        fx("magma_breath", x1, y1, len * 1.15f, ang)
+                        flashes += Light((x1 + x2) / 2, (y1 + y2) / 2, 320f, 0xFFFF9A30.toInt(), 0.15f, 0.15f)
+                        if (Math.random() < 0.35) Audio.play("rocket", near(x1, y1) * 0.35f, 1.6f)
+                        continue
+                    }
                     tracers += Tracer(x1, y1, x2, y2, if (sniper) 0xFFFFE0A0.toInt() else 0xFFFFC870.toInt(), 0.12f, if (sniper) 2.6f else 1.6f)
                     val a = atan2(x2 - x1, y2 - y1)
                     fx("muzzle", x1, y1, if (sniper) 95f else 62f, Math.toDegrees((-a + PI / 2).toDouble()).toFloat(), dur = 0.06f, frame = (0..2).random())
@@ -1277,7 +1286,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
      * Kayıt: [10, tür(+2 kule), x, y, açı, durum, t, efekt(1 vuruş, 2 ölümsüz), can, seviye, düşman+lazerMesafe*2, ölüm/nişan].
      */
     private fun drawSoldier(c: Canvas, o: Int) {
-        val kf = drawBuf[o + 1].toInt(); val sniper = kf % 2 == 1; val tower = kf >= 2
+        val kf = drawBuf[o + 1].toInt(); val kind = kf % 4; val sniper = kind == 1; val tower = kf >= 4
         val x = drawBuf[o + 2]; val y = drawBuf[o + 3]; val face = drawBuf[o + 4]
         val state = drawBuf[o + 5].toInt(); val t = drawBuf[o + 6]; val fxf = drawBuf[o + 7].toInt()
         val hp = drawBuf[o + 8]; val lv = drawBuf[o + 9].toInt()
@@ -1287,6 +1296,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (tower) sy -= 235f * scale
         if (sx < -300 || sx > sw + 300 || sy < -300 || sy > sh + 400) return
         val dirX0 = cos(face); val dirY0 = sin(face)
+        if ((kind == 2 || kind == 3) && drawBot(c, kind, x, y, sx, sy, face, state, t, fxf, hp, lv, hostile, extra)) return
         val who = if (sniper) "sniper" else "soldier"
         // V10 yan görünüm pozları (sağa bakar): devriye, nişan, ateş, kulede çömelme, şarjör, dürbün, vurulma, düşüş, ölü.
         // Yukarı bakarken V8 sırt, kameraya doğru nişanda V8 ön karesi.
@@ -1377,6 +1387,42 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val label = "Sv $lv " + if (sniper) "Keskin Nişancı" else "M4 Askeri"
             plates += Plate(sx, top - 4 * density, label, if (hostile) 0xFFFF7A6A.toInt() else 0xFF8AD8FF.toInt(), hp, false, null)
         }
+    }
+
+    /**
+     * V13 Cephe botları (kalkanlı / alev makineli asker): 5 yönlü animasyon (batı yanı doğunun aynası), ölüm güney/doğu.
+     * Durum: 0 bekleme, 1 yürüme, 2-3 nişan/ateş, 4 ölü (extra = ölüm süresi).
+     */
+    private fun drawBot(c: Canvas, kind: Int, x: Float, y: Float, sx: Float, sy: Float, face: Float, state: Int, t: Float, fxf: Int,
+                        hp: Float, lv: Int, hostile: Boolean, extra: Float): Boolean {
+        val name = if (kind == 2) "shieldbot" else "flamebot"
+        if (!atlas.has("z/$name/idle_0_0")) return false
+        val anim = when (state) { 4 -> "death"; 2, 3 -> "attack"; 1 -> "walk"; else -> "idle" }
+        val dir = ((Math.round((90.0 - Math.toDegrees(face.toDouble())) / 45.0).toInt() % 8) + 8) % 8
+        var d5 = dir; var flip = false
+        if (anim == "death") { d5 = when (dir) { 2, 3, 5, 6 -> 2; else -> 0 }; flip = dir == 5 || dir == 6 }
+        else if (dir >= 5) { d5 = 8 - dir; flip = true }
+        val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, if (state == 4) extra else t)
+        val sp = atlas[spriteKey("z/$name", anim, d5, f)] ?: atlas[spriteKey("z/$name", "idle", d5, 0)] ?: return false
+        val dead = state == 4
+        if (!dead) { fill.color = 0x40000000; c.drawOval(sx - sp.w * sp.k * scale * 0.3f, sy - 5 * scale, sx + sp.w * sp.k * scale * 0.3f, sy + 5 * scale, fill) }
+        val paint = when {
+            dead -> { deadPaint.alpha = (255 * (1f - ((extra - 3f) / 3f).coerceIn(0f, 1f))).toInt(); deadPaint }
+            fxf == 1 -> flashPaint
+            !hostile -> friendPaint
+            else -> pixelPaint
+        }
+        atlas.draw(c, sp, sx, sy, scale, paint, flip)
+        if (!dead) {
+            if (fxf == 2) drawFxSprite(c, "shield", x, y - 62, 175f, time)
+            val top = sy - sp.ay * sp.k * scale
+            val label = "Sv $lv " + if (kind == 2) "Kalkanlı Asker" else "Alev Makineli Asker"
+            plates += Plate(sx, top - 4 * density, label, if (hostile) 0xFFFF7A6A.toInt() else 0xFF8AD8FF.toInt(), hp, false, null)
+            // alev makinesinin pilot alevi
+            if (kind == 3 && Settings.current.particles && Math.random() < 0.3)
+                particles += Particle(x + cos(face) * 40f, y, 60f, 0f, 0f, 30f, 0.4f, 0.4f, 0xFFFFA040.toInt(), 3f, 4)
+        }
+        return true
     }
 
     private var heliDustT = 0f

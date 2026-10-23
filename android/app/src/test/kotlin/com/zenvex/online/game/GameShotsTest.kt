@@ -144,5 +144,8 @@ class GameShotsTest {
     @Test fun g24_titan() = shot("titan", { cheat("level 50"); cheat("tp desert"); cheat("god"); cheat("boss") }, steps = 150)
     @Test fun g25_titanLate() = shot("titan_late", { cheat("level 50"); cheat("tp desert"); cheat("god"); cheat("boss") }, steps = 420)
 
+    // V13 Cephe botları: üsse girince kalkanlı ve alev makineli askerler
+    @Test fun g26_baseBots() = shot("base_bots", { cheat("level 40"); cheat("god"); cheat("tp base 1"); cheat("tp 744 27") }, steps = 120)
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

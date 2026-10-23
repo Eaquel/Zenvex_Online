@@ -43,6 +43,12 @@ pub const D_FLAG: f32 = 12.0;
 
 pub const K_M4: u8 = 0;
 pub const K_SNIPER: u8 = 1;
+/// V13 Cephe botları: kalkanlı asker (önden gelen hasarın %60'ını kalkanı alır) ve alev makineli asker (kısa menzil)
+pub const K_SHIELD: u8 = 2;
+pub const K_FLAME: u8 = 3;
+pub const FLAME_RANGE: f32 = 5.5;
+pub const FLAME_DMG: f32 = 2.6;
+pub const FLAME_CD: f32 = 2.2;
 
 /// M4: 3'lü seri, menzil 10 m; keskin nişancı: 1.3 sn nişan (lazer), tek atış, menzil 20 m
 pub const M4_RANGE: f32 = 10.0;
@@ -141,10 +147,11 @@ pub const POSTS: [(f32, f32); GARRISON] = [
 ];
 
 pub fn post_kind(post: usize) -> u8 {
-    if post <= 4 {
-        K_SNIPER
-    } else {
-        K_M4
+    match post {
+        0..=4 => K_SNIPER,
+        p if p % 3 == 2 => K_SHIELD,
+        p if p % 3 == 0 => K_FLAME,
+        _ => K_M4,
     }
 }
 
@@ -555,7 +562,11 @@ impl Game {
             s.flash_t = (s.flash_t - dt).max(0.0);
             s.recoil = (s.recoil - dt * 6.0).max(0.0);
             s.think_t -= dt;
-            let range = if s.kind == K_SNIPER { SNIPER_RANGE } else { M4_RANGE } * PX_PER_M_F;
+            let range = match s.kind {
+                K_SNIPER => SNIPER_RANGE,
+                K_FLAME => FLAME_RANGE,
+                _ => M4_RANGE,
+            } * PX_PER_M_F;
             if s.think_t <= 0.0 {
                 s.think_t = 0.35;
                 let (t, ..) = self.soldier_target(&s, range);
@@ -573,7 +584,7 @@ impl Game {
             // mevziye yürü (helikopterden inenler) ya da mevzide hafif yer değiştir
             let b = &base_defs()[s.base as usize];
             let (mut hx, mut hy) = ((b.tx + POSTS[s.post as usize].0) * TILE, (b.ty + POSTS[s.post as usize].1) * TILE);
-            if s.kind == K_M4 && tp.is_some() {
+            if s.kind != K_SNIPER && tp.is_some() {
                 hx += (s.anim_t * 0.7 + s.post as f32).sin() * 26.0;
             }
             let (dx, dy) = (hx - s.x, hy - s.y);
@@ -618,14 +629,14 @@ impl Game {
                     s.burst_t -= dt;
                     if s.burst_t <= 0.0 {
                         s.burst -= 1;
-                        s.burst_t = 0.11;
+                        s.burst_t = if s.kind == K_FLAME { 0.15 } else { 0.11 };
                         shots.push((si, s.tgt));
                         if s.burst == 0 {
-                            s.cd = M4_CD + self.rng.range(0.0, 0.8);
+                            s.cd = if s.kind == K_FLAME { FLAME_CD } else { M4_CD } + self.rng.range(0.0, 0.8);
                         }
                     }
                 } else if s.cd <= 0.0 {
-                    s.burst = 3;
+                    s.burst = if s.kind == K_FLAME { 6 } else { 3 };
                     s.burst_t = 0.0;
                 }
             }
@@ -643,7 +654,11 @@ impl Game {
         let Some((tx, ty)) = (if s.kind == K_SNIPER { Some((s.ax, s.ay)) } else { self.target_pos(t) }) else { return };
         let d = (tx - s.x).hypot(ty - s.y);
         let dm = d / PX_PER_M_F;
-        let mut acc = if s.kind == K_SNIPER { 0.8 - 0.01 * dm } else { 0.6 - 0.025 * dm };
+        let mut acc = match s.kind {
+            K_SNIPER => 0.8 - 0.01 * dm,
+            K_FLAME => if dm < FLAME_RANGE { 0.9 } else { 0.0 },
+            _ => 0.6 - 0.025 * dm,
+        };
         if t == Target::Player {
             // koşan oyuncu daha zor vurulur; keskin nişancı lazeri izlenip kaçılabilir
             if self.player.anim == A_RUN {
@@ -660,8 +675,12 @@ impl Game {
         let hit = self.rng.chance(acc);
         let lvl = 1.0 + 0.012 * s.level as f32;
         let train = if s.base as usize == TRAIN_BASE { 0.5 } else { 1.0 };
-        let dmg = if s.kind == K_SNIPER { SNIPER_DMG } else { M4_DMG } * lvl * train * self.rng.range(0.9, 1.1);
-        let (ix, iy) = if hit {
+        let dmg = match s.kind {
+            K_SNIPER => SNIPER_DMG,
+            K_FLAME => FLAME_DMG,
+            _ => M4_DMG,
+        } * lvl * train * self.rng.range(0.9, 1.1);
+        let (ix, iy) = if hit || s.kind == K_FLAME {
             (tx, ty - 50.0)
         } else {
             let a = self.rng.range(0.0, TAU);
@@ -706,6 +725,15 @@ impl Game {
             self.events.push(Event::Immune { x, y: y - 120.0 });
             return true;
         }
+        // kalkanlı asker: önünden gelen vuruşun %60'ını kalkan alır
+        let mut dmg = dmg;
+        if s.kind == K_SHIELD && by_player {
+            let (ex, ey) = (self.player.x - x, self.player.y - y);
+            if (ex * s.face.cos() + ey * s.face.sin()) / ex.hypot(ey).max(1.0) > 0.35 {
+                dmg *= 0.4;
+            }
+        }
+        let s = self.soldiers.get_mut(si).unwrap();
         s.hp -= dmg;
         s.flash_t = 0.12;
         if s.tgt == Target::None && by_player {
@@ -859,7 +887,7 @@ impl Game {
             } else {
                 0.0
             };
-            let tower = if s.post < 4 { 2.0 } else { 0.0 };
+            let tower = if s.post < 4 { 4.0 } else { 0.0 };
             let fx = if s.inv_t > 0.0 { 2.0 } else if s.flash_t > 0.0 { 1.0 } else { 0.0 };
             let extra = if s.dead_t > 0.0 { s.dead_t } else if s.kind == K_SNIPER && s.aim_t > 0.0 { s.aim_t / SNIPER_AIM } else { 0.0 };
             // nişan noktası (lazer) ayrı kayıtta değil: açı + mesafe yeter
