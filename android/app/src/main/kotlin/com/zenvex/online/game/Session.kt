@@ -123,6 +123,14 @@ object Session {
         kicked.value = reason
     }
 
+    /**
+     * Yalnız [my] oturumu hâlâ açıksa kapatır. Oyun ekranı kapanırken gecikmeli çağrılır: o arada yeni bir oturum açıldıysa
+     * (lobiden hemen tekrar girildiyse) yeni oturuma dokunmaz. Eskiden yeni oturumu kapatıyor, dünya sessizce donuyordu.
+     */
+    fun endIf(my: String) {
+        if (my.isNotEmpty() && sid == my) end()
+    }
+
     /** Oyundan çıkış: oturum kapanır (son kayıt önce gönderilmeli). */
     fun end(send: Boolean = true) {
         val my = sid

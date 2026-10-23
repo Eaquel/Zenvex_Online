@@ -54,11 +54,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Arkasında oyunun her zaman görüneceği katmanlar (yan menü, NPC konuşması, sohbet, ölüm ekranı) */
-private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay.Chat, Overlay.Dead)
+private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay.Chat, Overlay.Dead, Overlay.Player)
 
 private enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile,
 }
 
 /**
@@ -70,6 +70,8 @@ fun GameScreen(toLobby: () -> Unit) {
     val ctx = LocalContext.current
     var overlay by remember { mutableStateOf(Overlay.None) }
     var npcKind by remember { mutableIntStateOf(1) }
+    // dokunulan oyuncu (Online uid, ad)
+    var picked by remember { mutableStateOf("" to "") }
     val view = remember {
         lateinit var v: GameView
         v = GameView(ctx, object : GameUi {
@@ -78,6 +80,10 @@ fun GameScreen(toLobby: () -> Unit) {
                 v.post {
                     // bir pencere açıkken oyun ekranındaki tuşlar (mini harita, etkileşim, NPC) başka pencere açmaz
                     if (overlay != Overlay.None) return@post
+                    if (panel.startsWith("player:")) {
+                        val (u, n) = panel.removePrefix("player:").split('|', limit = 2).let { it[0] to it.getOrElse(1) { "Oyuncu" } }
+                        picked = u to n; overlay = Overlay.Player; return@post
+                    }
                     if (panel.startsWith("npc:")) { npcKind = panel.substring(4).toIntOrNull() ?: 1; overlay = Overlay.Npc; return@post }
                     overlay = when (panel) {
                         "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
@@ -99,6 +105,16 @@ fun GameScreen(toLobby: () -> Unit) {
     // oturum düştü (başka cihaz, bakım, yasak, bağlantı): lobiye dön, nedeni lobide gösterilir
     val kicked = com.zenvex.online.game.Session.kicked.value
     LaunchedEffect(kicked) { if (kicked != null) toLobby() }
+    // güvenlik ağı: oturum oyundayken sessizce kapandıysa (atılma nedeni yoksa) donuk dünyada bekletme, lobiye dön
+    val sessionState = com.zenvex.online.game.Session.state.value
+    LaunchedEffect(sessionState) {
+        if (sessionState == com.zenvex.online.game.Session.State.Off && !Demo.on) {
+            delay(800)
+            if (com.zenvex.online.game.Session.state.value == com.zenvex.online.game.Session.State.Off) {
+                Toaster.show("Oturum Kapandı, Tekrar Gir", false); toLobby()
+            }
+        }
+    }
     DisposableEffect(Unit) {
         Online.onChat = { l ->
             if (l.channel != "system") view.bubble(l.name, l.text)
@@ -109,7 +125,8 @@ fun GameScreen(toLobby: () -> Unit) {
             GameSession.save(cloud = true)
             Online.stop()
             // son kayıt gönderildikten sonra oturum kapanır
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ com.zenvex.online.game.Session.end() }, 1500)
+            val my = com.zenvex.online.game.Session.sid
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ com.zenvex.online.game.Session.endIf(my) }, 1500)
         }
     }
     BackHandler {
@@ -219,6 +236,10 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Top -> TopDialog(close)
             Overlay.Garage -> GarageScreen(close)
             Overlay.Me -> PlayerProfileDialog(Account.id.value.toString(), close)
+            Overlay.Player -> PlayerMenu(picked.first, picked.second, close,
+                trade = { Online.requestTrade(picked.first); overlay = Overlay.Trade },
+                profile = { overlay = Overlay.PlayerProfile })
+            Overlay.PlayerProfile -> PlayerProfileDialog(picked.second, close)
             Overlay.Cheat -> DevMenu(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
@@ -289,16 +310,15 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         .clickable(remember { MutableInteractionSource() }, null) { open(Overlay.Me) })
     // sol üst (portre/barların altı): harita, görevler, sezon, yetenekler
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PassButton { open(Overlay.Pass) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
-        PassButton { open(Overlay.Pass) }
         PxIcon("gem", size = 46.dp, tint = Color(0xFF7FE0FF), color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // etkinlik afişi: üst orta, bölge adı ve PvP uyarısının altında
     EventBanner(Modifier.align(Alignment.TopCenter).padding(top = 54.dp)) { open(Overlay.Event) }
-    // görev takipçisi: simge satırının altında
-    QuestTracker(story, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 140.dp)) { open(Overlay.Quests) }
+    // (görev takipçisi kaldırıldı: görevler Görevler tuşunda; ekranda yalnız haritadaki hedef işareti kalır)
     // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)
     Row(Modifier.align(Alignment.TopEnd).padding(end = 146.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }

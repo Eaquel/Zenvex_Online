@@ -162,7 +162,8 @@ impl Game {
                 -1.0
             };
             let flash = if z.flash_t > 0.0 { 1.0 } else { 0.0 };
-            let special = if z.enraged { 1.0 } else { 0.0 };
+            // bit 0: öfkeli; üstü: azami can (Kotlin can çubuğunda "kalan/azami" yazar)
+            let special = if z.enraged { 1.0 } else { 0.0 } + 2.0 * z.max_hp.round().min(4_000_000.0);
             self.draw_tmp.push((
                 z.y,
                 [

@@ -315,6 +315,24 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    /**
+     * Ekran görüntüsü testleri: [steps] kare oyunu ilerletir ([input]: hareket x/y, saldırı x/y, saldırı 0/1) ve son kareyi
+     * [c] tuvaline çizer. Gerçek döngüyle aynı update/render yolunu kullanır.
+     */
+    internal fun previewFrames(c: Canvas, w: Int, h: Int, steps: Int, dt: Float = 1f / 30f, input: FloatArray? = null) {
+        if (sw != w || sh != h) { sw = w; sh = h; layoutControls(w, h) }
+        repeat(steps) { i ->
+            time += dt
+            if (input != null) {
+                moveStick.vx = input[0]; moveStick.vy = input[1]
+                atkStick.pointer = if (input.getOrElse(4) { 0f } > 0f) 99 else -1
+                atkStick.vx = input.getOrElse(2) { 0f }; atkStick.vy = input.getOrElse(3) { 0f }
+            }
+            update(dt)
+            if (i == steps - 1) render(c, dt)
+        }
+    }
+
     // ------------------------------------------------------------------ güncelleme
     private fun update(dt: Float) {
         val s = Settings.current
@@ -631,6 +649,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "zone" -> {
                     val lo = e.getInt("lo"); val hi = e.getInt("hi")
+                    zoneLabel = e.getString("name"); zoneLabelOf = hud[Native.ZONE].toInt()
                     setBanner(e.getString("name"), if (e.optBoolean("safe")) "Güvenli bölge" else "Seviye $lo–$hi",
                         if (e.optBoolean("safe")) 0xFF7FE0A0.toInt() else 0xFFFFE9A8.toInt())
                 }
@@ -689,7 +708,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun wy(y: Float) = (y - camY) * scale + sh / 2f
 
     private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?, val subColor: Int = 0xFFDDDDDD.toInt(),
-                        val title: String? = null, val titleRank: Int = 0)
+                        val title: String? = null, val titleRank: Int = 0, val hpText: String? = null, val small: Boolean = false)
     private val plates = ArrayList<Plate>()
 
     private fun render(c: Canvas, dt: Float) {
@@ -706,7 +725,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawChests(c)
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
-        npcBoxes.clear()
+        npcBoxes.clear(); benchBoxes.clear(); synchronized(playerBoxes) { playerBoxes.clear() }
         val px = hud[Native.PX]; val py = hud[Native.PY]
         for (i in 0 until drawN) {
             val o = i * Native.STRIDE
@@ -739,12 +758,27 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawBaseHud(c)
         drawControls(c)
         drawTutorial(c)
-        if (s.showFps) drawText(c, "${fps.roundToInt()} FPS", 12 * density, sh - 10 * density, 12 * density, 0xFF9AFF9A.toInt())
-        if (s.showPing) {
-            // ping: yeşil iyi, sarı orta, kırmızı kötü; bağlantı yoksa gri
-            val pm = Online.ping()
-            val col = when { pm < 0 -> 0xFF9A9A9A.toInt(); pm < 90 -> 0xFF7AE07A.toInt(); pm < 180 -> 0xFFF6D04A.toInt(); else -> 0xFFFF6A5A.toInt() }
-            drawText(c, if (pm < 0) "Ping —" else "Ping $pm ms", 12 * density, sh - (if (s.showFps) 26 else 10) * density, 12 * density, col)
+        // FPS ve ping: sağ alt köşede tek satır (sol alttaki seviye/koordinat yazılarıyla çakışmaz)
+        if (s.showFps || s.showPing) {
+            val d = density
+            var x = sw - 10 * d
+            val y = sh - 9 * d
+            text.typeface = fontBold; text.textSize = 11 * d
+            if (s.showPing) {
+                // ping: yeşil iyi, sarı orta, kırmızı kötü; bağlantı yoksa gri
+                val pm = Online.ping()
+                val col = when { pm < 0 -> 0xFF9A9A9A.toInt(); pm < 90 -> 0xFF7AE07A.toInt(); pm < 180 -> 0xFFF6D04A.toInt(); else -> 0xFFFF6A5A.toInt() }
+                val t = if (pm < 0) "Ping —" else "Ping $pm ms"
+                x -= text.measureText(t)
+                drawText(c, t, x, y, 11 * d, col)
+                x -= 10 * d
+            }
+            if (s.showFps) {
+                val t = "${fps.roundToInt()} FPS"
+                text.textSize = 11 * d
+                x -= text.measureText(t)
+                drawText(c, t, x, y, 11 * d, 0xFF9AFF9A.toInt())
+            }
         }
     }
 
@@ -801,7 +835,26 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.restore()
         } else atlas.draw(c, sp, sx, sy, scale, paint)
         val hp = drawBuf[o + 8]
-        if (hp >= 0) bar(c, sx, sy - sp.ay * scale * 0.55f, 46 * density, hp, 0xFFE0C060.toInt())
+        if (hp >= 0) bar(c, sx, sy - sp.ay * sp.k * scale * 0.55f, 46 * density, hp, 0xFFE0C060.toInt())
+        // tezgâh: yakındayken yerde nabız gibi atan halka ve üstünde çekiçli rozet (dokununca üretim açılır)
+        if (kind == 9) {
+            val dd = hypot(x - px, y - py)
+            val top = sy - sp.ay * sp.k * scale
+            benchBoxes += floatArrayOf(sx - sp.w * sp.k * scale * 0.5f, top, sx + sp.w * sp.k * scale * 0.5f, sy + 6 * density, dd)
+            if (dd < 520f) {
+                val a = ((520f - dd) / 200f).coerceIn(0f, 1f)
+                val ph = (time * 1.2f) % 1f
+                stroke.color = alphaC(0xFFFFC85A.toInt(), a * 0.75f * (1f - ph)); stroke.strokeWidth = 2f * density
+                val rr = sp.w * sp.k * scale * (0.55f + 0.25f * ph)
+                c.drawOval(sx - rr, sy - rr * 0.36f, sx + rr, sy + rr * 0.36f, stroke)
+                val by = top - (14 + sin(time * 3f) * 3f) * density
+                val br = 13 * density
+                fill.color = alphaC(0xE01E1A12.toInt(), a); c.drawCircle(sx, by, br, fill)
+                stroke.color = alphaC(0xFFFFC85A.toInt(), a); stroke.strokeWidth = 2f * density; c.drawCircle(sx, by, br, stroke)
+                drawIcon(c, "craft", sx, by, br * 1.1f, alphaC(0xFFFFE6A8.toInt(), a))
+                if (dd < 300f) drawText(c, "Tezgâh · Dokun", sx, by - br - 5 * density, 10.5f * density, alphaC(0xFFFFE6A8.toInt(), a), center = true)
+            }
+        }
         // ışık kaynakları
         if (kind == 7 || kind == 8) {
             val night = 1f - hud[Native.LIGHT]
@@ -810,14 +863,19 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val lx = if (kind == 7) x - sp.ax + sp.w * 0.5f else x
                 lightSources += floatArrayOf(lx, ly, if (kind == 7) 420f else 330f, if (kind == 7) 1f else 2f)
             }
-            if (kind == 8 && Settings.current.particles && Math.random() < 0.3) {
-                particles += Particle(x + (Math.random().toFloat() - 0.5f) * 30, y, 30f, (Math.random().toFloat() - 0.5f) * 20, 0f,
-                    80f + Math.random().toFloat() * 60, 0.9f, 0.9f, 0xFFFFA030.toInt(), 3f, 3)
+            // kamp ateşi: seyrek, küçük piksel kıvılcımlar (kare, titreşen, sarıdan kora döner); eskiden iri sarı daireler çıkıyordu
+            if (kind == 8 && Settings.current.particles && Math.random() < 0.09) {
+                val life = 0.9f + Math.random().toFloat() * 0.7f
+                particles += Particle(x + (Math.random().toFloat() - 0.5f) * 22, y, 26f, (Math.random().toFloat() - 0.5f) * 14, 0f,
+                    55f + Math.random().toFloat() * 45, life, life, 0xFFFFD060.toInt(), 1.6f + Math.random().toFloat(), 4)
             }
         }
     }
 
     private val lightSources = ArrayList<FloatArray>()
+    /** son bölge girişinin adı (karakollarda yerin kendi adı) ve hangi bölge için geldiği */
+    private var zoneLabel = ""
+    private var zoneLabelOf = -1
 
     private val heroIds = arrayOf("kaan", "nova", "rady", "elif")
     private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride", "roll", "knockdown", "getup",
@@ -977,6 +1035,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val cl = Online.lastClans.getOrNull(who.toInt())?.ifEmpty { null }
                 val tt = Online.lastTitles.getOrNull(who.toInt())
                 plates += Plate(sx, top - 4 * density, n, 0xFF7FE0FF.toInt(), -1f, false, cl, CLAN_COLOR, tt?.first?.ifEmpty { null }, tt?.second ?: 0)
+                // dokunulunca oyuncu menüsü (fısıltı, takas, arkadaş, profil, şikâyet)
+                Online.lastIds.getOrNull(who.toInt())?.let { u -> synchronized(playerBoxes) { playerBoxes += PlayerBox(sx - 34 * density, top - 10 * density, sx + 34 * density, sy + 6 * density, u, n) } }
             }
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
         }
@@ -1032,6 +1092,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
     }
+    /** dokunarak menü açmak için uzak oyuncuların ekran kutuları */
+    private class PlayerBox(val l: Float, val t: Float, val r: Float, val b: Float, val uid: String, val name: String)
+    private val playerBoxes = ArrayList<PlayerBox>()
+    /** dokunarak üretim açmak için tezgâhların ekran kutuları: sol, üst, sağ, alt, oyuncuya uzaklık */
+    private val benchBoxes = ArrayList<FloatArray>()
     /** dokunarak konuşmak için NPC'lerin ekran kutuları: ch, sol, üst, sağ, alt */
     private val npcBoxes = ArrayList<FloatArray>()
     private val npc6Bmp = HashMap<String, android.graphics.Bitmap?>()
@@ -1415,14 +1480,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         return g to ((petPh % 1f) * n).toInt().coerceIn(0, n - 1)
     }
 
-    /** Köpek yardımcı: piksel köpek (seviyeye göre zırh), "Köpek" etiketiyle. */
+    /** Köpek yardımcı: tek görünüm (fularlı çoban köpeği, animasyonlu), "Köpek" etiketiyle. Seviye görünümü değiştirmez. */
     private fun drawPet(c: Canvas, o: Int) {
         val x = drawBuf[o + 2]; val y = drawBuf[o + 3]
         val dir = drawBuf[o + 4].toInt()
         var anim = zAnimNames.getOrElse(drawBuf[o + 5].toInt()) { "idle" }
         val t = drawBuf[o + 6]
         val lv = drawBuf[o + 9].toInt()
-        val pre = when { lv >= 10 -> "p/dog10"; lv >= 5 -> "p/dog5"; else -> "p/dog0" }
+        val pre = "p/dog0"
         val pa = atlas.anims(pre, atlas.zombieAnims)
         val gait = petGait(x, y, pa)
         val sx = wx(x); val sy = wy(y)
@@ -1435,7 +1500,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sp == null) { placeholder(c, sx, sy, 0xFFC08A40.toInt()); return }
         val paint = if (drawBuf[o + 7] > 0) flashPaint else pixelPaint
         atlas.draw(c, sp, sx, sy, scale, paint, flip)
-        plates += Plate(sx, sy - sp.ay * scale - 2 * density, "Köpek Sv ${drawBuf[o + 9].toInt()}", 0xFF9BE07A.toInt(), drawBuf[o + 8], false, null)
+        plates += Plate(sx, sy - sp.ay * sp.k * scale + 2 * density, "Köpek Sv ${drawBuf[o + 9].toInt()}", 0xFF9BE07A.toInt(), drawBuf[o + 8], false, null)
     }
 
     private val zombiePixel = HashMap<String, Boolean>()
@@ -1450,7 +1515,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val hp = drawBuf[o + 8]
         val lvl = drawBuf[o + 9].toInt()
         val alpha = drawBuf[o + 10]
-        val enraged = drawBuf[o + 11] > 0
+        val special = drawBuf[o + 11].toInt()
+        val enraged = special and 1 == 1
+        val maxHp = special shr 1
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
         val name = zombieSprite.getOrElse(kind) { "walker" }
@@ -1467,8 +1534,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (kind == 4 || kind == 3 || kind == 7) {
             val col = when (kind) { 4 -> 0x60A040FF; 3 -> 0x5090FF30; else -> if (enraged) 0x70FF3020 else 0x40FF6020 }
             val r = sp.w * scale * 0.6f
-            fill.shader = RadialGradient(sx, sy - sp.ay * scale * 0.45f, r, col, 0, Shader.TileMode.CLAMP)
-            c.drawCircle(sx, sy - sp.ay * scale * 0.45f, r, fill)
+            fill.shader = RadialGradient(sx, sy - sp.ay * sp.k * scale * 0.45f, r, col, 0, Shader.TileMode.CLAMP)
+            c.drawCircle(sx, sy - sp.ay * sp.k * scale * 0.45f, r, fill)
             fill.shader = null
         }
         val paint = when {
@@ -1483,9 +1550,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val boss = kind == 7
             // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
             val elite = kind == 5 || kind == 6
-            val label = when { boss -> zombieName.getOrElse(kind) { "" }; elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; else -> "" }
-            if (label.isNotEmpty() || hp < 0.999f)
-                plates += Plate(sx, sy - sp.ay * scale - 2 * density, label, zombieColor.getOrElse(kind) { -1 }, hp, boss, null)
+            // seviye her zaman (küçük), seçkin ve boss'ta adıyla; hasar alınca can çubuğu ve "kalan/azami" can
+            val label = when { boss -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" }; else -> "Sv $lvl" }
+            val hpText = if (hp >= 0f && maxHp > 0) "${(hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0)}/$maxHp" else null
+            // başın hemen üstü: görselin çapası dünya ölçeğiyle (k) çarpılır; eskiden k unutulduğu için çubuk çok yukarıda kalıyordu
+            plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, hp, boss, null,
+                hpText = hpText, small = !boss && !elite)
         }
         if (kind == 3 && Settings.current.particles && Math.random() < 0.12)
             particles += Particle(x + (Math.random().toFloat() - 0.5f) * 30, y, 50f, 0f, 0f, 30f, 1.0f, 1.0f, 0xFF9AFF40.toInt(), 5f, 3)
@@ -1609,7 +1679,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
             if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
             if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
-            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
             if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
         }
         if (driver >= 0 && speed > 30 && !wreck) {
@@ -1946,6 +2016,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     c.drawCircle(sx, sy, p.size * scale * density * (1.6f - k), fill)
                 }
                 3 -> { fill.color = alphaC(p.color, k); c.drawCircle(sx, sy, p.size * scale * density * 0.5f, fill) }
+                4 -> { // piksel kıvılcım: kare, hafif yalpalar, yer yer söner; sarı → turuncu → kor kırmızı
+                    if (sin(p.life * 37f + p.x) > -0.55f) {
+                        val col = when { k > 0.66f -> 0xFFFFE07A.toInt(); k > 0.33f -> 0xFFFF9A2E.toInt(); else -> 0xFFC8401E.toInt() }
+                        fill.color = alphaC(col, min(1f, k * 1.6f))
+                        val h = p.size * scale * density * 0.6f
+                        val dx = sin(p.life * 5f + p.y * 0.05f) * 3f * scale
+                        c.drawRect(sx + dx - h, sy - h, sx + dx + h, sy + h, fill)
+                    }
+                }
             }
         }
     }
@@ -2085,10 +2164,23 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         plates.sortBy { hypot(it.x - cx, it.y - cy) }
         var named = 0
         for (p in plates) {
-            val ts = if (p.boss) 15 * d else 11.5f * d
-            var y = p.y - (if (p.hp >= 0) 10 * d else 2 * d)
-            if (p.hp >= 0) bar(c, p.x, p.y - 3 * d, if (p.boss) 120 * d else 46 * d, p.hp,
-                if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
+            val ts = if (p.boss) 15 * d else if (p.small) 9.5f * d else 11.5f * d
+            val tall = p.hpText != null
+            var y = p.y - (if (p.hp >= 0) (if (tall) 13 * d else 10 * d) else 2 * d)
+            if (p.hp >= 0) {
+                val bw = if (p.boss) 120 * d else 52 * d
+                if (tall) {
+                    // can sayılı çubuk: biraz daha kalın, sayı ortada
+                    val h = 9 * d
+                    rect.set(p.x - bw / 2 - 1.5f * d, p.y - 3 * d - h / 2 - 1.5f * d, p.x + bw / 2 + 1.5f * d, p.y - 3 * d + h / 2 + 1.5f * d)
+                    fill.color = 0xD0101418.toInt(); c.drawRoundRect(rect, 3 * d, 3 * d, fill)
+                    val col = if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt()
+                    rect.set(p.x - bw / 2, p.y - 3 * d - h / 2, p.x - bw / 2 + bw * p.hp.coerceIn(0f, 1f), p.y - 3 * d + h / 2)
+                    fill.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, lighten(col, 1.35f), col, Shader.TileMode.CLAMP)
+                    c.drawRoundRect(rect, 2 * d, 2 * d, fill); fill.shader = null
+                    drawText(c, p.hpText!!, p.x, p.y - 3 * d + 3 * d, 8 * d, 0xFFFFFFFF.toInt(), center = true)
+                } else bar(c, p.x, p.y - 3 * d, bw, p.hp, if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
+            }
             if (p.text.isEmpty()) continue
             if (named >= 10 && !p.boss) continue
             val w = text.apply { typeface = fontBold; textSize = ts }.measureText(p.text) / 2 + 3 * d
@@ -2275,7 +2367,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         hudBar(c, bx, py0 + 38 * d, bw * 0.8f, 6 * d, hud[Native.XP] / max(1f, hud[Native.XPNEXT]), 0xFF5AC8FF.toInt(), null, 0f)
         if (hud[Native.POISON] > 0) drawText(c, "☠ Zehirlendin", bx, py0 + 60 * d, 12 * d, 0xFF9AFF40.toInt())
         // ---- üst orta: bölge, saat
-        val zone = zones.getOrElse(hud[Native.ZONE].toInt()) { "" }
+        val zi = hud[Native.ZONE].toInt()
+        val zone = if (zi == zoneLabelOf && zoneLabel.isNotEmpty()) zoneLabel else zones.getOrElse(zi) { "" }
         drawText(c, if (serverTitle.isNotEmpty()) "$serverTitle => $zone" else zone, sw / 2f, 26 * d, 15 * d, 0xFFFFE9A8.toInt(), true, fontDisplay)
         if (hud[Native.PVP] > 0f) {
             val a = 0.65f + 0.35f * kotlin.math.sin(time * 4f)
@@ -2293,11 +2386,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val rr = 64 * d
         val rcx = sw - 16 * d - rr; val rcy = 16 * d + rr
         drawRadar(c, rcx, rcy, rr)
-        // altın: radarın hemen altında (sağ üst tuşlarla çakışmaz)
+        // altın: posta/menü tuşlarının altında, radarın solunda (takla tuşu yayıyla çakışmaz)
         val gs = "%,d".format(gold).replace(',', '.')
         val gw = text.apply { typeface = fontBold; textSize = 15 * d }.measureText(gs)
-        drawCoin(c, rcx - gw / 2 - 6 * d, rcy + rr + 18 * d, 8 * d)
-        drawText(c, gs, rcx - gw / 2 + 6 * d, rcy + rr + 23 * d, 15 * d, 0xFFFFD34A.toInt())
+        val gx = sw - 150 * d - gw
+        fill.color = 0x9015140F.toInt(); tutOval.set(gx - 26 * d, 64 * d, sw - 142 * d, 88 * d); c.drawRoundRect(tutOval, 4 * d, 4 * d, fill)
+        drawCoin(c, gx - 13 * d, 76 * d, 8 * d)
+        drawText(c, gs, gx, 81 * d, 15 * d, 0xFFFFD34A.toInt())
         // ---- araç durumu
         if (hud[Native.IN_VEHICLE] > 0) {
             hudBar(c, 16 * d, py0 + 76 * d, 150 * d, 8 * d, hud[Native.VEHICLE_HP], 0xFF60D0FF.toInt(), null, 0f)
@@ -2519,11 +2614,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             guideStep == "g5" -> "Çantada bir eşyaya basılı tut ve soldaki ceplerden birine sürükle."
             guideStep == "g6" -> "Tüccar Marco'yu bul ve onunla konuş."
             guideStep == "g6b" -> "Ateşin doğusundaki mor cüppeli Büyücü Aldric'le konuş."
-            guideStep == "g8" -> "Haritadaki işarete, Titan Arenası'nın yanındaki Arena Kampı'na git."
             guideStep == "g9" && guideN == 0 -> "Askerleri indir, sonra ortadaki bayrak halkasında 10 saniye dur."
             guideStep == "g7" -> "5. seviyeye ulaş: Yaşlı Silas'ın görevlerini yap, ormanda avlan."
-            guideOffer && guideGiver == 8 -> "Şehrin güvenli bölgesinde Komutan Ece seni bekliyor: şehri ve üsleri o anlatacak."
-            guideOffer && hud[Native.LEVEL] < 5f -> "Buraya gel, sana anlatacaklarım var."
             else -> null
         }
         val key = "$guideStep|$tutMoved|$tutAttacked|$guideReady|$guideOffer|$guideN"
@@ -2537,18 +2629,23 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val m = 56 * d
         val dist = (kotlin.math.hypot(tgt.x - px, tgt.y - py) / 62.5f).toInt()
         val gold = 0xFFFFD34A.toInt()
+        // göstergeler HUD köşelerine (portre, harita, joystickler) binmesin: güvenli iç dikdörtgen
+        val sl = 150 * d; val sr = sw - 180 * d; val st = 118 * d; val sb = sh - 120 * d
         if (gx in m..(sw - m) && gy in m..(sh - m)) {
             groundRing(c, gx, gy, 46f * scale, gold)
             if (dist > 3) {
                 val top = gy - 130 * scale - (4 + sin(time * 4f) * 4) * d
-                chevron(c, gx, top, (PI / 2).toFloat(), 10 * d, gold, 0.95f)
-                pill(c, "${tgt.label} · $dist m", gx, top - 22 * d, 0xFFFFF0C0.toInt(), 0.9f)
+                // hedefin üstü HUD'a denk geliyorsa yazı ve ok gösterilmez (yerdeki halka yeter)
+                if (top - 22 * d > st && gx in sl..sr) {
+                    chevron(c, gx, top, (PI / 2).toFloat(), 10 * d, gold, 0.95f)
+                    pill(c, "${tgt.label} · $dist m", gx, top - 22 * d, 0xFFFFF0C0.toInt(), 0.9f)
+                }
             }
         } else {
-            val cx = sw / 2f; val cy = sh / 2f
+            val cx = (sl + sr) / 2f; val cy = (st + sb) / 2f
             val ang = atan2(gy - cy, gx - cx)
-            val kx = (sw / 2f - m) / kotlin.math.abs(kotlin.math.cos(ang)).coerceAtLeast(0.001f)
-            val ky = (sh / 2f - m) / kotlin.math.abs(kotlin.math.sin(ang)).coerceAtLeast(0.001f)
+            val kx = ((sr - sl) / 2f) / kotlin.math.abs(kotlin.math.cos(ang)).coerceAtLeast(0.001f)
+            val ky = ((sb - st) / 2f) / kotlin.math.abs(kotlin.math.sin(ang)).coerceAtLeast(0.001f)
             val r = min(kx, ky)
             val ex = cx + kotlin.math.cos(ang) * r; val ey = cy + kotlin.math.sin(ang) * r
             val a = 0.7f + 0.3f * sin(time * 4f)
@@ -2765,6 +2862,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val x = e.getX(i); val y = e.getY(i)
                 // mini haritaya dokunma: tam harita
                 if (radarR > 0 && hypot(x - radarCx, y - radarCy) < radarR) { Audio.play("click", 0.7f, bus = Audio.Bus.Ui); ui.onOpen("map"); return true }
+                // başka oyuncuya dokunma: oyuncu menüsü
+                synchronized(playerBoxes) { playerBoxes.firstOrNull { x in it.l..it.r && y in it.t..it.b } }?.let { pb ->
+                    Audio.play("click", 0.7f, bus = Audio.Bus.Ui)
+                    ui.onOpen("player:${pb.uid}|${pb.name}")
+                    return true
+                }
+                // tezgâha dokunma: üretim (yakındaysa)
+                benchBoxes.firstOrNull { x in it[0]..it[2] && y in (it[1] - 40 * density)..it[3] }?.let { b ->
+                    if (b[4] < 330f) ui.onOpen("craft") else ui.onToast("Tezgâha Yaklaş")
+                    return true
+                }
                 // NPC'ye dokunma: konuşma (yakındaysa)
                 npcBoxes.firstOrNull { x in it[1]..it[3] && y in it[2]..it[4] }?.let { b ->
                     if (b[5] < 300f) ui.onOpen("npc:${b[0].toInt() - 4}") else ui.onToast("Konuşmak İçin Yaklaş")

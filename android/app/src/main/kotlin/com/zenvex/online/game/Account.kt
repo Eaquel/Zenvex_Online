@@ -139,6 +139,9 @@ object Account {
     fun friendRemove(other: Long, done: (Result<String>) -> Unit) = Supa.rpc("zx_friend_remove", auth().put("p_other", other)) { r -> done(txt(r)) }
     fun dmSend(to: Long, text: String, done: (Result<JSONObject>) -> Unit) =
         Supa.rpc("zx_dm_send", auth().put("p_to", to).put("p_text", text)) { r -> done(obj(r)) }
+    /** Oyuncu şikâyeti (yöneticiye düşer) */
+    fun report(target: Long, reason: String, done: (String?) -> Unit) =
+        Supa.rpc("zx_report", auth().put("p_target", target).put("p_reason", reason)) { r -> done(r.exceptionOrNull()?.message) }
     fun dmList(with: Long, after: Long, done: (Result<JSONArray>) -> Unit) =
         Supa.rpc("zx_dm_list", auth().put("p_with", with).put("p_after", after)) { r -> done(arr(r)) }
 

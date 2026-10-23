@@ -110,3 +110,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
+
+// oyun ekranı görüntü testleri (GameShotsTest) Rust çekirdeğini bilgisayar için derlenmiş haliyle yükler:
+// (cd rust && cargo build -p zenvex_jni --release) → rust/target/release/libzenvex.so
+tasks.withType<Test>().configureEach {
+    systemProperty("java.library.path", rootProject.file("../rust/target/release").absolutePath)
+}

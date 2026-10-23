@@ -725,8 +725,24 @@ impl Game {
         if zi != self.player.zone {
             self.player.zone = zi;
             let (lo, hi) = z.level_range();
+            // karakollarda genel "Karakol" yerine yerin adı (Cephe Karargâhı, Kül Karakolu…)
+            let name = if z == world::Zone::Outpost {
+                let (px, py) = (self.player.x, self.player.y);
+                world::LANDMARKS
+                    .iter()
+                    .filter(|l| l.safe)
+                    .min_by(|a, b| {
+                        let (ax, ay) = a.pos();
+                        let (bx, by) = b.pos();
+                        (ax - px).hypot(ay - py).total_cmp(&(bx - px).hypot(by - py))
+                    })
+                    .map(|l| format!("{} (Güvenli)", l.name))
+                    .unwrap_or_else(|| z.name().into())
+            } else {
+                z.name().into()
+            };
             self.events.push(Event::ZoneEnter {
-                name: z.name().into(),
+                name,
                 lo,
                 hi,
                 safe: z.safe(),

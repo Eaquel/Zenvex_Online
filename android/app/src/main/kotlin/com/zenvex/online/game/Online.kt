@@ -220,6 +220,8 @@ object Online {
                 val g = p.optString("g").takeUnless { it == "null" } ?: ""
                 addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), g, false, System.currentTimeMillis()))
             }
+            // fısıltı: yalnız alıcı görür (Yakın sekmesinde [Fısıltı] etiketiyle)
+            "w" -> if (p.optString("to") == me) addLine(ChatLine("local", p.optString("n", "?"), p.optString("m").take(140), "Fısıltı", false, System.currentTimeMillis()))
             "treq" -> if (p.optString("to") == me) main.post { tradeRequest.value = p.optString("u") to p.optString("n", "Oyuncu") }
             "tr" -> if (p.optString("to") == me) main.post { onTradeMsg(p) }
         }
@@ -269,6 +271,21 @@ object Online {
         if (channelName == "global") Account.postChat(serverId, t)
         else if (channelName == "local") Account.chatLog("$serverId:local", t)
         else if (channelName == "clan") Account.chatLog("clan:${Account.clan.value?.id ?: 0}", t)
+        return null
+    }
+
+    /** Fısıltı: yalnız [toUid] oyuncusuna giden kısa mesaj (sohbet kuralları ve bekleme süresi geçerli). */
+    fun whisper(toUid: String, toName: String, text: String): String? {
+        val t = text.trim().take(140)
+        if (t.isEmpty()) return null
+        if (chatLocked()) return "Sohbet $CHAT_LEVEL. Seviyede Açılır"
+        val w = chatWait()
+        if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
+        val c = channel ?: return "Çevrimdışısın"
+        lastSend = SystemClock.elapsedRealtime()
+        addLine(ChatLine("local", "→ $toName", t, "Fısıltı", true, System.currentTimeMillis()))
+        c.send("w", JSONObject().put("to", toUid).put("u", uid).put("n", name).put("m", t))
+        Account.chatLog("$serverId:whisper:$toUid", t)
         return null
     }
 

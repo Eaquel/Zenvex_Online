@@ -40,6 +40,13 @@ object GameSession {
         open(readLocal(sid))
     }
 
+    /** Ekran görüntüsü testleri (JVM, layoutlib): dosya/hesap olmadan yeni bir oyun açar. */
+    internal fun initPreview(ctx: Context, save: String = "") {
+        appCtx = ctx.applicationContext ?: ctx
+        if (groundPx == null) loadGroundTextures()
+        open(save)
+    }
+
     fun prefs(): android.content.SharedPreferences = appCtx.getSharedPreferences("account", Context.MODE_PRIVATE)
 
     private fun readLocal(id: String) = runCatching { saveFile(id).readText() }.getOrDefault("")
