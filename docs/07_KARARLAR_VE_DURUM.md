@@ -210,3 +210,11 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
 - **Diğer:** tezgâh yakındayken halka + çekiç rozeti ve dokununca üretim; kamp ateşi piksel kıvılcım; köpek tek görünüm;
   NPC portreleri yüz merkezli; sıralamada "nasıl girilir" notları; karakollarda yerin adı.
 - **Test:** `GameShotsTest` gerçek oyun ekranını (Rust çekirdeği bilgisayar için derlenir) HUD ile birlikte çizer.
+
+## V11.2 — Zombi canı ve çizilmiş çerçeveler (Ekim 2026)
+
+- **Zombi canı:** her zombinin başında seviyenin yanında kalan/azami can yazar (`Sv 4 · 63/104`); can çubuğu yine
+  vurulunca ya da boss'ta çıkar. Çekirdek can oranını her zaman yollar, azami can kaydın özel alanında (`4 × azami + bayraklar`).
+- **Çizilmiş çerçeveler:** `assets/ui/frame_<id>.png` varsa çerçeve gövdesi o görselden, hareketli efektler ve rozet yazısı kodla
+  üstüne çizilir; yoksa kodla çizilen çerçeve. Görsel kutunun 1.25 katı (taşan süs payı), iç pencere resim alanına hizalı.
+  Prompt'lar `16_CERCEVE_PROMPTLARI.md`, içe aktarma `tools/pixel/frame_import.py` (piksel sanat ya da `hd`).

@@ -144,6 +144,8 @@ fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Mod
     val img = remember(def.key) { SpriteCache.get(ctx, def.key) }
     val pic = remember(photo) { PhotoCache.get(photo) }
     val t = rememberTime()
+    // çizilmiş çerçeve görseli (assets/ui/frame_<id>.png, tools/pixel/frame_import.py) varsa o; yoksa kodla
+    val art = remember(frame) { UiArt.image(ctx, "frame_" + frame.ifEmpty { "iron" }) }
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         val inner = size * 0.8f
         Box(Modifier.size(inner).clip(RoundedCornerShape(4.dp)).background(Brush.verticalGradient(listOf(Color(0xFF3A4A5A), Color(0xFF151A22))))) {
@@ -168,7 +170,7 @@ fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Mod
                     IntSize(dw.toInt(), dh.toInt()), filterQuality = FilterQuality.None)
             }
         }
-        Canvas(Modifier.size(size)) { drawFrame(frame, t) }
+        Canvas(Modifier.size(size)) { drawFrame(frame, t, art) }
     }
 }
 
@@ -194,7 +196,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.pixText(s: String, 
 }
 
 /**
- * Çerçeveler (tamamen kodla, animasyonlu): metal bant + eğim çizgileri + çerçeveye özel efekt.
+ * Çerçeveler (animasyonlu): metal bant + eğim çizgileri + çerçeveye özel efekt.
+ * [art] varsa (çizilmiş çerçeve görseli) bant ve süsler yerine o çizilir; hareketli efektler ve rozet yine kodla üstüne gelir.
+ * Görsel kutunun 1.25 katıdır (dışa taşan taç/alev/diken payı), ortası boş.
  *  - Demir: sade koyu demir, perçinler
  *  - Sv 10 Bronz Savaşçı: bronz, perçinler, bant boyunca dolaşan ışık, "10" kalkan rozeti
  *  - Sv 25 Gümüş Muhafız: gümüş, köşelerde nabız gibi parlayan safirler, yanlarda kanatlar, dolaşan yıldızlar, "25"
@@ -202,10 +206,20 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.pixText(s: String, 
  *  - Sezon #1: koyu çelik, neon camgöbeği iç hat ve mor dış ışıma, bant boyunca kuyruklu enerji topu, "S1"
  *  - Kanlı Ay: kızıl demir, dış dikenler, tepede nabız gibi atan kanlı ay ve kanat çırpan yarasalar, yanlardan süzülen kan damlaları
  */
-private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: String, t: Float) {
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: String, t: Float, art: ImageBitmap? = null) {
     val w = size.width
     val s = w * 0.1f
     val dark = Color(0xFF0E0B08)
+    /** gövde: görsel varsa o (en yakın komşu, taşma payıyla), yoksa kodla çizilen bant */
+    fun base(code: () -> Unit) {
+        if (art == null) { code(); return }
+        val o = -w * 0.125f; val d = w * 1.25f
+        // piksel sanat (küçük ızgara) en yakın komşu; ince detaylı (hd, büyük) görsel yumuşak ölçeklenir
+        drawImage(art, IntOffset.Zero, IntSize(art.width, art.height), IntOffset(o.toInt(), o.toInt()), IntSize(d.toInt(), d.toInt()),
+            filterQuality = if (art.width > 200) FilterQuality.Medium else FilterQuality.None)
+    }
+    /** yalnız kodla çizilen çerçevede olan sabit süs (görselde zaten var) */
+    fun deco(code: () -> Unit) { if (art == null) code() }
     fun edge(u: Float, inset: Float = s * 0.5f): Offset {
         val p = ((u % 1f) + 1f) % 1f * 4f; val e = w - inset * 2
         return when (p.toInt()) {
@@ -249,15 +263,17 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
     val corners = listOf(Offset(s * 0.5f, s * 0.5f), Offset(w - s * 0.5f, s * 0.5f), Offset(s * 0.5f, w - s * 0.5f), Offset(w - s * 0.5f, w - s * 0.5f))
     when (frame) {
         "lv10" -> {
-            band(Color(0xFFF6C08A), Color(0xFFB8733A), Color(0xFF5A2E12))
-            corners.forEach { rivet(it, s * 0.32f, Color(0xFFD08A4A)) }
-            for (u in listOf(0.125f, 0.375f, 0.625f, 0.875f)) rivet(edge(u), s * 0.2f, Color(0xFFC07A3A))
+            base { band(Color(0xFFF6C08A), Color(0xFFB8733A), Color(0xFF5A2E12)) }
+            deco {
+                corners.forEach { rivet(it, s * 0.32f, Color(0xFFD08A4A)) }
+                for (u in listOf(0.125f, 0.375f, 0.625f, 0.875f)) rivet(edge(u), s * 0.2f, Color(0xFFC07A3A))
+            }
             val c = edge(t * 0.18f)
             glow(c, s * 1.6f, Color(0xFFFFE0B0), 0.75f)
             badge("10", Color(0xFF8A4A1E), Color(0xFFF2B27A), Color(0xFFFFF0D8))
         }
         "lv25" -> {
-            band(Color(0xFFFFFFFF), Color(0xFFC8D0DA), Color(0xFF5E6878))
+            base { band(Color(0xFFFFFFFF), Color(0xFFC8D0DA), Color(0xFF5E6878)) }
             // tepede safirli gümüş arma
             run {
                 val cx = w / 2; val cy = s * 0.45f; val r = s * 1.15f
@@ -265,20 +281,26 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
                     moveTo(cx - r * 1.3f, cy - r * 0.3f); lineTo(cx + r * 1.3f, cy - r * 0.3f); lineTo(cx + r * 0.9f, cy + r * 0.55f)
                     lineTo(cx, cy + r * 0.9f); lineTo(cx - r * 0.9f, cy + r * 0.55f); close()
                 }
-                drawPath(crest, dark, style = Stroke(s * 0.3f))
-                drawPath(crest, Brush.verticalGradient(listOf(Color.White, Color(0xFF8A96A6)), cy - r * 0.3f, cy + r * 0.9f))
+                deco {
+                    drawPath(crest, dark, style = Stroke(s * 0.3f))
+                    drawPath(crest, Brush.verticalGradient(listOf(Color.White, Color(0xFF8A96A6)), cy - r * 0.3f, cy + r * 0.9f))
+                }
                 glow(Offset(cx, cy + r * 0.2f), s * 1.4f, Color(0xFF5AA8FF), 0.5f + 0.3f * sin(t * 3f))
-                drawCircle(dark, r * 0.42f, Offset(cx, cy + r * 0.2f))
-                drawCircle(Brush.radialGradient(listOf(Color(0xFFBFE4FF), Color(0xFF2A6AE0)), Offset(cx - r * 0.1f, cy + r * 0.1f), r * 0.4f), r * 0.34f, Offset(cx, cy + r * 0.2f))
+                deco {
+                    drawCircle(dark, r * 0.42f, Offset(cx, cy + r * 0.2f))
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFFBFE4FF), Color(0xFF2A6AE0)), Offset(cx - r * 0.1f, cy + r * 0.1f), r * 0.4f), r * 0.34f, Offset(cx, cy + r * 0.2f))
+                }
             }
             val pulse = 0.5f + 0.5f * sin(t * 3f)
             corners.forEach { c ->
                 glow(c, s * (1.4f + 0.5f * pulse), Color(0xFF5AA8FF), 0.55f + 0.35f * pulse)
-                val r = s * 0.55f
-                val path = androidx.compose.ui.graphics.Path().apply { moveTo(c.x, c.y - r); lineTo(c.x + r * 0.8f, c.y); lineTo(c.x, c.y + r); lineTo(c.x - r * 0.8f, c.y); close() }
-                drawPath(path, dark, style = Stroke(s * 0.2f))
-                drawPath(path, Brush.linearGradient(listOf(Color(0xFFBFE4FF), Color(0xFF2A6AE0)), Offset(c.x - r, c.y - r), Offset(c.x + r, c.y + r)))
-                drawRect(Color.White, Offset(c.x - r * 0.3f, c.y - r * 0.5f), Size(r * 0.25f, r * 0.25f))
+                deco {
+                    val r = s * 0.55f
+                    val path = androidx.compose.ui.graphics.Path().apply { moveTo(c.x, c.y - r); lineTo(c.x + r * 0.8f, c.y); lineTo(c.x, c.y + r); lineTo(c.x - r * 0.8f, c.y); close() }
+                    drawPath(path, dark, style = Stroke(s * 0.2f))
+                    drawPath(path, Brush.linearGradient(listOf(Color(0xFFBFE4FF), Color(0xFF2A6AE0)), Offset(c.x - r, c.y - r), Offset(c.x + r, c.y + r)))
+                    drawRect(Color.White, Offset(c.x - r * 0.3f, c.y - r * 0.5f), Size(r * 0.25f, r * 0.25f))
+                }
             }
             for (k in 0..1) sparkle(edge(t * 0.12f + k * 0.5f), s * (0.45f + 0.15f * sin(t * 8f + k)), Color.White.copy(alpha = 0.95f))
             badge("25", Color(0xFF6A7686), Color(0xFFF2F6FA), Color.White)
@@ -299,9 +321,9 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
                 }
                 drawPath(path, Brush.verticalGradient(listOf(Color(0x00FF3A10), Color(0xFFFF5A1F), Color(0xFFFFC040), Color(0xFFFFF4B0)), c.y - h, c.y + s * 0.3f))
             }
-            band(Color(0xFFFFF4B0), Color(0xFFFFC83A), Color(0xFF8A4A08), s * 1.1f)
+            base { band(Color(0xFFFFF4B0), Color(0xFFFFC83A), Color(0xFF8A4A08), s * 1.1f) }
             // köşe süsleri
-            corners.forEach { c ->
+            if (art == null) corners.forEach { c ->
                 val r = s * 0.7f
                 val path = androidx.compose.ui.graphics.Path().apply { moveTo(c.x, c.y - r); lineTo(c.x + r, c.y); lineTo(c.x, c.y + r); lineTo(c.x - r, c.y); close() }
                 drawPath(path, dark, style = Stroke(s * 0.2f)); drawPath(path, Color(0xFFFFD860))
@@ -314,9 +336,11 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
                 lineTo(cx, cy - ch * 0.55f); lineTo(cx + cw / 4, cy + ch * 0.05f); lineTo(cx + cw / 2, cy - ch * 0.3f); lineTo(cx + cw / 2, cy + ch * 0.5f); close()
             }
             glow(Offset(cx, cy), s * 2.4f, Color(0xFFFFD860), 0.45f + 0.25f * sin(t * 4f))
-            drawPath(crown, dark, style = Stroke(s * 0.3f))
-            drawPath(crown, Brush.verticalGradient(listOf(Color(0xFFFFF4B0), Color(0xFFE0A020)), cy - ch * 0.55f, cy + ch * 0.5f))
-            drawCircle(Color(0xFFE0302A), s * 0.28f, Offset(cx, cy + ch * 0.12f))
+            deco {
+                drawPath(crown, dark, style = Stroke(s * 0.3f))
+                drawPath(crown, Brush.verticalGradient(listOf(Color(0xFFFFF4B0), Color(0xFFE0A020)), cy - ch * 0.55f, cy + ch * 0.5f))
+                drawCircle(Color(0xFFE0302A), s * 0.28f, Offset(cx, cy + ch * 0.12f))
+            }
             // yükselen kıvılcımlar
             for (k in 0 until 7) {
                 val ph = fract(t * 0.55f + k * 0.29f)
@@ -329,7 +353,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
         "season1" -> {
             val pulse = 0.5f + 0.5f * sin(t * 2.6f)
             drawRect(Color(0xFFB05AFF).copy(alpha = 0.25f + 0.25f * pulse), Offset(-s * 0.15f, -s * 0.15f), Size(w + s * 0.3f, w + s * 0.3f), style = Stroke(s * 0.5f))
-            band(Color(0xFF4A5068), Color(0xFF242836), Color(0xFF0E1018))
+            base { band(Color(0xFF4A5068), Color(0xFF242836), Color(0xFF0E1018)) }
             drawRect(Color(0xFF3AF0E0).copy(alpha = 0.55f + 0.45f * pulse), Offset(s * 0.95f, s * 0.95f), Size(w - s * 1.9f, w - s * 1.9f), style = Stroke(s * 0.14f))
             // kuyruklu enerji topu
             for (i in 0 until 14) {
@@ -338,7 +362,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
                 drawCircle(androidx.compose.ui.graphics.lerp(Color(0xFFE8FFFF), Color(0xFFB05AFF), i / 14f).copy(alpha = a), s * 0.38f * (1f - i / 20f), c)
             }
             glow(edge(t * 0.22f), s * 1.5f, Color(0xFF3AF0E0), 0.7f)
-            corners.forEach { c ->
+            if (art == null) corners.forEach { c ->
                 val r = s * 0.4f
                 val hex = androidx.compose.ui.graphics.Path().apply {
                     for (k in 0 until 6) { val a = k * PI.toFloat() / 3f; val p = Offset(c.x + cos(a) * r, c.y + sin(a) * r); if (k == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }; close()
@@ -353,7 +377,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
             drawRect(Color(0xFFFF2020).copy(alpha = 0.18f + 0.22f * pulse), Offset(-s * 0.2f, -s * 0.2f), Size(w + s * 0.4f, w + s * 0.4f), style = Stroke(s * 0.6f))
             // dikenler (dışa doğru)
             val nT = 20
-            for (k in 0 until nT) {
+            if (art == null) for (k in 0 until nT) {
                 val u = k / nT.toFloat()
                 val c = edge(u, 0f)
                 val side = ((u * 4f).toInt())
@@ -364,7 +388,7 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
                 }
                 drawPath(path, Color(0xFF3A0606))
             }
-            band(Color(0xFFD8302A), Color(0xFF8A1010), Color(0xFF2A0404))
+            base { band(Color(0xFFD8302A), Color(0xFF8A1010), Color(0xFF2A0404)) }
             // yanlardan süzülen kan damlaları
             for (k in 0 until 6) {
                 val left = k % 2 == 0
@@ -390,12 +414,14 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
             glow(mc, s * (2.6f + 0.6f * pulse), Color(0xFFFF2A1A), 0.55f + 0.3f * pulse)
             // ay: koyu kenarlı kızıl disk, sağda hilal gölgesi, kraterler ve ince parlak kenar
             val mr = s * 0.85f
-            drawCircle(dark, mr * 1.15f, mc)
-            drawCircle(Brush.radialGradient(listOf(Color(0xFFFF9A7A), Color(0xFFD02A18), Color(0xFF7A0A06)), Offset(mc.x - mr * 0.35f, mc.y - mr * 0.35f), mr * 1.4f), mr, mc)
-            drawCircle(Color(0x80300000), mr * 0.85f, Offset(mc.x + mr * 0.45f, mc.y + mr * 0.1f))
-            for ((dx, dy, rr) in listOf(Triple(-0.3f, -0.2f, 0.18f), Triple(0.1f, 0.35f, 0.13f), Triple(-0.45f, 0.3f, 0.1f)))
-                drawCircle(Color(0x70500000), mr * rr, Offset(mc.x + mr * dx, mc.y + mr * dy))
-            drawCircle(Color(0xFFFFB098).copy(alpha = 0.5f + 0.3f * pulse), mr, mc, style = Stroke(s * 0.08f))
+            if (art == null) {
+                drawCircle(dark, mr * 1.15f, mc)
+                drawCircle(Brush.radialGradient(listOf(Color(0xFFFF9A7A), Color(0xFFD02A18), Color(0xFF7A0A06)), Offset(mc.x - mr * 0.35f, mc.y - mr * 0.35f), mr * 1.4f), mr, mc)
+                drawCircle(Color(0x80300000), mr * 0.85f, Offset(mc.x + mr * 0.45f, mc.y + mr * 0.1f))
+                for ((dx, dy, rr) in listOf(Triple(-0.3f, -0.2f, 0.18f), Triple(0.1f, 0.35f, 0.13f), Triple(-0.45f, 0.3f, 0.1f)))
+                    drawCircle(Color(0x70500000), mr * rr, Offset(mc.x + mr * dx, mc.y + mr * dy))
+                drawCircle(Color(0xFFFFB098).copy(alpha = 0.5f + 0.3f * pulse), mr, mc, style = Stroke(s * 0.08f))
+            }
             for (k in 0..1) {
                 val bx = mc.x + (if (k == 0) -1f else 1f) * s * (2.1f + 0.3f * sin(t * 1.5f + k)); val by = mc.y - s * 0.1f + sin(t * 2f + k * 2f) * s * 0.25f
                 val flap = sin(t * 14f + k * 1.3f) * s * 0.35f
@@ -407,8 +433,8 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
             }
         }
         else -> {
-            band(Color(0xFF8A8A90), Color(0xFF4A4A50), Color(0xFF1E1E22))
-            corners.forEach { rivet(it, s * 0.26f, Color(0xFF7A7A82)) }
+            base { band(Color(0xFF8A8A90), Color(0xFF4A4A50), Color(0xFF1E1E22)) }
+            deco { corners.forEach { rivet(it, s * 0.26f, Color(0xFF7A7A82)) } }
         }
     }
 }
