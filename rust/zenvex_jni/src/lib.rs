@@ -239,6 +239,36 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_setTextures<'l>(
         .collect();
 }
 
+/// V13 bölge dokuları (ana, ikinci, yol, boşluk; `size`x`size` ARGB art arda) ve ait oldukları bölge.
+/// Ortak dokularla aynı boyda olmalı; ışınlanınca yenisi gönderilir.
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_setRegionTextures<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    area: jint,
+    size: jint,
+    pixels: JIntArray<'l>,
+) {
+    let Some(g) = game(h) else { return };
+    let size = size.max(1) as usize;
+    if g.textures.size != size {
+        return;
+    }
+    let len = env.get_array_length(&pixels).unwrap_or(0) as usize;
+    let mut all = vec![0i32; len];
+    if env.get_int_array_region(&pixels, 0, &mut all).is_err() {
+        return;
+    }
+    let base = zenvex_core::world::ground::BASE_COUNT;
+    g.textures.tex.truncate(base);
+    let per = size * size;
+    for c in all.chunks(per).take(4) {
+        g.textures.tex.push(if c.len() == per { c.iter().map(|&p| p as u32).collect() } else { Vec::new() });
+    }
+    g.textures.area = if area >= 0 { Some(area as usize) } else { None };
+}
+
 #[no_mangle]
 pub extern "system" fn Java_com_zenvex_online_game_Native_renderChunk<'l>(
     env: JNIEnv<'l>,

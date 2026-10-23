@@ -101,6 +101,7 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
     const COL: [u32; world::ground::COUNT] = [
         0xFF4E7A34, 0xFF365A26, 0xFF8A8A4A, 0xFF7A5E3E, 0xFF8C8478, 0xFF3A3C40, 0xFF9C9890,
         0xFF7E7C78, 0xFF4A4630, 0xFF8A9AAA, 0xFF2A2624, 0xFF6A6A66, 0xFF2E3A22, 0xFF5E4630,
+        0, 0, 0, 0,
     ];
     for py in 0..n {
         for px in 0..n {
@@ -108,7 +109,12 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
             let ty = py * world::MAP_TILES / n;
             if let Some(o) = out.get_mut(py * n + px) {
                 let m = g.world.ground_at(tx, ty);
-                let c = COL[(m as usize).min(world::ground::COUNT - 1)];
+                let c = if m >= world::ground::R_MAIN {
+                    let a = areas::area_at((tx as f32 + 0.5) * world::TILE, (ty as f32 + 0.5) * world::TILE);
+                    ground::AREA_COL[a.min(7)][(m - world::ground::R_MAIN) as usize]
+                } else {
+                    COL[(m as usize).min(world::ground::COUNT - 1)]
+                };
                 let z = g.world.zone(tx as f32 * world::TILE, ty as f32 * world::TILE);
                 *o = if world::ground::own_color(m) { c } else { ground::zone_tint(z, c) };
             }

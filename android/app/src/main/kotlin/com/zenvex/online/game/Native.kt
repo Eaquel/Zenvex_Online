@@ -46,6 +46,8 @@ object Native {
     external fun events(h: Long): String
     external fun saveJson(h: Long): String
     external fun setTextures(h: Long, size: Int, pixels: IntArray)
+    /** V13 bulunulan bölgenin zemin dokuları (ana, ikinci, yol, boşluk) */
+    external fun setRegionTextures(h: Long, area: Int, size: Int, pixels: IntArray)
     external fun renderChunk(h: Long, x0: Float, y0: Float, size: Int, out: IntArray): Int
     external fun minimap(h: Long, n: Int, out: IntArray)
     external fun setRemotes(h: Long, data: FloatArray, count: Int)

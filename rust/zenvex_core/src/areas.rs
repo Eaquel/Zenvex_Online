@@ -349,3 +349,36 @@ mod tests {
         }
     }
 }
+
+
+/// V13 bölge zemini: ortak malzemeyi bölgenin kendi dokusuna çevirir (ana, ikinci, yol). Beton (güvenli bölge, karargâh)
+/// ve üs içi çakıl olduğu gibi kalır. Bölge dokuları yalnız o bölgedeyken yüklenir (ground::R_*).
+pub fn region_ground(area: usize, m: u8, alt_noise: f32) -> u8 {
+    use crate::world::ground::*;
+    let (main, alt, path) = (R_MAIN, R_ALT, R_PATH);
+    match (AREAS[area].id, m) {
+        (_, CONCRETE) => m,
+        ("forest", GRASS | DRY_GRASS) => if alt_noise > 0.72 { alt } else { main },
+        ("forest", DARK_GRASS | MUD) => alt,
+        ("forest", DIRT | GRAVEL) => path,
+        ("city", ASPHALT) => main,
+        ("city", SIDEWALK | GRASS | DRY_GRASS | DARK_GRASS) => alt,
+        ("city", DIRT | GRAVEL) => path,
+        ("burnt", ASH | GRASS | DARK_GRASS) => if alt_noise > 0.74 { alt } else { main },
+        ("burnt", DRY_GRASS) => alt,
+        ("burnt", DIRT | GRAVEL) => path,
+        ("desert", DRY_GRASS | GRASS | DIRT | GRAVEL) => if alt_noise > 0.8 { alt } else { main },
+        ("desert", DESERT_ROAD | ASPHALT) => path,
+        ("bswamp", MUD | DARK_GRASS | GRASS) => main,
+        ("bswamp", SWAMP) => alt,
+        ("bswamp", DIRT | GRAVEL) => path,
+        ("harbor", SNOW_DOCK) => if alt_noise > 0.7 { alt } else { main },
+        ("harbor", ASPHALT | GRAVEL | DIRT) => path,
+        ("front", MUD | BASE_DIRT) => main,
+        ("front", DRY_GRASS | GRASS) => alt,
+        ("front", DIRT) => path,
+        ("home", GRASS | DRY_GRASS | DARK_GRASS) => main,
+        ("home", BASE_DIRT | DIRT | GRAVEL) => path,
+        _ => m,
+    }
+}

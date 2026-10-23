@@ -56,6 +56,7 @@ object GameSession {
             if (handle != 0L) Native.destroy(handle)
             handle = Native.create(WORLD_SEED, save, today())
             groundPx?.let { Native.setTextures(handle, groundSize, it) }
+            regionPx?.let { Native.setRegionTextures(handle, regionArea, groundSize, it) }
             Native.command(handle, JSONObject().put("cmd", "set_rules").put("hardcore", server.value.hardcore).toString())
             if (Account.name.value.isNotEmpty()) Native.command(handle, JSONObject().put("cmd", "set_name").put("name", Account.name.value).toString())
             // hile komutları yalnız sunucunun yönetici dediği hesapta (ve hata ayıklama gösteriminde) açılır
@@ -82,6 +83,25 @@ object GameSession {
 
     /** Hesap değişince (giriş/kayıt) mevcut sunucuyu yeniden yükler. */
     fun reload(done: () -> Unit) = switchServer(server.value, done)
+
+    private var regionArea = -1
+    private var regionPx: IntArray? = null
+
+    /** V13: bölgenin kendi zemin dokuları (assets/v2/ground/g_<id>_<rol>.webp); ışınlanınca bir kez yüklenir */
+    fun setRegion(area: Int, id: String) {
+        if (area == regionArea || groundSize == 0) return
+        val roles = listOf("main", "alt", "path", "void")
+        val px = IntArray(groundSize * groundSize * roles.size)
+        for ((i, r) in roles.withIndex()) {
+            val bmp = runCatching { appCtx.assets.open("v2/ground/g_${id}_$r.webp").use { BitmapFactory.decodeStream(it) } }.getOrNull() ?: return
+            if (bmp.width != groundSize || bmp.height != groundSize) { bmp.recycle(); return }
+            bmp.getPixels(px, i * groundSize * groundSize, groundSize, 0, 0, groundSize, groundSize)
+            bmp.recycle()
+        }
+        regionArea = area
+        regionPx = px
+        synchronized(lock) { if (handle != 0L) Native.setRegionTextures(handle, area, groundSize, px) }
+    }
 
     private fun loadGroundTextures() {
         val names = listOf("grass", "dark_grass", "dry_grass", "dirt", "gravel", "asphalt", "sidewalk", "concrete", "mud",

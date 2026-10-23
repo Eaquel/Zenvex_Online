@@ -31,7 +31,13 @@ pub mod ground {
     pub const DESERT_ROAD: u8 = 11;
     pub const SWAMP: u8 = 12;
     pub const BASE_DIRT: u8 = 13;
-    pub const COUNT: usize = 14;
+    /// V13 bulunulan bölgenin dokuları (ışınlanınca Kotlin yenilerini yükler): ana, ikinci, yol, sınır ötesi boşluk
+    pub const R_MAIN: u8 = 14;
+    pub const R_ALT: u8 = 15;
+    pub const R_PATH: u8 = 16;
+    pub const R_VOID: u8 = 17;
+    pub const BASE_COUNT: usize = 14;
+    pub const COUNT: usize = 18;
     /// kendi rengini taşıyan (bölge tonu uygulanmayan) dokular
     pub fn own_color(m: u8) -> bool {
         m >= SNOW_DOCK
@@ -133,6 +139,15 @@ pub const STATIC_NAMES: &[&str] = &[
     "hq_command_tent", "hq_radio_mast", "hq_flag", "hq_sign",
     "train_dummy", "train_sign", "train_target",
     "quarantine_wall", "quarantine_post", "quarantine_sign", "border_searchlight", "border_bones",
+    // V13 bölge paketi: sınır parçaları (b), dekorlar (d), simge yapılar (l); areas::AREAS sırasıyla
+    "b_forest_0", "b_forest_1", "b_forest_2", "b_forest_3", "b_forest_4", "b_forest_5", "d_forest_0", "d_forest_1", "d_forest_2", "d_forest_3", "d_forest_4", "d_forest_5", "d_forest_6", "d_forest_7", "l_forest_1", "l_forest_2",
+    "b_city_0", "b_city_1", "b_city_2", "b_city_3", "b_city_4", "b_city_5", "d_city_0", "d_city_1", "d_city_2", "d_city_3", "d_city_4", "d_city_5", "d_city_6", "d_city_7", "l_city_1", "l_city_2",
+    "b_burnt_0", "b_burnt_1", "b_burnt_2", "b_burnt_3", "b_burnt_4", "b_burnt_5", "d_burnt_0", "d_burnt_1", "d_burnt_2", "d_burnt_3", "d_burnt_4", "d_burnt_5", "d_burnt_6", "d_burnt_7", "l_burnt_1", "l_burnt_2",
+    "b_desert_0", "b_desert_1", "b_desert_2", "b_desert_3", "b_desert_4", "b_desert_5", "d_desert_0", "d_desert_1", "d_desert_2", "d_desert_3", "d_desert_4", "d_desert_5", "d_desert_6", "d_desert_7", "l_desert_1", "l_desert_2",
+    "b_bswamp_0", "b_bswamp_1", "b_bswamp_2", "b_bswamp_3", "b_bswamp_4", "b_bswamp_5", "d_bswamp_0", "d_bswamp_1", "d_bswamp_2", "d_bswamp_3", "d_bswamp_4", "d_bswamp_5", "d_bswamp_6", "d_bswamp_7", "l_bswamp_1", "l_bswamp_2",
+    "b_harbor_0", "b_harbor_1", "b_harbor_2", "b_harbor_3", "b_harbor_4", "b_harbor_5", "d_harbor_0", "d_harbor_1", "d_harbor_2", "d_harbor_3", "d_harbor_4", "d_harbor_5", "d_harbor_6", "d_harbor_7", "l_harbor_1", "l_harbor_2",
+    "b_front_0", "b_front_1", "b_front_2", "b_front_3", "b_front_4", "b_front_5", "d_front_0", "d_front_1", "d_front_2", "d_front_3", "d_front_4", "d_front_5", "d_front_6", "d_front_7", "l_front_1", "l_front_2",
+    "b_home_0", "b_home_1", "b_home_2", "b_home_3", "b_home_4", "b_home_5", "d_home_0", "d_home_1", "d_home_2", "d_home_3", "d_home_4", "d_home_5", "d_home_6", "d_home_7",
 ];
 pub fn sprite(name: &str) -> u16 {
     STATIC_NAMES.iter().position(|n| *n == name).unwrap_or(0) as u16
@@ -897,6 +912,8 @@ impl World {
         // V11 (sona eklenir: önceki nesnelerin sıra numaraları değişmez)
         w.place_border();
         w.place_front();
+        w.regionize_ground();
+        w.place_region_art();
         // SUV oyundan kaldırıldı: doğduğu yerlerde iki kişilik araba durur (indeks 3 yalnız yer tutucu)
         for v in w.vehicle_spawns.iter_mut() {
             if v.0 == 3 {
@@ -1962,9 +1979,10 @@ impl World {
         self.clear_tiles(x0 - 3.0, y0 - 3.0, x1 + 3.0, y1 + 3.0);
         let mut x = x0;
         while x < x1 {
-            self.push("wall_x", Kind::Prop, (x + 2.0) * t, y0 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            self.push("wall_x", Kind::Prop, (x + 2.0) * t, y1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            x += 4.0;
+            // V13: ahşap çit (b_home_0); dikey kenarlarda eski duvar
+            self.push("b_home_0", Kind::Prop, (x + 2.0) * t, y0 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
+            self.push("b_home_0", Kind::Prop, (x + 2.0) * t, y1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
+            x += 3.4;
         }
         let mut y = y0;
         while y < y1 {
@@ -1983,6 +2001,17 @@ impl World {
         self.benches.push(((cx + 6.0) * t, (cy - 1.0) * t));
         for (ox, oy) in [(-9.0, -9.0), (9.0, -9.0), (-9.0, 9.0), (9.0, 9.0)] {
             self.push("lamp", Kind::Lamp, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.15 * t), 0.0, 0.0);
+        }
+        // V13: köşe kuleleri, iç kenarlarda çam, kaya, odun yığını, çit; bahçe, kuyu, bank, çamaşır ipi …
+        for (ox, oy) in [(-13.0f32, -13.0f32), (13.0, -13.0), (-13.0, 13.0), (13.0, 13.0)] {
+            self.push("b_home_1", Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Rect(1.0 * t, 0.6 * t), 0.0, 0.0);
+        }
+        for (name, ox, oy) in [("b_home_2", -12.5f32, -4.0f32), ("b_home_3", 12.5, -9.5), ("b_home_4", 12.0, 9.0), ("b_home_5", -12.0, 8.5),
+            ("b_home_2", 4.0, -12.5), ("b_home_5", -6.0, 12.6)] {
+            self.push(name, Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Rect(1.4 * t, 0.45 * t), 0.0, 0.0);
+        }
+        for (k, (ox, oy)) in [(-7.5f32, 6.0f32), (-3.0, 7.5), (8.5, 1.0), (4.0, 6.5), (-9.5, 2.0), (-1.0, -5.5), (2.0, 3.0), (-5.0, -6.0)].iter().enumerate() {
+            self.push(&format!("d_home_{k}"), Kind::Deco, (cx + ox) * t, (cy + oy) * t, Shape::None, 0.0, 0.0);
         }
         for k in 0..10 {
             let a = k as f32 * 0.63;
@@ -2059,6 +2088,141 @@ impl World {
     ///  - şehir suru harita kenarından 2 karo içeride başlıyordu (kenardan sıyrılıp şehre girilebiliyordu) → batı ucu kapatılır
     ///  - şehrin doğusu (Askerî Bölge tarafı) açıktı → doğu suru (x = OLD_TILES), kuzey kenardan sura kadar
     ///  - harita kenarı boştu → çepeçevre karantina duvarı, aralıklı gözetleme kuleleri, lambalar ve uyarı tabelaları
+    /// V13: her bölgenin kendi sınır parçaları kenar boyunca dizilir (öteki bölge görünmesin), dekorlar serpilir,
+    /// iki simge yapı (biri giriş karakolunun yanında, biri bölgenin içinde) kurulur.
+    fn place_region_art(&mut self) {
+        use crate::areas::{self, AREAS};
+        let t = TILE;
+        let n = MAP_TILES as f32;
+        let mut rng = Rng::new(self.seed ^ 0x13_A2EA);
+        // büyük nesneler için kaba ızgara (4 karo)
+        let cell = |x: f32, y: f32| ((x / (4.0 * t)) as i32, (y / (4.0 * t)) as i32);
+        let mut grid: std::collections::HashMap<(i32, i32), Vec<(f32, f32, f32)>> = std::collections::HashMap::new();
+        for st in &self.statics {
+            let r = match st.shape {
+                Shape::None => continue,
+                Shape::Circle(r) => r,
+                Shape::Rect(hw, hh) => hw.max(hh),
+            };
+            grid.entry(cell(st.x, st.y)).or_default().push((st.x, st.y, r));
+        }
+        let free = |grid: &std::collections::HashMap<(i32, i32), Vec<(f32, f32, f32)>>, x: f32, y: f32, r: f32| -> bool {
+            let (cx, cy) = cell(x, y);
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    if let Some(v) = grid.get(&(cx + dx, cy + dy)) {
+                        if v.iter().any(|&(sx, sy, sr)| (sx - x).hypot(sy - y) < sr + r) {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        };
+        let busy_base = |x: f32, y: f32| base_defs().iter().any(|b| (x / t - b.tx).abs() < BASE_HALF + 4.0 && (y / t - b.ty).abs() < BASE_HALF + 4.5);
+        for (ai, a) in AREAS.iter().enumerate() {
+            let id = a.id;
+            let (hx, hy) = areas::hub(ai);
+            let near_hub = |x: f32, y: f32| (x - hx).hypot(y - hy) < 14.0 * t;
+            // ---- sınır: kenar boyunca, içeriden; harita kenarında karantina duvarının iç yanına
+            if id != "home" {
+                for &(x0, y0, x1, y1) in a.rects {
+                    let edges = [
+                        ((x0, y0), (x1, y0), (0.0f32, -1.0f32)),
+                        ((x0, y1), (x1, y1), (0.0, 1.0)),
+                        ((x0, y0), (x0, y1), (-1.0, 0.0)),
+                        ((x1, y0), (x1, y1), (1.0, 0.0)),
+                    ];
+                    for ((ax, ay), (bx, by), (ox, oy)) in edges {
+                        let len = (bx - ax).abs().max((by - ay).abs());
+                        let mut d = 2.0;
+                        while d < len - 1.0 {
+                            let f = d / len;
+                            let (ex, ey) = (ax + (bx - ax) * f, ay + (by - ay) * f);
+                            let outer = ex + ox < 0.5 || ey + oy < 0.5 || ex + ox > n - 0.5 || ey + oy > n - 0.5;
+                            let inset = if outer { 4.8 } else { 1.3 };
+                            let (px, py) = ((ex - ox * inset) * t, (ey - oy * inset) * t);
+                            let other = outer || areas::area_at((ex + ox * 1.5) * t, (ey + oy * 1.5) * t) != ai;
+                            d += 2.9 + rng.range(0.0, 0.5);
+                            if !other || areas::area_at(px, py) != ai || near_hub(px, py) || busy_base(px, py) || !free(&grid, px, py, 0.9 * t) {
+                                continue;
+                            }
+                            let k = rng.below(6);
+                            let name = format!("b_{id}_{k}");
+                            self.push(&name, Kind::Prop, px, py, Shape::Rect(1.45 * t, 0.45 * t), 0.0, rng.range(0.0, 6.28));
+                            grid.entry(cell(px, py)).or_default().push((px, py, 1.45 * t));
+                        }
+                    }
+                }
+            }
+            // ---- simge yapılar
+            if id != "home" {
+                let spots = [(hx + 13.0 * t, hy - 5.0 * t), {
+                    let r = a.rects[0];
+                    (((r.0 + r.2) / 2.0 + 18.0) * t, ((r.1 + r.3) / 2.0 - 10.0) * t)
+                }];
+                for (li, &(sx, sy)) in spots.iter().enumerate() {
+                    // en yakın boş yer (sarmal arama)
+                    let mut at = None;
+                    'search: for ring in 0..24 {
+                        let rr = ring as f32 * 2.0 * t;
+                        let steps = (ring * 6).max(1);
+                        for s in 0..steps {
+                            let ang = s as f32 / steps as f32 * std::f32::consts::TAU;
+                            let (x, y) = (sx + ang.cos() * rr, sy + ang.sin() * rr);
+                            if areas::area_at(x, y) == ai && free(&grid, x, y, 3.2 * t) && !busy_base(x, y) && (li == 0 || !near_hub(x, y)) {
+                                at = Some((x, y));
+                                break 'search;
+                            }
+                        }
+                    }
+                    if let Some((x, y)) = at {
+                        let name = format!("l_{id}_{}", li + 1);
+                        self.push(&name, Kind::Building, x, y, Shape::Rect(2.0 * t, 0.9 * t), 0.0, 0.0);
+                        grid.entry(cell(x, y)).or_default().push((x, y, 3.0 * t));
+                    }
+                }
+            }
+            // ---- dekor: bölgeye serpilir (kişisel üste sabit birkaç tane)
+            let (mut area_t, mut tries) = (0.0f32, 0usize);
+            for r in a.rects {
+                area_t += (r.2 - r.0) * (r.3 - r.1);
+            }
+            let want = if id == "home" { 8 } else { ((area_t / 700.0) as usize).clamp(40, 220) };
+            let mut placed = 0;
+            while placed < want && tries < want * 12 {
+                tries += 1;
+                let r = a.rects[rng.below(a.rects.len() as u32) as usize];
+                let (x, y) = (rng.range(r.0 + 2.0, r.2 - 2.0) * t, rng.range(r.1 + 2.0, r.3 - 2.0) * t);
+                if areas::area_at(x, y) != ai || (id != "home" && near_hub(x, y)) || busy_base(x, y) || !free(&grid, x, y, 0.6 * t) {
+                    continue;
+                }
+                if id == "home" && (x - hx).hypot(y - hy) < 3.0 * t {
+                    continue;
+                }
+                let name = format!("d_{id}_{}", rng.below(8));
+                self.push(&name, Kind::Deco, x, y, Shape::None, 0.0, rng.range(0.0, 6.28));
+                grid.entry(cell(x, y)).or_default().push((x, y, 0.5 * t));
+                placed += 1;
+            }
+        }
+    }
+
+    /// V13: her karonun malzemesi bulunduğu bölgenin kendi dokusuna çevrilir (crate::areas::region_ground)
+    fn regionize_ground(&mut self) {
+        for ty in 0..MAP_TILES {
+            for tx in 0..MAP_TILES {
+                let (x, y) = ((tx as f32 + 0.5) * TILE, (ty as f32 + 0.5) * TILE);
+                let a = crate::areas::area_at(x, y);
+                let n = crate::rng::value_noise(self.seed ^ 0xA17, tx as f32 / 7.0, ty as f32 / 7.0);
+                let i = ty * MAP_TILES + tx;
+                if let Some(c) = self.ground.get_mut(i) {
+                    *c = crate::areas::region_ground(a, *c, n);
+                }
+            }
+        }
+    }
+
     fn place_border(&mut self) {
         let t = TILE;
         let n = MAP_TILES as f32;
@@ -2364,6 +2528,10 @@ impl World {
             "desert_road",
             "swamp",
             "base_dirt",
+            "r_main",
+            "r_alt",
+            "r_path",
+            "r_void",
         ]
     }
 

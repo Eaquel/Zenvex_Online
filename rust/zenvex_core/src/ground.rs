@@ -6,15 +6,40 @@ use crate::world::{ground, World, Zone, MAP_PX, MAP_TILES, TILE};
 #[derive(Default)]
 pub struct Textures {
     pub size: usize,
-    /// her malzeme için ARGB pikseller (size*size)
+    /// her malzeme için ARGB pikseller (size*size); 14-17 bulunulan bölgenin dokuları (yoksa ortak dokuya düşer)
     pub tex: Vec<Vec<u32>>,
+    /// bölge dokularının ait olduğu bölge (areas::AREAS indeksi); dışında kalan yer "boşluk" dokusuyla çizilir
+    pub area: Option<usize>,
 }
 
 impl Textures {
     pub fn ready(&self) -> bool {
-        self.size > 0 && self.tex.len() >= ground::COUNT
+        self.size > 0 && self.tex.len() >= ground::BASE_COUNT
     }
 }
+
+/// bölge dokusu yüklenmemişse yerine geçen ortak doku
+fn fallback(m: u8) -> u8 {
+    match m {
+        ground::R_MAIN => ground::GRASS,
+        ground::R_ALT => ground::DARK_GRASS,
+        ground::R_PATH => ground::DIRT,
+        ground::R_VOID => ground::DARK_GRASS,
+        _ => m,
+    }
+}
+
+/// V13 bölge küçük harita renkleri (dokuların ortalaması): [ana, ikinci, yol, boşluk]
+pub const AREA_COL: [[u32; 4]; 8] = [
+    [0xFF587441, 0xFF3A3A1C, 0xFF6B4E35, 0xFF0A1A12],
+    [0xFF3D4344, 0xFF808177, 0xFF555758, 0xFF151719],
+    [0xFF2E2E30, 0xFF3B372F, 0xFF6D6A62, 0xFF131211],
+    [0xFFEA974A, 0xFF813123, 0xFF927A5C, 0xFF0A0202],
+    [0xFF373822, 0xFF0E3232, 0xFF4A4330, 0xFF0B0C0E],
+    [0xFFBBCED6, 0xFFA0BED0, 0xFF8EA5B2, 0xFF16263C],
+    [0xFF3E3424, 0xFF5B4E2B, 0xFF5A4A39, 0xFF212323],
+    [0xFF417339, 0xFF417339, 0xFF7B7E53, 0xFF0A1A12],
+];
 
 #[inline]
 fn warp_noise(seed: u64, x: f32, y: f32) -> f32 {
@@ -82,12 +107,20 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
             }
             let nx = warp_noise(seed, wx / 90.0, wy / 90.0) * 2.0 - 1.0;
             let ny = warp_noise(seed ^ 0x99, wx / 90.0, wy / 90.0) * 2.0 - 1.0;
-            let m = mat_at(wx + nx * warp, wy + ny * warp);
-            let m2 = mat_at(wx + nx * warp + 7.0, wy + ny * warp + 5.0);
+            let mut m = mat_at(wx + nx * warp, wy + ny * warp);
+            let mut m2 = mat_at(wx + nx * warp + 7.0, wy + ny * warp + 5.0);
+            // V13: bulunulan bölgenin dışı (sınırın ötesi) bölgenin boşluk dokusu
+            if let Some(a) = tex.area {
+                if crate::areas::area_at(wx + nx * warp * 1.4, wy + ny * warp * 1.4) != a {
+                    m = ground::R_VOID;
+                    m2 = ground::R_VOID;
+                }
+            }
             let sample = |mm: u8| -> u32 {
                 if !tex.ready() {
                     return 0xFF4F8A3A;
                 }
+                let mm = if (mm as usize) < tex.tex.len() && !tex.tex[mm as usize].is_empty() { mm } else { fallback(mm) };
                 let t = &tex.tex[mm as usize];
                 let u = (wx as usize) % ts;
                 let v = (wy as usize) % ts;

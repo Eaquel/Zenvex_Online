@@ -828,7 +828,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    /** zemin dokuları yüklü bölge (değişince bölgenin kendi dokuları yüklenir, parçalar yeniden çizilir) */
+    private var groundArea = -2
+
     private fun drawGround(c: Canvas) {
+        val ai = com.zenvex.online.ui.areaIndexAt(areas, hud[Native.PX], hud[Native.PY])
+        if (ai != groundArea && ai >= 0) {
+            groundArea = ai
+            GameSession.setRegion(ai, areas[ai].id)
+            clearChunks()
+        }
         val x0 = floor((camX - viewW / 2) / CH).toInt() - 0
         val y0 = floor((camY - viewH / 2) / CH).toInt() - 0
         val x1 = floor((camX + viewW / 2) / CH).toInt()
