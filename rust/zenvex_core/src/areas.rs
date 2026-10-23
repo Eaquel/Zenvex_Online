@@ -189,7 +189,7 @@ impl crate::game::Game {
                     }));
                 if i == self.titan.1 && !self.titan_dead {
                     let d = &ZOMBIES[ZKind::Titan as usize];
-                    mobs.insert(0, json!({ "name": format!("{} (Şimdi Burada!)", d.name), "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": 50, "hi": 50, "color": d.color }));
+                    mobs.insert(0, json!({ "name": format!("{} (Şimdi Burada!)", d.name), "sprite": "z/magma/idle_0_0", "lo": 50, "hi": 50, "color": d.color }));
                 }
                 if i == FRONT {
                     mobs.push(json!({ "name": "Üs Askeri (Bot)", "sprite": "npc/soldier", "lo": 28, "hi": 50, "color": 0xFFC8D0A0u32 }));

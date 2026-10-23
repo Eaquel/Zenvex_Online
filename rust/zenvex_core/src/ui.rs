@@ -1379,7 +1379,12 @@ impl Game {
                 Ok(format!("{n}× {} doğdu", data::ZOMBIES[kind as usize].name))
             }
             "boss" => {
-                self.spawn_zombie_at(data::ZKind::Titan, 50, px + 420.0, py - 200.0);
+                // Titan'ı buraya taşı (yoksa bölge Titan'ı dilim başında çağrılanı siler)
+                let (tx, ty) = (px + 420.0, py - 200.0);
+                self.titan = (self.titan_slot(), crate::areas::area_at(px, py), tx, ty);
+                self.titan_dead = false;
+                self.zombies.retain(|z| !z.boss);
+                self.spawn_zombie_at(data::ZKind::Titan, 50, tx, ty);
                 self.events.push(Event::Boss { name: "TİTAN".into() });
                 Ok("TİTAN çağrıldı!".into())
             }

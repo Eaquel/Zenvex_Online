@@ -140,5 +140,9 @@ class GameShotsTest {
     @Test fun g22_swampCreatures() = shot("cr_swamp", { creatures(30, "swamp", "bloater", "boggiant", "witch") }, steps = 70)
     @Test fun g23_harborCreatures() = shot("cr_harbor", { creatures(45, "harbor", "sailor", "icecrab", "dockbrute") }, steps = 70)
 
+    // V13 Magma Titan: yürür, yere vurur, ateş püskürtür
+    @Test fun g24_titan() = shot("titan", { cheat("level 50"); cheat("tp desert"); cheat("god"); cheat("boss") }, steps = 150)
+    @Test fun g25_titanLate() = shot("titan_late", { cheat("level 50"); cheat("tp desert"); cheat("god"); cheat("boss") }, steps = 420)
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

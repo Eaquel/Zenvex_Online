@@ -38,6 +38,9 @@ pub const Z_WALK: u8 = 1;
 pub const Z_ATTACK: u8 = 2;
 pub const Z_HURT: u8 = 3;
 pub const Z_DEATH: u8 = 4;
+/// V13 Magma Titan: iki elle yere vurma ve ateş püskürtme
+pub const Z_SLAM: u8 = 5;
+pub const Z_BREATH: u8 = 6;
 
 // ---- çizim listesi
 pub const STRIDE: usize = 12;
@@ -148,6 +151,9 @@ pub enum Event {
     ToxicCloud { x: f32, y: f32 },
     #[serde(rename = "slam")]
     Slam { x: f32, y: f32, r: f32 },
+    /// V13 Magma Titan saldırı efekti: a = 0 pençe, 1 yere vurma, 2 ateş püskürtme (tx, ty: hedef)
+    #[serde(rename = "magma")]
+    Magma { x: f32, y: f32, a: u8, tx: f32, ty: f32 },
     #[serde(rename = "boss")]
     Boss { name: String },
     #[serde(rename = "quest")]

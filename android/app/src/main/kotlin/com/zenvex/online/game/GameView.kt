@@ -663,6 +663,25 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     burst(x, y, 30, 0xFF8A7A60.toInt(), e.getDouble("r").toFloat() * 2f, 6f, 0, 0.8f)
                     shake(10f * near(x, y), 0.3f)
                 }
+                "magma" -> {
+                    // V13 Magma Titan: pençe alev izi, yere vurma lav patlaması, ateş püskürtme konisi
+                    val tx = e.getDouble("tx").toFloat(); val ty = e.getDouble("ty").toFloat()
+                    val ang = Math.toDegrees(kotlin.math.atan2((ty - y).toDouble(), (tx - x).toDouble())).toFloat()
+                    when (e.getInt("a")) {
+                        0 -> { fx("magma_claw", tx, ty - 110f, 240f, ang); Audio.play("swing", near(x, y), 0.6f); shake(4f, 0.15f) }
+                        1 -> {
+                            fx("magma_slam", x, y + 10f, 560f); fx("fire", x, y + 10, 200f, dur = 2.2f)
+                            flashes += Light(x, y - 40, 900f, 0xFFFF7A20.toInt(), 0.6f, 0.6f)
+                            burst(x, y, 40, 0xFFFF8A20.toInt(), 420f, 7f, 1, 0.9f)
+                            Audio.play("explosion", max(0.4f, near(x, y)), 0.7f); shake(16f * near(x, y) + 4f, 0.5f); vibrate(160, 255)
+                        }
+                        else -> {
+                            fx("magma_breath", x + (tx - x) * 0.08f, y - 150f + (ty - y) * 0.08f, 560f, ang)
+                            flashes += Light((x + tx) / 2, (y + ty) / 2 - 60, 700f, 0xFFFF9A30.toInt(), 0.9f, 0.9f)
+                            Audio.play("rocket", near(x, y), 0.5f); shake(6f, 0.6f)
+                        }
+                    }
+                }
                 "boss" -> { setBanner(e.getString("name"), "Bir boss uyandı!", 0xFFFF4A3A.toInt()); Audio.play("boss"); shake(8f, 0.6f) }
                 "quest" -> {
                     setBanner("GÖREV TAMAMLANDI", e.getString("title"), 0xFF7FE07F.toInt()); Audio.play("quest")
@@ -941,7 +960,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val heroIds = arrayOf("kaan", "nova", "rady", "elif")
     private val heroAnimNames = arrayOf("idle", "walk", "run", "punch", "melee", "pistol_idle", "pistol_walk", "rifle_idle", "rifle_walk", "cast", "hurt", "death", "ride", "roll", "knockdown", "getup",
         "pickup", "chop", "mine", "open", "drink", "cheer", "point")
-    private val zAnimNames = arrayOf("idle", "walk", "attack", "hurt", "death")
+    private val zAnimNames = arrayOf("idle", "walk", "attack", "hurt", "death", "slam", "breath")
     private val tiers = arrayOf("", "basic", "police", "military", "titan")
     private val keyBuf = StringBuilder(48)
 
@@ -1581,6 +1600,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     private val zombiePixel = HashMap<String, Boolean>()
 
+    private val magmaArt by lazy { atlas.has("z/magma/idle_0_0") }
+
     private fun drawZombie(c: Canvas, o: Int) {
         val code = drawBuf[o + 1].toInt()
         val kind = code % 8
@@ -1599,7 +1620,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val maxHp = special shr 2
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
-        val sid = if (species > 0) speciesId.getOrNull(species - 1) else null
+        // V13: Titan'ın Magma İskelet görseli (yürüme 8 yön, diğerleri 5 yön + ayna)
+        val sid = if (species > 0) speciesId.getOrNull(species - 1) else if (kind == 7 && magmaArt) "magma" else null
         val name = sid ?: zombieSprite.getOrElse(kind) { "walker" }
         val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, t)
         // piksel zombiler (köpek + V7 örgü iskeletli türler): tek görünüm (sola bakar), sağa bakarken aynalanır
@@ -1611,7 +1633,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (anim == "death") {
                 zdir = when (dir) { 2, 3 -> 2; 5, 6 -> 2; else -> 0 }
                 zflip = dir == 5 || dir == 6
-            } else if (dir >= 5) { zdir = 8 - dir; zflip = true }
+            } else if (dir >= 5 && !atlas.has(spriteKey("z/$name", anim, dir, 0))) { zdir = 8 - dir; zflip = true }
         }
         var sp = atlas[spriteKey("z/$name", anim, zdir, f)]
         if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
@@ -1641,7 +1663,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val cur = if (hp >= 0f && maxHp > 0) (hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0) else -1
             val hpPart = if (cur >= 0) " · $cur/$maxHp" else ""
             val label = when {
-                sid != null -> "Sv $lvl " + speciesName.getOrElse(species - 1) { "" } + hpPart
+                sid != null && species > 0 -> "Sv $lvl " + speciesName.getOrElse(species - 1) { "" } + hpPart
                 boss || elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" } + hpPart
                 else -> "Sv $lvl$hpPart"
             }

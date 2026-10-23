@@ -515,12 +515,13 @@ impl Game {
                         }
                         self.events.push(Event::Teleport { x: z.x, y: z.y });
                     } else if z.boss && z.special_cd <= 0.0 && dist < 700.0 {
+                        // V13: yere vurma (deprem dalgası) ya da yakındaysa ateş püskürtme; sırayla, rastgele
                         z.special_cd = if z.enraged { 4.0 } else { 6.5 };
                         z.state = ZState::Attack;
-                        z.anim = Z_ATTACK;
+                        z.anim = if dist < 480.0 && self.rng.chance(0.5) { Z_BREATH } else { Z_SLAM };
                         z.anim_t = 0.0;
                         z.hit_done = false;
-                        shockwaves.push((z.x, z.y));
+                        z.dir = dir_from_vec(dx, dy);
                     } else if dist < reach && z.attack_cd <= 0.0 && !in_vehicle {
                         z.state = ZState::Attack;
                         z.anim = Z_ATTACK;
@@ -554,7 +555,12 @@ impl Game {
                     }
                 }
                 ZState::Attack => {
-                    if !z.hit_done && z.anim_t >= 0.3 {
+                    let (hit_at, end_at) = match z.anim {
+                        Z_SLAM => (0.62, 1.05),
+                        Z_BREATH => (0.5, 1.2),
+                        _ => (0.3, 0.6),
+                    };
+                    if !z.hit_done && z.anim_t >= hit_at {
                         z.hit_done = true;
                         let (fx, fy) = dir_vec(z.dir);
                         let facing = (dx * fx + dy * fy) / dist.max(1e-3);
@@ -563,7 +569,31 @@ impl Game {
                             ZKind::Tank => {
                                 slams.push((z.x + fx * 40.0, z.y + fy * 40.0, m(2.0), lvl_dmg));
                             }
+                            ZKind::Titan if z.anim == Z_SLAM => {
+                                shockwaves.push((z.x, z.y));
+                                self.events.push(Event::Magma { x: z.x, y: z.y, a: 1, tx: px, ty: py });
+                            }
+                            ZKind::Titan if z.anim == Z_BREATH => {
+                                // ateş konisi: 460 px, ±26°; bakılan yöne (hedef) doğru
+                                let (cx, cy) = (dx / dist.max(1e-3), dy / dist.max(1e-3));
+                                let cone = |tx: f32, ty: f32| {
+                                    let (ex, ey) = (tx - z.x, ty - z.y);
+                                    let l = ex.hypot(ey);
+                                    l < 460.0 && (ex * cx + ey * cy) / l.max(1e-3) > 0.9
+                                };
+                                let burn = lvl_dmg * 1.5;
+                                if cone(self.player.x, self.player.y) && !in_vehicle {
+                                    player_damage += burn;
+                                }
+                                for (k, t) in targets.iter().enumerate() {
+                                    if cone(t.0, t.1) {
+                                        remote_hits.push((k, burn, false));
+                                    }
+                                }
+                                self.events.push(Event::Magma { x: z.x, y: z.y, a: 2, tx: z.x + cx * 400.0, ty: z.y + cy * 400.0 });
+                            }
                             ZKind::Titan => {
+                                self.events.push(Event::Magma { x: z.x, y: z.y, a: 0, tx: z.x + fx * 90.0, ty: z.y + fy * 90.0 });
                                 if dist < def.radius + 110.0 {
                                     if ti == -2 {
                                         dog_damage += lvl_dmg;
@@ -594,7 +624,7 @@ impl Game {
                             }
                         }
                     }
-                    if z.anim_t >= 0.6 {
+                    if z.anim_t >= end_at {
                         z.state = ZState::Chase;
                         z.anim = Z_WALK;
                         z.anim_t = 0.0;
