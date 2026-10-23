@@ -63,13 +63,26 @@ import kotlin.math.sin
 /** Sıralama kategorisi: sunucu anahtarı, sekme adı, simge, ilk 10'a verilen unvan, değer biçimi. */
 data class BoardCat(val kind: String, val name: String, val icon: String, val title: String, val art: String? = null, val unit: (Long) -> String)
 
+/** Sıralamaya nasıl girilir (kategori başına kısa not) */
+val BOARD_HOW = mapOf(
+    "level" to "Karakterinin seviyesi. Görev yap, zombi avla, üret: her şey tecrübe verir.",
+    "kills" to "Öldürdüğün her zombi sayılır. Seçkinler ve titanlar da dahil.",
+    "pvp" to "PvP bölgelerinde (Askerî Bölge, Donmuş Liman, Cephe Hattı) yendiğin oyuncular.",
+    "titan" to "Titan Arenası'nda düşürdüğün titanlar (son vuruş ya da yakında olmak yeter).",
+    "soldiers" to "Cephe Hattı'ndaki devlet ve klan üslerinde indirdiğin askerler.",
+    "bases" to "Klanınla birlikte bayrağın dibinde durup ele geçirdiğin üsler.",
+    "dog" to "Son vuruşu senin köpeğinin yaptığı zombiler. Köpeğini Eğitmen Jack'te geliştir.",
+    "crafted" to "Üretim ekranında ürettiğin her eşya (×5 üretim 5 sayılır).",
+    "time" to "Oyunda geçirdiğin toplam süre.",
+)
+
 // art: V10 piksel kategori simgesi (assets/ui); yoksa çizim ikon
 val BOARD_CATS = listOf(
-    BoardCat("level", "Seviye", "star", "Efsane") { "Sv $it" },
+    BoardCat("level", "Seviye", "star", "Efsane", "lb_level") { "Sv $it" },
     BoardCat("kills", "Zombi Avı", "skull", "Canavar Avcısı", "lb_kills") { "${fmtL(it)} Zombi" },
     BoardCat("pvp", "Oyuncu Avı", "attack", "Oyuncu Katili", "lb_pvp") { "${fmtL(it)} Oyuncu" },
     BoardCat("titan", "Titan", "flame", "Titan Avcısı", "lb_titan") { "${fmtL(it)} Titan" },
-    BoardCat("soldiers", "Asker", "shield", "Savaş Lordu") { "${fmtL(it)} Asker" },
+    BoardCat("soldiers", "Asker", "shield", "Savaş Lordu", "lb_soldiers") { "${fmtL(it)} Asker" },
     BoardCat("bases", "Üs Fethi", "map", "Fatih", "lb_bases") { "${fmtL(it)} Üs" },
     BoardCat("dog", "Köpek", "paw", "Sürü Lideri", "lb_dog") { "${fmtL(it)} Av" },
     BoardCat("crafted", "Zanaat", "hammer", "Usta Zanaatkâr", "lb_crafted") { "${fmtL(it)} Üretim" },
@@ -269,7 +282,7 @@ fun BoardDialog(close: () -> Unit, preview: JSONArray? = null) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xFF4A3A1E) else Px.PanelDark)
                         .border(if (on) 2.dp else 0.dp, if (on) GOLD.copy(alpha = 0.7f) else Color.Transparent, RoundedCornerShape(3.dp))
                         .clickable { tab = i }.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val art = BOARD_CATS.getOrNull(i)?.art
+                        val art = if (i < BOARD_CATS.size) BOARD_CATS[i].art else "lb_clan"
                         if (art != null) ArtImage(art, Modifier.size(20.dp)) else Icon(ic, 18.dp, if (on) GOLD else Px.Sub)
                         Spacer(Modifier.width(8.dp))
                         PT(n, 13.sp, if (on) Px.Text else Px.Sub)
@@ -298,6 +311,10 @@ private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit
             Account.boardNext(cat.kind) { next = it }
             do { kotlinx.coroutines.delay(1000); now = Pass.now() } while (next == 0L || now < next + 2000)
         }
+    }
+    BOARD_HOW[cat.kind]?.let {
+        PT("Nasıl Girilir: $it İlk 10 unvan kazanır.", 11.sp, Px.Sub, maxLines = 2)
+        Spacer(Modifier.height(3.dp))
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         PT(cat.name, 18.sp, Px.Orange)

@@ -210,7 +210,7 @@ fun PxIcon(icon: String, modifier: Modifier = Modifier, size: Dp = 48.dp, badge:
             Modifier.size(size).clip(RoundedCornerShape(6.dp)).background(color).border(2.dp, Px.Edge, RoundedCornerShape(6.dp))
                 .clickable(interactionSource = src, indication = null) { Audio.play("click", bus = Audio.Bus.Ui); onClick() },
             contentAlignment = Alignment.Center,
-        ) { Icon(icon, size * 0.56f, tint) }
+        ) { Icon(icon, size * (if (icon in PIXEL_ICONS) 0.72f else 0.56f), tint) }
         if (badge > 0) Box(
             Modifier.align(Alignment.TopEnd).offset(6.dp, (-6).dp).size(20.dp).clip(CircleShape).background(Color(0xFFE02828))
                 .border(1.5.dp, Color.White, CircleShape),

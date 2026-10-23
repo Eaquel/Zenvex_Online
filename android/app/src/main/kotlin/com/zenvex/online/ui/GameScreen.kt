@@ -313,7 +313,7 @@ private fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PassButton { open(Overlay.Pass) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
-        PxIcon("gem", size = 46.dp, tint = Color(0xFF7FE0FF), color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
+        PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
     // etkinlik afişi: üst orta, bölge adı ve PvP uyarısının altında

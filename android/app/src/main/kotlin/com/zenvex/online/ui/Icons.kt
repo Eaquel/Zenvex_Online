@@ -20,9 +20,27 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Çözünürlükten bağımsız vektör ikonlar (Canvas ile çizilir). */
+/** V11 piksel simgeleri (assets/ui/ic_<ad>.png, tools/pixel/icons_v11.py): varsa vektörün yerine çizilir, renklendirilmez. */
+internal val PIXEL_ICONS = setOf("coin", "gem", "quest", "magic", "skill", "crate", "bag", "trade", "clan", "level")
+
+/** Çözünürlükten bağımsız vektör ikonlar (Canvas ile çizilir); piksel karşılığı olanlar piksel simge. */
 @Composable
 fun Icon(name: String, size: Dp, tint: Color = Pal.Text, modifier: Modifier = Modifier) {
+    if (name in PIXEL_ICONS) {
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val key = if (name == "skill") "ic_magic" else "ic_$name"
+        val img = androidx.compose.runtime.remember(key) { UiArt.image(ctx, key) }
+        if (img != null) {
+            Canvas(modifier.size(size)) {
+                val k = minOf(this.size.width / img.width, this.size.height / img.height)
+                val w = img.width * k; val h = img.height * k
+                drawImage(img, androidx.compose.ui.unit.IntOffset.Zero, androidx.compose.ui.unit.IntSize(img.width, img.height),
+                    androidx.compose.ui.unit.IntOffset(((this.size.width - w) / 2).toInt(), ((this.size.height - h) / 2).toInt()),
+                    androidx.compose.ui.unit.IntSize(w.toInt(), h.toInt()), filterQuality = androidx.compose.ui.graphics.FilterQuality.None)
+            }
+            return
+        }
+    }
     Canvas(modifier.size(size)) { drawIcon(name, tint) }
 }
 

@@ -450,9 +450,12 @@ fun ClanRanking() {
             PxButton("Haftalık", height = 34.dp, size = 13.sp, color = if (kind == 0) Px.Green else Px.Dark) { kind = 0 }
             PxButton("Genel", height = 34.dp, size = 13.sp, color = if (kind == 1) Px.Green else Px.Dark) { kind = 1 }
             Spacer(Modifier.width(10.dp))
-            PT(if (kind == 0) "İlk 10: 10.000 Altın + 100 Elmas → 1.000 Altın + 10 Elmas (En Aktif 10 Üye)" else "İlk 3 Klanın Üyelerine Efektli Çerçeve",
+            PT(if (kind == 0) "İlk 10: 10.000 Altın + 100 Elmas → 1.000 Altın + 10 Elmas (En Aktif 10 Üye)" else "Klanların Tüm Zamanlar Sıralaması",
                 11.sp, Px.Sub, maxLines = 2)
         }
+        Spacer(Modifier.height(4.dp))
+        PT("Nasıl Girilir: üyelerin kazandığı her tecrübe ve klanının tuttuğu her üs (dakikada 60) klana tecrübe yazar. Haftalık sıralama Pazartesi sıfırlanır.",
+            11.sp, Px.Sub, maxLines = 2)
         Spacer(Modifier.height(6.dp))
         Column(Modifier.verticalScroll(rememberScrollState())) {
             val l = list

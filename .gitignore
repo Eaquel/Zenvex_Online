@@ -10,3 +10,4 @@ __pycache__/
 dist/
 android/firebase.properties
 *.raw
+android/app/src/test/snapshots/images/*GameShotsTest*

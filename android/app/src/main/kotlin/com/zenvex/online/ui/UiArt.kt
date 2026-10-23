@@ -57,14 +57,15 @@ object UiArt {
 
 /** Piksel görsel (en yakın komşu, oran korunur, ortalanır). */
 @Composable
-fun ArtImage(name: String, modifier: Modifier) {
+fun ArtImage(name: String, modifier: Modifier, silhouette: Boolean = false) {
     val ctx = LocalContext.current
     val img = remember(name) { UiArt.image(ctx, name) } ?: return
     Canvas(modifier) {
         val k = minOf(size.width / img.width, size.height / img.height)
         val w = img.width * k; val h = img.height * k
         drawImage(img, IntOffset.Zero, IntSize(img.width, img.height), IntOffset(((size.width - w) / 2).toInt(), ((size.height - h) / 2).toInt()),
-            IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.None)
+            IntSize(w.toInt(), h.toInt()), filterQuality = FilterQuality.None,
+            colorFilter = if (silhouette) androidx.compose.ui.graphics.ColorFilter.tint(androidx.compose.ui.graphics.Color(0xFF0A0908)) else null)
     }
 }
 

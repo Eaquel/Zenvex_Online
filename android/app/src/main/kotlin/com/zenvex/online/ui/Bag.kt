@@ -122,7 +122,8 @@ fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String?
             if (n > 1) PT("$n", (size.value * 0.22f).sp, Color.White, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp), outline = true)
         } else if (ghost != null) {
             // boş ekipman yuvası: soluk piksel siluet + küçük ad
-            ArtImage(ghost, Modifier.padding(size * 0.14f).fillMaxSize().alpha(0.3f))
+            // koyu siluet: eşya varmış gibi görünmesin
+            ArtImage(ghost, Modifier.padding(size * 0.14f).fillMaxSize().alpha(0.55f), silhouette = true)
             if (hint != null) PT(hint, (size.value * 0.16f).sp, Color(0x80FFFFFF), Modifier.align(Alignment.BottomCenter), outline = true)
         } else if (hint != null) PT(hint, (size.value * 0.2f).sp, Color(0x55FFFFFF))
     }

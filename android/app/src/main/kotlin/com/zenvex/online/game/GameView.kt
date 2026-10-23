@@ -2440,6 +2440,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     private fun drawCoin(c: Canvas, x: Float, y: Float, r: Float) {
+        // V11 piksel sikke
+        com.zenvex.online.ui.UiArt.bitmap(context, "ic_coin")?.let { b ->
+            artPaint.alpha = 255; artPaint.colorFilter = null
+            artRect.set(x - r * 1.2f, y - r * 1.2f, x + r * 1.2f, y + r * 1.2f); c.drawBitmap(b, null, artRect, artPaint); return
+        }
         fill.shader = RadialGradient(x - r * 0.3f, y - r * 0.3f, r * 1.3f, 0xFFFFF0A0.toInt(), 0xFFC88A10.toInt(), Shader.TileMode.CLAMP)
         c.drawCircle(x, y, r, fill); fill.shader = null
         stroke.color = 0xFF8A5A08.toInt(); stroke.strokeWidth = r * 0.18f; c.drawCircle(x, y, r * 0.7f, stroke)
@@ -2736,7 +2741,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.drawCircle(cx, cy, r, fill); fill.shader = null
             stroke.color = alphaC(0xFFFFFFFF.toInt(), 0.35f * op + b.flash * 0.5f); stroke.strokeWidth = 2 * density
             c.drawCircle(cx, cy, r, stroke)
-            drawIcon(c, icon, cx, cy - (if (label != null && !dim) r * 0.12f else 0f), r * 0.55f, alphaC(Color.WHITE, if (dim) 0.4f else 1f))
+            // V11 piksel simgesi varsa (takas…) onu, yoksa vektör simge
+            val px = if (icon == "trade") com.zenvex.online.ui.UiArt.bitmap(context, "ic_trade") else null
+            if (px != null) {
+                artPaint.alpha = if (dim) 110 else 255; artPaint.colorFilter = null
+                val hs = r * 0.62f
+                artRect.set(cx - hs, cy - hs, cx + hs, cy + hs)
+                c.drawBitmap(px, null, artRect, artPaint)
+            } else drawIcon(c, icon, cx, cy - (if (label != null && !dim) r * 0.12f else 0f), r * 0.55f, alphaC(Color.WHITE, if (dim) 0.4f else 1f))
         }
         if (icon == "roll" && dim) {
             fill.color = 0x80000000.toInt()
