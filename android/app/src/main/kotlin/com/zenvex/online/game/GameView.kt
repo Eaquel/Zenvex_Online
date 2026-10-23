@@ -2660,7 +2660,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             guideStep == "g4b" -> "Çanta → Üret → Silah Ve Alet sekmesinden Taş Balta'yı üret. Malzemeyi ben verdim."
             guideStep == "g4a" -> "Bir ağaca yürü ve vurmaya devam et: 500 canı var, balta her vuruşta 50 götürür."
             guideStep == "g5" -> "Çantada bir eşyaya basılı tut ve soldaki ceplerden birine sürükle."
-            guideStep == "g6" -> "Tüccar Marco'yu bul ve onunla konuş."
+            guideStep == "g6" -> "Gezgin Tüccar Marco'nun kamyonetini bul (haritada işaretli) ve onunla konuş."
             guideStep == "g6b" -> "Ateşin doğusundaki mor cüppeli Büyücü Aldric'le konuş."
             guideStep == "g9" && guideN == 0 -> "Askerleri indir, sonra ortadaki bayrak halkasında 10 saniye dur."
             guideStep == "g7" -> "5. seviyeye ulaş: Yaşlı Silas'ın görevlerini yap, ormanda avlan."

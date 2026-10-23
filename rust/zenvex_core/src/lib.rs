@@ -20,6 +20,7 @@ mod draw;
 mod home;
 pub mod areas;
 pub mod benches;
+pub mod caravan;
 mod training;
 pub mod net;
 mod vehicles;
@@ -235,8 +236,17 @@ mod tests {
         let r: serde_json::Value =
             serde_json::from_str(&g.command(r#"{"cmd":"cheat","text":"gold 500"}"#)).unwrap();
         assert_eq!(r["ok"], true);
+        // gezgin tüccar: park ettiği yerde, bu gelişin mallarından al
+        g.base_clock = (caravan::SLOT * 7000.0 + caravan::SLOT / 2.0) * 1000.0;
+        g.update_caravans();
+        let n = &g.npcs[g.caravans[0].npc];
+        let (nx, ny) = (n.x, n.y + 60.0);
+        g.player.x = nx;
+        g.player.y = ny;
+        let m: serde_json::Value = serde_json::from_str(&g.ui_json("merchant")).unwrap();
+        let first = m["buy"].as_array().unwrap().iter().find(|b| b["locked"] == false).expect("mal").clone();
         let r: serde_json::Value =
-            serde_json::from_str(&g.command(r#"{"cmd":"buy","i":0,"n":2}"#)).unwrap();
+            serde_json::from_str(&g.command(&format!(r#"{{"cmd":"buy","i":{},"n":1}}"#, first["i"]))).unwrap();
         assert_eq!(r["ok"], true, "{r}");
     }
 

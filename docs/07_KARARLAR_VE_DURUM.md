@@ -250,3 +250,15 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
   duyurulur, haritada ve büyücü haritasında görünür; o dilimde öldürülürse bir sonrakine kadar gelmez.
 - **Aldric'in Haritası 8 ayrı ada** (4×2, süzülen adalar, ışık iplikleri, yıldızlı boşluk): tek haritanın bölünmüş hali
   görünmüyor. Görseller `island_<kimlik>.png` + `wizard_bg.png` (docs/18 §9); yoksa ada üstünde bölgenin harita kesiti.
+
+## V12.2 — Klan düzeltmesi, dik seviye, otomatik rehber, gezgin tüccar (Ekim 2026)
+
+- **Klan tecrübesi hatası:** oyuncunun kazandığı XP'nin tamamı klana yazılıyordu. Artık %5'i; üs dakikada 15; eşikler
+  3 bin → 1,4 milyon. Mevcut klanlar `xp_total_v1` / `level_v1` sütunlarına yedeklenip yeniden hesaplandı.
+- **Seviye eğrisi:** `xp_to_next` ilk 8 seviyede aynı, sonra dik (Sv 30 ~76 bin, Sv 49 ~386 bin).
+- **Ekonomi:** satış değerin %35'i; ışınlanma bölgeye göre 30-100 altın; mallar gezgin tüccarda.
+- **Rehber Nova otomatik:** adımlar kabul/teslim gerektirmeden ilerler; Komutan Diana'nın adımları elle. Görevci Silas
+  her bölgenin güvenli girişinde.
+- **Gezgin Tüccar Marco** (`caravan.rs`): sabit tezgâh yok; her bölgede kamyonetiyle 20 dakikada bir başka karakola gelir
+  (sunucu saatiyle herkeste aynı), her gelişinde mallar olasılıkla seçilir (dükkânda "Gelme Olasılığı" ve stok yazar).
+- **Sıralama ve klan armaları:** 4-10 numaraları rozetin içinde; klan kalkanları her seviyede aynı boyda.

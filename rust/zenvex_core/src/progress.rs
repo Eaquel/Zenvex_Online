@@ -304,6 +304,9 @@ pub struct Progress {
     /// V12.1: kişisel üste kurulan kalıcı tezgâhlar (dünya pikseli)
     #[serde(default)]
     pub benches: Vec<(f32, f32)>,
+    /// V12.2: gezgin tüccardan bu gelişte alınanlar (dilim, bölge, havuz sırası, adet)
+    #[serde(default)]
+    pub caravan_bought: Vec<(i64, u8, u16, u32)>,
     /// V9: etkinlik puanı sayaçları (istemci farkları sunucuya yollar)
     pub ev: EventStats,
 }
@@ -459,6 +462,7 @@ impl Default for Progress {
             chests: Vec::new(),
             home_spawn: false,
             benches: Vec::new(),
+            caravan_bought: Vec::new(),
             ev: EventStats::default(),
         };
         p.inv.add_id("bandage", 3);

@@ -197,7 +197,10 @@ impl crate::game::Game {
             .collect();
         let (_, ta, tx, ty) = self.titan;
         json!({ "areas": list, "here": here, "gold": self.progress.gold, "cd": self.wiz_cd.max(0.0), "near": self.near_wizard(),
-            "titan": { "area": ta, "name": AREAS.get(ta).map(|a| a.name), "x": tx, "y": ty, "left": self.titan_left(), "dead": self.titan_dead } })
+            "titan": { "area": ta, "name": AREAS.get(ta).map(|a| a.name), "x": tx, "y": ty, "left": self.titan_left(), "dead": self.titan_dead },
+            // gezgin tüccar kamyonetleri (haritada işaret)
+            "merchant": self.caravans.iter().map(|c| { let p = self.caravan_park(c);
+                json!({ "x": c.x, "y": c.y, "parked": c.parked, "area": c.area, "park": [p.0, p.1] }) }).collect::<Vec<_>>() })
     }
 
     /// Titan zaman dilimi (15 dk): sunucu saati (üs saati) geldiyse onunla (her oyuncuda aynı), yoksa oyun süresiyle

@@ -1,6 +1,6 @@
 //! Arayüz köprüsü: Kotlin ekranları için JSON görünümleri ve JSON komutları (geliştirici hileleri dahil).
 use crate::data::{
-    self, ItemKind, CHARACTERS, COSMETICS, ITEMS, MERCHANT, PASS_REWARDS, RECIPES,
+    self, ItemKind, CHARACTERS, COSMETICS, ITEMS, PASS_REWARDS, RECIPES,
 };
 use crate::game::*;
 use crate::progress::{self, SKILLS};
@@ -11,7 +11,7 @@ const NEAR: f32 = 150.0;
 pub const DOCTOR_PRICE: u32 = 20;
 pub const MECHANIC_PRICE: u32 = 30;
 
-fn item_json(id: &str) -> Value {
+pub(crate) fn item_json(id: &str) -> Value {
     match data::item_index(id) {
         Some(i) if !id.is_empty() => {
             let d = &ITEMS[i];
@@ -50,12 +50,9 @@ impl Game {
             || self.near_placed_bench()
     }
 
+    /// V12.2: tüccar gezgin (caravan.rs); yalnız park etmiş kamyonetinin yanında alışveriş
     pub fn near_merchant(&self) -> bool {
-        let (px, py) = (self.player.x, self.player.y);
-        self.world
-            .merchants
-            .iter()
-            .any(|&(x, y)| (x - px).hypot(y - py) < NEAR)
+        self.near_caravan().is_some()
     }
 
     /// Kamp doktoru: 20 altına canı doldurur, zehri temizler.
@@ -173,7 +170,7 @@ impl Game {
         self.npcs.iter().any(|n| n.kind == kind && (n.x - px).hypot(n.y - py) < crate::game::m(4.0))
     }
 
-    fn buy_price(&self, base: u32) -> u32 {
+    pub(crate) fn buy_price(&self, base: u32) -> u32 {
         ((base as f32) * (1.0 - self.progress.trade_bonus()))
             .ceil()
             .max(1.0) as u32
@@ -340,14 +337,8 @@ impl Game {
                 json!({ "near": self.near_npc(4), "builds": builds })
             }
             "merchant" => {
-                let buy: Vec<Value> = MERCHANT
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (id, price, req))| {
-                        json!({ "i": i, "item": item_json(id), "price": self.buy_price(*price), "req": req,
-                                "locked": g.level < *req, "afford": g.gold >= self.buy_price(*price) })
-                    })
-                    .collect();
+                // V12.2 gezgin tüccar: bu gelişin malları ve gelme olasılıkları
+                let cj = self.caravan_json();
                 let sell: Vec<Value> = g
                     .inv
                     .slots
@@ -362,7 +353,8 @@ impl Game {
                         Some(json!({ "slot": i, "item": item_json(d.id), "count": s.count, "price": self.sell_price(s.item as usize) }))
                     })
                     .collect();
-                json!({ "gold": g.gold, "near": self.near_merchant(), "buy": buy, "sell": sell, "bonus": g.trade_bonus() })
+                json!({ "gold": g.gold, "near": self.near_merchant(), "buy": cj["buy"], "missing": cj["missing"], "next": cj["next"],
+                        "area": cj["area"], "caravans": cj["caravans"], "sell": sell, "bonus": g.trade_bonus() })
             }
             "skills" => {
                 let list: Vec<Value> = SKILLS
@@ -1062,26 +1054,9 @@ impl Game {
         ))
     }
 
+    /// V12.2: alışveriş gezgin tüccarın kamyonetinden (`i`: caravan::POOL sırası)
     fn buy(&mut self, i: usize, n: u32) -> Result<String, String> {
-        let &(id, base, req) = MERCHANT.get(i).ok_or("Ürün yok")?;
-        if self.progress.level < req {
-            return Err(format!("Seviye {req} gerekli"));
-        }
-        let item = data::item_index(id).ok_or("Ürün hatalı")?;
-        let n = if ITEMS[item].stack == 1 { 1 } else { n };
-        let cost = self.buy_price(base) * n;
-        if self.progress.gold < cost {
-            return Err("Yeterli altının yok".into());
-        }
-        if !self.progress.inv.can_fit(item, n) {
-            return Err("Envanterde yer yok".into());
-        }
-        self.progress.gold -= cost;
-        self.progress.inv.add(item, n);
-        Ok(format!(
-            "{n}× {} satın alındı (-{cost} altın)",
-            ITEMS[item].name
-        ))
+        self.caravan_buy(i, n)
     }
 
     fn sell(&mut self, slot: usize, n: Option<u32>) -> Result<String, String> {

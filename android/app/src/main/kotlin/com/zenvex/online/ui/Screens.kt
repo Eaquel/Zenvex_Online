@@ -352,26 +352,52 @@ fun ShopScreen(back: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     val data = remember(tick) { GameSession.ui("merchant") }
     val prof = remember(tick) { GameSession.ui("profile") }
-    ScreenFrame("TÜCCAR", "shop", back, right = {
+    ScreenFrame("GEZGİN TÜCCAR MARCO", "shop", back, right = {
         Chip("coin", fmt(data.optInt("gold")), Pal.Gold); Spacer(Modifier.width(8.dp)); Chip("gem", fmt(prof.optInt("gems")), Pal.Gem)
     }) {
         Tabs(listOf("shop" to "Satın Al", "coin" to "Sat", "gem" to "Elmas"), tab) { tab = it }
         Spacer(Modifier.height(10.dp))
         when (tab) {
-            0 -> {
+            0 -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                // V12.2 gezgin tüccar: bu gelişin malları (gelme olasılığı, stok), süre ve getirmedikleri
+                val next = data.optDouble("next").toInt()
+                T("Tüccar Marco her gelişinde başka mallar getirir; aynı anda herkes aynı malları görür. " +
+                    "${next / 60}:${"%02d".format(next % 60)} sonra kamyonetiyle başka bir karakola gider.", 13.sp, Pal.Sub)
+                Spacer(Modifier.height(8.dp))
                 @OptIn(ExperimentalLayoutApi::class)
-                FlowRow(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     for (o in data.optJSONArray("buy").objs()) {
                         val it = o.optJSONObject("item") ?: JSONObject()
                         val locked = o.optBoolean("locked")
+                        val left = o.optInt("left")
                         Column(Modifier.width(150.dp).glass(16.dp, Pal.rarity(it.optInt("rarity"))).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             ItemSlot(it.optString("id"), 0, it.optInt("rarity"), 70.dp)
                             T(it.optString("name"), 13.sp, Pal.rarity(it.optInt("rarity")), bold = true, maxLines = 1)
+                            T("Gelme Olasılığı %${o.optInt("chance")}", 11.sp, Pal.Sub, maxLines = 1)
+                            T("Stok $left", 11.sp, if (left > 0) Pal.Gold else Pal.Sub, maxLines = 1)
                             Spacer(Modifier.height(6.dp))
                             if (locked) GButton("Sv ${o.optInt("req")}", Modifier.fillMaxWidth(), Tone.Dark, icon = "lock", height = 34.dp, size = 12.sp) {}
+                            else if (left == 0) GButton("Tükendi", Modifier.fillMaxWidth(), Tone.Dark, height = 34.dp, size = 12.sp) {}
                             else GButton("${o.optInt("price")}", Modifier.fillMaxWidth(), if (o.optBoolean("afford")) Tone.Gold else Tone.Dark, icon = "coin", height = 34.dp, size = 13.sp) {
                                 val r = GameSession.cmd("buy", "i" to o.optInt("i"), "n" to 1); Toaster.show(r.msg, r.ok); tick++
                                 if (r.ok) com.zenvex.online.game.Audio.play("coin")
+                            }
+                        }
+                    }
+                }
+                val missing = data.optJSONArray("missing").objs()
+                if (missing.isNotEmpty()) {
+                    Spacer(Modifier.height(12.dp))
+                    T("Bu Sefer Getirmedikleri (Gelme Olasılığı)", 14.sp, Pal.Sub, bold = true)
+                    Spacer(Modifier.height(6.dp))
+                    @OptIn(ExperimentalLayoutApi::class)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (o in missing) {
+                            val it = o.optJSONObject("item") ?: JSONObject()
+                            Row(Modifier.glass(10.dp).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                ItemSlot(it.optString("id"), 0, it.optInt("rarity"), 30.dp)
+                                Spacer(Modifier.width(6.dp))
+                                T("${it.optString("name")} %${o.optInt("chance")}", 12.sp, Pal.Sub, maxLines = 1)
                             }
                         }
                     }

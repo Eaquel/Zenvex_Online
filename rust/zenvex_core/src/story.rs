@@ -126,8 +126,8 @@ pub const GUIDE: &[Quest] = &[
        "Artık hazırlıklısın. Ceplerin bekleme süresini de gösterir.",
        Goal::Pocket, 1, 1, 10, 30, &[("potion_heal", 1)], &[]),
     q!("g6", N_GUIDE, "Tüccarla Tanış", "Tüccar Marco ile Konuş",
-       ["Marco kampın tüccarıdır. Fazla malzemeni satar, ihtiyacın olanı alırsın.",
-        "Git, onunla bir konuş."],
+       ["Marco gezgin tüccardır: kamyonetiyle bölgenin karakollarını dolaşır, her gelişinde başka mallar getirir.",
+        "Haritada kamyonetini bul, onunla bir konuş. Fazla malzemeni de ona satarsın."],
        "Marco'yla anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
        Goal::Talk(N_MERCHANT), 1, 1, 10, 30, &[], &[]),
     q!("g6b", N_GUIDE, "Büyücüyle Tanış", "Büyücü Aldric ile Konuş",
@@ -571,7 +571,7 @@ impl Game {
                 menu = Menu::Topics;
             }
             "back" => lines.push(match kind {
-                N_MERCHANT => "Başka? Tezgâh açık, dostum.",
+                N_MERCHANT => "Başka? Kamyonet kalkmadan acele et, dostum.",
                 N_QUEST => "Başka bir şey sormak ister misin evlat?",
                 _ => "Başka bir şey var mı?",
             }
@@ -755,7 +755,7 @@ impl Game {
 
 fn greeting(kind: u8) -> &'static str {
     match kind {
-        N_MERCHANT => "Hoş geldin yolcu! Marco'yun tezgâhında her şey var: iksir, malzeme, yiyecek. Ne lazım?",
+        N_MERCHANT => "Hoş geldin yolcu! Kamyonet bu sefer dolu: her gelişimde başka mallar getiririm, fırsatı kaçırma. Ne lazım?",
         N_QUEST => "Otur evlat, otur. Yaşlı Silas'ın dizleri tutmuyor ama aklı hâlâ yerinde.",
         N_DOCTOR => "Yaralı mısın? Otur şuraya, bir bakayım. Zehirlendiysen de temizlerim.",
         N_MECHANIC => "Motor sesi duydum sandım… Aracın mı bozuldu? Viktor'un elinden kurtulan araç yoktur.",

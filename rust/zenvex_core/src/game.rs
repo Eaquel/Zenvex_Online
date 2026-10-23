@@ -509,6 +509,8 @@ pub struct Game {
     pub wiz_cd: f32,
     /// V12.1: dışarıda kurulan geçici tezgâh (x, y, kalan sn)
     pub temp_benches: Vec<(f32, f32, f32)>,
+    /// V12.2: bölgelerin gezgin tüccar kamyonetleri
+    pub caravans: Vec<crate::caravan::Caravan>,
     /// V11 eğitim üssü öğreticisi: 0 kapalı, 1 çatışma, 2 bomba düşüyor, 3 patladı (bkz. training.rs)
     pub train: u8,
     pub train_t: f32,
@@ -555,7 +557,8 @@ impl Game {
         let mut scratch = Vec::new();
         for &(mx, my) in &world.merchants {
             let forest = world.zone(mx, my) == world::Zone::Camp;
-            let mut spots: Vec<(u8, f32, f32)> = vec![(1, mx, my), (2, mx + m(2.6), my + m(1.2))];
+            // tüccar sabit değil: kendi kamyonetiyle dolaşır (caravan.rs)
+            let mut spots: Vec<(u8, f32, f32)> = vec![(2, mx + m(2.6), my + m(1.2))];
             if forest {
                 spots.push((6, mx - m(2.6), my + m(1.2)));
                 // büyücü kampta, ateşin doğusunda: kişisel üsse ve keşfedilen karakollara ışınlar
@@ -593,6 +596,15 @@ impl Game {
             let (fx, fy) = world::front_spawn();
             npcs.push(Npc { kind: 7, x: fx + m(6.0), y: fy - m(0.5), dir: 0, cd: 0.0, anim_t: 0.9, hit_t: 0.0, hit_id: 0 });
         }
+        // V12.2: gezgin tüccar Marco — kişisel üs dışındaki her bölgede bir kamyonet; tüccar NPC'si park edince görünür
+        let mut caravans = Vec::new();
+        for i in 0..crate::areas::AREAS.len() {
+            if i == crate::areas::HOME {
+                continue;
+            }
+            caravans.push(crate::caravan::Caravan::build(&world, i, npcs.len()));
+            npcs.push(Npc { kind: crate::story::N_MERCHANT, x: -10_000.0, y: -10_000.0, dir: 0, cd: 0.0, anim_t: 0.2 * i as f32, hit_t: 0.0, hit_id: 0 });
+        }
         // V12: her bölgenin giriş karakolunda bir büyücü (bölgeler arası tek yol)
         for (i, a) in crate::areas::AREAS.iter().enumerate() {
             if matches!(a.id, "forest" | "front" | "home") {
@@ -609,7 +621,7 @@ impl Game {
                 npcs.push(Npc { kind: crate::story::N_QUEST, x, y, dir: 0, cd: 0.0, anim_t: 0.9 + i as f32 * 0.3, hit_t: 0.0, hit_id: 0 });
             }
         }
-        Game {
+        let mut g = Game {
             world,
             progress,
             player,
@@ -655,11 +667,15 @@ impl Game {
             base_clock: 0.0,
             wiz_cd: 0.0,
             temp_benches: Vec::new(),
+            caravans,
             titan: (i64::MIN, 0, 0.0, 0.0),
             titan_dead: false,
             train: 0,
             train_t: 0.0,
-        }
+        };
+        // kervanlar ilk karede yerinde olsun (harita ve dükkân hemen doğru konumu görsün)
+        g.update_caravans();
+        g
     }
 
     pub fn msg(&mut self, t: impl Into<String>) {
@@ -744,6 +760,7 @@ impl Game {
         self.update_training(dt);
         self.wiz_cd = (self.wiz_cd - dt).max(0.0);
         self.update_benches(dt);
+        self.update_caravans();
     }
 
     fn update_zone(&mut self) {

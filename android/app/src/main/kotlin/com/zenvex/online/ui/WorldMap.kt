@@ -130,7 +130,10 @@ fun WorldMapScreen(close: () -> Unit) {
     val w = remember { GameSession.world() }
     val fog = remember { fogMask(GameSession.ui("fog")) }
     val prof = remember { GameSession.ui("profile") }
-    val marks = remember { mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) + titanMark(GameSession.ui("areas")) }
+    val marks = remember {
+        val ar = GameSession.ui("areas")
+        mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) + titanMark(ar) + merchantMarks(ar)
+    }
     androidx.compose.runtime.LaunchedEffect(Unit) { com.zenvex.online.game.Bases.refresh() }
     WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close) { to ->
         val r = GameSession.cmd("travel", "to" to to)
@@ -145,6 +148,16 @@ fun titanMark(areas: JSONObject): List<MapMark> {
     if (t.optBoolean("dead")) return emptyList()
     val left = t.optDouble("left").toInt()
     return listOf(MapMark(t.optDouble("x").toFloat(), t.optDouble("y").toFloat(), 2, "Titan", "${left / 60}:${"%02d".format(left % 60)} Sonra Başka Bölgeye Geçer"))
+}
+
+/** V12.2 gezgin tüccar Marco'nun kamyoneti (park ettiyse alışveriş açık) */
+fun merchantMarks(areas: JSONObject): List<MapMark> {
+    val a = areas.optJSONArray("merchant") ?: return emptyList()
+    return (0 until a.length()).map { i ->
+        val o = a.getJSONObject(i)
+        MapMark(o.optDouble("x").toFloat(), o.optDouble("y").toFloat(), 4, "Gezgin Tüccar Marco",
+            if (o.optBoolean("parked")) "Park Etti: Alışveriş Açık" else "Yolda, Birazdan Park Eder")
+    }
 }
 
 /** Keşfedilen devlet üsleri: sahip, ödül, kalan süre (dokununca kart). */

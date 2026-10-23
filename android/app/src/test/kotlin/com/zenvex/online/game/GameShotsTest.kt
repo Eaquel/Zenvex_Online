@@ -116,5 +116,17 @@ class GameShotsTest {
     @Test fun g15_handCraft() = shot("hand_craft", { cheat("item cloth 6"); cheat("item resin 4") }, steps = 20, hud = false,
         overlay = { com.zenvex.online.ui.CraftScreen({}) })
 
+    /** V12.2 gezgin tüccar: kamyonet kampa gelir, park eder, tüccar iner; dükkânda gelme olasılıkları */
+    private fun goCaravan() {
+        val m = GameSession.ui("areas").optJSONArray("merchant")?.optJSONObject(0) ?: return
+        val p = m.optJSONArray("park") ?: return
+        cheat("tp ${(p.optDouble(0) / 64 - 2).toInt()} ${(p.optDouble(1) / 64 + 3).toInt()}")
+    }
+
+    @Test fun g16_caravan() = shot("caravan", { cheat("level 6"); goCaravan() }, steps = 420)
+
+    @Test fun g17_shop() = shot("shop", { cheat("level 12"); cheat("gold 2000"); goCaravan() }, steps = 420, hud = false,
+        overlay = { com.zenvex.online.ui.ShopScreen({}) })
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

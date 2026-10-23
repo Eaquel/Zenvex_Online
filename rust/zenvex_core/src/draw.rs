@@ -243,6 +243,16 @@ impl Game {
                 ],
             ));
         }
+        // V12.2 gezgin tüccarın kamyoneti (sürücüsüz araç olarak; binilmez)
+        for c in &self.caravans {
+            if c.x < x0 || c.x > x1 || c.y < y0 || c.y > y1 {
+                continue;
+            }
+            self.draw_tmp.push((
+                c.y,
+                [D_VEHICLE, crate::caravan::TRUCK as f32, c.x, c.y, Game::vehicle_dir(c.angle) as f32, 0.0, c.speed, -1.0, 1.0, 0.0, -1.0, 0.0],
+            ));
+        }
         for n in &self.npcs {
             if n.x < x0 || n.x > x1 || n.y < y0 || n.y > y1 {
                 continue;
@@ -372,11 +382,7 @@ impl Game {
         } else {
             0.0
         };
-        let near_m = self
-            .world
-            .merchants
-            .iter()
-            .any(|&(x, y)| (x - p.x).hypot(y - p.y) < 150.0);
+        let near_m = self.near_caravan().is_some();
         let near_b = self
             .world
             .benches
@@ -455,8 +461,8 @@ impl Game {
                 push(v.x, v.y, 2.0, out);
             }
         }
-        for &(x, y) in &self.world.merchants {
-            push(x, y, 3.0, out);
+        for c in &self.caravans {
+            push(c.x, c.y, 3.0, out);
         }
         for r in &self.remotes {
             if !Game::in_home(r.x, r.y) {
