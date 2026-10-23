@@ -248,3 +248,5 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
   el ekranında görünmez.
 - **Titan** her 15 dakikada (sunucu saatiyle, herkeste aynı) şehir/yanık orman/çöl/bataklık/liman'dan birinde uyanır;
   duyurulur, haritada ve büyücü haritasında görünür; o dilimde öldürülürse bir sonrakine kadar gelmez.
+- **Aldric'in Haritası 8 ayrı ada** (4×2, süzülen adalar, ışık iplikleri, yıldızlı boşluk): tek haritanın bölünmüş hali
+  görünmüyor. Görseller `island_<kimlik>.png` + `wizard_bg.png` (docs/18 §9); yoksa ada üstünde bölgenin harita kesiti.

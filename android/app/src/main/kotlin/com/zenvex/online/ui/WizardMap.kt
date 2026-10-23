@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -73,110 +74,149 @@ fun itemNames(w: JSONObject): Map<String, Pair<String, Int>> {
     return (0 until a.length()).associate { val e = a.getJSONArray(it); e.getString(0) to (e.getString(1) to e.optInt(2)) }
 }
 
+/** Aldric'in haritasında adaların yeri: (sütun, satır) — 4×2 ızgara (docs/18) */
+private val ISLAND_SLOT = mapOf(
+    "forest" to (0 to 0), "city" to (1 to 0), "burnt" to (2 to 0), "desert" to (3 to 0),
+    "bswamp" to (0 to 1), "harbor" to (1 to 1), "front" to (2 to 1), "home" to (3 to 1),
+)
+
+/** Arka plan yıldızları (sabit): x, y (0-1), boy */
+private val STARS = java.util.Random(11).let { r -> List(70) { floatArrayOf(r.nextFloat(), r.nextFloat(), 0.6f + r.nextFloat() * 1.4f) } }
+
 /**
- * Büyücü Aldric'in haritası: dünya bölgelere ayrılmış olarak görünür. Bir bölgeye dokununca sağda kartı açılır:
- * önerilen seviye, gereken seviye, yaratıklar, çıkan eşyalar, ücret ve "Işınlan". Kilitli bölgeler kararır.
- * Çizilmiş harita görseli (assets/ui/wizard_map.png) varsa zemin o; yoksa dünyanın piksel haritası.
+ * Büyücü Aldric'in haritası: her bölge ayrı bir harita olduğu için karanlık büyülü boşlukta süzülen **ayrı adalar**
+ * olarak görünür (4×2). Adaya dokununca sağda kartı açılır: önerilen seviye, gereken seviye, yaratıklar, çıkan eşyalar,
+ * ücret ve "Işınlan". Kilitli ada kararır, bulunulan adada mavi işaret, Titan'ın adasında kırmızı rozet.
+ * Görseller: assets/ui/island_<kimlik>.png (saydam zeminli ada) ve wizard_bg.png (boşluk); yoksa adalar bölgenin kendi
+ * piksel haritasından bir kesitle, boşluk yıldızlarla kodla çizilir.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int>>, worldImg: ImageBitmap?, close: () -> Unit, initial: Int = -1,
                            teleport: (String) -> Unit) {
     val ctx = LocalContext.current
-    val art = remember { UiArt.image(ctx, "wizard_map") }
     val areas = remember(data) { data.optJSONArray("areas") ?: JSONArray() }
+    val ids = remember(areas) { List(areas.length()) { areas.getJSONObject(it).optString("id") } }
+    val islandArt = remember(ids) { ids.map { UiArt.image(ctx, "island_$it") } }
+    val bgArt = remember { UiArt.image(ctx, "wizard_bg") }
     val here = data.optInt("here", 0)
     var sel by remember { mutableStateOf(if (initial >= 0) initial else -1) }
     val t = rememberTime()
-    // harita dünyası kare: tüm bölgelerin dış sınırı
-    val mapPx = remember(areas) {
-        var m = 1f
-        for (i in 0 until areas.length()) {
-            val rs = areas.getJSONObject(i).optJSONArray("rects") ?: continue
-            for (k in 0 until rs.length()) { val r = rs.getJSONArray(k); m = maxOf(m, r.getDouble(2).toFloat(), r.getDouble(3).toFloat()) }
+    // bölgenin harita kesiti (görsel yoksa): en büyük dikdörtgeninin ortasından kare
+    val crops = remember(areas, worldImg) {
+        List(areas.length()) { i ->
+            val rs = areas.getJSONObject(i).optJSONArray("rects") ?: JSONArray()
+            val r = (0 until rs.length()).map { k -> rs.getJSONArray(k) }.maxByOrNull { (it.getDouble(2) - it.getDouble(0)) * (it.getDouble(3) - it.getDouble(1)) }
+            if (r == null || worldImg == null) null else {
+                val k = worldImg.width / 57600f
+                val (x0, y0, x1, y1) = List(4) { r.getDouble(it).toFloat() * k }
+                val side = min(x1 - x0, y1 - y0)
+                IntOffset(((x0 + x1 - side) / 2).toInt(), ((y0 + y1 - side) / 2).toInt()) to IntSize(side.toInt().coerceAtLeast(1), side.toInt().coerceAtLeast(1))
+            }
         }
-        m
-    }
-    fun rectsOf(i: Int): List<FloatArray> {
-        val rs = areas.getJSONObject(i).optJSONArray("rects") ?: return emptyList()
-        return (0 until rs.length()).map { k -> val r = rs.getJSONArray(k); FloatArray(4) { r.getDouble(it).toFloat() } }
-    }
-    val rects = remember(areas) { (0 until areas.length()).map { rectsOf(it) } }
-    val homeIdx = remember(areas) { (0 until areas.length()).firstOrNull { areas.getJSONObject(it).optString("id") == "home" } ?: -1 }
-    fun areaAt(x: Float, y: Float): Int {
-        fun inside(i: Int) = rects[i].any { x >= it[0] && x < it[2] && y >= it[1] && y < it[3] }
-        if (homeIdx >= 0 && inside(homeIdx)) return homeIdx
-        return rects.indices.firstOrNull { inside(it) } ?: -1
     }
 
-    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1E3A), Color(0xFF0E0A14))))) {
+    Box(Modifier.fillMaxSize().background(Brush.radialGradient(listOf(Color(0xFF2A1E3A), Color(0xFF0B0812))))) {
         Row(Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            // ---- harita
-            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                val side = min(maxWidth.value, maxHeight.value).dp
-                val sidePx = with(LocalDensity.current) { side.toPx() }
-                val k = sidePx / mapPx
-                Box(Modifier.size(side)) {
-                    Canvas(Modifier.fillMaxSize().pointerInput(rects) {
-                        detectTapGestures { p -> areaAt(p.x / k, p.y / k).takeIf { it >= 0 }?.let { sel = it } }
-                    }) {
-                        val bg = art ?: worldImg
-                        if (bg != null) {
-                            drawImage(bg, IntOffset.Zero, IntSize(bg.width, bg.height), IntOffset.Zero, IntSize(size.width.toInt(), size.height.toInt()),
-                                filterQuality = if (art != null) FilterQuality.Medium else FilterQuality.None)
-                        } else drawRect(Color(0xFF243018))
-                        // büyülü parşömen tonu
-                        drawRect(Color(0x302A1040))
-                        for (i in rects.indices) {
-                            val a = areas.getJSONObject(i)
-                            val col = Color(AREA_COLOR[a.optString("id")] ?: 0xFFCCCCCC)
-                            val open = a.optBoolean("open")
-                            for (r in rects[i]) {
-                                val o = Offset(r[0] * k, r[1] * k); val s = Size((r[2] - r[0]) * k, (r[3] - r[1]) * k)
-                                when {
-                                    !open -> drawRect(Color(0xB8080610), o, s)
-                                    i == sel -> drawRect(col.copy(alpha = 0.22f + 0.1f * sin(t * 4f)), o, s)
-                                    art == null -> drawRect(col.copy(alpha = 0.12f), o, s)
-                                }
+            // ---- adalar
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight()) {
+                val d = LocalDensity.current
+                val wPx = with(d) { maxWidth.toPx() }; val hPx = with(d) { maxHeight.toPx() }
+                val cw = wPx / 4f; val ch = hPx / 2f
+                val s = min(cw, ch * 0.72f) * 0.8f
+                // adanın merkezi (tek sütunlar biraz aşağıda: dağınık görünsün)
+                fun center(i: Int): Offset {
+                    val (c, r) = ISLAND_SLOT[ids[i]] ?: ((i % 4) to (i / 4))
+                    return Offset(cw * (c + 0.5f), ch * (r + 0.42f) + (if (c % 2 == 1) ch * 0.06f else -ch * 0.02f))
+                }
+                Canvas(Modifier.fillMaxSize().pointerInput(ids) {
+                    detectTapGestures { p ->
+                        ids.indices.firstOrNull { i -> val c = center(i); kotlin.math.abs(p.x - c.x) < s * 0.6f && kotlin.math.abs(p.y - c.y) < s * 0.7f }?.let { sel = it }
+                    }
+                }) {
+                    // boşluk: görsel ya da yıldızlar
+                    if (bgArt != null) {
+                        val k = maxOf(size.width / bgArt.width, size.height / bgArt.height)
+                        val sw = (size.width / k).toInt(); val sh = (size.height / k).toInt()
+                        drawImage(bgArt, IntOffset((bgArt.width - sw) / 2, (bgArt.height - sh) / 2), IntSize(sw, sh), IntOffset.Zero,
+                            IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.Medium)
+                    } else for ((k, st) in STARS.withIndex()) {
+                        val tw = 0.45f + 0.55f * (0.5f + 0.5f * sin(t * (0.8f + k % 5 * 0.3f) + k))
+                        drawCircle(Color(0xFFE8D8FF).copy(alpha = 0.55f * tw), st[2].dp.toPx(), Offset(st[0] * size.width, st[1] * size.height))
+                    }
+                    // adalar arası ışık iplikleri (ızgara komşuları)
+                    for (i in ids.indices) for (j in ids.indices) {
+                        if (j <= i) continue
+                        val (ci, ri) = ISLAND_SLOT[ids[i]] ?: continue; val (cj, rj) = ISLAND_SLOT[ids[j]] ?: continue
+                        if (kotlin.math.abs(ci - cj) + kotlin.math.abs(ri - rj) != 1) continue
+                        val a = center(i); val b = center(j)
+                        drawLine(Color(0xFFB080FF).copy(alpha = 0.18f + 0.1f * sin(t * 2f + i + j)), a, b, 1.5f.dp.toPx(),
+                            pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 7.dp.toPx()), -t * 30f))
+                    }
+                    for (i in ids.indices) {
+                        val a = areas.getJSONObject(i)
+                        val col = Color(AREA_COLOR[ids[i]] ?: 0xFFCCCCCC)
+                        val open = a.optBoolean("open")
+                        val c = center(i) + Offset(0f, sin(t * 1.1f + i * 1.7f) * 3.dp.toPx())
+                        val half = s / 2f
+                        // altında büyü halkası
+                        drawOval(Brush.radialGradient(listOf(Color(0xFFB080FF).copy(alpha = if (i == sel) 0.6f else 0.3f), Color.Transparent),
+                            Offset(c.x, c.y + half * 1.05f), half * 1.1f), Offset(c.x - half * 1.1f, c.y + half * 0.8f), Size(half * 2.2f, half * 0.5f))
+                        val art = islandArt[i]
+                        if (art != null) {
+                            val k = min(s * 1.25f / art.width, s * 1.25f / art.height)
+                            val dw = art.width * k; val dh = art.height * k
+                            drawImage(art, IntOffset.Zero, IntSize(art.width, art.height), IntOffset((c.x - dw / 2).toInt(), (c.y - dh / 2).toInt()),
+                                IntSize(dw.toInt(), dh.toInt()), filterQuality = FilterQuality.Medium)
+                        } else {
+                            // kayalık alt yüz (süzülen ada) + üstte bölgenin kendi haritası
+                            val rock = androidx.compose.ui.graphics.Path().apply {
+                                moveTo(c.x - half, c.y + half * 0.6f); lineTo(c.x + half, c.y + half * 0.6f)
+                                lineTo(c.x + half * 0.55f, c.y + half * 1.05f); lineTo(c.x + half * 0.1f, c.y + half * 1.35f)
+                                lineTo(c.x - half * 0.35f, c.y + half * 1.1f); lineTo(c.x - half * 0.7f, c.y + half * 0.95f); close()
                             }
-                        }
-                        // sınırlar: önce koyu, sonra renkli; seçili bölge parlak altın
-                        for (i in rects.indices) {
-                            val a = areas.getJSONObject(i)
-                            val col = Color(AREA_COLOR[a.optString("id")] ?: 0xFFCCCCCC)
-                            val w = if (i == sel) 3.dp.toPx() else 1.5f.dp.toPx()
-                            for (r in rects[i]) {
-                                val o = Offset(r[0] * k, r[1] * k); val s = Size((r[2] - r[0]) * k, (r[3] - r[1]) * k)
-                                drawRect(Color(0xE0100C14), o, s, style = Stroke(w + 2.dp.toPx()))
-                                drawRect(if (i == sel) Color(0xFFFFD860) else col.copy(alpha = 0.85f), o, s, style = Stroke(w))
+                            drawPath(rock, Brush.verticalGradient(listOf(Color(0xFF5A4636), Color(0xFF241A14)), c.y + half * 0.6f, c.y + half * 1.35f))
+                            val top = androidx.compose.ui.graphics.Path().apply {
+                                addRoundRect(androidx.compose.ui.geometry.RoundRect(c.x - half, c.y - half * 0.8f, c.x + half, c.y + half * 0.75f,
+                                    androidx.compose.ui.geometry.CornerRadius(half * 0.35f)))
                             }
+                            val crop = crops[i]
+                            clipPath(top) {
+                                if (crop != null && worldImg != null) drawImage(worldImg, crop.first, crop.second,
+                                    IntOffset((c.x - half).toInt(), (c.y - half * 0.8f).toInt()), IntSize(s.toInt(), (half * 1.55f).toInt()), filterQuality = FilterQuality.None)
+                                else drawRect(col.copy(alpha = 0.5f))
+                            }
+                            drawPath(top, Color(0xFF120C18), style = Stroke(4.dp.toPx()))
+                            drawPath(top, col.copy(alpha = 0.9f), style = Stroke(2.dp.toPx()))
+                            if (!open) drawPath(top, Color(0xC0080610))
                         }
-                        // buradasın: nabız gibi atan mavi işaret bölgenin girişinde
-                        areas.optJSONObject(here)?.optJSONArray("hub")?.let { h ->
-                            val p = Offset(h.getDouble(0).toFloat() * k, h.getDouble(1).toFloat() * k)
-                            drawCircle(Color(0x553A8AFF), 14.dp.toPx() * (1f + 0.25f * sin(t * 3f)), p)
-                            drawCircle(Color.White, 6.dp.toPx(), p); drawCircle(Color(0xFF3A8AFF), 4.dp.toPx(), p)
+                        if (art != null && !open) drawCircle(Color(0x99080610), half * 0.9f, c)
+                        if (i == sel) drawRoundRect(Color(0xFFFFD860).copy(alpha = 0.7f + 0.3f * sin(t * 4f)), Offset(c.x - half - 4.dp.toPx(), c.y - half * 0.8f - 4.dp.toPx()),
+                            Size(s + 8.dp.toPx(), half * 1.55f + 8.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(half * 0.4f), style = Stroke(3.dp.toPx()))
+                        if (i == here) {
+                            drawCircle(Color(0x553A8AFF), 12.dp.toPx() * (1f + 0.25f * sin(t * 3f)), c)
+                            drawCircle(Color.White, 6.dp.toPx(), c); drawCircle(Color(0xFF3A8AFF), 4.dp.toPx(), c)
+                        }
+                        if (a.optBoolean("titan")) {
+                            val p = Offset(c.x + half * 0.75f, c.y - half * 0.65f)
+                            drawCircle(Color(0x66FF2A1A), 14.dp.toPx() * (1f + 0.2f * sin(t * 5f)), p)
+                            drawCircle(Color(0xFF120C18), 10.dp.toPx(), p); drawCircle(Color(0xFFE03A2A), 8.dp.toPx(), p)
                         }
                     }
-                    // bölge adları (kilitliyse kilit ve seviye)
-                    for (i in rects.indices) {
-                        val a = areas.getJSONObject(i)
-                        val r = rects[i].firstOrNull() ?: continue
-                        val home = a.optString("id") == "home"
-                        val cx = (r[0] + r[2]) / 2f * k; val cy = (if (home) r[3] + 30f * 64f else (r[1] + r[3]) / 2f) * k
-                        val d = LocalDensity.current
-                        // etiket bölgenin genişliğine sığar (dar bölgede iki satır)
-                        val lw = with(d) { min(140.dp.toPx(), if (home) 120.dp.toPx() else (r[2] - r[0]) * k - 6.dp.toPx()) }
-                        Column(Modifier.offset { IntOffset((cx - lw / 2).toInt(), (cy - with(d) { 16.dp.toPx() }).toInt()) }.width(with(d) { lw.toDp() }),
-                            horizontalAlignment = Alignment.CenterHorizontally) {
-                            val open = a.optBoolean("open")
-                            PT(a.optString("name"), if (home) 11.sp else 14.sp, if (i == sel) Px.Clan else if (open) Px.Text else Px.Sub,
-                                align = androidx.compose.ui.text.style.TextAlign.Center, maxLines = 2, outline = true)
-                            if (!open) Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon("lock", 12.dp, Px.Sub); Spacer(Modifier.width(3.dp)); PT("Sv ${a.optInt("level")}", 12.sp, Color(0xFFE07060))
-                            } else if (i == here) PT("Buradasın", 11.sp, Color(0xFF7AB8FF))
-                            if (a.optBoolean("titan")) PT("Titan!", 12.sp, Color(0xFFFF5A4A), outline = true)
-                        }
+                }
+                // ada adları (kilitliyse kilit ve seviye)
+                for (i in ids.indices) {
+                    val a = areas.getJSONObject(i)
+                    val c = center(i)
+                    val lw = cw * 0.96f
+                    Column(Modifier.offset { IntOffset((c.x - lw / 2).toInt(), (c.y + s * 0.72f + with(d) { 4.dp.toPx() }).toInt()) }.width(with(d) { lw.toDp() }),
+                        horizontalAlignment = Alignment.CenterHorizontally) {
+                        val open = a.optBoolean("open")
+                        PT(a.optString("name"), 13.sp, if (i == sel) Px.Clan else if (open) Px.Text else Px.Sub, outline = true)
+                        if (!open) Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon("lock", 12.dp, Px.Sub); Spacer(Modifier.width(3.dp)); PT("Sv ${a.optInt("level")}", 12.sp, Color(0xFFE07060))
+                        } else if (i == here) PT("Buradasın", 11.sp, Color(0xFF7AB8FF))
+                        else if (a.optBoolean("titan")) PT("Titan Burada!", 11.sp, Color(0xFFFF5A4A))
                     }
                 }
             }
@@ -191,7 +231,7 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                 if (a == null) {
                     PT("Bir bölgeye dokun: orada ne yaşadığını, ne düştüğünü ve kaçıncı seviyede gitmen gerektiğini söylerim.", 14.sp, Px.Sub, maxLines = 4)
                     Spacer(Modifier.height(8.dp))
-                    PT("Bölgeler artık ayrı haritalar; aralarında yürünmez, kapımdan geçilir.", 13.sp, Px.Sub, maxLines = 3)
+                    PT("Her bölge ayrı bir diyar; aralarında yürünmez, kapımdan geçilir.", 13.sp, Px.Sub, maxLines = 3)
                 } else AreaCard(a, sel == here, data.optInt("gold"), data.optDouble("cd", 0.0).toFloat(), data.optBoolean("near", true), items, teleport)
             }
         }

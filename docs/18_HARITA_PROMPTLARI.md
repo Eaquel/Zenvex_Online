@@ -31,7 +31,7 @@ kapatır, onun ötesinde de koyu bir "boşluk" zemini (derin su, sık ağaç tep
 | **D** | Dekor sayfası (haritanın içine serpilen süsler) | 1 sayfa (8 nesne) | yeşil zemin |
 | **Y** | Simge yapılar (haritanın yer işaretleri) | 2 | yeşil zemin, tek tek |
 
-Toplam bölge başına **9 görsel** (Kişisel Üs 5) → toplam 68 görsel + büyücü haritası + tezgâh simgesi. **Öncelik sırası:** K → Z → S → D → Y. Konsept haritayı ilk gönderirsen
+Toplam bölge başına **9 görsel** (Kişisel Üs 5) → toplam 68 görsel + 8 ada + 1 arka plan + tezgâh simgesi. **Öncelik sırası:** K → Z → S → D → Y. Konsept haritayı ilk gönderirsen
 yerleşimi (yollar, kamp, nehir, yapıların yeri) ona göre kurarım.
 
 **Dosya adları:** `concept_<kimlik>.png`, `g_<kimlik>_main.png`, `g_<kimlik>_alt.png`, `g_<kimlik>_path.png`,
@@ -402,32 +402,53 @@ a chopping block with axe, a lantern post, a flower pot
 
 ---
 
-## 9) Aldric'in Haritası (8 ayrı ada)
+## 9) Aldric'in Haritası — 8 ayrı ada
 
-Bölgeler yan yana değil; büyücünün haritası **karanlık büyülü bir boşlukta süzülen 8 ayrı ada**. Oyun dokunma
-alanlarını şu merkezlere koyacak (yatay %, dikey %); her ada yaklaşık **genişliğin %20'si**:
+Her bölge ayrı bir harita olduğu için Aldric'in haritası **tek bir haritanın bölünmüş hali değil**: karanlık büyülü bir
+boşlukta süzülen **8 ayrı ada**. Oyun bunu zaten böyle çiziyor (4 üstte, 4 altta); şu an her adanın üstünde o bölgenin
+kendi piksel haritasından bir kesit var. Aşağıdaki görseller gelince adalar onlarla değişir.
 
-| Ada | Merkez | Ada | Merkez |
-|-----|--------|-----|--------|
-| forest | (14, 27) | bswamp | (14, 73) |
-| city | (38, 24) | harbor | (38, 76) |
-| burnt | (62, 24) | front | (62, 76) |
-| desert | (86, 27) | home | (86, 73) |
+Tek büyük harita görseli **istemiyoruz** (hizalaması tutmuyordu). Her ada **ayrı bir görsel**, bir de boş arka plan:
 
-**`wizard_map.png`** (1:1 kare, 2048×2048):
+| Dosya | Ölçü | Ne |
+|-------|------|----|
+| `wizard_bg.png` | 16:9, 2400×1350 | Adaların arkasındaki büyülü boşluk (adasız) |
+| `island_forest.png` … `island_home.png` (8) | 1:1, 1024×1024 | Tek bir süzülen ada, **yeşil #00FF00 zemin** (silerim) |
+
+**`wizard_bg.png`** (STİL-K yerine şunu kullan):
 
 ```
-an arcane wizard's atlas: eight separate small floating island maps hovering in a dark purple starry magical void,
-seen from above, each island a completely different biome and clearly separated from the others with empty space between
-them, arranged in two rows of four:
-top row left to right: a green forest with a campfire camp and a river, a ruined grey city with broken streets,
-a black burnt forest with glowing embers, an orange desert canyon with a cracked highway;
-bottom row left to right: a dark toxic swamp with dead trees, a frozen snowy harbor with containers and a lighthouse,
-a war-torn trench battlefield with small fortified bases and flags, a tiny cozy wooden fort with a glowing portal stone;
-faint glowing purple rune circles under each island, thin magical light threads connecting them, no text, no labels
+a dark arcane void seen from above, deep purple and midnight blue nebula, scattered tiny stars, faint glowing rune circles
+and thin magical light threads drifting across, very dark and calm so that bright objects on top stand out, painterly
+pixel art, no islands, no land, no text, no UI, 16:9
 ```
+
+**Ada ortak bloğu** (her ada prompt'unun başına):
+
+```
+a single small floating island seen from a 3/4 top-down angle, a chunk of land torn from the earth hovering in the air,
+the top surface is a tiny detailed miniature of the region described below, the underside is jagged dark rock with
+hanging roots and falling pebbles, a faint purple magic glow under the rock, the island fills about 80% of the square
+canvas and is centered, crisp detailed pixel art, flat solid #00FF00 green background, no text, no labels, no frame
+```
+
+| Dosya | Adanın üstü |
+|-------|-------------|
+| `island_forest.png` | a green forest with a tiny campfire camp, two small tents, a winding blue river with a wooden bridge, pine trees (dark olive green, not pure green) |
+| `island_city.png` | a tiny ruined grey city block: broken streets, collapsed apartment buildings, a burnt car, a small sandbag safe zone gate |
+| `island_burnt.png` | a black burnt forest: charred tree trunks, grey ash ground, glowing orange ember cracks, thin smoke rising |
+| `island_desert.png` | an orange desert: a cracked highway crossing the island, sand dunes, a red rock arch, a small abandoned gas station, cacti |
+| `island_bswamp.png` | a black toxic swamp: dark water pools, twisted dead trees with hanging moss, a half-sunken stilt shack, sickly yellow fog |
+| `island_harbor.png` | a frozen harbor: snowy docks, stacked icy shipping containers, a frozen boat, a tiny lighthouse at the edge |
+| `island_front.png` | a war-torn battlefield: zigzag trenches, sandbags, barbed wire, two tiny fortified bases with flags, a small helipad |
+| `island_home.png` | a cozy tiny wooden fort: palisade wall, a small cabin, a workbench, two storage chests, a glowing purple portal stone at the gate |
+
+> Adaların hepsi **aynı açıdan ve aynı boyda** olsun (yan yana duracaklar). Saf yeşil kullanılmasın (zemin yeşil).
 
 Bölge afişleri (`region_<kimlik>.png`, 3:1) `17_BOLGE_HARITASI_PROMPTLARI.md`'deki gibi (Askeri Bölge afişi artık gerekmez).
+
+> Her bölgenin **K · konsept haritası** (yukarıda) o bölgenin kendi haritasıdır: bölgeler ayrı haritalara taşınınca oyundaki
+> harita ekranı (M) da yalnız o görseli gösterecek; başka bölge hiç görünmeyecek.
 
 ---
 
