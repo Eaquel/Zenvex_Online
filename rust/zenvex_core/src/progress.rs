@@ -7,8 +7,12 @@ pub const MAX_LEVEL: u32 = 50;
 pub const MAX_CHAR_LEVEL: u32 = 10;
 pub const CITY_LEVEL: u32 = 10;
 
+/// Seviye için gereken XP. İlk 8 seviye hızlı (öğretici), sonra dikleşir (V12.2: eskiden 40. seviye ~120 öldürmeydi,
+/// şimdi ~1.000): 50·l^1,6 × (1 + ((l − 8) / 7)^1,5). Sv 10 ≈ 2,1 bin, Sv 20 ≈ 19,6 bin, Sv 30 ≈ 76 bin, Sv 49 ≈ 386 bin.
 pub fn xp_to_next(level: u32) -> u32 {
-    (50.0 * (level as f32).powf(1.6)).round() as u32
+    let l = level as f32;
+    let late = ((l - 8.0).max(0.0) / 7.0).powf(1.5);
+    (50.0 * l.powf(1.6) * (1.0 + late)).round() as u32
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -946,7 +950,10 @@ mod tests {
     #[test]
     fn xp_curve_matches_design() {
         assert_eq!(xp_to_next(1), 50);
-        assert_eq!(xp_to_next(9), 1682);
+        assert_eq!(xp_to_next(8), 1393);
+        // sonraki seviyeler dik: 40. seviye 20. seviyenin 10 katı kadar
+        assert!(xp_to_next(20) > 18_000 && xp_to_next(20) < 21_000, "{}", xp_to_next(20));
+        assert!(xp_to_next(40) > 10 * xp_to_next(20), "{}", xp_to_next(40));
     }
 
     #[test]

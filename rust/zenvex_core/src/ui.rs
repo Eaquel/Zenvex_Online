@@ -180,7 +180,8 @@ impl Game {
     }
 
     fn sell_price(&self, item: usize) -> u32 {
-        ((ITEMS[item].value as f32) * (0.5 + self.progress.trade_bonus())).floor() as u32
+        // V12.2: satış değerin %35'i (eşya satmak ana altın kaynağıydı)
+        ((ITEMS[item].value as f32) * (0.35 + self.progress.trade_bonus())).floor() as u32
     }
 
     // ------------------------------------------------------------------ görünümler

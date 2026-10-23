@@ -2649,7 +2649,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val prog = if (guideGoal > 1) " ($guideN/$guideGoal)" else ""
         var ringAt: Triple<Float, Float, Float>? = null
         val msg: String? = when {
-            guideReady -> "Görev tamam! Yanıma dön, ödülün hazır."
+            // Nova'nın adımları kendiliğinden teslim edilir; yalnız Komutan Diana'nın adımlarında dönmek gerekir
+            guideReady -> "Görev tamam! Komutan Diana'ya dön, ödülün hazır."
             guideStep == "g1" && !tutMoved -> { ringAt = Triple(moveStick.homeX, moveStick.homeY, stickR); "Sol tarafta parmağını kaydırarak yürü. Sonuna kadar itersen koşarsın; koşmak seni yormaz." }
             guideStep == "g1" && !tutAttacked -> { ringAt = Triple(atkStick.homeX, atkStick.homeY, stickR); "Sağdaki çemberi zombiye doğru çevir; o yöne vurursun." }
             guideStep == "g1" -> "Kamptan çık ve 3 zombi indir$prog. Vuruşlar dayanıklılık harcar, sarı çubuğa göz kulak ol."

@@ -602,6 +602,12 @@ impl Game {
             let (mut x, mut y) = if a.id == "city" { (hx - m(5.0), hy - m(3.0)) } else { (hx + m(3.5), hy - m(1.5)) };
             world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
             npcs.push(Npc { kind: 7, x, y, dir: 0, cd: 0.0, anim_t: 0.3 + i as f32 * 0.4, hit_t: 0.0, hit_id: 0 });
+            // V12.2: görevci Silas her bölgenin güvenli girişinde (görevler oradan alınır); şehirde pazarda zaten var
+            if a.id != "city" {
+                let (mut x, mut y) = (hx - m(3.5), hy - m(1.5));
+                world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
+                npcs.push(Npc { kind: crate::story::N_QUEST, x, y, dir: 0, cd: 0.0, anim_t: 0.9 + i as f32 * 0.3, hit_t: 0.0, hit_id: 0 });
+            }
         }
         Game {
             world,

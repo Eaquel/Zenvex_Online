@@ -143,11 +143,11 @@ pub const GUIDE: &[Quest] = &[
        "Artık benim yardımıma ihtiyacın yok. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
     // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Diana
-    q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Titan Arenası'nı Gör (Arena Kampı)",
+    q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Arena Kampı'na Git",
        ["Şehre hoş geldin asker. Ben Komutan Diana; bu surların ardında hayatta kalanları ben toplarım.",
-        "Şehir üç kuşaktır: banliyö, merkez ve sanayi. Kuzeydoğuda Titan Arenası var; titanlar orada uyanır.",
-        "Arena Kampı'na kadar git, gözünle gör. Haritanda işaretledim. Titana tek başına dalma; önce yerini bil."],
-       "Gördün mü o devi? Titanlar büyük ganimet bırakır ama klansız gidene mezar olur.",
+        "Şehir üç kuşaktır: banliyö, merkez ve sanayi. Kuzeydoğudaki eski arena artık boş; Titan her çeyrek saatte başka bir bölgede uyanıyor.",
+        "Arena Kampı'na kadar git, şehri tanı. Haritanda işaretledim. Titan'ın nerede olduğunu Aldric'in haritasında görürsün."],
+       "Şehri tanıdın. Titan büyük ganimet bırakır ama klansız gidene mezar olur.",
        Goal::Reach("arena_post"), 1, 10, 150, 200, &[("medkit", 2)], &[]),
     q!("g9", N_COMMANDER, "Eğitim Üssü", "Eğitim Üssündeki Askerleri Yen Ve Üssü Ele Geçir",
        ["Asıl savaş Cephe Hattı'nda: devlet üsleri ve klanların kapıştığı yer. Oraya Büyücü Aldric götürür.",
@@ -330,12 +330,84 @@ impl Game {
     }
 
     fn story_ready(&mut self, q: &Quest) {
+        // Nova'nın adımları kendiliğinden teslim edilir (auto_guide)
+        if q.giver == N_GUIDE {
+            return;
+        }
         let (who, _) = npc_name(q.giver);
         self.events.push(Event::Quest { title: format!("{} · {who} ile konuş", q.title) });
     }
 
-    /// Her saniye: yer ve seviye hedefleri
+    /// Görevi başlatır: başlangıç malzemesi verilir (verilenlerin listesi döner).
+    fn quest_accept(&mut self, w: u8, idx: usize) -> Vec<String> {
+        let Some(q) = chain(w).get(idx) else { return Vec::new() };
+        self.story_set(w, idx, true, 0);
+        let mut given = Vec::new();
+        for &(id, c) in q.start_items {
+            let left = self.progress.inv.add_id(id, c);
+            if left > 0 {
+                let (x, y) = (self.player.x, self.player.y);
+                self.spawn_drop_id(id, left, x, y + 30.0);
+            }
+            if let Some(i) = data::item_index(id) {
+                given.push(format!("{c}× {}", data::ITEMS[i].name));
+            }
+        }
+        self.events.push(Event::Quest { title: format!("Yeni Görev: {}", q.title) });
+        self.story_goals();
+        given
+    }
+
+    /// Görevi teslim eder: ödüller verilir (listesi döner), zincir ilerler.
+    fn quest_turnin(&mut self, w: u8, idx: usize) -> Vec<String> {
+        let Some(q) = chain(w).get(idx) else { return Vec::new() };
+        self.progress.add_gold(q.gold);
+        self.progress.add_xp(q.xp);
+        let mut got = vec![format!("+{} altın", q.gold)];
+        if q.xp > 0 {
+            got.push(format!("+{} XP", q.xp));
+        }
+        for &(id, c) in q.items {
+            let left = self.progress.inv.add_id(id, c);
+            if left > 0 {
+                let (x, y) = (self.player.x, self.player.y);
+                self.spawn_drop_id(id, left, x, y + 30.0);
+            }
+            if let Some(i) = data::item_index(id) {
+                got.push(format!("{c}× {}", data::ITEMS[i].name));
+            }
+        }
+        self.events.push(Event::Quest { title: format!("Görev Teslim Edildi: {}", q.title) });
+        self.story_set(w, idx + 1, false, 0);
+        self.check_level_quests();
+        got
+    }
+
+    /// V12.2: Rehber Nova'nın adımları otomatik: kabul ve teslim için konuşmak gerekmez. Seviye yetince adım kendiliğinden
+    /// başlar, hedef tamamlanınca ödül verilir ve sıradaki adım açılır. (Komutan Diana'nın şehir adımları elle alınır.)
+    fn auto_guide(&mut self) {
+        let (idx, on, n) = self.story_slot(0);
+        let Some(q) = GUIDE.get(idx) else { return };
+        if q.giver != N_GUIDE {
+            return;
+        }
+        if !on {
+            if self.progress.level >= q.min_level {
+                self.quest_accept(0, idx);
+            }
+        } else if self.quest_progress(q, n) >= q.count {
+            let got = self.quest_turnin(0, idx);
+            self.msg(format!("Rehber Nova: {} ({})", q.done, got.join(", ")));
+        }
+    }
+
+    /// Her saniye: yer ve seviye hedefleri, otomatik rehber
     pub fn story_tick(&mut self) {
+        self.story_goals();
+        self.auto_guide();
+    }
+
+    fn story_goals(&mut self) {
         for which in 0..2u8 {
             let (idx, on, n) = self.story_slot(which);
             let Some(q) = chain(which).get(idx) else { continue };
@@ -445,7 +517,7 @@ impl Game {
         }
         // bu NPC'nin verdiği görev (rehber: 0, görevci: 1)
         let which = match kind {
-            N_GUIDE | N_COMMANDER => Some(0u8),
+            N_COMMANDER => Some(0u8),
             N_QUEST => Some(1u8),
             _ => None,
         }
@@ -466,25 +538,12 @@ impl Game {
                 let (idx, on, n) = self.story_slot(w);
                 if let Some(q) = chain(w).get(idx) {
                     if opt == "accept" && !on && self.progress.level >= q.min_level {
-                        self.story_set(w, idx, true, 0);
-                        let mut given = Vec::new();
-                        for &(id, c) in q.start_items {
-                            let left = self.progress.inv.add_id(id, c);
-                            if left > 0 {
-                                let (x, y) = (self.player.x, self.player.y);
-                                self.spawn_drop_id(id, left, x, y + 30.0);
-                            }
-                            if let Some(i) = data::item_index(id) {
-                                given.push(format!("{c}× {}", data::ITEMS[i].name));
-                            }
-                        }
+                        let given = self.quest_accept(w, idx);
                         lines.push(format!("Anlaştık! {}.", q.hint));
                         if !given.is_empty() {
                             lines.push(format!("Al bunları, işine yarar: {}.", given.join(", ")));
                         }
                         lines.push("Hedefin sol üstteki takipçide ve haritada işaretli. İşin bitince bana dön.".into());
-                        self.events.push(Event::Quest { title: format!("Yeni Görev: {}", q.title) });
-                        self.story_tick();
                         if q.goal == Goal::Train {
                             self.start_training();
                             lines.push("Kapıyı açıyorum… Bol şans asker!".into());
@@ -492,26 +551,8 @@ impl Game {
                         menu = Menu::Leave;
                     } else if opt == "turnin" && on && self.quest_progress(q, n) >= q.count {
                         lines.push(q.done.to_string());
-                        self.progress.add_gold(q.gold);
-                        self.progress.add_xp(q.xp);
-                        let mut got = vec![format!("+{} altın", q.gold)];
-                        if q.xp > 0 {
-                            got.push(format!("+{} XP", q.xp));
-                        }
-                        for &(id, c) in q.items {
-                            let left = self.progress.inv.add_id(id, c);
-                            if left > 0 {
-                                let (x, y) = (self.player.x, self.player.y);
-                                self.spawn_drop_id(id, left, x, y + 30.0);
-                            }
-                            if let Some(i) = data::item_index(id) {
-                                got.push(format!("{c}× {}", data::ITEMS[i].name));
-                            }
-                        }
+                        let got = self.quest_turnin(w, idx);
                         lines.push(format!("Ödülün: {}", got.join(", ")));
-                        self.events.push(Event::Quest { title: format!("Görev Teslim Edildi: {}", q.title) });
-                        self.story_set(w, idx + 1, false, 0);
-                        self.check_level_quests();
                         menu = Menu::AfterTurnin;
                     }
                 }
@@ -681,8 +722,6 @@ impl Game {
                 out.push(format!("{who}'nin verdiği işi bitir: {}.", q.hint));
             } else if lv >= q.min_level && q.giver == N_COMMANDER {
                 out.push("Komutan Diana seni şehrin güvenli bölgesinde bekliyor: şehri ve üsleri o anlatır.".into());
-            } else if lv >= q.min_level {
-                out.push("Rehber Nova seni bekliyor; kampta, ateşin yanında. Onun dersleri hayatta kalmanın temeli.".into());
             }
         }
         if let Some(q) = MAIN.get(s.main) {
@@ -740,31 +779,40 @@ mod tests {
         g.player.y = y;
     }
 
+    /// V12.2: Nova'nın rehberi otomatik — konuşmadan başlar, hedef bitince ödül verilir ve sıradaki adım açılır
     #[test]
-    fn guide_chain_flows() {
+    fn guide_runs_automatically() {
         let mut g = Game::new(5, Progress::default(), 1);
+        assert!(!g.progress.story.guide_on);
+        g.story_tick();
+        assert!(g.progress.story.guide_on, "ilk adım kendiliğinden başlamalı");
+        // Nova görev seçeneği sunmaz
         npc_at(&mut g, N_GUIDE);
         let d = g.talk(N_GUIDE, "");
-        assert!(d["lines"].as_array().unwrap().len() >= 2);
-        assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "accept"));
-        g.talk(N_GUIDE, "accept");
-        assert!(g.progress.story.guide_on);
+        assert!(!d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "accept" || o["id"] == "turnin"));
         for _ in 0..3 {
             g.story_event(Ev::Kill { kind: ZKind::Walker, x: 0.0, y: 0.0 });
         }
-        let d = g.talk(N_GUIDE, "");
-        assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "turnin"));
         let gold = g.progress.gold;
-        g.talk(N_GUIDE, "turnin");
-        assert!(g.progress.gold > gold);
+        g.story_tick();
+        assert!(g.progress.gold > gold, "ödül kendiliğinden verilmeli");
         assert_eq!(g.progress.story.guide, 1);
-        // üretim görevi kabulde malzeme verir
+        g.story_tick();
+        assert!(g.progress.story.guide_on);
+        // üretim adımı başlayınca malzeme verilir
         g.progress.story.guide = 3;
-        g.talk(N_GUIDE, "accept");
+        g.progress.story.guide_on = false;
+        g.story_tick();
         assert!(g.progress.inv.count_id("cloth") >= 2);
         let j = g.story_json();
         assert_eq!(j[0]["id"], "g4");
         assert_eq!(j[1]["id"], "q1");
+        // Komutan Diana'nın adımları elle alınır
+        g.progress.story.guide = GUIDE.iter().position(|q| q.id == "g8").unwrap();
+        g.progress.story.guide_on = false;
+        g.progress.level = 12;
+        g.story_tick();
+        assert!(!g.progress.story.guide_on);
     }
 
     #[test]
@@ -797,20 +845,24 @@ mod tests {
 
     #[test]
     fn accept_closes_with_single_leave_option() {
+        // Silas: görev konuşarak alınır ve teslim edilir
         let mut g = Game::new(5, Progress::default(), 1);
-        npc_at(&mut g, N_GUIDE);
-        let d = g.talk(N_GUIDE, "accept");
+        let n = g.npcs.iter().find(|n| n.kind == N_QUEST).unwrap();
+        let (x, y) = (n.x, n.y + 60.0);
+        g.player.x = x;
+        g.player.y = y;
+        let d = g.talk(N_QUEST, "accept");
         let ids: Vec<&str> = d["opts"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap()).collect();
         assert_eq!(ids, ["ok"], "kabulden sonra yalnız Yola Çık kalmalı");
         assert!(d["lines"].as_array().unwrap().iter().all(|l| !l.as_str().unwrap().contains("Tamamlandı")));
-        assert!(g.progress.story.guide_on);
-        // anında tamamlanan seviye görevi: teslim de sunulur
-        g.progress.story = StoryState { guide: GUIDE.iter().position(|q| q.id == "g7").unwrap(), guide_v: 1, ..Default::default() };
-        g.progress.level = 6;
-        let d = g.talk(N_GUIDE, "accept");
-        let ids: Vec<&str> = d["opts"].as_array().unwrap().iter().map(|o| o["id"].as_str().unwrap()).collect();
-        assert_eq!(ids, ["turnin", "ok"]);
-        let d = g.talk(N_GUIDE, "turnin");
+        assert!(g.progress.story.main_on);
+        for _ in 0..5 {
+            let (cx, cy) = world::camp_spawn();
+            g.story_event(Ev::Kill { kind: ZKind::Walker, x: cx + 25.0 * world::TILE, y: cy });
+        }
+        let d = g.talk(N_QUEST, "");
+        assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "turnin"), "{d}");
+        let d = g.talk(N_QUEST, "turnin");
         assert!(d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "ok"));
     }
 

@@ -113,7 +113,7 @@ wide cinematic 3:1 landscape banner, 3/4 top-down view of the location, atmosphe
 - **Bölgeler:** Başlangıç Ormanı (Sv 1+), Yıkık Şehir (Sv 10+), Cephe Hattı (Sv 10+), Yanık Orman (Sv 15+), Çöl Otoyolu (Sv 20+),
   Kara Bataklık (Sv 25+), Askeri Bölge (Sv 35+), Donmuş Liman (Sv 40+), Kişisel Üssüm.
 - **Sınır:** bölgenin kenarı görünmez duvar; ötesi koyulaşan sisle kararır, mini harita ve harita da yalnız bulunulan bölgeyi gösterir.
-- **Büyücü:** her bölgenin giriş karakolunda bir Aldric var. Işınlanma 15 altın (orman ve kişisel üs ücretsiz), 8 sn bekleme.
+- **Büyücü:** her bölgenin giriş karakolunda bir Aldric var. Işınlanma 30-100 altın (bölgeye göre; orman ve kişisel üs ücretsiz), 8 sn bekleme.
 - **Ölünce:** öldüğün bölgenin giriş karakolunda doğarsın (kişisel üs seçiliyse orada).
 - **Görev oku:** hedef başka bölgedeyse ok bu bölgenin büyücüsünü gösterir ("Büyücü → Yanık Orman").
 - **Cephe Hattı:** üslerin çevresinde zombi doğmaz; yalnız üs askerleri (botlar) var.
