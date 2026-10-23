@@ -1670,7 +1670,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val id = vehicleIds.getOrElse(kind) { "car" }
         // V8: yandan çizilmiş motor ve açık cip (yön: sağa/sola çevrilir, dikey giderken son yön korunur)
         // V11: 8 yönlü çizim varsa (x8/moto/0..7, x8/car/0..7; docs/15 istemleri) araç gittiği yöne döner, yan görünüş kullanılmaz
-        val d8 = if (kind >= 1) atlas["x8/${if (kind == 1) "moto" else "car"}/$dir"] else null
+        // V12.2: gezgin tüccarın kamyoneti (suv) için ayrı 8 yön (x8/truck, docs/19) varsa o
+        val d8 = (if (kind == 3) atlas["x8/truck/$dir"] else null) ?: if (kind >= 1) atlas["x8/${if (kind == 1) "moto" else "car"}/$dir"] else null
         val v8 = if (d8 != null) null else if (kind == 1) atlas["x/moto"] else if (kind >= 2) atlas["x/car"] else null
         val sp = d8 ?: v8 ?: atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
         if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
