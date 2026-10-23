@@ -11,7 +11,7 @@ pub fn topics(kind: u8) -> &'static [(&'static str, &'static str)] {
         N_MECHANIC => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Araçlar Hakkında"), ("rumor", "Söylenti Var Mı?")],
         N_TRAINER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Köpekler Hakkında"), ("rumor", "Söylenti Var Mı?")],
         N_GUIDE => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Temel Bilgiler"), ("rumor", "Söylenti Var Mı?")],
-        N_WIZARD => &[("todo", "Ne Yapmalıyım?"), ("area", "Kişisel Üs Nedir?"), ("self", "Kendinden Bahset"), ("tip", "Devlet Üsleri"), ("rumor", "Söylenti Var Mı?")],
+        N_WIZARD => &[("todo", "Ne Yapmalıyım?"), ("area", "Kişisel Üs Nedir?"), ("self", "Kendinden Bahset"), ("tip", "Bölgeler ve Üsler"), ("rumor", "Söylenti Var Mı?")],
         N_COMMANDER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Devlet Üsleri"), ("rumor", "Söylenti Var Mı?")],
         _ => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Kuleler Hakkında"), ("rumor", "Söylenti Var Mı?")],
     }
@@ -177,11 +177,13 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
         (N_WIZARD, "self") => pick(&[
             &["Adım Aldric. Salgından önce şehrin rasathanesinde yıldızları sayardım.",
               "Gökyüzü değişince ben de değiştim. Artık yıldızlar değil, kapılar sayıyorum.",
-              "Her kapı bir yeri hatırlar. Sen bir yeri görmeden ben seni oraya götüremem."],
+              "Her kapı bir bölgeyi hatırlar. Dünya artık parça parça; bölgeden bölgeye yürünmez, kapımdan geçilir."],
             &["Bu kapıları bana kim öğretti diye sorma. Rüyamda yaşlı bir kadın vardı; gizemli ağacın altında oturuyordu.",
               "Uyandığımda ellerimde mavi bir ışık vardı. O günden beri yolcuları taşırım."],
         ]),
         (N_WIZARD, "tip") => vec![
+            "Dünya bölgelere ayrıldı: orman, şehir, yanık orman, çöl, kara bataklık, askerî bölge, liman ve cephe.",
+            "Haritama bak: bir bölgeye dokunursan orada ne yaşadığını, ne düştüğünü ve kaçıncı seviyede gitmen gerektiğini söylerim.",
             "Elli devlet üssünün hepsi Cephe Hattı'nda; oraya yürüyerek gidilmez, 10. seviyeden sonra seni ben götürürüm.",
             "Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
             "Keskin nişancının kırmızı lazerini görürsen yerinden kıpırda ya da takla at; mermi lazerin olduğu yere gider.",
@@ -193,6 +195,25 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Donmuş Liman'dan gelen bir tüccar, buz tutmuş konteynerlerin içinde ışık gördüğünü anlattı.", "Kim bilir, belki asker sandıklarıdır, belki de daha kötüsü."],
             &["Yanık Orman hâlâ tütüyor. Ateşi kimin yaktığını bilen yok; ama küllerin arasında koşan şeyler var."],
             &["Askeri Bölge'nin hangarlarında devlet son birliklerini saklıyormuş. Helikopter sesleri geceleri buraya kadar gelir."],
+        ]),
+        // ------------------------------------------------------------------ komutan (şehir)
+        (N_COMMANDER, "area") => vec![
+            "Bu surların içi şehrin tek güvenli yeri. Pazar, doktor, tamirci; hepsi burada.",
+            "Güneyde sur, kuzeyde banliyö, merkez ve en tepede sanayi. Kuzeydoğu köşede Titan Arenası.",
+            "Şehir kendi başına bir bölge; ormana, cepheye ya da başka bölgelere yalnız Aldric götürür. Büyücü güvenli bölgede.",
+        ],
+        (N_COMMANDER, "self") => vec![
+            "Salgından önce sınır karakolundaydım. Emir gelmedi, ben de emir vermeye başladım.",
+            "Şehre giren her hayatta kalanı kayda geçiririm. Sen de artık kayıtlısın asker.",
+        ],
+        (N_COMMANDER, "tip") => vec![
+            "Üs almak için önce askerleri temizle, sonra bayrak halkasında on saniye dur. Klanın yoksa üs tutamazsın.",
+            "Keskin nişancının lazeri üstündeyse yer değiştir ya da takla at.",
+            "Tuttuğun üssü boş bırakma: devlet geri almak için helikopterle asker indirir, bazen de bombalar.",
+        ],
+        (N_COMMANDER, "rumor") => pick(&[
+            &["Cephe Hattı'nda klanların gece boyu çatıştığı söyleniyor.", "Sabah olunca bayrakların yarısı el değiştirmiş oluyor."],
+            &["Karargâhtaki telsizci, güneyde kimsenin tutamadığı bir üs olduğunu söyledi.", "Her alan kişi bir hafta içinde kaybediyormuş."],
         ]),
         // ------------------------------------------------------------------ kule askeri
         (_, "area") => vec![
@@ -210,25 +231,6 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
         (_, "rumor") => pick(&[
             &["Dün gece kuzeyde bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
             &["Titan arenasından gelen kükremeyi kulede bile hissettim.", "Hazır olmadan oraya gitme."],
-        ]),
-        // ------------------------------------------------------------------ komutan (şehir)
-        (N_COMMANDER, "area") => vec![
-            "Bu surların içi şehrin tek güvenli yeri. Pazar, doktor, tamirci; hepsi burada.",
-            "Güneyde kapı, kuzeyde banliyö, merkez ve en tepede sanayi. Kuzeydoğu köşede Titan Arenası.",
-            "Cephe Hattı haritanın doğusunda ve güneyinde, karantina duvarının ardında. Oraya yalnız Aldric götürür.",
-        ],
-        (N_COMMANDER, "self") => vec![
-            "Salgından önce sınır karakolundaydım. Emir gelmedi, ben de emir vermeye başladım.",
-            "Şehre giren her hayatta kalanı kayda geçiririm. Sen de artık kayıtlısın asker.",
-        ],
-        (N_COMMANDER, "tip") => vec![
-            "Üs almak için önce askerleri temizle, sonra bayrak halkasında on saniye dur. Klanın yoksa üs tutamazsın.",
-            "Keskin nişancının lazeri üstündeyse yer değiştir ya da takla at.",
-            "Tuttuğun üssü boş bırakma: devlet geri almak için helikopterle asker indirir, bazen de bombalar.",
-        ],
-        (N_COMMANDER, "rumor") => pick(&[
-            &["Cephe Hattı'nda klanların gece boyu çatıştığı söyleniyor.", "Sabah olunca bayrakların yarısı el değiştirmiş oluyor."],
-            &["Karargâhtaki telsizci, güneyde kimsenin tutamadığı bir üs olduğunu söyledi.", "Her alan kişi bir hafta içinde kaybediyormuş."],
         ]),
         _ => vec!["Bunu bilmiyorum, kusura bakma."],
     }

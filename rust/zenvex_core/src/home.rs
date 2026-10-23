@@ -1,12 +1,11 @@
 //! Kişisel üs (büyücünün ışınladığı, duvarla kapalı güvenli bölge) ve büyücü ışınlanması.
 //! Her oyuncu üssünü yalnız kendisi görür: başka oyuncular üs alanında çizilmez, sandıklar kayıttan gelir.
 use crate::game::*;
-use crate::progress::{CITY_LEVEL, FOG_N};
-use crate::world::{self, LANDMARKS, TILE};
+use crate::areas;
+use crate::world::{self, TILE};
 
-/// Işınlanma bekleme süresi (sn) ve karakol ücreti (kişisel üs ve kamp ücretsiz)
+/// Işınlanma bekleme süresi (sn); ücret bölgeye göre (areas.rs)
 pub const WIZ_CD: f32 = 8.0;
-pub const WIZ_COST: u32 = 15;
 
 pub struct Dest {
     pub id: &'static str,
@@ -26,41 +25,19 @@ impl Game {
         x >= 0.0 && y >= 0.0 && world::in_home_tile((x / TILE) as usize, (y / TILE) as usize)
     }
 
-    fn explored_at(&self, x: f32, y: f32) -> bool {
-        let cell = world::MAP_PX / FOG_N as f32;
-        self.progress.explored((x / cell) as usize, (y / cell) as usize)
-    }
-
-    /// Büyücünün ışınlayabildiği yerler: kişisel üs, kamp, (seviye yetiyorsa) şehir güvenli bölgesi ve keşfedilen
-    /// güvenli karakollar. Hepsi güvenli bölgedir.
+    /// V12: büyücü bölgeler arası ışınlar (bölgeler ayrı harita). Bulunulan bölge dışındaki, seviyesi yeten her bölge;
+    /// varış bölgenin güvenli giriş karakolu. Kişisel üs ve Başlangıç Ormanı ücretsiz.
     pub fn wizard_dests(&self) -> Vec<Dest> {
-        let mut v = Vec::new();
-        let (px, py) = (self.player.x, self.player.y);
-        let far = |x: f32, y: f32| (x - px).hypot(y - py) > 12.0 * TILE;
-        let (hx, hy) = world::home_spawn();
-        if !self.at_home() {
-            v.push(Dest { id: "home", name: "Kişisel Üssüm", x: hx, y: hy, cost: 0 });
-        }
-        let (cx, cy) = world::camp_spawn();
-        if far(cx, cy) {
-            v.push(Dest { id: "camp", name: "Kamp", x: cx, y: cy, cost: 0 });
-        }
-        let (sx, sy) = world::city_spawn();
-        if self.progress.level >= CITY_LEVEL && self.explored_at(sx, sy) && far(sx, sy) {
-            v.push(Dest { id: "city", name: "Şehir Güvenli Bölgesi", x: sx, y: sy, cost: WIZ_COST });
-        }
-        // V11 Cephe Hattı (tüm üsler orada): yalnız buradan, şehir seviyesine ulaşınca; keşif gerekmez
-        let (fx, fy) = world::front_spawn();
-        if self.progress.level >= CITY_LEVEL && far(fx, fy) {
-            v.push(Dest { id: "front", name: "Cephe Hattı (Üsler)", x: fx, y: fy, cost: WIZ_COST });
-        }
-        for l in LANDMARKS.iter().filter(|l| l.safe && l.id != "front_hq") {
-            let (lx, ly) = (l.tx * TILE, (l.ty + 2.5) * TILE);
-            if self.explored_at(lx, ly) && far(lx, ly) {
-                v.push(Dest { id: l.id, name: l.name, x: lx, y: ly, cost: WIZ_COST });
-            }
-        }
-        v
+        let here = areas::area_at(self.player.x, self.player.y);
+        areas::AREAS
+            .iter()
+            .enumerate()
+            .filter(|&(i, a)| i != here && self.progress.level >= a.level)
+            .map(|(i, a)| {
+                let (x, y) = areas::hub(i);
+                Dest { id: a.id, name: a.name, x, y, cost: a.cost }
+            })
+            .collect()
     }
 
     pub fn wizard_teleport(&mut self, id: &str) -> Result<String, String> {
@@ -76,8 +53,14 @@ impl Game {
         if self.player.combat_t < 5.0 {
             return Err("Çatışmadayken ışınlanamazsın".into());
         }
+        let Some(a) = areas::AREAS.iter().find(|a| a.id == id) else {
+            return Err("Bilinmeyen bölge".into());
+        };
+        if self.progress.level < a.level {
+            return Err(format!("{} için {}. seviye gerekli", a.name, a.level));
+        }
         let Some(d) = self.wizard_dests().into_iter().find(|d| d.id == id) else {
-            return Err("Bu yere ışınlanamazsın (önce keşfetmelisin)".into());
+            return Err("Zaten bu bölgedesin".into());
         };
         if !self.world.zone(d.x, d.y).safe() {
             return Err("Orası güvenli değil".into());
@@ -117,7 +100,7 @@ mod tests {
             }
         }
         let dests = g.wizard_dests();
-        assert!(dests.len() >= 10, "{}", dests.len());
+        assert_eq!(dests.len(), areas::AREAS.len() - 1);
         for d in &dests {
             assert!(g.world.zone(d.x, d.y).safe(), "{} güvenli değil", d.id);
         }
@@ -132,10 +115,16 @@ mod tests {
         assert!(g.at_home());
         assert_eq!(g.world.zone(g.player.x, g.player.y), world::Zone::Home);
         // bekleme süresi
-        assert!(g.wizard_teleport("camp").is_err());
+        assert!(g.wizard_teleport("forest").is_err());
         g.wiz_cd = 0.0;
-        assert!(g.wizard_teleport("camp").is_ok());
+        assert!(g.wizard_teleport("forest").is_ok());
         assert!(!g.at_home());
+        // seviye yetmeyen bölge
+        g.wiz_cd = 0.0;
+        g.progress.level = 12;
+        assert!(g.wizard_teleport("harbor").unwrap_err().contains("40"));
+        assert!(g.wizard_teleport("city").is_ok());
+        assert_eq!(areas::area_at(g.player.x, g.player.y), areas::CITY);
     }
 
     #[test]

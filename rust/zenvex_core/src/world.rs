@@ -364,7 +364,8 @@ impl Zone {
             Zone::BlackSwamp => &[(ZKind::Toxic, 50), (ZKind::Dark, 25), (ZKind::Walker, 20), (ZKind::Mystery, 5)],
             Zone::Military => &[(ZKind::Tank, 30), (ZKind::Dark, 25), (ZKind::Runner, 25), (ZKind::Toxic, 10), (ZKind::Mystery, 5), (ZKind::Dog, 5)],
             Zone::Harbor => &[(ZKind::Dark, 35), (ZKind::Tank, 25), (ZKind::Runner, 20), (ZKind::Toxic, 10), (ZKind::Mystery, 10)],
-            Zone::Front => &[(ZKind::Runner, 30), (ZKind::Tank, 25), (ZKind::Dark, 25), (ZKind::Walker, 15), (ZKind::Mystery, 5)],
+            // V12: üslerde ve çevresinde zombi yok, yalnız üs askerleri (botlar)
+            Zone::Front => &[],
             Zone::Industrial | Zone::BossArena => &[
                 (ZKind::Dark, 30),
                 (ZKind::Toxic, 25),
@@ -423,20 +424,18 @@ pub fn home_spawn() -> (f32, f32) {
 }
 
 /// V8 bölgeleri: doğu yarısı (kuzey Askeri Bölge, güney Yanık Orman), güney şerit (batı Kara Bataklık, doğu Çöl Otoyolu),
-/// güneydoğu çeyrek Donmuş Liman. Bölge sınırları gürültüyle kıvrılır.
+/// güneydoğu çeyrek Donmuş Liman. V12: bölgeler ayrı haritalar (areas.rs), sınırlar düz.
 fn region_zone(tx: usize, ty: usize) -> Zone {
-    let w = (value_noise(0x2E61, tx as f32 / 23.0, ty as f32 / 23.0) - 0.5) * 18.0;
-    let (fx, fy) = (tx as f32 + w, ty as f32 - w);
-    let half = OLD_TILES as f32 / 2.0;
+    let half = OLD_TILES / 2;
     if tx >= OLD_TILES {
         if ty >= OLD_TILES {
             Zone::Harbor
-        } else if fy < half {
+        } else if ty < half {
             Zone::Military
         } else {
             Zone::BurntForest
         }
-    } else if fx < half {
+    } else if tx < half {
         Zone::BlackSwamp
     } else {
         Zone::Desert
@@ -2277,9 +2276,12 @@ impl World {
         let (mut cx, mut cy) = (ox, oy);
         let mut hit = false;
         for _ in 0..n {
+            let (px, py) = (cx, cy);
             cx += sx;
             cy += sy;
             hit |= self.resolve(&mut cx, &mut cy, r, gate_open, scratch);
+            // V12: bölge sınırı görünmez duvar
+            hit |= crate::areas::clamp(px, py, &mut cx, &mut cy);
         }
         *x = cx;
         *y = cy;

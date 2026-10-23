@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,6 +52,27 @@ import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+
+/** V12 bölgesi: ad ve dünya pikseli dikdörtgenleri (x0, y0, x1, y1) */
+class MapArea(val id: String, val name: String, val rects: List<FloatArray>) {
+    fun contains(x: Float, y: Float) = rects.any { x >= it[0] && x < it[2] && y >= it[1] && y < it[3] }
+}
+
+fun mapAreas(w: JSONObject): List<MapArea> {
+    val a = w.optJSONArray("areas") ?: return emptyList()
+    return (0 until a.length()).map { i ->
+        val o = a.getJSONObject(i)
+        val rs = o.optJSONArray("rects") ?: JSONArray()
+        MapArea(o.optString("id"), o.optString("name"), (0 until rs.length()).map { k -> val r = rs.getJSONArray(k); FloatArray(4) { r.getDouble(it).toFloat() } })
+    }
+}
+
+/** Noktanın bölgesi (kişisel üs, içinde durduğu Donmuş Liman'dan önce); bölge yoksa -1 */
+fun areaIndexAt(areas: List<MapArea>, x: Float, y: Float): Int {
+    val home = areas.indexOfFirst { it.id == "home" }
+    if (home >= 0 && areas[home].contains(x, y)) return home
+    return areas.indexOfFirst { it.contains(x, y) }
+}
 
 /** Haritadaki bir işaret (dünya pikseli). kind: 0 oyuncu, 1 seyahat, 2 titan, 3 görev, 4 kamp NPC'si, 5 devlet üssü */
 data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "", val sub: String = "", val color: Int = 0, val icon: String = "")
@@ -161,11 +183,21 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
 
 @Composable
 internal fun WorldMapView(
-    img: ImageBitmap?, fog: ImageBitmap?, w: JSONObject, meX: Float, meY: Float, level: Int, marks: List<MapMark>,
+    img: ImageBitmap?, fog: ImageBitmap?, w: JSONObject, meX: Float, meY: Float, level: Int, allMarks: List<MapMark>,
     close: () -> Unit, initialPick: MapMark? = null, travel: (String) -> Unit,
 ) {
     val mapPx = w.optDouble("map_px", 23040.0).toFloat()
-    val travelList = w.optJSONArray("travel") ?: JSONArray()
+    // V12: harita yalnız bulunulan bölgeyi gösterir (kamera bölgeye sınırlı, dışı karanlık; diğer bölgeler büyücüden)
+    val areas = remember(w) { mapAreas(w) }
+    val here = remember(areas) { areaIndexAt(areas, meX, meY) }
+    val area = areas.getOrNull(here)
+    val bx0 = area?.rects?.minOf { it[0] } ?: 0f; val by0 = area?.rects?.minOf { it[1] } ?: 0f
+    val bx1 = area?.rects?.maxOf { it[2] } ?: mapPx; val by1 = area?.rects?.maxOf { it[3] } ?: mapPx
+    val travelAll = w.optJSONArray("travel") ?: JSONArray()
+    val travelList = remember(travelAll) {
+        JSONArray().also { out -> for (i in 0 until travelAll.length()) { val a = travelAll.getJSONArray(i); if (here < 0 || a.optInt(6, here) == here) out.put(a) } }
+    }
+    val marks = remember(allMarks, areas) { if (area == null) allMarks else allMarks.filter { areaIndexAt(areas, it.x, it.y) == here } }
     var view by remember { mutableStateOf(IntSize.Zero) }
     // kamera: dünya pikseli cinsinden merkez + ekran pikseli/dünya pikseli ölçeği
     var zoom by remember { mutableFloatStateOf(0f) }
@@ -176,16 +208,16 @@ internal fun WorldMapView(
     val t = rememberTime()
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val badges = remember { listOf("map_gov", "map_clan", "map_war", "map_unknown").associateWith { UiArt.image(ctx, it) } }
-    fun minZoom() = if (view.width == 0) 0.02f else min(view.width, view.height) / mapPx
+    fun minZoom() = if (view.width == 0) 0.02f else min(view.width / (bx1 - bx0), view.height / (by1 - by0))
     fun clampCam() {
         val z = zoom
         val hw = view.width / 2f / z; val hh = view.height / 2f / z
-        cx = if (hw * 2 >= mapPx) mapPx / 2 else cx.coerceIn(hw, mapPx - hw)
-        cy = if (hh * 2 >= mapPx) mapPx / 2 else cy.coerceIn(hh, mapPx - hh)
+        cx = if (hw * 2 >= bx1 - bx0) (bx0 + bx1) / 2 else cx.coerceIn(bx0 + hw, bx1 - hw)
+        cy = if (hh * 2 >= by1 - by0) (by0 + by1) / 2 else cy.coerceIn(by0 + hh, by1 - hh)
     }
     Box(Modifier.fillMaxSize().background(Color(0xFF1A2414)).onSizeChanged {
         view = it
-        if (zoom == 0f) zoom = minZoom() * 4f
+        if (zoom == 0f) zoom = (minZoom() * 2.5f).coerceAtMost(0.6f)
         clampCam()
     }) {
         Canvas(
@@ -228,6 +260,16 @@ internal fun WorldMapView(
             }
             // bulutlar: doku katmanı, keşif maskesiyle kesilir (yumuşak kenar: maske büyütülürken süzülür)
             if (fog != null) drawClouds(fog, ox, oy, mapPx * z, t)
+            // bölge dışı: karanlık (başka harita), sınırda büyülü mor çizgi
+            if (area != null) {
+                val hole = androidx.compose.ui.graphics.Path().apply {
+                    for (r in area.rects) addRect(androidx.compose.ui.geometry.Rect(at(r[0], r[1]), at(r[2], r[3])))
+                }
+                clipPath(hole, androidx.compose.ui.graphics.ClipOp.Difference) {
+                    drawRect(Color(0xF00C0A12))
+                }
+                drawPath(hole, Color(0xFFB080FF).copy(alpha = 0.55f + 0.25f * sin(t * 2f)), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
+            }
             // işaretler
             for (m in marks) {
                 val p = at(m.x, m.y)
@@ -266,7 +308,10 @@ internal fun WorldMapView(
         Row(Modifier.align(Alignment.TopStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             PxIcon("close", size = 44.dp) { close() }
             Spacer(Modifier.width(10.dp))
-            PT("Dünya Haritası", 24.sp, Px.Orange, outline = true)
+            Column {
+                PT(area?.name ?: "Dünya Haritası", 24.sp, Px.Orange, outline = true)
+                if (area != null) PT("Diğer Bölgelere Büyücü Aldric Işınlar", 12.sp, Color(0xFFC8A0FF))
+            }
         }
         Row(Modifier.align(Alignment.TopEnd).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PxIcon("pin", size = 44.dp) { cx = meX; cy = meY; clampCam() }

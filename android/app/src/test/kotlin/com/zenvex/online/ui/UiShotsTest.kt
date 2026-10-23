@@ -96,6 +96,22 @@ class UiShotsTest {
         }
     }
 
+    /** V12 büyücü haritası: bölgeye dokununca kart (yaratıklar, ganimet, seviye, ücret); kilitli bölge */
+    @Test
+    fun wizardMap() {
+        val bmp: android.graphics.Bitmap = android.graphics.BitmapFactory.decodeStream(javaClass.getResourceAsStream("/ui/map.png"))
+        val img = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
+        val items = itemNames(sample("world"))
+        paparazzi.snapshot { WizardMapView(sample("areas"), items, img, {}, initial = 2) {} }
+    }
+
+    @Test
+    fun wizardMapLocked() {
+        val bmp: android.graphics.Bitmap = android.graphics.BitmapFactory.decodeStream(javaClass.getResourceAsStream("/ui/map.png"))
+        val img = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
+        paparazzi.snapshot { WizardMapView(sample("areas"), itemNames(sample("world")), img, {}, initial = 6) {} }
+    }
+
     /** V8: keşfedilen devlet üsleri (devlet / başka klan / kendi klanın) */
     @Test
     fun worldMapBases() {

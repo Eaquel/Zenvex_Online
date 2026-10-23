@@ -364,12 +364,14 @@ impl Game {
 
     /// Görev hedefinin dünyadaki yeri (harita/mini harita işareti): teslimde veren NPC, yer görevinde o yer.
     fn quest_target(&self, q: &Quest, ready: bool) -> Option<(f32, f32)> {
+        // aynı bölgedeki NPC öncelikli (bölgeler ayrı harita)
         let npc = |k: u8| {
             let (px, py) = (self.player.x, self.player.y);
+            let here = crate::areas::area_at(px, py);
             self.npcs
                 .iter()
                 .filter(|n| n.kind == k)
-                .min_by(|a, b| (a.x - px).hypot(a.y - py).total_cmp(&(b.x - px).hypot(b.y - py)))
+                .min_by_key(|n| (crate::areas::area_at(n.x, n.y) != here, (n.x - px).hypot(n.y - py) as u32))
                 .map(|n| (n.x, n.y))
         };
         if ready {
@@ -405,7 +407,21 @@ impl Game {
             });
             // kabul edilmemiş görev: veren NPC işaretlenir (seviye yetiyorsa)
             let target = if on { self.quest_target(q, ready) } else if self.progress.level >= q.min_level { self.quest_target(q, true) } else { None };
-            if let Some((x, y)) = target {
+            if let Some((mut x, mut y)) = target {
+                // hedef başka bölgede: bu bölgedeki en yakın büyücü gösterilir ("via": gidilecek bölge)
+                let (px, py) = (self.player.x, self.player.y);
+                let (here, there) = (crate::areas::area_at(px, py), crate::areas::area_at(x, y));
+                if here != there {
+                    v["via"] = json!(crate::areas::AREAS[there].name);
+                    if let Some(w) = self
+                        .npcs
+                        .iter()
+                        .filter(|n| n.kind == N_WIZARD && crate::areas::area_at(n.x, n.y) == here)
+                        .min_by_key(|n| (n.x - px).hypot(n.y - py) as u32)
+                    {
+                        (x, y) = (w.x, w.y);
+                    }
+                }
                 v["x"] = json!(x);
                 v["y"] = json!(y);
             }
@@ -519,14 +535,8 @@ impl Game {
                 _ => "Başka bir şey var mı?",
             }
             .into()),
-            "tp" => {
-                lines.push(if self.at_home() {
-                    "Nereye gidelim? Yalnız güvenli yerlere açarım kapıyı; bilmediğin yere götüremem.".into()
-                } else {
-                    "Kapıyı nereye açayım? Kişisel üssün ve kamp bedava; karakollar 15 altın. Yalnız gördüğün güvenli yerlere götürürüm.".into()
-                });
-                menu = Menu::Teleport;
-            }
+            // V12: bölgeler ayrı harita; büyücünün haritası açılır (bölgeye dokun → bilgi → ışınlan)
+            "tp" => open = "wizard_map",
             t if t.starts_with("tp:") => match self.wizard_teleport(&t[3..]) {
                 Ok(m) => {
                     lines.push(format!("Gözlerini kapa… {m}."));
@@ -712,7 +722,7 @@ fn greeting(kind: u8) -> &'static str {
         N_MECHANIC => "Motor sesi duydum sandım… Aracın mı bozuldu? Viktor'un elinden kurtulan araç yoktur.",
         N_TRAINER => "Köpekler insanı kokusundan tanır. Seninki iyi bir koku, sana güvenirler.",
         N_GUIDE => "Bir şey sormak istersen buradayım. Kampın etrafında dikkatli ol.",
-        N_WIZARD => "Rüzgâr senin geleceğini fısıldadı yolcu. Kapılarım açık: kendi üssüne ya da gördüğün güvenli bir yere.",
+        N_WIZARD => "Rüzgâr senin geleceğini fısıldadı yolcu. Haritam açık: bölgeden bölgeye yalnız benim kapılarımla geçilir.",
         _ => "Kuleden her şeyi görüyorum. Zombileri mızrağımla indiririm, sen içeride güvendesin.",
     }
 }
@@ -762,10 +772,21 @@ mod tests {
         let mut g = Game::new(5, Progress::default(), 1);
         g.progress.level = 3;
         g.progress.story.main = 2; // gizemli ağaç
+        // başka bölgedeki görevciden alınırsa hedef başka bölgede: bu bölgenin büyücüsü gösterilir
         npc_at(&mut g, N_QUEST);
+        assert_ne!(crate::areas::area_at(g.player.x, g.player.y), crate::areas::FOREST);
         g.talk(N_QUEST, "accept");
         let j = g.story_json();
         let (tx, ty) = world::landmark("tree").pos();
+        assert_eq!(j[1]["via"], "Başlangıç Ormanı");
+        let (wx, wy) = (j[1]["x"].as_f64().unwrap() as f32, j[1]["y"].as_f64().unwrap() as f32);
+        assert!(g.npcs.iter().any(|n| n.kind == N_WIZARD && n.x == wx && n.y == wy));
+        // ormandayken ağacın kendisi
+        let (cx, cy) = world::camp_spawn();
+        g.player.x = cx;
+        g.player.y = cy;
+        let j = g.story_json();
+        assert!(j[1].get("via").is_none());
         assert_eq!(j[1]["x"].as_f64().unwrap() as f32, tx);
         g.player.x = tx;
         g.player.y = ty + 50.0;

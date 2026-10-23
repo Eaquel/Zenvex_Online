@@ -126,6 +126,10 @@ impl Game {
             {
                 continue;
             }
+            // V12: yalnız merkezdeki oyuncunun bölgesinde (sınırın ötesi başka harita)
+            if crate::areas::area_at(x, y) != crate::areas::area_at(px, py) {
+                continue;
+            }
             let zone = self.world.zone(x, y);
             let table = zone.spawns();
             if table.is_empty() || self.world.blocked(x, y, 16.0, &mut self.scratch) {
@@ -632,6 +636,7 @@ impl Game {
                     self.progress.level >= crate::progress::CITY_LEVEL,
                     &mut self.scratch,
                 );
+                crate::areas::clamp(self.player.x, self.player.y, &mut nx, &mut ny);
                 self.player.x = nx;
                 self.player.y = ny;
             }
@@ -670,6 +675,7 @@ impl Game {
             self.world
                 .resolve(&mut x, &mut y, r, false, &mut self.scratch);
         }
+        crate::areas::clamp(z.x, z.y, &mut x, &mut y);
         // güvenli bölgeye giremez
         if self.zombie_blocked_by_safe(x, y) && !z.boss {
             return;

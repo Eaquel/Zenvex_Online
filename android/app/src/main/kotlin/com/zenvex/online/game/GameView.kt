@@ -49,12 +49,6 @@ interface GameUi {
     fun onChatLine(text: String) {}
 }
 
-/**
- * Oyun ekranı: Rust'ın y-sıralı çizim listesini yüksek çözünürlüklü atlaslardan çizer.
- * Zemin Rust'ta piksel piksel harmanlanır ve parçalar halinde önbelleğe alınır.
- * Joystickler ve hızlı tuşlar (yetenek, silah, araç, etkileşim) çoklu dokunuş için tuvalde çizilir.
- */
-@SuppressLint("ViewConstructor")
 private const val CLAN_COLOR = 0xFFF6E05A.toInt()
 /** rust pet.rs D_PET */
 private const val D_PET = 8
@@ -63,6 +57,15 @@ private const val D_SOLDIER = 10
 private const val D_HELI = 11
 private const val D_FLAG = 12
 
+/** bölge sınırı sisinin katmanları (sınırdan dışarı karo cinsinden) */
+private val AREA_FADE = floatArrayOf(0f, 0.7f, 1.4f, 2.2f, 3.2f, 4.5f, 6f)
+
+/**
+ * Oyun ekranı: Rust'ın y-sıralı çizim listesini yüksek çözünürlüklü atlaslardan çizer.
+ * Zemin Rust'ta piksel piksel harmanlanır ve parçalar halinde önbelleğe alınır.
+ * Joystickler ve hızlı tuşlar (yetenek, silah, araç, etkileşim) çoklu dokunuş için tuvalde çizilir.
+ */
+@SuppressLint("ViewConstructor")
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
@@ -83,6 +86,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val zones: Array<String>
     private val mapPx: Float
     private val tile: Float
+    /** V12 bölgeler (ayrı haritalar): bulunulan bölgenin dışı karanlık */
+    private val areas: List<com.zenvex.online.ui.MapArea>
 
     init {
         holder.addCallback(this)
@@ -106,6 +111,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         zones = Array(zs.length()) { zs.getJSONArray(it).getString(0) }
         mapPx = w.getDouble("map_px").toFloat()
         tile = w.optDouble("tile", 64.0).toFloat()
+        areas = com.zenvex.online.ui.mapAreas(w)
         atlas.preload("world"); atlas.preload("items"); atlas.preload("npcs")
     }
 
@@ -413,8 +419,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val st = GameSession.ui("quests").optJSONArray("story")
             for (i in 0 until (st?.length() ?: 0)) {
                 val q = st!!.getJSONObject(i)
+                // hedef başka bölgedeyse ok bu bölgenin büyücüsünü gösterir
+                val via = q.optString("via")
                 if (q.has("x")) questTargets += QuestTarget(q.getDouble("x").toFloat(), q.getDouble("y").toFloat(),
-                    if (q.optBoolean("ready") || !q.optBoolean("on")) q.optString("giver") else q.optString("title"), q.optBoolean("guide"))
+                    if (via.isNotEmpty()) "Büyücü → $via" else if (q.optBoolean("ready") || !q.optBoolean("on")) q.optString("giver") else q.optString("title"), q.optBoolean("guide"))
                 if (q.optBoolean("guide") && q.optBoolean("on") && !q.optBoolean("ready")) {
                     guideStep = q.optString("id"); guideN = q.optInt("n"); guideGoal = q.optInt("goal")
                 }
@@ -753,6 +761,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawLighting(c)
         drawPlates(c)
         drawFloaters(c)
+        drawAreaEdge(c, px, py)
         c.restore()
         drawHud(c)
         drawBaseHud(c)
@@ -779,6 +788,29 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 x -= text.measureText(t)
                 drawText(c, t, x, y, 11 * d, 0xFF9AFF9A.toInt())
             }
+        }
+    }
+
+    /**
+     * Bölge sınırının ötesi başka harita: sınırdan dışarı doğru koyulaşan sis (katmanlı, her katman bölgeyi biraz daha
+     * genişleterek dışarıda kalanı karartır). Ekran tamamen bölge içindeyse hiçbir şey çizilmez.
+     */
+    private fun drawAreaEdge(c: Canvas, px: Float, py: Float) {
+        val i = com.zenvex.online.ui.areaIndexAt(areas, px, py)
+        val a = areas.getOrNull(i) ?: return
+        val vx0 = camX - viewW / 2 - tile * 5; val vy0 = camY - viewH / 2 - tile * 5
+        val vx1 = camX + viewW / 2 + tile * 5; val vy1 = camY + viewH / 2 + tile * 5
+        if (a.rects.any { vx0 >= it[0] && vy0 >= it[1] && vx1 <= it[2] && vy1 <= it[3] }) return
+        fill.style = Paint.Style.FILL
+        fill.color = 0x5A0C0A12
+        for (e in AREA_FADE) {
+            c.save()
+            for (r in a.rects) {
+                rect.set(wx(r[0] - e * tile), wy(r[1] - e * tile), wx(r[2] + e * tile), wy(r[3] + e * tile))
+                c.clipOutRect(rect)
+            }
+            c.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), fill)
+            c.restore()
         }
     }
 
@@ -2470,6 +2502,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             mapSrc.set((px * k - sr).toInt(), (py * k - sr).toInt(), (px * k + sr).toInt(), (py * k + sr).toInt())
             mapDst.set(cx - r, cy - r, cx + r, cy + r)
             c.drawBitmap(bmp, mapSrc, mapDst, pixelPaint)
+        }
+        // bölge dışı (başka harita) karanlık
+        areas.getOrNull(com.zenvex.online.ui.areaIndexAt(areas, px, py))?.let { a ->
+            c.save()
+            for (q in a.rects) {
+                rect.set(cx + (q[0] - px) / range * r, cy + (q[1] - py) / range * r, cx + (q[2] - px) / range * r, cy + (q[3] - py) / range * r)
+                c.clipOutRect(rect)
+            }
+            fill.color = 0xE60C0A12.toInt(); c.drawCircle(cx, cy, r, fill)
+            c.restore()
         }
         // kenar karartması
         fill.shader = RadialGradient(cx, cy, r, intArrayOf(0, 0, 0x90000000.toInt()), floatArrayOf(0f, 0.7f, 1f), Shader.TileMode.CLAMP)

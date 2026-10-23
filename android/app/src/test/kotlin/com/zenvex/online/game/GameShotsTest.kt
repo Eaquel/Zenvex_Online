@@ -95,5 +95,8 @@ class GameShotsTest {
 
     @Test fun g09_harbor() = shot("harbor", { cheat("level 45"); cheat("tp harbor"); cheat("spawn dark 3 3") }, steps = 90)
 
+    /** V12: bölge sınırı (Başlangıç Ormanı'nın doğusu): ötesi karanlık, yürünmez */
+    @Test fun g12_border() = shot("border", { cheat("level 12"); cheat("tp 354 300") }, steps = 90, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

@@ -840,6 +840,7 @@ impl Game {
                 let (mut nx, mut ny) = (px + dx / l * 110.0, py + dy / l * 110.0);
                 let gate = self.progress.level >= crate::progress::CITY_LEVEL;
                 self.world.resolve(&mut nx, &mut ny, 14.0, gate, &mut self.scratch);
+                crate::areas::clamp(px, py, &mut nx, &mut ny);
                 self.player.x = nx;
                 self.player.y = ny;
                 self.player.hurt_t = 1.1;

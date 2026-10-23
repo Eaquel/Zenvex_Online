@@ -218,3 +218,18 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
 - **Çizilmiş çerçeveler:** `assets/ui/frame_<id>.png` varsa çerçeve gövdesi o görselden, hareketli efektler ve rozet yazısı kodla
   üstüne çizilir; yoksa kodla çizilen çerçeve. Görsel kutunun 1.25 katı (taşan süs payı), iç pencere resim alanına hizalı.
   Prompt'lar `16_CERCEVE_PROMPTLARI.md`, içe aktarma `tools/pixel/frame_import.py` (piksel sanat ya da `hd`).
+
+## V12 — Ayrı bölgeler ve Aldric'in Haritası (Ekim 2026)
+
+- **Bölgeler ayrı harita** (`rust/zenvex_core/src/areas.rs`): Başlangıç Ormanı, Yıkık Şehir, Yanık Orman, Çöl Otoyolu,
+  Kara Bataklık, Askeri Bölge, Donmuş Liman, Cephe Hattı, Kişisel Üssüm. Sınırlar düz dikdörtgen (V8 bölge sınırlarındaki
+  gürültü kaldırıldı). Sınır görünmez duvar (`areas::clamp`: oyuncu, takla, savrulma, araç, köpek, zombi); ötesi oyun
+  ekranında katmanlı sisle kararır; harita ve mini harita yalnız bulunulan bölgeyi gösterir; harita seyahati bölge içinde.
+- **Büyücü:** her bölgenin giriş karakolunda Aldric. "Işınlan" → Aldric'in Haritası (`WizardMap.kt`): bölgeye dokun →
+  önerilen/gereken seviye, yaratıklar (seviye aralığıyla), çıkan eşyalar, ücret, Işınlan (`wizard_tp`, yalnız büyücünün
+  yanında). Ücret 15 altın; orman ve kişisel üs ücretsiz.
+- **Ölünce** öldüğün bölgenin giriş karakolunda doğulur (kişisel üs seçiliyse orada).
+- **Görev oku:** hedef başka bölgedeyse `story_json` "via" ile bu bölgenin büyücüsünü gösterir.
+- **Cephe Hattı'nda zombi doğmaz** (üslerin çevresi yalnız üs askerleri).
+- Komutan Ece'nin sohbet konuları genel kalıbın arkasında kalıp hiç çıkmıyordu; düzeltildi.
+- Görseller: `17_BOLGE_HARITASI_PROMPTLARI.md` (`wizard_map.png`, `region_<id>.png`).

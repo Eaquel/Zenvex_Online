@@ -58,7 +58,7 @@ private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay
 
 internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap,
 }
 
 /**
@@ -222,7 +222,10 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Skills -> TreeScreen(close)
             Overlay.Dog -> DogDialog(close)
             Overlay.Npc -> NpcDialogScreen(npcKind, close) { o ->
-                overlay = when (o) { "merchant" -> Overlay.Merchant; "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; "garage" -> Overlay.Garage; else -> Overlay.None }
+                overlay = when (o) {
+                    "merchant" -> Overlay.Merchant; "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; "garage" -> Overlay.Garage
+                    "wizard_map" -> Overlay.WizardMap; else -> Overlay.None
+                }
             }
             // imePadding: klavye açılınca sohbet paneli klavyenin üstüne kayar
             // sohbet: oyun arkada görünür ve oynanır (karartma yok); panel yarı saydam, ekranın yüksekliği boyunca
@@ -230,6 +233,7 @@ fun GameScreen(toLobby: () -> Unit) {
                 ChatPanel(Modifier.width(520.dp).fillMaxHeight().align(Alignment.CenterStart), close)
             }
             Overlay.Map -> WorldMapScreen(close)
+            Overlay.WizardMap -> WizardMapScreen(close)
             Overlay.Trade -> TradeScreen(close)
             Overlay.Mail -> MailScreen(close)
             Overlay.Clan -> ClanScreen({ overlay = Overlay.None; view.localClan = Account.clan.value?.name ?: ""; Online.setIdentity(view.localName, "") }, inGame = true)

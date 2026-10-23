@@ -135,6 +135,7 @@ impl Game {
             let l = mx.hypot(my).max(1e-3);
             let (mut nx, mut ny) = (d.x + mx / l * speed * dt, d.y + my / l * speed * dt);
             self.world.resolve(&mut nx, &mut ny, 12.0, true, &mut self.scratch);
+            crate::areas::clamp(d.x, d.y, &mut nx, &mut ny);
             d.x = nx;
             d.y = ny;
             d.dir = dir_from_vec(mx, my);

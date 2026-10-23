@@ -586,6 +586,16 @@ impl Game {
             let (fx, fy) = world::front_spawn();
             npcs.push(Npc { kind: 7, x: fx + m(6.0), y: fy - m(0.5), dir: 0, cd: 0.0, anim_t: 0.9, hit_t: 0.0, hit_id: 0 });
         }
+        // V12: her bölgenin giriş karakolunda bir büyücü (bölgeler arası tek yol)
+        for (i, a) in crate::areas::AREAS.iter().enumerate() {
+            if matches!(a.id, "forest" | "front" | "home") {
+                continue;
+            }
+            let (hx, hy) = crate::areas::hub(i);
+            let (mut x, mut y) = if a.id == "city" { (hx - m(5.0), hy - m(3.0)) } else { (hx + m(3.5), hy - m(1.5)) };
+            world.resolve(&mut x, &mut y, m(0.4), true, &mut scratch);
+            npcs.push(Npc { kind: 7, x, y, dir: 0, cd: 0.0, anim_t: 0.3 + i as f32 * 0.4, hit_t: 0.0, hit_id: 0 });
+        }
         Game {
             world,
             progress,
@@ -640,9 +650,14 @@ impl Game {
         self.events.push(Event::Msg { text: t.into() });
     }
 
+    /// Ölünce doğma: kişisel üs seçildiyse orada, yoksa öldüğü bölgenin giriş karakolunda (V12; bölgeler ayrı harita).
+    /// `city`: eski kayıtlar için şehirde doğma isteği (şehir bölgesinde zaten öyle).
     pub fn respawn(&mut self, city: bool) {
+        let area = crate::areas::area_at(self.player.x, self.player.y);
         let (x, y) = if self.progress.home_spawn {
             world::home_spawn()
+        } else if area != crate::areas::HOME && self.progress.level >= crate::areas::AREAS[area].level {
+            crate::areas::hub(area)
         } else if city && self.progress.level >= CITY_LEVEL {
             world::city_spawn()
         } else {
@@ -962,16 +977,15 @@ impl Game {
                 self.player.y + ny * speed * dt,
             );
             let (ox, oy) = (self.player.x, self.player.y);
+            // V12: başka bölgeye yürünmez; sınıra dayanınca büyücü hatırlatılır
+            let beyond = crate::areas::area_at(x, y);
+            let here = crate::areas::area_at(ox, oy);
             self.world
                 .resolve_move(ox, oy, &mut x, &mut y, 14.0, gate_open, &mut self.scratch);
-            if !gate_open
-                && y < (world::WALL_Y as f32 + 2.2) * world::TILE
-                && self.player.y >= (world::WALL_Y as f32 + 2.2) * world::TILE
-                && (x / world::TILE - 180.0).abs() < 5.0
-                && self.player.locked_t <= 0.0
-            {
-                self.player.locked_t = 3.0;
-                self.events.push(Event::CityLocked);
+            if beyond != here && self.player.locked_t <= 0.0 {
+                self.player.locked_t = 4.0;
+                let name = crate::areas::AREAS[beyond].name;
+                self.msg(format!("Bölge sınırı: {name} başka bir harita. Bölgeler arası Büyücü Aldric ışınlar."));
             }
             self.player.x = x;
             self.player.y = y;
@@ -1284,6 +1298,7 @@ impl Game {
         let speed = m(3.0) / ROLL_TIME; // 3 metre
         let (mut x, mut y) = (self.player.x + self.player.roll_dx * speed * dt, self.player.y + self.player.roll_dy * speed * dt);
         self.world.resolve(&mut x, &mut y, 14.0, gate_open, &mut self.scratch);
+        crate::areas::clamp(self.player.x, self.player.y, &mut x, &mut y);
         let p = &mut self.player;
         p.x = x;
         p.y = y;

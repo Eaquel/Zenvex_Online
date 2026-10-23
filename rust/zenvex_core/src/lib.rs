@@ -18,6 +18,7 @@ pub mod world;
 mod combat;
 mod draw;
 mod home;
+pub mod areas;
 mod training;
 pub mod net;
 mod vehicles;
@@ -54,7 +55,7 @@ pub fn world_json(g: &Game) -> String {
         .iter()
         .map(|t| {
             let (x, y) = t.pos();
-            json!([t.id, t.name, x, y, t.level, t.cost])
+            json!([t.id, t.name, x, y, t.level, t.cost, areas::area_at(x, y)])
         })
         .collect();
     let chars: Vec<_> = data::CHARACTERS
@@ -85,6 +86,9 @@ pub fn world_json(g: &Game) -> String {
         "zones": zones,
         "chars": chars,
         "city_level": progress::CITY_LEVEL,
+        // V12 bölgeler: ad ve dünya pikseli dikdörtgenleri (oyun ekranı bölge dışını karartır, harita bölgeye sınırlanır)
+        "areas": areas::AREAS.iter().map(|a| json!({ "id": a.id, "name": a.name,
+            "rects": a.rects.iter().map(|&(x0, y0, x1, y1)| json!([x0 * world::TILE, y0 * world::TILE, x1 * world::TILE, y1 * world::TILE])).collect::<Vec<_>>() })).collect::<Vec<_>>(),
     })
     .to_string()
 }

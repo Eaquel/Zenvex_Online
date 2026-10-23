@@ -426,6 +426,7 @@ impl Game {
                 json!({ "skins": list, "gems": g.gems, "price": data::CRATE_PRICE, "price10": data::CRATE_PRICE10 })
             }
             k if k == "chests" || k.starts_with("chest:") => self.chests_json(k).unwrap_or(Value::Null),
+            "areas" => self.areas_json(),
             _ => json!({ "error": "bilinmeyen görünüm" }),
         };
         v.to_string()
@@ -441,6 +442,11 @@ impl Game {
         }
         if self.progress.level < t.level {
             return Err(format!("{} için seviye {} gerekli", t.name, t.level));
+        }
+        // V12: harita seyahati yalnız bölge içinde; bölgeler arası büyücü
+        let (tx, ty) = t.pos();
+        if crate::areas::area_at(tx, ty) != crate::areas::area_at(self.player.x, self.player.y) {
+            return Err(format!("{} başka bölgede: Büyücü Aldric ışınlar", t.name));
         }
         if self.player.combat_t < 5.0 {
             return Err("Çatışmadayken seyahat edemezsin".into());
@@ -737,6 +743,14 @@ impl Game {
                 Ok(String::new())
             }
             "travel" => self.travel(v["to"].as_str().unwrap_or("")),
+            // V12 büyücü haritası: yalnız büyücünün yanında
+            "wizard_tp" => {
+                if self.near_wizard() {
+                    self.wizard_teleport(v["to"].as_str().unwrap_or(""))
+                } else {
+                    Err("Bölgeler arası Büyücü Aldric ışınlar; önce bir büyücüye git".into())
+                }
+            }
             // V8 devlet üsleri: sunucu durumu (Kotlin her 30 sn ve harita açılınca) / ele geçirme reddi
             "bases" => {
                 let data: Value = match &v["data"] {
@@ -1650,7 +1664,7 @@ mod v4_tests {
         h.talk(crate::story::N_GUIDE, "accept");
         h.story_event(crate::story::Ev::Kill { kind: crate::data::ZKind::Walker, x: 0.0, y: 0.0 });
         std::fs::write(format!("{dir}/quests.json"), h.ui_json("quests")).unwrap();
-        for v in ["tree", "dog", "bag", "inventory", "fog"] {
+        for v in ["tree", "dog", "bag", "inventory", "fog", "areas"] {
             std::fs::write(format!("{dir}/{v}.json"), g.ui_json(v)).unwrap();
         }
     }
