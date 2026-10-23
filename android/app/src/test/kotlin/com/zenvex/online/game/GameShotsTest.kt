@@ -45,7 +45,8 @@ class GameShotsTest {
 
     private fun cmd(o: JSONObject) = synchronized(GameSession.lock) { Native.command(GameSession.handle, o.toString()) }
 
-    private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null, hud: Boolean = true) {
+    private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null, hud: Boolean = true,
+                     overlay: (@androidx.compose.runtime.Composable () -> Unit)? = null) {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
@@ -66,6 +67,7 @@ class GameShotsTest {
             Box(Modifier.fillMaxSize()) {
                 Image(img, null, Modifier.fillMaxSize(), contentScale = ContentScale.FillBounds)
                 if (hud) Hud {}
+                overlay?.invoke()
             }
         }
     }
@@ -97,6 +99,22 @@ class GameShotsTest {
 
     /** V12: bölge sınırı (Başlangıç Ormanı'nın doğusu): ötesi karanlık, yürünmez */
     @Test fun g12_border() = shot("border", { cheat("level 12"); cheat("tp 354 300") }, steps = 90, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
+
+    /** V12.1: tezgâh eşyası kampın dışına kurulur (kalan süre), tezgâh ekranında yalnız tezgâh tarifleri */
+    private fun placeBench() {
+        cheat("level 12"); cheat("tp 150 320"); cheat("item workbench 1"); cheat("item swamp_moss 3"); cheat("item dried_hide 3"); cheat("item bandage 4")
+        val slots = GameSession.ui("inventory").optJSONArray("slots") ?: return
+        val k = (0 until slots.length()).firstOrNull { slots.optJSONObject(it)?.optString("id") == "workbench" } ?: return
+        cmd(JSONObject().put("cmd", "use").put("slot", k))
+    }
+
+    @Test fun g13_bench() = shot("bench", { placeBench() }, steps = 40)
+
+    @Test fun g14_benchCraft() = shot("bench_craft", { placeBench() }, steps = 20, hud = false,
+        overlay = { com.zenvex.online.ui.CraftScreen({}, bench = true) })
+
+    @Test fun g15_handCraft() = shot("hand_craft", { cheat("item cloth 6"); cheat("item resin 4") }, steps = 20, hud = false,
+        overlay = { com.zenvex.online.ui.CraftScreen({}) })
 
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

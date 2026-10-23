@@ -22,8 +22,12 @@ pub struct Area {
 
 pub const FOREST: usize = 0;
 pub const CITY: usize = 1;
-pub const FRONT: usize = 7;
-pub const HOME: usize = 8;
+pub const FRONT: usize = 6;
+pub const HOME: usize = 7;
+/// Titan'ın uyanabildiği bölgeler (başlangıç ormanı, cephe ve kişisel üs hariç)
+pub const TITAN_AREAS: &[usize] = &[1, 2, 3, 4, 5];
+/// Titan dilimi (sn)
+pub const TITAN_SLOT: f64 = 900.0;
 
 const W: f32 = world::WORLD_TILES as f32;
 const O: f32 = world::OLD_TILES as f32;
@@ -37,8 +41,8 @@ pub const AREAS: &[Area] = &[
         desc: "Kamp, sahra hastanesi ve köpek barınağı burada. Kampın çevresi sakin; doğuya ve bataklığa gittikçe zombiler sertleşir." },
     Area { id: "city", name: "Yıkık Şehir", rects: &[(0.0, 0.0, O, WALL)], level: 10, rec: (10, 50), cost: 15,
         zones: &[Zone::SafeCity, Zone::Suburb, Zone::Downtown, Zone::Industrial, Zone::BossArena],
-        desc: "Güvenli bölgeden banliyöye, merkeze ve sanayiye. Kuzeydoğudaki arenada Titan uyur." },
-    Area { id: "burnt", name: "Yanık Orman", rects: &[(O, W / 4.0, W, O)], level: 15, rec: (15, 25), cost: 15,
+        desc: "Güvenli bölgeden banliyöye, merkeze ve sanayiye. Elektronik, dişli, pil ve paslı anahtar burada." },
+    Area { id: "burnt", name: "Yanık Orman", rects: &[(O, 0.0, W, O)], level: 15, rec: (15, 25), cost: 15,
         zones: &[Zone::BurntForest],
         desc: "Yangından geriye kül ve kömürleşmiş ağaçlar kaldı. Koşucular ve karanlık zombiler dumanın içinde avlanır." },
     Area { id: "desert", name: "Çöl Otoyolu", rects: &[(O / 2.0, O, O, W)], level: 20, rec: (20, 30), cost: 15,
@@ -47,9 +51,6 @@ pub const AREAS: &[Area] = &[
     Area { id: "bswamp", name: "Kara Bataklık", rects: &[(0.0, O, O / 2.0, W)], level: 25, rec: (25, 35), cost: 15,
         zones: &[Zone::BlackSwamp],
         desc: "Zehirli sis ve kara su. Toksik zombilerin yuvası; gizemli maskeliler de görülmüş." },
-    Area { id: "military", name: "Askeri Bölge", rects: &[(O, 0.0, W, W / 4.0)], level: 35, rec: (35, 50), cost: 15,
-        zones: &[Zone::Military],
-        desc: "Terk edilmiş kışla, radar ve cephanelikler. Askerî sandıklar zengin, zombiler çok güçlü." },
     Area { id: "harbor", name: "Donmuş Liman", rects: &[(O, O, W, W)], level: 40, rec: (40, 50), cost: 15,
         zones: &[Zone::Harbor],
         desc: "Buzla kaplı rıhtım ve konteynerler. Dünyanın en tehlikeli zombileri burada." },
@@ -103,7 +104,6 @@ pub fn hub(i: usize) -> (f32, f32) {
         "burnt" => post("burnt_post"),
         "desert" => post("desert_post"),
         "bswamp" => post("bswamp_post"),
-        "military" => post("military_post"),
         "harbor" => post("harbor_post"),
         "front" => world::front_spawn(),
         "home" => world::home_spawn(),
@@ -111,7 +111,7 @@ pub fn hub(i: usize) -> (f32, f32) {
     }
 }
 
-/// Bölgedeki yaratıklar: (tür, en düşük seviye, en yüksek seviye), ağırlığa göre sıralı
+/// Bölgedeki yaratıklar: (tür, en düşük seviye, en yüksek seviye), ağırlığa göre sıralı (Titan ayrıca: titan_area)
 pub fn creatures(i: usize) -> Vec<(ZKind, u32, u32)> {
     let mut out: Vec<(ZKind, u32, u32, u32)> = Vec::new();
     for z in AREAS[i].zones {
@@ -126,15 +126,12 @@ pub fn creatures(i: usize) -> Vec<(ZKind, u32, u32)> {
                 None => out.push((k, lo, hi, w)),
             }
         }
-        if *z == Zone::BossArena {
-            out.push((ZKind::Titan, 50, 50, 0));
-        }
     }
     out.sort_by(|a, b| b.3.cmp(&a.3));
     out.into_iter().map(|(k, lo, hi, _)| (k, lo, hi)).collect()
 }
 
-/// Bölgede zombilerden ve sandıklardan çıkan başlıca eşyalar (combat.rs ganimet tablolarıyla aynı)
+/// Bölgede çıkan eşyalar: önce bölgeye özel malzemeler (data::region_items), sonra temel malzemeler ve nadir hazır eşyalar
 pub fn drops(i: usize) -> Vec<&'static str> {
     let mut out: Vec<&'static str> = Vec::new();
     let mut add = |v: &[&'static str]| {
@@ -144,30 +141,20 @@ pub fn drops(i: usize) -> Vec<&'static str> {
             }
         }
     };
-    // bölgeye özel (seçkinlerde daha sık)
     for z in AREAS[i].zones {
-        add(match z {
-            Zone::Harbor => &["frozen_fish", "ice_shard"],
-            Zone::BurntForest => &["scorched_resin", "charcoal"],
-            Zone::Desert => &["scorpion_venom", "dried_hide"],
-            Zone::BlackSwamp => &["swamp_moss", "bog_iron"],
-            Zone::Military => &["circuit_board", "powder_pouch"],
-            Zone::Downtown | Zone::Suburb | Zone::Industrial => &["gold_watch", "rusty_key"],
-            _ => &[],
-        });
+        let ids: Vec<&'static str> = crate::data::region_items(*z).iter().map(|e| e.0).collect();
+        add(&ids);
     }
     let kinds = creatures(i);
     if !kinds.is_empty() {
-        add(&["tooth", "bone", "cloth"]);
+        add(&["bone", "cloth"]);
     }
     for (k, _, _) in kinds {
         add(match k {
             ZKind::Dog => &["leather"],
-            ZKind::Toxic => &["toxic"],
-            ZKind::Dark => &["dark_crystal", "neck_dark"],
-            ZKind::Tank => &["scrap", "gear"],
-            ZKind::Mystery => &["electronics", "ring_hunter", "neck_amulet"],
-            ZKind::Titan => &["titan_shard", "ring_titan", "w_katana"],
+            ZKind::Tank => &["scrap"],
+            ZKind::Dark => &["neck_dark"],
+            ZKind::Mystery => &["ring_hunter", "neck_amulet"],
             _ => &[],
         });
     }
@@ -191,6 +178,10 @@ impl crate::game::Game {
                         json!({ "name": d.name, "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": lo, "hi": hi, "color": d.color })
                     })
                     .collect();
+                if i == self.titan.1 && !self.titan_dead {
+                    let d = &ZOMBIES[ZKind::Titan as usize];
+                    mobs.insert(0, json!({ "name": format!("{} (Şimdi Burada!)", d.name), "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": 50, "hi": 50, "color": d.color }));
+                }
                 if i == FRONT {
                     mobs.push(json!({ "name": "Üs Askeri (Bot)", "sprite": "npc/soldier", "lo": 28, "hi": 50, "color": 0xFFC8D0A0u32 }));
                     mobs.push(json!({ "name": "Keskin Nişancı (Bot)", "sprite": "npc/soldier", "lo": 28, "hi": 50, "color": 0xFFE0C080u32 }));
@@ -200,11 +191,69 @@ impl crate::game::Game {
                     "rects": a.rects.iter().map(|&(x0, y0, x1, y1)| json!([x0 * TILE, y0 * TILE, x1 * TILE, y1 * TILE])).collect::<Vec<_>>(),
                     "hub": [hx, hy], "level": a.level, "rec": [a.rec.0, a.rec.1], "cost": a.cost,
                     "here": i == here, "open": lv >= a.level, "safe": a.zones.iter().all(|z| z.safe()),
-                    "mobs": mobs, "drops": drops(i),
+                    "mobs": mobs, "drops": drops(i), "titan": i == self.titan.1 && !self.titan_dead,
                 })
             })
             .collect();
-        json!({ "areas": list, "here": here, "gold": self.progress.gold, "cd": self.wiz_cd.max(0.0), "near": self.near_wizard() })
+        let (_, ta, tx, ty) = self.titan;
+        json!({ "areas": list, "here": here, "gold": self.progress.gold, "cd": self.wiz_cd.max(0.0), "near": self.near_wizard(),
+            "titan": { "area": ta, "name": AREAS.get(ta).map(|a| a.name), "x": tx, "y": ty, "left": self.titan_left(), "dead": self.titan_dead } })
+    }
+
+    /// Titan zaman dilimi (15 dk): sunucu saati (üs saati) geldiyse onunla (her oyuncuda aynı), yoksa oyun süresiyle
+    pub fn titan_slot(&self) -> i64 {
+        if self.base_clock > 0.0 {
+            (self.base_clock / (TITAN_SLOT * 1000.0)) as i64
+        } else {
+            (self.time as f64 / TITAN_SLOT) as i64
+        }
+    }
+
+    /// Dilimin Titan'ı: bölge ve yer (tohum + dilimden; her istemcide aynı). Güvenli olmayan, boş bir yer seçilir.
+    pub fn titan_spot(&self, slot: i64) -> (usize, f32, f32) {
+        let mut rng = crate::rng::Rng::new(self.world.seed ^ 0x7174_A400 ^ (slot as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15));
+        let a = TITAN_AREAS[rng.below(TITAN_AREAS.len() as u32) as usize];
+        let mut scratch = Vec::new();
+        for _ in 0..60 {
+            let r = AREAS[a].rects[0];
+            let tx = rng.range(r.0 + 20.0, r.2 - 20.0);
+            let ty = rng.range(r.1 + 20.0, r.3 - 20.0);
+            let (x, y) = (tx * TILE, ty * TILE);
+            let z = self.world.zone(x, y);
+            if !z.safe() && z != Zone::Wall && area_at(x, y) == a && !self.world.blocked(x, y, 40.0, &mut scratch) {
+                return (a, x, y);
+            }
+        }
+        let (hx, hy) = hub(a);
+        (a, hx + 30.0 * TILE, hy)
+    }
+
+    /// V12.1: Titan her 15 dakikada başka bir bölgede uyanır (sabit arena yok). Dilim değişince eskisi kaybolur ve
+    /// herkese duyurulur; oyuncu yaklaşınca doğar; o dilimde öldürülürse bir sonrakine kadar gelmez.
+    pub(crate) fn update_titan(&mut self, px: f32, py: f32) {
+        let slot = self.titan_slot();
+        if slot != self.titan.0 {
+            let (a, x, y) = self.titan_spot(slot);
+            self.titan = (slot, a, x, y);
+            self.titan_dead = false;
+            self.zombies.retain(|z| !z.boss);
+            self.msg(format!("TİTAN {} bölgesinde uyandı! 15 dakika orada kalacak.", AREAS[a].name));
+        }
+        let (_, _, bx, by) = self.titan;
+        let alive = self.zombies.iter().any(|z| z.boss && z.state != crate::game::ZState::Dead);
+        if !alive && !self.titan_dead && (bx - px).hypot(by - py) < 1600.0 {
+            self.spawn_zombie_at(ZKind::Titan, 50, bx, by);
+            self.events.push(crate::game::Event::Boss { name: "TİTAN".into() });
+        }
+    }
+
+    /// Titan'ın kalan süresi (sn, dilim sonuna kadar)
+    pub fn titan_left(&self) -> f32 {
+        if self.base_clock > 0.0 {
+            (TITAN_SLOT - (self.base_clock / 1000.0) % TITAN_SLOT) as f32
+        } else {
+            (TITAN_SLOT - self.time as f64 % TITAN_SLOT) as f32
+        }
     }
 
     /// Oyuncu bir büyücünün yanında mı (büyücü haritası yalnız onunla konuşurken açılır)
@@ -232,6 +281,36 @@ mod tests {
                 a.id
             );
         }
+    }
+
+    #[test]
+    fn titan_moves_every_slot_and_stays_dead_when_killed() {
+        let mut g = crate::game::Game::new(7, crate::Progress::default(), 0);
+        let mut seen = std::collections::HashSet::new();
+        for slot in 0..40 {
+            let (a, x, y) = g.titan_spot(slot);
+            assert!(TITAN_AREAS.contains(&a));
+            assert_eq!(area_at(x, y), a);
+            assert!(!g.world.zone(x, y).safe());
+            assert_eq!(g.titan_spot(slot), (a, x, y), "aynı dilim aynı yer");
+            seen.insert(a);
+        }
+        assert!(seen.len() >= 4, "Titan hep aynı bölgelerde: {seen:?}");
+        // sunucu saatiyle dilim; yaklaşınca doğar
+        g.base_clock = 1_800_000_000_000.0;
+        g.update_titan(0.0, 0.0);
+        let (_, _, bx, by) = g.titan;
+        g.update_titan(bx, by + 300.0);
+        assert!(g.zombies.iter().any(|z| z.boss));
+        // öldürüldü: dilim bitene kadar gelmez
+        g.zombies.clear();
+        g.titan_dead = true;
+        g.update_titan(bx, by + 300.0);
+        assert!(!g.zombies.iter().any(|z| z.boss));
+        // yeni dilim: başka yer ve yeniden uyanır
+        g.base_clock += TITAN_SLOT * 1000.0;
+        g.update_titan(0.0, 0.0);
+        assert!(!g.titan_dead);
     }
 
     #[test]

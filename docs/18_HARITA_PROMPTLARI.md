@@ -1,26 +1,25 @@
-# 10 Ayrı Harita — Prompt'lar (V13)
+# 8 Ayrı Bölge — Prompt'lar (V13)
 
-Dünya artık tek parça değil: **10 tamamen farklı harita**. Her haritanın kendi zemini, kendi süsleri, kendi yapıları ve
-kendi sınırı var. Haritalar arasında yürünmez; **Büyücü Aldric ışınlar**. Haritanın kenarına gidince öteki bölge
-**görünmez**: kenarı o haritaya özel kalın bir **sınır süsü** (kayalık, sık orman, yıkık binalar, buz uçurumu…) kapatır,
-onun ötesinde de koyu bir "boşluk" zemini (derin su, sık ağaç tepesi, kanyon gölgesi…) olur.
+Dünya artık tek bir haritanın parçaları değil: **8 bölge, her biri bambaşka bir yerde, kendi başına bir harita**.
+Bölgeler birbirine bitişik değil; aralarında yürünmez, **Büyücü Aldric ışınlar**. Bir bölgenin kenarına gidince öteki
+bölge **hiç görünmez**: kenarı o bölgeye özel kalın bir **sınır süsü** (kayalık, sık orman, yıkık binalar, buz uçurumu…)
+kapatır, onun ötesinde de koyu bir "boşluk" zemini (derin su, sık ağaç tepesi, kanyon gölgesi…) olur.
 
-| # | Kimlik | Harita | Seviye | Tema (tek cümle) |
-|---|--------|--------|--------|------------------|
-| 1 | `forest` | Başlangıç Ormanı | 1–10 | Güneşli yeşil orman, nehir, ahşap köprüler, hayatta kalanların kampı |
-| 2 | `city` | Yıkık Şehir | 10–25 | Çökmüş gökdelenler, yanmış arabalar, güvenli bölge (Komutan Diana) |
-| 3 | `burnt` | Yanık Orman | 15–25 | Kömürleşmiş ağaçlar, kül, için için yanan korlar, duman |
-| 4 | `desert` | Çöl Otoyolu | 20–30 | Kızıl kanyon, kum tepeleri, çatlak otoyol, terk edilmiş benzinlik |
-| 5 | `bswamp` | Kara Bataklık | 25–35 | Kara su, çürük ağaçlar, zehirli sis, batık kulübeler |
-| 6 | `military` | Askeri Bölge | 35–45 | Kışla, hangar, radar, beton bariyer ve dikenli tel |
-| 7 | `harbor` | Donmuş Liman | 40–50 | Buz tutmuş rıhtım, konteyner yığınları, donmuş gemiler, deniz feneri |
-| 8 | `arena` | Sanayi ve Titan Arenası | 45–50 | Paslı fabrikalar, zehirli kanallar, ortada Titan'ın arenası |
-| 9 | `front` | Cephe Hattı | 10+ (üsler 28–50) | Siperler, mayın tarlası, devlet ve klan üsleri; **zombi yok, yalnız askerler** |
-| 10 | `home` | Kişisel Üssüm | — | Küçük, güvenli, ahşap çitli kişisel üs |
+| # | Kimlik | Bölge | Seviye | Tema | Bölgeye özel eşyalar |
+|---|--------|-------|--------|------|----------------------|
+| 1 | `forest` | Başlangıç Ormanı | 1–15 | Güneşli yeşil orman, nehir, ahşap köprüler, hayatta kalanların kampı | Reçine, İp |
+| 2 | `city` | Yıkık Şehir | 10–25 | Çökmüş binalar, yanmış arabalar, güvenli bölge (Komutan Diana) | Elektronik Parça, Dişli, Pil, Paslı Anahtar, Altın Saat |
+| 3 | `burnt` | Yanık Orman | 15–25 | Kömürleşmiş ağaçlar, kül, için için yanan korlar, duman | Kömür, Yanık Reçine |
+| 4 | `desert` | Çöl Otoyolu | 20–30 | Kızıl kanyon, kum tepeleri, çatlak otoyol, terk edilmiş benzinlik | Kurutulmuş Deri, Benzin, Akrep Zehri |
+| 5 | `bswamp` | Kara Bataklık | 25–35 | Kara su, çürük ağaçlar, zehirli sis, batık kulübeler | Bataklık Yosunu, Toksik Öz, Bataklık Demiri |
+| 6 | `harbor` | Donmuş Liman | 40–50 | Buz tutmuş rıhtım, konteyner yığınları, donmuş gemiler, deniz feneri | Donmuş Balık, Buz Kristali, Karanlık Kristal |
+| 7 | `front` | Cephe Hattı | 10+ (üsler 28–50) | Siperler, mayın tarlası, devlet ve klan üsleri; **zombi yok, yalnız askerler** | Barut Kesesi, Askerî Devre Kartı |
+| 8 | `home` | Kişisel Üssüm | — | Küçük, güvenli, ahşap çitli kişisel üs; kalıcı tezgâh ve sandıklar | — |
 
-> Yeni: **Sanayi ve Titan Arenası** artık şehirden ayrı, kendi haritası (10. harita bu oldu).
-
----
+- **Her yerde çıkan temel malzemeler:** odun, taş, kumaş, deri, paslı metal, kemik.
+- **Titan** artık sabit bir arenada değil: **her 15 dakikada** Yıkık Şehir, Yanık Orman, Çöl, Bataklık ya da Liman'dan
+  birinde uyanır (herkese duyurulur; büyücünün haritasında "Titan Burada" yazar). Titan Parçası yalnız ondan düşer.
+- Askeri Bölge kalktı; askerî süsler Cephe Hattı'na taşındı.
 
 ## Her harita için üretilecekler
 
@@ -32,7 +31,7 @@ onun ötesinde de koyu bir "boşluk" zemini (derin su, sık ağaç tepesi, kanyo
 | **D** | Dekor sayfası (haritanın içine serpilen süsler) | 1 sayfa (8 nesne) | yeşil zemin |
 | **Y** | Simge yapılar (haritanın yer işaretleri) | 2 | yeşil zemin, tek tek |
 
-Toplam harita başına **9 görsel** (Kişisel Üs 5). **Öncelik sırası:** K → Z → S → D → Y. Konsept haritayı ilk gönderirsen
+Toplam bölge başına **9 görsel** (Kişisel Üs 5) → toplam 68 görsel + büyücü haritası + tezgâh simgesi. **Öncelik sırası:** K → Z → S → D → Y. Konsept haritayı ilk gönderirsen
 yerleşimi (yollar, kamp, nehir, yapıların yeri) ona göre kurarım.
 
 **Dosya adları:** `concept_<kimlik>.png`, `g_<kimlik>_main.png`, `g_<kimlik>_alt.png`, `g_<kimlik>_path.png`,
@@ -87,7 +86,7 @@ green objects (background is green), cropped, cut off, perspective tilt, isometr
 
 ---
 
-## 1) `forest` — Başlangıç Ormanı (Sv 1–10)
+## 1) `forest` — Başlangıç Ormanı (Sv 1–15)
 
 **K · konsept** (STİL-K +)
 
@@ -294,48 +293,7 @@ a toxic barrel leaking, a crow on a stump, swamp flowers
 
 ---
 
-## 6) `military` — Askeri Bölge (Sv 35–45)
-
-**K · konsept**
-
-```
-an abandoned military base level: barracks rows, two big hangars, a runway with a crashed plane, a radar dish hill,
-an ammunition depot, tank wrecks, helipads, guard posts; the border all around is tall concrete blast walls with razor wire
-and watchtowers
-```
-
-**Z · zemin**
-
-| Dosya | Tarif |
-|-------|-------|
-| `g_military_main` | olive drab trampled grass and dirt with tire tracks |
-| `g_military_alt` | grey concrete slabs with oil stains and painted yellow lines fragments |
-| `g_military_path` | gravel road with tank tread marks |
-| `g_military_void` | dark concrete wall tops and shadow seen from above, almost black |
-
-**S · sınır sayfası** (2×3)
-
-```
-six huge blocking military border pieces: 1) a tall concrete blast wall section with razor wire on top, 2) a guard
-watchtower, 3) a stack of shipping containers, 4) a wall of sandbags and hesco barriers, 5) a destroyed tank, 6) a chain-link
-fence with barbed wire and warning plates (no letters)
-```
-
-**D · dekor sayfası** (2×4)
-
-```
-eight military decorations: ammo crates stack, a fuel drum, a field radio, a camo net over crates, a searchlight,
-a jeep wreck, an anti-tank hedgehog, a stretcher
-```
-
-**Y · yapılar**
-
-- `l_military_1`: `a large military aircraft hangar with half-open doors`
-- `l_military_2`: `a radar dish station on a small concrete platform`
-
----
-
-## 7) `harbor` — Donmuş Liman (Sv 40–50)
+## 6) `harbor` — Donmuş Liman (Sv 40–50)
 
 **K · konsept**
 
@@ -375,53 +333,14 @@ a frozen rowboat, a pallet of crates with snow, a broken forklift
 
 ---
 
-## 8) `arena` — Sanayi ve Titan Arenası (Sv 45–50)
-
-**K · konsept**
-
-```
-an industrial wasteland level: rusty factories with tall chimneys, toxic green-yellow canals (olive tone, not pure green),
-pipelines, a scrapyard, a chemical plant, and in the center a huge circular concrete arena surrounded by spikes and torches
-where a giant boss lives; the border all around is factory walls, chain-link fences and piles of scrap metal
-```
-
-**Z · zemin**
-
-| Dosya | Tarif |
-|-------|-------|
-| `g_arena_main` | oily dark concrete with rust stains and cracks |
-| `g_arena_alt` | rusty scrap metal plates and grating |
-| `g_arena_path` | dirty industrial road with puddles of oil |
-| `g_arena_void` | black factory roofs and smoke seen from above, almost black |
-
-**S · sınır sayfası** (2×3)
-
-```
-six huge blocking industrial border pieces: 1) a rusty factory wall with pipes, 2) a mountain of scrap metal and car parts,
-3) a tall chimney stack, 4) a row of chemical tanks, 5) a chain-link fence with barbed wire, 6) a broken conveyor machine
-```
-
-**D · dekor sayfası** (2×4)
-
-```
-eight industrial decorations: a leaking toxic barrel, a valve wheel pipe, a rusty generator, a stack of metal beams,
-a broken forklift, a pallet jack, a warning lamp, a pile of gears
-```
-
-**Y · yapılar**
-
-- `l_arena_1`: `a giant circular concrete boss arena seen at 3/4, spiked walls, burning torches, cracked floor, empty center`
-- `l_arena_2`: `a rusty chemical plant with tanks and pipes`
-
----
-
-## 9) `front` — Cephe Hattı (zombi yok, yalnız askerler)
+## 7) `front` — Cephe Hattı (zombi yok, yalnız askerler)
 
 **K · konsept**
 
 ```
 a war-torn front line level: trench lines zigzagging across muddy fields, craters, barbed wire, many small fortified
-military bases with flags spread across the map, a command headquarters with a helipad in one corner, destroyed bridges,
+military bases with flags spread across the map, a command headquarters with a helipad in one corner, an abandoned army
+camp with olive tents, a radar dish and a half-open hangar, destroyed bridges,
 a minefield area; the border all around is a wall of sandbag fortifications, concrete bunkers and dense barbed wire
 ```
 
@@ -456,7 +375,7 @@ flag (no symbols), a stretcher, a smoking crater, a rifle stuck in the ground wi
 
 ---
 
-## 10) `home` — Kişisel Üssüm
+## 8) `home` — Kişisel Üssüm
 
 **K · konsept**
 
@@ -483,35 +402,47 @@ a chopping block with axe, a lantern post, a flower pot
 
 ---
 
-## 11) Aldric'in Haritası (yeni, 10 ayrı ada)
+## 9) Aldric'in Haritası (8 ayrı ada)
 
-Haritalar artık yan yana değil; büyücünün haritası **karanlık büyülü bir boşlukta süzülen 10 ayrı ada** olacak. Oyun
-dokunma alanlarını şu merkezlere koyacak (yatay %, dikey %); her ada yaklaşık **genişliğin %18'i**:
+Bölgeler yan yana değil; büyücünün haritası **karanlık büyülü bir boşlukta süzülen 8 ayrı ada**. Oyun dokunma
+alanlarını şu merkezlere koyacak (yatay %, dikey %); her ada yaklaşık **genişliğin %20'si**:
 
 | Ada | Merkez | Ada | Merkez |
 |-----|--------|-----|--------|
-| forest | (14, 22) | burnt | (26, 52) |
-| city | (38, 20) | bswamp | (50, 54) |
-| arena | (62, 20) | desert | (74, 52) |
-| military | (86, 22) | harbor | (26, 82) |
-| front | (50, 84) | home | (74, 82) |
+| forest | (14, 27) | bswamp | (14, 73) |
+| city | (38, 24) | harbor | (38, 76) |
+| burnt | (62, 24) | front | (62, 76) |
+| desert | (86, 27) | home | (86, 73) |
 
 **`wizard_map.png`** (1:1 kare, 2048×2048):
 
 ```
-an arcane wizard's atlas: ten separate small floating island maps hovering in a dark purple starry magical void,
-seen from above, each island a different biome and clearly separated from the others with empty space between them,
-arranged in three rows (4 on top, 3 in the middle, 3 at the bottom):
-top row left to right: a green forest with a campfire camp, a ruined grey city, a rusty industrial zone with a round arena,
-an olive military base with hangars;
-middle row: a black burnt forest with embers, a dark toxic swamp, an orange desert canyon with a highway;
-bottom row: a frozen snowy harbor, a war-torn trench battlefield with flags, a tiny cozy wooden fort;
+an arcane wizard's atlas: eight separate small floating island maps hovering in a dark purple starry magical void,
+seen from above, each island a completely different biome and clearly separated from the others with empty space between
+them, arranged in two rows of four:
+top row left to right: a green forest with a campfire camp and a river, a ruined grey city with broken streets,
+a black burnt forest with glowing embers, an orange desert canyon with a cracked highway;
+bottom row left to right: a dark toxic swamp with dead trees, a frozen snowy harbor with containers and a lighthouse,
+a war-torn trench battlefield with small fortified bases and flags, a tiny cozy wooden fort with a glowing portal stone;
 faint glowing purple rune circles under each island, thin magical light threads connecting them, no text, no labels
 ```
 
-Bölge afişleri (`region_<kimlik>.png`, 3:1) `17_BOLGE_HARITASI_PROMPTLARI.md`'deki gibi; yeni harita için:
+Bölge afişleri (`region_<kimlik>.png`, 3:1) `17_BOLGE_HARITASI_PROMPTLARI.md`'deki gibi (Askeri Bölge afişi artık gerekmez).
 
-- `region_arena.png`: `a rusty industrial wasteland at dusk, chimneys and toxic canals, a huge circular spiked arena in the distance with a giant silhouette inside`
+---
+
+## 10) Tezgâh simgesi (yeni eşya)
+
+Tezgâh artık **üretilen ve kurulan bir eşya**: elle üretilir (20 odun, 10 taş, 4 paslı metal, 2 ip), kullanınca bulunduğun
+yere kurulur. **Kişisel üste kalıcı** (en çok 3), başka yerde **10 dakika** durur. Gelişmiş tarifler yalnız tezgâh
+ekranında; el üretimi ekranında görünmez. Şu an çantada dünya tezgâhının görseli kullanılıyor; özel simge için:
+
+**`i_workbench.png`** (STİL-N + simge eki):
+
+```
+single inventory icon, a compact portable wooden workbench with a small vise, a hammer and a saw lying on top, iron
+corner brackets, object fills 80% of a square canvas, slight 3/4 angle, bold readable silhouette at 48x48 pixels
+```
 
 ---
 
@@ -520,4 +451,4 @@ Bölge afişleri (`region_<kimlik>.png`, 3:1) `17_BOLGE_HARITASI_PROMPTLARI.md`'
 - Her görseli tablodaki adla gönder (ör. `g_desert_main.png`). Sayfa görsellerinde nesne sırası tarifteki sıra olsun.
 - Ben: zeminleri dikişsiz 512'lik dokuya çeviririm, sayfaları keserim, yeşili silerim, ölçeği oyun metresine oturturum,
   konsept haritaya bakarak her haritanın yerleşimini (yollar, kamp, yapılar, sınır) kodla kurarım.
-- Tek seferde hepsi gerekmez: bir haritanın 9 görseli tamamlanınca o harita yeni haliyle oyuna girebilir.
+- Tek seferde hepsi gerekmez: bir bölgenin 9 görseli tamamlanınca o bölge yeni haliyle oyuna girebilir.

@@ -234,7 +234,9 @@ object SpriteCache {
     }
     fun get(ctx: android.content.Context, key: String): ImageBitmap? = synchronized(cache) {
         if (cache.containsKey(key)) return cache[key]
+        // eşya simgesi yoksa aynı adlı dünya nesnesi (ör. kurulabilir tezgâh: s/workbench)
         val b: Bitmap? = runCatching { Atlas.get(ctx).extract(key) }.getOrNull()
+            ?: if (key.startsWith("i/")) runCatching { Atlas.get(ctx).extract("s/" + key.removePrefix("i/")) }.getOrNull() else null
         val img = b?.asImageBitmap()
         cache[key] = img
         img

@@ -84,21 +84,9 @@ impl Game {
         // uzaktakileri kaldır
         self.zombies
             .retain(|z| z.boss || (z.x - px).hypot(z.y - py) < ACTIVE_R + 600.0);
-        // boss
+        // V12.1 Titan: her 15 dakikada rastgele bir bölgede (areas.rs)
         self.boss_t -= dt;
-        let boss_alive = self
-            .zombies
-            .iter()
-            .any(|z| z.boss && z.state != ZState::Dead);
-        let (bx, by) = world::BOSS;
-        if !boss_alive && self.boss_t <= 0.0 && (bx - px).hypot(by - py) < 1600.0 {
-            self.boss_t = 600.0;
-            self.spawn_zombie_at(ZKind::Titan, 50, bx, by);
-            self.events.push(Event::Boss {
-                name: "TİTAN".into(),
-            });
-            self.msg("TİTAN uyandı! Sanayi bölgesinin kuzeydoğusunda.");
-        }
+        self.update_titan(px, py);
         self.spawn_t -= dt;
         if self.spawn_t > 0.0 {
             return;

@@ -130,13 +130,21 @@ fun WorldMapScreen(close: () -> Unit) {
     val w = remember { GameSession.world() }
     val fog = remember { fogMask(GameSession.ui("fog")) }
     val prof = remember { GameSession.ui("profile") }
-    val marks = remember { mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) }
+    val marks = remember { mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) + titanMark(GameSession.ui("areas")) }
     androidx.compose.runtime.LaunchedEffect(Unit) { com.zenvex.online.game.Bases.refresh() }
     WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close) { to ->
         val r = GameSession.cmd("travel", "to" to to)
         Toaster.show(r.msg, r.ok)
         if (r.ok) close()
     }
+}
+
+/** V12.1: Titan her 15 dakikada başka bir bölgede; bu dilimde öldürülmediyse yeri ve kalan süresi */
+fun titanMark(areas: JSONObject): List<MapMark> {
+    val t = areas.optJSONObject("titan") ?: return emptyList()
+    if (t.optBoolean("dead")) return emptyList()
+    val left = t.optDouble("left").toInt()
+    return listOf(MapMark(t.optDouble("x").toFloat(), t.optDouble("y").toFloat(), 2, "Titan", "${left / 60}:${"%02d".format(left % 60)} Sonra Başka Bölgeye Geçer"))
 }
 
 /** Keşfedilen devlet üsleri: sahip, ödül, kalan süre (dokununca kart). */
@@ -168,7 +176,6 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
         val a = travel.getJSONArray(i)
         out += MapMark(a.getDouble(2).toFloat(), a.getDouble(3).toFloat(), 1, a.getString(1))
     }
-    w.optJSONArray("boss")?.let { out += MapMark(it.getDouble(0).toFloat(), it.getDouble(1).toFloat(), 2, "Titan") }
     val st = quests.optJSONArray("story") ?: JSONArray()
     for (i in 0 until st.length()) {
         val q = st.getJSONObject(i)

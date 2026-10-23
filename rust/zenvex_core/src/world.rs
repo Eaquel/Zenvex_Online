@@ -207,7 +207,7 @@ pub const TRAVEL: &[Travel] = &[
     Travel { id: "downtown", name: "Merkez Sığınağı", tile: (44.0, 70.0), level: 20, cost: 100 },
     Travel { id: "desert", name: "Çöl Karakolu", tile: (262.0, 472.0), level: 20, cost: 110 },
     Travel { id: "bswamp", name: "Kara Bataklık Karakolu", tile: (90.0, 472.0), level: 25, cost: 130 },
-    Travel { id: "military", name: "Askeri Karakol", tile: (388.0, 132.0), level: 35, cost: 160 },
+    Travel { id: "military", name: "Kuzey Kül Karakolu", tile: (388.0, 132.0), level: 15, cost: 80 },
     Travel { id: "harbor", name: "Liman Karakolu", tile: (470.0, 422.0), level: 40, cost: 180 },
     Travel { id: "boss", name: "Arena Kampı", tile: (275.0, 50.0), level: 45, cost: 200 },
 ];
@@ -269,7 +269,7 @@ pub const LANDMARKS: &[Landmark] = &[
     Landmark { id: "burnt_post", name: "Kül Karakolu", tx: 452.0, ty: 270.0, r: 6.0, safe: true },
     Landmark { id: "desert_post", name: "Çöl Karakolu", tx: 262.0, ty: 470.0, r: 6.0, safe: true },
     Landmark { id: "bswamp_post", name: "Kara Bataklık Karakolu", tx: 90.0, ty: 470.0, r: 6.0, safe: true },
-    Landmark { id: "military_post", name: "Askeri Karakol", tx: 388.0, ty: 130.0, r: 6.0, safe: true },
+    Landmark { id: "military_post", name: "Kuzey Kül Karakolu", tx: 388.0, ty: 130.0, r: 6.0, safe: true },
     Landmark { id: "harbor_post", name: "Liman Karakolu", tx: 470.0, ty: 420.0, r: 6.0, safe: true },
     // V11 Cephe Karargâhı (Cephe Hattı'nın güneydoğu köşesi; Büyücü Aldric buraya ışınlar, geri götürür)
     Landmark { id: "front_hq", name: "Cephe Karargâhı", tx: 810.0, ty: 810.0, r: 9.0, safe: true },
@@ -428,10 +428,9 @@ pub fn home_spawn() -> (f32, f32) {
 fn region_zone(tx: usize, ty: usize) -> Zone {
     let half = OLD_TILES / 2;
     if tx >= OLD_TILES {
+        // V12.1: Askeri Bölge kalktı; kuzeydoğu da Yanık Orman
         if ty >= OLD_TILES {
             Zone::Harbor
-        } else if ty < half {
-            Zone::Military
         } else {
             Zone::BurntForest
         }
@@ -486,10 +485,10 @@ fn v10_variant(name: &str, x: f32, y: f32, shape: Shape) -> (&str, Shape) {
         ("rock_small0" | "rock_small1" | "rock_small2" | "grass2", Zone::Desert) => {
             pick(&["cow_skull", "cone_pile", "gas_can", "road_sign", name_static(name), name_static(name)])
         }
-        ("wreck0" | "wreck1", Zone::Military) => pick(&["jeep_wreck", "jeep_wreck2"]),
-        ("sandbags", Zone::Military) => pick(&["sandbag_nest", "sandbags"]),
-        ("barricade", Zone::Military) => "ammo_stack",
-        ("barrel", Zone::Military) => pick(&["radar_dish", "mil_tent", "ammo_stack"]),
+        ("wreck0" | "wreck1", Zone::Military | Zone::Front) => pick(&["jeep_wreck", "jeep_wreck2"]),
+        ("sandbags", Zone::Military | Zone::Front) => pick(&["sandbag_nest", "sandbags"]),
+        ("barricade", Zone::Military | Zone::Front) => "ammo_stack",
+        ("barrel", Zone::Military | Zone::Front) => pick(&["radar_dish", "mil_tent", "ammo_stack"]),
         ("wreck0" | "wreck1", _) if city => pick(&["burnt_car", name_static(name)]),
         ("trash", _) if city => pick(&["dumpster", "bus_stop", "billboard", "trash", "street_lamp"]),
         _ => name_static(name),
@@ -2169,6 +2168,12 @@ impl World {
             self.push("watchtower", Kind::Tower, (hq.tx + ox * (hq.r + 2.5)) * t, (hq.ty + oy * (hq.r + 2.5)) * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0);
             self.push("lamp", Kind::Lamp, (hq.tx + ox * (hq.r - 1.0)) * t, (hq.ty + oy * (hq.r - 1.0)) * t, Shape::Circle(0.15 * t), 0.0, 0.0);
         }
+        // V12.1 (Askeri Bölge kalktı): karargâhın dışında radar ve askerî çadırlar
+        let (rx, ry) = (hq.tx - hq.r - 7.0, hq.ty - 3.0);
+        self.push("radar_dish", Kind::Prop, rx * t, ry * t, Shape::Circle(0.6 * t), 0.0, 0.0);
+        for k in 0..3 {
+            self.push("mil_tent", Kind::Prop, (rx + 1.0 + k as f32 * 3.2) * t, (ry + 5.0) * t, Shape::Rect(1.4 * t, 0.9 * t), 0.0, 0.0);
+        }
     }
 
     pub fn build_grid(&mut self) {
@@ -2402,8 +2407,8 @@ mod tests {
         let n = w.statics.len();
         println!("statik: {n}, üretim: {:?}", t0.elapsed());
         assert!(n < 260_000, "{n}");
-        // yeni bölgelerin hepsi var
-        for z in [Zone::BurntForest, Zone::Desert, Zone::BlackSwamp, Zone::Military, Zone::Harbor, Zone::Home] {
+        // bölgelerin hepsi var (V12.1: Askeri Bölge kalktı, askerî dekor Cephe Hattı'nda)
+        for z in [Zone::BurntForest, Zone::Desert, Zone::BlackSwamp, Zone::Harbor, Zone::Front, Zone::Home] {
             let k = ZONES_ALL.iter().position(|q| *q == z).unwrap() as u8;
             assert!(w.zones.contains(&k), "{z:?}");
         }

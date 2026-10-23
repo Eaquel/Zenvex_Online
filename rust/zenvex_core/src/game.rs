@@ -488,6 +488,9 @@ pub struct Game {
     pub time: f32,
     pub day_t: f32,
     pub boss_t: f32,
+    /// V12.1 Titan: (dilim, bölge, x, y) ve bu dilimde öldürüldü mü
+    pub titan: (i64, usize, f32, f32),
+    pub titan_dead: bool,
     pub textures: Textures,
     pub rng: Rng,
     pub scratch: Vec<u32>,
@@ -504,6 +507,8 @@ pub struct Game {
     pub base_clock: f64,
     /// büyücü ışınlanma bekleme süresi
     pub wiz_cd: f32,
+    /// V12.1: dışarıda kurulan geçici tezgâh (x, y, kalan sn)
+    pub temp_benches: Vec<(f32, f32, f32)>,
     /// V11 eğitim üssü öğreticisi: 0 kapalı, 1 çatışma, 2 bomba düşüyor, 3 patladı (bkz. training.rs)
     pub train: u8,
     pub train_t: f32,
@@ -517,6 +522,8 @@ impl Game {
         progress.story.migrate();
         progress.relayout_inv();
         progress.ensure_dailies(day_index);
+        // V12.1: oyundan kalkan ara malzemeler karşılığına dönüşür
+        progress.retire_items();
         let _ = progress.quest_event(data::QuestKind::Level, 0);
         let (x, y) = world::camp_spawn();
         let player = Player {
@@ -641,6 +648,9 @@ impl Game {
             my_clan: 0,
             base_clock: 0.0,
             wiz_cd: 0.0,
+            temp_benches: Vec::new(),
+            titan: (i64::MIN, 0, 0.0, 0.0),
+            titan_dead: false,
             train: 0,
             train_t: 0.0,
         }
@@ -727,6 +737,7 @@ impl Game {
         self.update_bases(dt);
         self.update_training(dt);
         self.wiz_cd = (self.wiz_cd - dt).max(0.0);
+        self.update_benches(dt);
     }
 
     fn update_zone(&mut self) {

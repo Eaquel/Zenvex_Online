@@ -233,3 +233,18 @@ Ham görseller `art/v10u/`, ayıklanmış parçalar `art/v10/` (`tools/pixel/v10
 - **Cephe Hattı'nda zombi doğmaz** (üslerin çevresi yalnız üs askerleri).
 - Komutan Diana'nın sohbet konuları genel kalıbın arkasında kalıp hiç çıkmıyordu; düzeltildi.
 - Görseller: `17_BOLGE_HARITASI_PROMPTLARI.md` (`wizard_map.png`, `region_<id>.png`).
+
+## V12.1 — 8 bölge, bölgeye özel eşyalar, kurulabilir tezgâh, gezgin Titan (Ekim 2026)
+
+- **Bölgeler (8):** Başlangıç Ormanı, Yıkık Şehir, Yanık Orman, Çöl Otoyolu, Kara Bataklık, Donmuş Liman, Cephe Hattı,
+  Kişisel Üssüm. Askeri Bölge kalktı (alanı Yanık Orman'a, askerî dekor Cephe Hattı'na). İleride her bölge ayrı harita
+  olarak yeniden çizilecek (`18_HARITA_PROMPTLARI.md`).
+- **Eşyalar:** her bölgeden yalnız kendi malzemeleri çıkar (`data::region_items`); temel malzemeler (odun, taş, kumaş,
+  deri, hurda, kemik) her yerde. Kaldırılan ara malzemeler (vida, çivi, yay, bakır, plastik, yapıştırıcı, bant, diş, barut)
+  `RETIRE_INTO` ile eski kayıtlarda karşılığına döner (eşyalar sırayla kaydedildiği için listeden silinmedi, emekliye ayrıldı).
+  Tarifler baştan yazıldı: her eşyanın tek tarifi var; el tarifleri temel + orman malzemesi, tezgâh tarifleri bölge malzemesi ister.
+- **Tezgâh eşyası** (`benches.rs`): elle üretilir, kullanınca kurulur; kişisel üste kalıcı (en çok 3, geri alınabilir),
+  başka yerde 10 dakika. **El Üretimi** (çanta/HUD) ve **Tezgâh** (tezgâha dokununca) ayrı ekranlar; tezgâh tarifleri
+  el ekranında görünmez.
+- **Titan** her 15 dakikada (sunucu saatiyle, herkeste aynı) şehir/yanık orman/çöl/bataklık/liman'dan birinde uyanır;
+  duyurulur, haritada ve büyücü haritasında görünür; o dilimde öldürülürse bir sonrakine kadar gelmez.

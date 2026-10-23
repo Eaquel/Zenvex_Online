@@ -98,6 +98,17 @@ impl Game {
                 ],
             ));
         }
+        // V12.1 oyuncunun kurduğu tezgâhlar: dünya tezgâhı gibi çizilir (Kotlin yakınlık halkası ve dokunma kutusu verir)
+        let bench_sprite = crate::world::sprite("workbench") as f32;
+        for (bx, by, _) in self.placed_benches() {
+            if bx < x0 || bx > x1 || by < y0 || by > y1 {
+                continue;
+            }
+            self.draw_tmp.push((
+                by,
+                [D_STATIC, bench_sprite, bx, by, -1.0, crate::world::Kind::Bench as u8 as f32, 0.37, 0.0, -1.0, 0.0, 0.0, 0.0],
+            ));
+        }
         for d in &self.drops {
             if d.x < x0 || d.x > x1 || d.y < y0 || d.y > y1 {
                 continue;

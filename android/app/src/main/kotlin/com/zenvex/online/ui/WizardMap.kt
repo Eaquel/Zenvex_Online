@@ -175,6 +175,7 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                             if (!open) Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon("lock", 12.dp, Px.Sub); Spacer(Modifier.width(3.dp)); PT("Sv ${a.optInt("level")}", 12.sp, Color(0xFFE07060))
                             } else if (i == here) PT("Buradasın", 11.sp, Color(0xFF7AB8FF))
+                            if (a.optBoolean("titan")) PT("Titan!", 12.sp, Color(0xFFFF5A4A), outline = true)
                         }
                     }
                 }

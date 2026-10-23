@@ -58,7 +58,7 @@ private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay
 
 internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench,
 }
 
 /**
@@ -86,7 +86,7 @@ fun GameScreen(toLobby: () -> Unit) {
                     }
                     if (panel.startsWith("npc:")) { npcKind = panel.substring(4).toIntOrNull() ?: 1; overlay = Overlay.Npc; return@post }
                     overlay = when (panel) {
-                        "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "merchant" -> Overlay.Merchant
+                        "bag" -> Overlay.Bag; "craft" -> Overlay.Craft; "craft_bench" -> Overlay.CraftBench; "merchant" -> Overlay.Merchant
                         "chat" -> Overlay.Chat; "map" -> Overlay.Map; "trade" -> Overlay.Trade
                         "quests" -> Overlay.Quests; "dog" -> Overlay.Dog; else -> Overlay.Menu
                     }
@@ -214,6 +214,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Settings -> SettingsScreen(back = { overlay = Overlay.Menu; view.post { view.requestLayout() } }, inGame = true)
             Overlay.Bag -> InventoryScreen(close, inGame = true) { overlay = Overlay.Craft }
             Overlay.Craft -> CraftScreen(close)
+            Overlay.CraftBench -> CraftScreen(close, bench = true)
             Overlay.Merchant -> ShopScreen(close)
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)

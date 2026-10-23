@@ -19,6 +19,7 @@ mod combat;
 mod draw;
 mod home;
 pub mod areas;
+pub mod benches;
 mod training;
 pub mod net;
 mod vehicles;

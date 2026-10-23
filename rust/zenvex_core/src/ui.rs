@@ -47,6 +47,7 @@ impl Game {
             .benches
             .iter()
             .any(|&(x, y)| (x - px).hypot(y - py) < NEAR)
+            || self.near_placed_bench()
     }
 
     pub fn near_merchant(&self) -> bool {
@@ -285,11 +286,12 @@ impl Game {
                     "chest": self.near_chest().map_or(-1, |i| i as i64), "home": self.at_home(),
                 })
             }
-            "craft" => {
-                // aynı eşyanın tarifleri tek satırda (varyantlar), sekmelere göre; her malzemenin kaynağı yazılır
+            // V12.1: el üretimi ("craft") ve tezgâh ("craft_bench") ayrı listeler; tezgâh tarifleri elde görünmez
+            k if k == "craft" || k == "craft_bench" => {
+                let mode_bench = k == "craft_bench";
                 let bench = self.near_bench();
                 let mut groups: Vec<(&str, Vec<Value>)> = Vec::new();
-                for (i, r) in RECIPES.iter().enumerate() {
+                for (i, r) in RECIPES.iter().enumerate().filter(|(_, r)| r.bench == mode_bench) {
                     let inputs: Vec<Value> = r
                         .inputs
                         .iter()
@@ -311,7 +313,11 @@ impl Game {
                                 "have": g.inv.count_id(out) })
                     })
                     .collect();
-                json!({ "near_bench": bench, "recipes": list,
+                let (px, py) = (self.player.x, self.player.y);
+                let own = self.progress.benches.iter().any(|&(x, y)| (x - px).hypot(y - py) < crate::benches::BENCH_NEAR);
+                let temp = self.temp_benches.first().map(|b| b.2);
+                json!({ "near_bench": bench, "recipes": list, "mode": if mode_bench { "bench" } else { "hand" },
+                        "own_bench": own, "temp_left": temp,
                         "tabs": ["Şifa", "İksir", "Silah Ve Alet", "Ekipman", "Takı", "Malzeme", "Araç", "Üs"] })
             }
             "garage" => {
@@ -743,6 +749,7 @@ impl Game {
                 Ok(String::new())
             }
             "travel" => self.travel(v["to"].as_str().unwrap_or("")),
+            "pickup_bench" => self.pickup_bench(),
             // V12 büyücü haritası: yalnız büyücünün yanında
             "wizard_tp" => {
                 if self.near_wizard() {
@@ -924,6 +931,7 @@ impl Game {
                     .map_err(String::from);
             }
             ItemKind::Chest => return self.place_chest(slot),
+            ItemKind::Bench => return self.place_bench(slot),
             ItemKind::Tool if d.id.starts_with("veh_") => return self.summon_vehicle(if d.id == "veh_car" { 2 } else { 1 }),
             ItemKind::Tool => return Err("Alet çantanda durdukça işe yarar".into()),
             ItemKind::Consumable => {}

@@ -726,6 +726,12 @@ impl Game {
                     let id = if self.rng.chance(0.3) { "medkit" } else { "bandage" };
                     self.spawn_drop_id(id, 1, x, y);
                 }
+                // Cephe Hattı'nın özel malzemeleri (barut kesesi, devre kartı) askerlerden düşer
+                if self.rng.chance(0.35) {
+                    if let Some(id) = self.region_pick(crate::world::Zone::Front) {
+                        self.spawn_drop_id(id, 1, x, y);
+                    }
+                }
             }
         }
         true

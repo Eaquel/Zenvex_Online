@@ -297,6 +297,9 @@ pub struct Progress {
     pub chests: Vec<crate::chests::Chest>,
     /// V8: ölünce kişisel üste doğ (büyücüden seçilir)
     pub home_spawn: bool,
+    /// V12.1: kişisel üste kurulan kalıcı tezgâhlar (dünya pikseli)
+    #[serde(default)]
+    pub benches: Vec<(f32, f32)>,
     /// V9: etkinlik puanı sayaçları (istemci farkları sunucuya yollar)
     pub ev: EventStats,
 }
@@ -451,6 +454,7 @@ impl Default for Progress {
             story: Default::default(),
             chests: Vec::new(),
             home_spawn: false,
+            benches: Vec::new(),
             ev: EventStats::default(),
         };
         p.inv.add_id("bandage", 3);
@@ -561,6 +565,50 @@ impl Progress {
             }
         }
         v
+    }
+
+    /// V12.1 eşya temizliği: oyundan kalkan ara malzemeler (vida, çivi, bant…) çantada ve sandıklarda karşılığına
+    /// dönüşür (1'e 1, data::RETIRE_INTO). Dönüşen toplam adet döner.
+    pub fn retire_items(&mut self) -> u32 {
+        let map: Vec<(u16, usize)> = crate::data::RETIRE_INTO
+            .iter()
+            .filter_map(|(a, b)| Some((crate::data::item_index(a)? as u16, crate::data::item_index(b)?)))
+            .collect();
+        let mut n = 0u32;
+        let mut fix = |slots: &mut Vec<Option<crate::inventory::Slot>>| {
+            let mut add: Vec<(usize, u32)> = Vec::new();
+            for s in slots.iter_mut() {
+                if let Some(cur) = *s {
+                    if let Some(&(_, to)) = map.iter().find(|(from, _)| *from == cur.item) {
+                        add.push((to, cur.count as u32));
+                        n += cur.count as u32;
+                        *s = None;
+                    }
+                }
+            }
+            add
+        };
+        let mut lost: Vec<(usize, u32)> = Vec::new();
+        let back = fix(&mut self.inv.slots);
+        for (item, c) in back {
+            let from = crate::inventory::POCKETS.min(self.inv.slots.len());
+            let left = crate::inventory::stack_into(&mut self.inv.slots[from..], item, c);
+            if left > 0 {
+                lost.push((item, left));
+            }
+        }
+        for ch in self.chests.iter_mut() {
+            for (item, c) in fix(&mut ch.slots) {
+                crate::inventory::stack_into(&mut ch.slots, item, c);
+            }
+        }
+        // çantaya sığmayan dönüşüm ilk sandığa (yoksa kaybolmaz: bir sonraki yerde açılan yere eklenir)
+        for (item, c) in lost {
+            if let Some(ch) = self.chests.first_mut() {
+                crate::inventory::stack_into(&mut ch.slots, item, c);
+            }
+        }
+        n
     }
 
     /// Çanta düzenini seviye ve kuşanılan çantaya göre günceller (eşya kaybolmaz).
@@ -847,6 +895,35 @@ mod tests {
     use super::*;
 
     /// V8-V10 keşif kaydı (120×2) V11 düzenine (150×3) aynı hücrelerle taşınır
+    #[test]
+    fn retired_items_convert() {
+        let mut p = Progress::default();
+        p.relayout_inv();
+        p.inv.add_id("screw", 5);
+        p.inv.add_id("tape", 3);
+        p.inv.add_id("scrap", 2);
+        assert_eq!(p.retire_items(), 8);
+        assert_eq!(p.inv.count_id("screw") + p.inv.count_id("tape"), 0);
+        assert_eq!(p.inv.count_id("scrap"), 7);
+        assert_eq!(p.inv.count_id("cloth"), 3);
+        // kalan tariflerde ve tüccarda kaldırılan eşya yok
+        for r in crate::data::RECIPES {
+            assert!(crate::data::item_in_game(r.out), "{}", r.out);
+            for (i, _) in r.inputs {
+                assert!(crate::data::item_in_game(i) && crate::data::item_index(i).is_some(), "{} tarifinde {i}", r.out);
+            }
+        }
+        for (id, _, _) in crate::data::MERCHANT {
+            assert!(crate::data::item_in_game(id), "{id}");
+        }
+        // her eşyanın tek tarifi var
+        let mut outs: Vec<&str> = crate::data::RECIPES.iter().map(|r| r.out).collect();
+        outs.sort();
+        let n = outs.len();
+        outs.dedup();
+        assert_eq!(outs.len(), n, "aynı eşyanın iki tarifi var");
+    }
+
     #[test]
     fn fog_v8_migrates_to_v11() {
         let mut p = Progress::default();

@@ -6,7 +6,7 @@ use crate::world::{Kind, Zone};
 /// Ağaç/taşa vuruş oranı (kesim hızı)
 
 impl Game {
-    /// PvP açık mı: devlet üssü çevresi ya da yüksek seviyeli bölge (Askerî Bölge, Donmuş Liman); güvenli bölgede asla.
+    /// PvP açık mı: devlet üssü çevresi ya da yüksek seviyeli bölge (Donmuş Liman, Cephe Hattı); güvenli bölgede asla.
     pub fn pvp_at(&self, x: f32, y: f32) -> bool {
         let z = self.world.zone(x, y);
         if z.safe() {
@@ -252,53 +252,53 @@ impl Game {
         }
     }
 
+    /// Sandık: temel malzemeler + bulunduğu bölgenin özel malzemesi + ara sıra şifa/iksir (V12.1).
     fn crate_loot(&mut self, x: f32, y: f32, zone: Zone, mil: bool) {
         let mult = zone.loot_mult() * (1.0 + self.progress.luck()) * if mil { 1.5 } else { 1.0 };
         let gather = self.progress.gather_mult();
-        let common: &[(&str, u32)] = &[
-            ("cloth", 3),
-            ("scrap", 3),
-            ("screw", 3),
-            ("tape", 2),
-            ("nails", 3),
-            ("rope", 2),
-            ("plastic", 3),
-            ("copper", 2),
-            ("glue", 1),
-            ("leather", 2),
-            ("bandage", 1),
-            ("food", 1),
-        ];
+        let common: &[(&str, u32)] = &[("cloth", 3), ("scrap", 3), ("leather", 2), ("bone", 2), ("bandage", 1), ("food", 1)];
         for _ in 0..(2 + self.rng.below(2)) {
             let (id, n) = common[self.rng.below(common.len() as u32) as usize];
             let c = ((1 + self.rng.below(n)) as f32 * gather).round() as u32;
             self.spawn_drop_id(id, c.max(1), x, y);
         }
-        let rare: &[(&str, f32, u32)] = &[
-            ("battery", 0.25, 1),
-            ("gear", 0.25, 2),
-            ("spring", 0.25, 2),
-            ("electronics", 0.2, 2),
-            ("energy", 0.2, 1),
-            ("medkit", 0.1, 1),
-            ("potion_heal", 0.08, 1),
-            ("potion_speed", 0.05, 1),
-            ("fuel", 0.15, 1),
-            ("w_knife", 0.03, 1),
-            ("w_katana", 0.004, 1),
+        // bölge malzemesi: her sandıkta 1, askerî sandıkta 2
+        for _ in 0..if mil { 2 } else { 1 } {
+            if let Some(id) = self.region_pick(zone) {
+                let c = ((1 + self.rng.below(2)) as f32 * gather).round() as u32;
+                self.spawn_drop_id(id, c.max(1), x, y);
+            }
+        }
+        let rare: &[(&str, f32)] = &[
+            ("energy", 0.2), ("medkit", 0.1), ("potion_heal", 0.08), ("potion_speed", 0.05), ("w_knife", 0.03), ("w_katana", 0.004),
         ];
-        let city = zone.city();
-        for &(id, p, n) in rare {
-            let def = data::item(id);
-            // ormanda epik/efsanevi eşya çıkmaz
-            if !city && def.rarity >= data::Rarity::Epic {
+        let low = zone.level_range().1 < 15;
+        for &(id, p) in rare {
+            // başlangıç bölgesinde epik/efsanevi eşya çıkmaz
+            if low && data::item(id).rarity >= data::Rarity::Epic {
                 continue;
             }
             if self.rng.chance(p * mult) {
-                let rv = self.rng.below(n);
-                self.spawn_drop_id(id, 1 + rv, x, y);
+                self.spawn_drop_id(id, 1, x, y);
             }
         }
+    }
+
+    /// Bölgenin özel malzemelerinden ağırlıklı biri (bölgede yoksa None)
+    pub(crate) fn region_pick(&mut self, zone: Zone) -> Option<&'static str> {
+        let table = data::region_items(zone);
+        let total: u32 = table.iter().map(|e| e.1).sum();
+        if total == 0 {
+            return None;
+        }
+        let mut k = self.rng.below(total);
+        for &(id, w) in table {
+            if k < w {
+                return Some(id);
+            }
+            k -= w;
+        }
+        None
     }
 
     pub fn fire(&mut self, w: &'static data::WeaponDef, aim: (f32, f32)) {
@@ -622,22 +622,14 @@ impl Game {
         self.kill_rewards(z);
     }
 
-    /// Bölgeye özel eşya: %10 (seçkinlerde %30) şansla, zombinin öldüğü bölgenin iki eşyasından biri.
+    /// Bölgeye özel eşya (V12.1): %25 (seçkinlerde %60) şansla zombinin öldüğü bölgenin malzemelerinden biri.
     fn region_drop(&mut self, z: &Zombie) {
-        let pair: [&str; 2] = match self.world.zone(z.x, z.y) {
-            Zone::Harbor => ["frozen_fish", "ice_shard"],
-            Zone::BurntForest => ["scorched_resin", "charcoal"],
-            Zone::Desert => ["scorpion_venom", "dried_hide"],
-            Zone::BlackSwamp => ["swamp_moss", "bog_iron"],
-            Zone::Military | Zone::Front => ["circuit_board", "powder_pouch"],
-            Zone::Downtown | Zone::Suburb | Zone::Industrial => ["gold_watch", "rusty_key"],
-            _ => return,
-        };
-        let pc = if matches!(z.kind, ZKind::Tank | ZKind::Mystery | ZKind::Titan) { 0.3 } else { 0.1 };
+        let zone = self.world.zone(z.x, z.y);
+        let pc = if matches!(z.kind, ZKind::Tank | ZKind::Mystery | ZKind::Titan) { 0.6 } else { 0.25 };
         if self.rng.chance(pc) {
-            // değerli olan (ikinci) daha nadir
-            let id = if self.rng.chance(0.65) { pair[0] } else { pair[1] };
-            self.spawn_drop_id(id, 1, z.x, z.y);
+            if let Some(id) = self.region_pick(zone) {
+                self.spawn_drop_id(id, 1, z.x, z.y);
+            }
         }
     }
 
@@ -690,10 +682,7 @@ impl Game {
         let zone = self.world.zone(z.x, z.y);
         let mult = zone.loot_mult() * (1.0 + self.progress.luck());
         // para düşmez: altın günlük görev ve etkinliklerden gelir
-        if self.rng.chance(0.3 * mult.min(2.0)) {
-            self.spawn_drop_id("tooth", 1, z.x, z.y);
-        }
-        if self.rng.chance(0.2 * mult.min(2.0)) {
+        if self.rng.chance(0.35 * mult.min(2.0)) {
             self.spawn_drop_id("bone", 1, z.x, z.y);
         }
         if self.rng.chance(0.35) && z.kind != ZKind::Dog {
@@ -706,15 +695,8 @@ impl Game {
                     self.spawn_drop_id("leather", 1, z.x, z.y);
                 }
             }
-            ZKind::Toxic => {
-                if self.rng.chance(0.45 * mult) {
-                    self.spawn_drop_id("toxic", 1, z.x, z.y);
-                }
-            }
+            // malzemeler bölgeye özel (region_drop); türler yalnız temel malzeme ve nadir hazır eşya verir
             ZKind::Dark => {
-                if self.rng.chance(0.06 * mult) {
-                    self.spawn_drop_id("dark_crystal", 1, z.x, z.y);
-                }
                 if self.rng.chance(0.008 * mult) {
                     self.spawn_drop_id("neck_dark", 1, z.x, z.y);
                 }
@@ -722,31 +704,20 @@ impl Game {
             ZKind::Tank => {
                 let rv = self.rng.below(3);
                 self.spawn_drop_id("scrap", 1 + rv, z.x, z.y);
-                if self.rng.chance(0.3 * mult) {
-                    self.spawn_drop_id("gear", 1, z.x, z.y);
-                }
             }
             ZKind::Mystery => {
-                for (id, p) in [
-                    ("dark_crystal", 0.6),
-                    ("electronics", 0.8),
-                    ("battery", 0.4),
-                    ("w_katana", 0.03),
-                    ("ring_hunter", 0.05),
-                    ("neck_amulet", 0.05),
-                ] {
+                for (id, p) in [("w_katana", 0.03), ("ring_hunter", 0.05), ("neck_amulet", 0.05)] {
                     if self.rng.chance(p * mult) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
                     }
                 }
             }
             ZKind::Titan => {
+                self.titan_dead = true;
                 self.progress.boss_kills += 1;
                 done.extend(self.progress.quest_event(QuestKind::Boss, 1));
                 let rv = self.rng.below(3);
                 self.spawn_drop_id("titan_shard", 3 + rv, z.x, z.y);
-                let rv = self.rng.below(2);
-                self.spawn_drop_id("dark_crystal", 2 + rv, z.x, z.y);
                 for id in ["w_katana", "potion_power", "potion_speed", "potion_heal", "ring_titan"] {
                     if self.rng.chance(0.25) {
                         self.spawn_drop_id(id, 1, z.x, z.y);
@@ -756,10 +727,9 @@ impl Game {
             }
             _ => {}
         }
-        // genel nadir düşüş (yüksek seviye bölgelerde daha değerli)
-        if zone.city() && self.rng.chance(0.03 * mult) {
-            let pool = ["battery", "gear", "spring", "copper", "electronics", "medkit", "energy"];
-            let id = pool[self.rng.below(pool.len() as u32) as usize];
+        // genel nadir düşüş: şifa
+        if self.rng.chance(0.03 * mult) {
+            let id = if self.rng.chance(0.5) { "medkit" } else { "energy" };
             self.spawn_drop_id(id, 1, z.x, z.y);
         }
         let xp = def.xp + z.level * 3;

@@ -370,7 +370,7 @@ fn kind_order(k: ItemKind) -> u8 {
         ItemKind::Ammo | ItemKind::Tool => 1,
         ItemKind::Helmet | ItemKind::Jacket | ItemKind::Pants | ItemKind::Boots | ItemKind::Bag | ItemKind::Cloak | ItemKind::Ring | ItemKind::Necklace => 2,
         ItemKind::Consumable => 3,
-        ItemKind::Chest => 4,
+        ItemKind::Chest | ItemKind::Bench => 4,
         ItemKind::Material => 5,
         ItemKind::Currency => 6,
     }

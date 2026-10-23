@@ -26,6 +26,8 @@ pub enum ItemKind {
     Pants,
     /// V11: alet (balta / kazma: çantada durması yeter, armor = ağaç/taş başına vuruş gücü) ve araç anahtarı (kullanınca araç gelir)
     Tool,
+    /// V12.1: kurulabilir tezgâh (kişisel üste kalıcı, başka yerde 10 dakika)
+    Bench,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
@@ -199,8 +201,8 @@ pub const ITEMS: &[ItemDef] = &[
     item!("dried_hide", "Kurutulmuş Deri", Material, Common, 30, 35, "Çöl Otoyolu'ndan. İlk Yardım Kiti yapımında kullanılır."),
     item!("swamp_moss", "Bataklık Yosunu", Material, Common, 30, 30, "Kara Bataklık'tan. Şifa ve muska yapımında kullanılır."),
     item!("bog_iron", "Bataklık Demiri", Material, Rare, 30, 65, "Kara Bataklık'tan. Yüzük ve kask yapımında kullanılır."),
-    item!("circuit_board", "Askerî Devre Kartı", Material, Epic, 20, 120, "Askerî Bölge'den. Askerî Kask yapımında kullanılır."),
-    item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Askerî Bölge'den. Güç İksiri yapımında kullanılır."),
+    item!("circuit_board", "Askerî Devre Kartı", Material, Epic, 20, 120, "Cephe Hattı'ndaki askerlerden. Askerî takım ve sandık yapımında kullanılır."),
+    item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Cephe Hattı'ndaki askerlerden. Güç İksiri yapımında kullanılır."),
     item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Avcı Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
     item!("rusty_key", "Paslı Anahtar", Material, Rare, 10, 90, "Eski şehirden. Askerî Sandık yapımında kullanılır."),
     // V11 aletler: çantada olması yeter, en iyisi kullanılır (armor = ağaç/kaya başına vuruş gücü; yumruk 25)
@@ -223,6 +225,8 @@ pub const ITEMS: &[ItemDef] = &[
     item!("ev_scrap_weapon", "Hurdacı Testere Kılıcı", Weapon, Seasonal, 1, 0, "Hurdacılar etkinliğinde 3. sırada bitirerek elde edilir. Hızlı dönen dişli bıçak. Sınırlı sürelidir (30 gün), takas edilemez."),
     item!("ev_pack_weapon", "Sürü Lideri Pençesi", Weapon, Seasonal, 1, 0, "Sürü Lideri etkinliğinde 3. sırada bitirerek elde edilir. Çok hızlı pençe darbeleri. Sınırlı sürelidir (30 gün), takas edilemez."),
     item!("ev_breath_weapon", "Son Nefes Tırpanı", Weapon, Seasonal, 1, 0, "Son Nefes etkinliğinde 3. sırada bitirerek elde edilir. Uzun menzilli, önündeki her şeyi biçer. Sınırlı sürelidir (30 gün), takas edilemez."),
+    // V12.1 (sona eklenir: kayıtlar eşyayı sırasıyla tutar)
+    item!("workbench", "Tezgâh", Bench, Rare, 3, 80, "Kullan: bulunduğun yere kurulur. Kişisel üssünde kalıcıdır, başka yerde 10 dakika durur. Gelişmiş tarifler tezgâhta üretilir."),
 ];
 
 /// Malzemenin nereden çıktığı (üretim ekranında malzemenin altında yazar).
@@ -230,32 +234,21 @@ pub fn item_source(id: &str) -> &'static str {
     match id {
         "wood" => "Ağaç kes (balta ile hızlı)",
         "stone" => "Kaya kır (kazma ile hızlı)",
-        "resin" => "Çam ağaçları",
         "cloth" => "Zombiler, sandıklar, tüccar",
-        "glue" => "Üret (2 reçine), sandıklar, tüccar",
-        "tape" => "Üret (kumaş + yapıştırıcı), sandıklar, tüccar",
         "leather" => "Köpek zombiler, sandıklar",
         "scrap" => "Tank zombiler, kayalar, sandıklar",
-        "screw" | "nails" => "Sandıklar",
-        "rope" | "plastic" => "Sandıklar",
-        "copper" => "Sandıklar, şehir zombileri, tüccar",
-        "tooth" | "bone" => "Zombiler",
-        "toxic" => "Zehirli zombiler (Bataklık)",
-        "dark_crystal" => "Karanlık zombiler, Gizemli Maskeli, Titan",
-        "titan_shard" => "Titan (Titan Arenası)",
-        "gear" => "Tank zombiler, sandıklar",
-        "spring" | "battery" => "Sandıklar, şehir zombileri",
-        "electronics" => "Sandıklar, Gizemli Maskeli",
-        "fuel" => "Sandıklar, tüccar",
+        "bone" => "Zombiler",
+        "resin" | "rope" => "Başlangıç Ormanı (zombiler, sandıklar, çamlar)",
+        "electronics" | "gear" | "battery" | "gold_watch" | "rusty_key" => "Yıkık Şehir (zombiler, sandıklar)",
+        "charcoal" | "scorched_resin" => "Yanık Orman (zombiler, sandıklar)",
+        "dried_hide" | "fuel" | "scorpion_venom" => "Çöl Otoyolu (zombiler, sandıklar)",
+        "swamp_moss" | "toxic" | "bog_iron" => "Kara Bataklık (zombiler, sandıklar)",
+        "frozen_fish" | "ice_shard" | "dark_crystal" => "Donmuş Liman (zombiler, sandıklar)",
+        "powder_pouch" | "circuit_board" => "Cephe Hattı (askerler, üs sandıkları)",
+        "titan_shard" => "Titan (her 15 dakikada başka bir bölgede uyanır)",
         "bandage" | "energy" | "food" => "Sandıklar, tüccar",
-        "medkit" => "Üret, sandıklar, tüccar",
-        "ice_shard" | "frozen_fish" => "Donmuş Liman zombileri",
-        "scorched_resin" | "charcoal" => "Yanık Orman zombileri",
-        "scorpion_venom" | "dried_hide" => "Çöl Otoyolu zombileri",
-        "swamp_moss" | "bog_iron" => "Kara Bataklık zombileri",
-        "circuit_board" | "powder_pouch" => "Askerî Bölge zombileri",
-        "gold_watch" | "rusty_key" => "Şehir zombileri",
-        "v_wheel" | "v_engine" | "v_frame_moto" | "v_frame_car" => "Üret (Araç sekmesi)",
+        "medkit" => "Tezgâh, sandıklar, tüccar",
+        "v_wheel" | "v_engine" | "v_frame_moto" | "v_frame_car" => "Tezgâh (Araç sekmesi)",
         _ => "Üret ya da sandıklar",
     }
 }
@@ -269,7 +262,7 @@ pub fn recipe_tab(out: &str) -> u8 {
         o if ["helm_", "jacket_", "boots_", "bag_", "pants_"].iter().any(|p| o.starts_with(p)) => 3,
         o if o.starts_with("ring_") || o.starts_with("neck_") => 4,
         o if o.starts_with("v_") => 6,
-        o if o.starts_with("chest_") => 7,
+        o if o.starts_with("chest_") || o == "workbench" => 7,
         _ => 5,
     }
 }
@@ -284,6 +277,8 @@ pub const VEHICLE_BUILDS: &[(&str, &str, &[(&str, u32)], u32)] = &[
 /// V8: kask, ceket, bot, çanta ve pelerin çanta ekipman slotlarıyla geri döndü.
 /// V11: vida motor üretiminde kullanılır (sandıklardan); pelerin slotu kalktığı için pelerin listede yok.
 pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w_m4", "w_sniper", "w_rpg", "ammo_", "powder", "cloak",
+    // V12.1 eşya temizliği: tekrarlı ara malzemeler (RETIRE_INTO ile dönüşür)
+    "screw", "glue", "tape", "nails", "plastic", "spring", "copper", "tooth",
     // etkinlik kaskları yerine etkinlik silahları geldi (elde olanlar süresi dolana dek çalışır)
     "ev_blood_helm", "ev_titan_helm", "ev_base_helm", "ev_scrap_helm", "ev_pack_helm", "ev_breath_helm"];
 
@@ -756,105 +751,94 @@ pub struct Recipe {
     pub bench: bool,
 }
 
+/// V12.1: her tarif tek (aynı eşyanın ikinci tarifi yok). El üretimi (bench: false) yalnız temel malzemeler ve
+/// Başlangıç Ormanı eşyalarıyla; tezgâh tarifleri (bench: true) bölgelere özel malzemeler ister. El üretimi ekranında
+/// tezgâh tarifleri görünmez, tezgâhta da el tarifleri.
+macro_rules! r {
+    ($out:expr, $n:expr, [$(($i:expr, $c:expr)),*], $bench:expr) => {
+        Recipe { out: $out, count: $n, inputs: &[$(($i, $c)),*], bench: $bench }
+    };
+}
+
 pub const RECIPES: &[Recipe] = &[
-    // V9 bölge eşyalı tarifler
-    Recipe { out: "neck_amulet", count: 1, inputs: &[("ice_shard", 3), ("swamp_moss", 2)], bench: true },
-    Recipe { out: "ring_hunter", count: 1, inputs: &[("gold_watch", 1), ("bog_iron", 2)], bench: true },
-    Recipe { out: "potion_power", count: 2, inputs: &[("charcoal", 2), ("powder_pouch", 1)], bench: true },
-    Recipe { out: "potion_speed", count: 2, inputs: &[("scorpion_venom", 1), ("scorched_resin", 2)], bench: true },
-    Recipe { out: "helm_military", count: 1, inputs: &[("circuit_board", 2), ("bog_iron", 3), ("scrap", 10)], bench: true },
-    Recipe { out: "medkit", count: 2, inputs: &[("dried_hide", 2), ("swamp_moss", 1), ("cloth", 2)], bench: false },
-    Recipe { out: "chest_military", count: 1, inputs: &[("rusty_key", 1), ("scrap", 15)], bench: true },
-    Recipe {
-        out: "potion_heal",
-        count: 1,
-        inputs: &[("bandage", 1), ("resin", 2)],
-        bench: false,
-    },
-    Recipe {
-        out: "potion_speed",
-        count: 1,
-        inputs: &[("energy", 1), ("toxic", 1)],
-        bench: true,
-    },
-    Recipe {
-        out: "glue",
-        count: 1,
-        inputs: &[("resin", 2)],
-        bench: false,
-    },
-    Recipe {
-        out: "tape",
-        count: 2,
-        inputs: &[("cloth", 1), ("glue", 1)],
-        bench: false,
-    },
-    Recipe {
-        out: "bandage",
-        count: 1,
-        inputs: &[("cloth", 2), ("tape", 1)],
-        bench: false,
-    },
-    Recipe {
-        out: "medkit",
-        count: 1,
-        inputs: &[("bandage", 2), ("tape", 1), ("toxic", 1)],
-        bench: true,
-    },
-    Recipe {
-        out: "antidote",
-        count: 1,
-        inputs: &[("toxic", 2), ("glue", 1)],
-        bench: true,
-    },
-    Recipe {
-        out: "w_knife",
-        count: 1,
-        inputs: &[("scrap", 3), ("tape", 2), ("leather", 1)],
-        bench: false,
-    },
-    Recipe {
-        out: "w_katana",
-        count: 1,
-        inputs: &[("scrap", 8), ("copper", 3), ("leather", 2), ("tape", 2), ("dark_crystal", 1)],
-        bench: true,
-    },
-    // V8 ekipman: kask, ceket, bot, çanta (basit tezgâhsız; polis ve askerî tezgâhta)
-    Recipe { out: "helm_basic", count: 1, inputs: &[("scrap", 4), ("leather", 1), ("tape", 1)], bench: false },
-    Recipe { out: "jacket_basic", count: 1, inputs: &[("cloth", 6), ("leather", 2), ("tape", 1)], bench: false },
-    Recipe { out: "boots_basic", count: 1, inputs: &[("leather", 3), ("cloth", 2), ("glue", 1)], bench: false },
-    Recipe { out: "bag_basic", count: 1, inputs: &[("cloth", 6), ("leather", 2), ("rope", 2)], bench: false },
-    Recipe { out: "helm_police", count: 1, inputs: &[("scrap", 8), ("plastic", 4), ("leather", 2), ("glue", 2)], bench: true },
-    Recipe { out: "jacket_police", count: 1, inputs: &[("cloth", 10), ("plastic", 4), ("leather", 4), ("tape", 3)], bench: true },
-    Recipe { out: "boots_police", count: 1, inputs: &[("leather", 6), ("plastic", 2), ("glue", 2), ("nails", 4)], bench: true },
-    Recipe { out: "bag_police", count: 1, inputs: &[("cloth", 10), ("leather", 6), ("rope", 4), ("tape", 2)], bench: true },
-    Recipe { out: "helm_military", count: 1, inputs: &[("scrap", 14), ("gear", 2), ("leather", 3), ("dark_crystal", 1)], bench: true },
-    Recipe { out: "jacket_military", count: 1, inputs: &[("cloth", 14), ("scrap", 8), ("leather", 6), ("dark_crystal", 1)], bench: true },
-    Recipe { out: "boots_military", count: 1, inputs: &[("leather", 8), ("scrap", 4), ("spring", 2), ("dark_crystal", 1)], bench: true },
-    Recipe { out: "bag_military", count: 1, inputs: &[("cloth", 16), ("leather", 10), ("rope", 6), ("gear", 2), ("dark_crystal", 1)], bench: true },
-    Recipe { out: "helm_titan", count: 1, inputs: &[("titan_shard", 3), ("scrap", 20), ("dark_crystal", 2)], bench: true },
-    Recipe { out: "jacket_titan", count: 1, inputs: &[("titan_shard", 4), ("leather", 12), ("dark_crystal", 2)], bench: true },
-    Recipe { out: "boots_titan", count: 1, inputs: &[("titan_shard", 2), ("leather", 10), ("dark_crystal", 1)], bench: true },
-    // V8 yüzük ve kolye
-    Recipe { out: "ring_copper", count: 1, inputs: &[("copper", 4), ("glue", 1)], bench: false },
-    Recipe { out: "ring_hunter", count: 1, inputs: &[("copper", 6), ("tooth", 6), ("gear", 1)], bench: true },
-    Recipe { out: "ring_titan", count: 1, inputs: &[("titan_shard", 2), ("copper", 8), ("dark_crystal", 2)], bench: true },
-    Recipe { out: "neck_bone", count: 1, inputs: &[("bone", 6), ("rope", 1)], bench: false },
-    Recipe { out: "neck_amulet", count: 1, inputs: &[("bone", 8), ("toxic", 2), ("copper", 3), ("rope", 1)], bench: true },
-    Recipe { out: "neck_dark", count: 1, inputs: &[("dark_crystal", 3), ("bone", 10), ("copper", 4)], bench: true },
-    // V11 aletler (taş: her yerde, demir: tezgâhta) ve araç parçaları (tezgâhta)
-    Recipe { out: "t_axe_stone", count: 1, inputs: &[("wood", 6), ("stone", 4), ("rope", 1)], bench: false },
-    Recipe { out: "t_pick_stone", count: 1, inputs: &[("wood", 6), ("stone", 6), ("rope", 1)], bench: false },
-    Recipe { out: "t_axe_iron", count: 1, inputs: &[("wood", 4), ("scrap", 8), ("leather", 1), ("nails", 2)], bench: true },
-    Recipe { out: "t_pick_iron", count: 1, inputs: &[("wood", 4), ("scrap", 10), ("leather", 1), ("nails", 2)], bench: true },
-    Recipe { out: "v_wheel", count: 1, inputs: &[("scrap", 4), ("plastic", 3), ("rope", 1)], bench: true },
-    Recipe { out: "v_engine", count: 1, inputs: &[("scrap", 10), ("gear", 4), ("spring", 2), ("electronics", 2), ("screw", 4)], bench: true },
-    Recipe { out: "v_frame_moto", count: 1, inputs: &[("scrap", 12), ("spring", 2), ("leather", 2), ("nails", 6)], bench: true },
-    Recipe { out: "v_frame_car", count: 1, inputs: &[("scrap", 30), ("gear", 2), ("spring", 4), ("nails", 12), ("plastic", 6)], bench: true },
-    // V8 sandıklar (kişisel üsse kurulur)
-    Recipe { out: "chest_wood", count: 1, inputs: &[("wood", 30), ("nails", 6), ("rope", 1)], bench: true },
-    Recipe { out: "chest_iron", count: 1, inputs: &[("scrap", 16), ("wood", 10), ("nails", 10), ("spring", 2)], bench: true },
-    Recipe { out: "chest_military", count: 1, inputs: &[("scrap", 30), ("gear", 4), ("spring", 4), ("dark_crystal", 1)], bench: true },
+    // ---- el üretimi: temel (odun, taş, kumaş, deri, hurda, kemik) + orman (reçine, ip)
+    r!("bandage", 1, [("cloth", 2), ("resin", 1)], false),
+    r!("potion_heal", 1, [("bandage", 1), ("resin", 2)], false),
+    r!("w_knife", 1, [("scrap", 3), ("leather", 1), ("rope", 1)], false),
+    r!("t_axe_stone", 1, [("wood", 6), ("stone", 4), ("rope", 1)], false),
+    r!("t_pick_stone", 1, [("wood", 6), ("stone", 6), ("rope", 1)], false),
+    r!("helm_basic", 1, [("scrap", 4), ("leather", 1), ("cloth", 1)], false),
+    r!("jacket_basic", 1, [("cloth", 6), ("leather", 2)], false),
+    r!("pants_basic", 1, [("cloth", 5), ("leather", 1)], false),
+    r!("boots_basic", 1, [("leather", 3), ("cloth", 2)], false),
+    r!("bag_basic", 1, [("cloth", 6), ("leather", 2), ("rope", 2)], false),
+    r!("ring_copper", 1, [("scrap", 3), ("bone", 2)], false),
+    r!("neck_bone", 1, [("bone", 6), ("rope", 1)], false),
+    r!("workbench", 1, [("wood", 20), ("stone", 10), ("scrap", 4), ("rope", 2)], false),
+    // ---- tezgâh: şifa ve iksir
+    r!("medkit", 2, [("bandage", 2), ("swamp_moss", 1), ("dried_hide", 1)], true),
+    r!("antidote", 1, [("toxic", 2), ("resin", 1)], true),
+    r!("potion_speed", 2, [("scorpion_venom", 1), ("scorched_resin", 2)], true),
+    r!("potion_power", 2, [("charcoal", 3), ("powder_pouch", 1)], true),
+    // ---- tezgâh: silah ve alet
+    r!("w_katana", 1, [("scrap", 10), ("leather", 2), ("bog_iron", 2), ("dark_crystal", 1)], true),
+    r!("t_axe_iron", 1, [("wood", 4), ("scrap", 8), ("leather", 1), ("gear", 1)], true),
+    r!("t_pick_iron", 1, [("wood", 4), ("scrap", 10), ("leather", 1), ("gear", 1)], true),
+    // ---- tezgâh: polis takımı (şehir + çöl)
+    r!("helm_police", 1, [("scrap", 8), ("leather", 2), ("gear", 1)], true),
+    r!("jacket_police", 1, [("cloth", 10), ("leather", 4), ("dried_hide", 2)], true),
+    r!("pants_police", 1, [("cloth", 8), ("leather", 3), ("dried_hide", 1)], true),
+    r!("boots_police", 1, [("leather", 6), ("dried_hide", 2), ("scrap", 2)], true),
+    r!("bag_police", 1, [("cloth", 10), ("leather", 6), ("rope", 4), ("battery", 1)], true),
+    // ---- tezgâh: askerî takım (bataklık + liman + cephe)
+    r!("helm_military", 1, [("scrap", 14), ("bog_iron", 3), ("circuit_board", 1)], true),
+    r!("jacket_military", 1, [("cloth", 14), ("scrap", 8), ("ice_shard", 2), ("circuit_board", 1)], true),
+    r!("pants_military", 1, [("cloth", 12), ("bog_iron", 2), ("ice_shard", 1)], true),
+    r!("boots_military", 1, [("leather", 8), ("bog_iron", 2), ("scorched_resin", 2)], true),
+    r!("bag_military", 1, [("cloth", 16), ("leather", 10), ("rope", 6), ("ice_shard", 2)], true),
+    // ---- tezgâh: Titan takımı (Titan + liman)
+    r!("helm_titan", 1, [("titan_shard", 3), ("scrap", 20), ("dark_crystal", 2)], true),
+    r!("jacket_titan", 1, [("titan_shard", 4), ("leather", 12), ("dark_crystal", 2)], true),
+    r!("pants_titan", 1, [("titan_shard", 3), ("cloth", 12), ("dark_crystal", 1)], true),
+    r!("boots_titan", 1, [("titan_shard", 2), ("leather", 10), ("dark_crystal", 1)], true),
+    // ---- tezgâh: takı
+    r!("ring_hunter", 1, [("gold_watch", 1), ("bog_iron", 2)], true),
+    r!("ring_titan", 1, [("titan_shard", 2), ("dark_crystal", 2), ("gold_watch", 1)], true),
+    r!("neck_amulet", 1, [("ice_shard", 3), ("swamp_moss", 2)], true),
+    r!("neck_dark", 1, [("dark_crystal", 3), ("bone", 10), ("ice_shard", 2)], true),
+    // ---- tezgâh: araç parçaları
+    r!("v_wheel", 1, [("scrap", 4), ("leather", 2), ("rope", 1)], true),
+    r!("v_engine", 1, [("scrap", 10), ("gear", 4), ("electronics", 2), ("fuel", 2)], true),
+    r!("v_frame_moto", 1, [("scrap", 12), ("gear", 1), ("leather", 2)], true),
+    r!("v_frame_car", 1, [("scrap", 30), ("gear", 3), ("battery", 1), ("bog_iron", 2)], true),
+    // ---- tezgâh: üs
+    r!("chest_wood", 1, [("wood", 30), ("rope", 2)], true),
+    r!("chest_iron", 1, [("scrap", 16), ("wood", 10), ("bog_iron", 2)], true),
+    r!("chest_military", 1, [("scrap", 20), ("rusty_key", 1), ("circuit_board", 1)], true),
+];
+
+/// Bölgeye özel malzemeler (zombi ve sandık ganimeti; ağırlık): her bölgeden yalnız kendi eşyaları çıkar.
+/// Temel malzemeler (odun, taş, kumaş, deri, hurda, kemik) her yerde.
+pub fn region_items(zone: crate::world::Zone) -> &'static [(&'static str, u32)] {
+    use crate::world::Zone;
+    match zone {
+        Zone::Camp | Zone::Forest | Zone::DeepForest | Zone::Swamp => &[("resin", 3), ("rope", 2)],
+        Zone::SafeCity | Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::BossArena =>
+            &[("electronics", 3), ("gear", 3), ("battery", 2), ("rusty_key", 1), ("gold_watch", 1)],
+        Zone::BurntForest => &[("charcoal", 3), ("scorched_resin", 2)],
+        Zone::Desert => &[("dried_hide", 3), ("fuel", 2), ("scorpion_venom", 2)],
+        Zone::BlackSwamp => &[("swamp_moss", 3), ("toxic", 3), ("bog_iron", 2)],
+        Zone::Harbor => &[("frozen_fish", 3), ("ice_shard", 2), ("dark_crystal", 1)],
+        // Cephe Hattı: askerler ve üs sandıkları
+        Zone::Front | Zone::Military => &[("powder_pouch", 2), ("circuit_board", 1)],
+        _ => &[],
+    }
+}
+
+/// V12.1'de oyundan kalkan malzemeler eski kayıtlarda bunlara dönüşür (1'e 1)
+pub const RETIRE_INTO: &[(&str, &str)] = &[
+    ("screw", "scrap"), ("nails", "scrap"), ("spring", "scrap"), ("copper", "scrap"), ("plastic", "scrap"),
+    ("glue", "resin"), ("tape", "cloth"), ("tooth", "bone"), ("powder", "charcoal"),
 ];
 
 // --------------------------------------------------------------------------- tüccar
@@ -863,11 +847,9 @@ pub const MERCHANT: &[(&str, u32, u32)] = &[
     ("bandage", 15, 1),
     ("food", 10, 1),
     ("energy", 18, 1),
-    ("glue", 10, 1),
-    ("tape", 8, 1),
     ("cloth", 6, 1),
+    ("rope", 8, 1),
     ("w_knife", 120, 1),
-    ("copper", 12, 3),
     ("medkit", 60, 5),
     ("antidote", 35, 6),
     ("potion_heal", 80, 3),

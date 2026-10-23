@@ -182,7 +182,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
               "Uyandığımda ellerimde mavi bir ışık vardı. O günden beri yolcuları taşırım."],
         ]),
         (N_WIZARD, "tip") => vec![
-            "Dünya bölgelere ayrıldı: orman, şehir, yanık orman, çöl, kara bataklık, askerî bölge, liman ve cephe.",
+            "Dünya bölgelere ayrıldı: orman, şehir, yanık orman, çöl, kara bataklık, liman ve cephe. Her birinden yalnız kendi malzemesi çıkar.",
             "Haritama bak: bir bölgeye dokunursan orada ne yaşadığını, ne düştüğünü ve kaçıncı seviyede gitmen gerektiğini söylerim.",
             "Elli devlet üssünün hepsi Cephe Hattı'nda; oraya yürüyerek gidilmez, 10. seviyeden sonra seni ben götürürüm.",
             "Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
@@ -194,7 +194,7 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
         (N_WIZARD, "rumor") => pick(&[
             &["Donmuş Liman'dan gelen bir tüccar, buz tutmuş konteynerlerin içinde ışık gördüğünü anlattı.", "Kim bilir, belki asker sandıklarıdır, belki de daha kötüsü."],
             &["Yanık Orman hâlâ tütüyor. Ateşi kimin yaktığını bilen yok; ama küllerin arasında koşan şeyler var."],
-            &["Askeri Bölge'nin hangarlarında devlet son birliklerini saklıyormuş. Helikopter sesleri geceleri buraya kadar gelir."],
+            &["Titan tek yerde durmuyor. Her çeyrek saatte başka bir bölgede uyanıyor; haritama bakarsan nerede olduğunu görürsün."],
         ]),
         // ------------------------------------------------------------------ komutan (şehir)
         (N_COMMANDER, "area") => vec![

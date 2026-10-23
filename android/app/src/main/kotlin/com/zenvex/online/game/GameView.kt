@@ -106,7 +106,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         weaponSprites = Array(wp.length()) { wp.getJSONArray(it).getString(1) }
         val it2 = w.getJSONArray("items")
         itemIds = Array(it2.length()) { it2.getJSONArray(it).getString(0) }
-        itemSprites = Array(itemIds.size) { atlas["i/" + itemIds[it]] }
+        itemSprites = Array(itemIds.size) { atlas["i/" + itemIds[it]] ?: atlas["s/" + itemIds[it]] }
         val zs = w.getJSONArray("zones")
         zones = Array(zs.length()) { zs.getJSONArray(it).getString(0) }
         mapPx = w.getDouble("map_px").toFloat()
@@ -2924,7 +2924,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 // tezgâha dokunma: üretim (yakındaysa)
                 benchBoxes.firstOrNull { x in it[0]..it[2] && y in (it[1] - 40 * density)..it[3] }?.let { b ->
-                    if (b[4] < 330f) ui.onOpen("craft") else ui.onToast("Tezgâha Yaklaş")
+                    if (b[4] < 330f) ui.onOpen("craft_bench") else ui.onToast("Tezgâha Yaklaş")
                     return true
                 }
                 // NPC'ye dokunma: konuşma (yakındaysa)

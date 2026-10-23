@@ -200,20 +200,25 @@ fun ItemDetail(item: JSONObject) {
  * Üretim: üstte sekmeler (Şifa, İksir, Silah Ve Alet, Ekipman, Takı, Malzeme, Araç, Üs), solda sekmenin tarifleri
  * (aynı eşyanın farklı tarifleri tek satırda), sağda seçili eşya: Üret tuşları en üstte (kaydırmadan görünür),
  * altında malzemeler ve her malzemenin nereden çıktığı.
+ *
+ * V12.1: iki ayrı ekran. [bench] false → El Üretimi (çanta ve HUD'dan; yalnız elle yapılan tarifler), true → Tezgâh
+ * (tezgâha dokununca; yalnız tezgâh tarifleri). Bir ekrandaki tarif diğerinde görünmez; boş sekmeler gizlenir.
  */
 @Composable
-fun CraftScreen(back: () -> Unit) {
+fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
     var tick by remember { mutableIntStateOf(0) }
-    val data = remember(tick) { GameSession.ui("craft") }
+    val data = remember(tick) { GameSession.ui(if (bench) "craft_bench" else "craft") }
     val all = data.optJSONArray("recipes").objs()
-    val tabs = data.optJSONArray("tabs")?.let { a -> List(a.length()) { a.optString(it) } } ?: emptyList()
-    var tab by remember { mutableIntStateOf(0) }
+    val tabNames = data.optJSONArray("tabs")?.let { a -> List(a.length()) { a.optString(it) } } ?: emptyList()
+    // yalnız tarif olan sekmeler (sekme numarası korunur)
+    val tabs = tabNames.withIndex().filter { (i, _) -> all.any { it.optInt("tab") == i } }
+    var tab by remember { mutableIntStateOf(tabs.firstOrNull()?.index ?: 0) }
     var onlyCan by remember { mutableStateOf(false) }
     var selId by remember { mutableStateOf<String?>(null) }
     var variant by remember { mutableIntStateOf(0) }
     val list = all.filter { it.optInt("tab") == tab && (!onlyCan || it.optBoolean("can")) }
     val r = list.firstOrNull { it.optJSONObject("out")?.optString("id") == selId } ?: list.firstOrNull()
-    val bench = data.optBoolean("near_bench")
+    val near = data.optBoolean("near_bench")
 
     fun craft(v: JSONObject, n: Int) {
         val res = GameSession.cmd("craft", "i" to v.optInt("i"), "n" to n)
@@ -221,16 +226,26 @@ fun CraftScreen(back: () -> Unit) {
         if (res.ok) com.zenvex.online.game.Audio.play("craft")
     }
 
-    PxFrame("Üretim", "craft", back, right = {
+    PxFrame(if (bench) "Tezgâh" else "El Üretimi", "craft", back, right = {
         PxButton(if (onlyCan) "Yapılabilenler" else "Hepsi", height = 36.dp, size = 12.sp, color = if (onlyCan) Px.Green else Px.Dark, icon = "check") {
             onlyCan = !onlyCan
         }
         Spacer(Modifier.width(8.dp))
-        PT(if (bench) "Tezgâh Yakında" else "Tezgâh Yok", 13.sp, if (bench) Px.Green else Px.Sub)
+        if (bench) {
+            val left = data.optDouble("temp_left", -1.0)
+            when {
+                // üsteki kalıcı tezgâh çantaya geri alınabilir
+                data.optBoolean("own_bench") -> PxButton("Tezgâhı Kaldır", height = 36.dp, size = 12.sp, color = Px.Red, icon = "hammer") {
+                    val res = GameSession.cmd("pickup_bench"); Toaster.show(res.msg, res.ok); if (res.ok) back()
+                }
+                left > 0 -> PT("Tezgâh ${(left / 60).toInt()}:${"%02d".format((left % 60).toInt())} Daha Durur", 13.sp, Px.Clan)
+                !near -> PT("Tezgâhtan Uzaklaştın", 13.sp, Px.Hard)
+            }
+        } else PT("Gelişmiş Tarifler Tezgâhta", 13.sp, Px.Sub)
     }, bg = "bg_craft") {
         // sekmeler (her sekmede yapılabilir tarif sayısı)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            tabs.forEachIndexed { i, name ->
+            tabs.forEach { (i, name) ->
                 val ready = all.count { it.optInt("tab") == i && it.optBoolean("can") }
                 val on = i == tab
                 Row(Modifier.height(36.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
@@ -260,7 +275,7 @@ fun CraftScreen(back: () -> Unit) {
                                 val vs = g.optJSONArray("variants").objs()
                                 PT(when {
                                     vs.size > 1 -> "${vs.size} Farklı Tarif"
-                                    vs.firstOrNull()?.optBoolean("bench") == true -> "Tezgâh Gerekli"
+                                    bench -> "Tezgâhta"
                                     else -> "Her Yerde"
                                 } + if (g.optInt("have") > 0) " · Çantada ${g.optInt("have")}" else "", 11.sp, Px.Sub)
                             }
@@ -291,7 +306,7 @@ fun CraftScreen(back: () -> Unit) {
                     }
                     if (!can) {
                         Spacer(Modifier.height(4.dp))
-                        PT(if (v.optBoolean("bench") && !bench) "Bir Tezgâhın Yanına Git (Şehirde Ya Da Üssünde)" else "Malzemeler Eksik", 12.sp, Px.Hard)
+                        PT(if (v.optBoolean("bench") && !near) "Tezgâhın Yanına Dön" else "Malzemeler Eksik", 12.sp, Px.Hard)
                     }
                     if (vs.size > 1) {
                         Spacer(Modifier.height(6.dp))
@@ -307,7 +322,7 @@ fun CraftScreen(back: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(6.dp))
-                    PT("Malzemeler" + if (v.optBoolean("bench")) " · Tezgâh Gerekli" else "", 13.sp, Px.Clan)
+                    PT("Malzemeler", 13.sp, Px.Clan)
                     Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                         for (inp in v.optJSONArray("inputs").objs()) {
                             val ok = inp.optInt("have") >= inp.optInt("need")
