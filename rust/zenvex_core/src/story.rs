@@ -85,17 +85,17 @@ macro_rules! q {
     };
 }
 
-/// Rehberin öğretici zinciri: zombi öldürmekten üretime kadar her şeyi öğretir.
+/// Öğretici zinciri (kendi kendine ilerler, NPC'si yok): zombi öldürmekten üretime kadar her şeyi öğretir.
 pub const GUIDE: &[Quest] = &[
     q!("g1", N_GUIDE, "İlk Adımlar", "Kamptan Çık, 3 Zombi Öldür",
-       ["Uyandın demek! Ben Nova, bu kampın rehberiyim. Dünya çöktü ama biz hâlâ ayaktayız.",
+       ["Uyandın. Dünya çöktü ama bu kamp hâlâ ayakta.",
         "Sol joystick ile yürürsün; sonuna kadar itersen koşarsın. Sağ joystick saldırıdır: çevirdiğin yöne vurursun.",
-        "Kampın dışındaki ormanda aylak zombiler dolaşıyor. Git, 3 tanesini indir ve bana dön."],
-       "İşte bu! Kılıcını iyi kullanıyorsun. Ama bir zombi sürüsü seni kolayca köşeye sıkıştırır…",
+        "Kampın dışındaki ormanda aylak zombiler dolaşıyor. 3 tanesini indir."],
+       "İşte bu! Yumrukların iş görüyor. Ama bir zombi sürüsü seni kolayca köşeye sıkıştırır…",
        Goal::Kill(None), 3, 1, 20, 40, &[("bandage", 2)], &[]),
     q!("g2", N_GUIDE, "Takla At", "Takla Tuşuyla 2 Kez Yuvarlan",
        ["Kuşatıldığında kaçmayı bilmelisin. Sağdaki takla tuşu seni baktığın yöne yuvarlar.",
-        "Yuvarlanırken hiçbir saldırı sana işlemez. 2 kez takla at, göreyim."],
+        "Yuvarlanırken hiçbir saldırı sana işlemez. 2 kez takla at."],
        "Çevik bir hayatta kalan! Takla 5 saniyede bir dolar, iyi zamanla.",
        Goal::Roll, 2, 1, 10, 30, &[], &[]),
     q!("g3", N_GUIDE, "Ganimet", "Yerden 3 Eşya Topla",
@@ -104,13 +104,13 @@ pub const GUIDE: &[Quest] = &[
        "Malzeme her şeydir. Ne kadar çok toplarsan o kadar çok üretirsin.",
        Goal::Loot, 3, 1, 15, 40, &[], &[]),
     q!("g4", N_GUIDE, "İlk Üretim", "Çantadan Üret: 1 Bandaj",
-       ["Şimdi üretmeyi öğrenelim. Sana 2 kumaş ve 1 reçine veriyorum.",
-        "Çantadaki Üretim bölümünden Bandaj'ı seç ve üret. Bandaj her yerde üretilir; bazı tarifler tezgâh ister."],
+       ["Şimdi üretmeyi öğrenelim. Çantana 2 kumaş ve 1 reçine kondu.",
+        "Çantadaki Üret tuşundan Bandaj'ı seç ve üret. Bandaj her yerde üretilir; gelişmiş tarifler tezgâh ister."],
        "Harika! Kendi bandajını yapan biri kolay kolay ölmez.",
        Goal::Craft("bandage"), 1, 1, 20, 50, &[], &[("cloth", 2), ("resin", 1)]),
     q!("g4b", N_GUIDE, "Taş Balta", "Üret: 1 Taş Balta (Silah Ve Alet Sekmesi)",
        ["Ağaçlar sağlamdır: her birinin 500 canı var. Yumrukla 20 kez vurman gerekir.",
-        "Sana odun, taş ve ip veriyorum. Üretimdeki Silah Ve Alet sekmesinden Taş Balta yap.",
+        "Çantana odun, taş ve ip kondu. Üretimdeki Silah Ve Alet sekmesinden Taş Balta yap.",
         "Balta çantanda durdukça işe yarar: ağaca her vuruşun 50 can götürür. Demir balta 100 götürür, onu tezgâhta yaparsın."],
        "İşte gerçek bir hayatta kalan aleti! Kazmayı da aynı yerden yaparsın; kayalara işler.",
        Goal::Craft("t_axe_stone"), 1, 1, 15, 40, &[], &[("wood", 6), ("stone", 4), ("rope", 1)]),
@@ -126,27 +126,27 @@ pub const GUIDE: &[Quest] = &[
        "Artık hazırlıklısın. Ceplerin bekleme süresini de gösterir.",
        Goal::Pocket, 1, 1, 10, 30, &[("potion_heal", 1)], &[]),
     q!("g6", N_GUIDE, "Tüccarla Tanış", "Tüccar Marco ile Konuş",
-       ["Marco gezgin tüccardır: kamyonetiyle bölgenin karakollarını dolaşır, her gelişinde başka mallar getirir.",
-        "Haritada kamyonetini bul, onunla bir konuş. Fazla malzemeni de ona satarsın."],
+       ["Marco gezgin tüccardır: kamyonetiyle bölgenin duraklarını dolaşır, her gelişinde başka mallar getirir.",
+        "Haritada altın kese işaretini bul, onunla bir konuş. Fazla malzemeni de ona satarsın."],
        "Marco'yla anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
        Goal::Talk(N_MERCHANT), 1, 1, 10, 30, &[], &[]),
     q!("g6b", N_GUIDE, "Büyücüyle Tanış", "Büyücü Aldric ile Konuş",
        ["Ateşin doğusunda mor cüppeli biri durur: Büyücü Aldric.",
-        "Keşfettiğin güvenli yerlere ve kişisel üssüne seni ışınlar. 10. seviyede seni Cephe Hattı'na, üslerin olduğu yere de götürür.",
+        "Bölgeler ayrı haritalardır; aralarında yalnız o ışınlar. Kişisel üssüne de o götürür, 10. seviyede şehre ve Cephe Hattı'na da.",
         "Git, kendini tanıt."],
-       "Aldric tuhaf adamdır ama sözünü tutar. Uzak yolları onunla kısaltırsın.",
+       "Aldric tuhaf adamdır ama sözünü tutar. Bölgeden bölgeye onunla geçersin.",
        Goal::Talk(N_WIZARD), 1, 1, 10, 30, &[], &[]),
     q!("g7", N_GUIDE, "Ayakta Kal", "Seviye 5'e Ulaş",
-       ["Sana öğreteceklerim bu kadar. Gerisi tecrübe.",
-        "Yaşlı Silas'ın görevlerini yap, ormanda zombi avla. 5. seviyeye ulaşınca gel, seni uğurlayayım.",
-        "5. seviyede sohbet de açılır; diğer hayatta kalanlarla konuşabilirsin."],
-       "Artık benim yardımıma ihtiyacın yok. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
+       ["Temel bilgiler bu kadar. Gerisi tecrübe.",
+        "Yaşlı Silas'ın görevlerini yap, ormanda zombi avla ve 5. seviyeye ulaş.",
+        "5. seviyede sohbet açılır; diğer hayatta kalanlarla konuşabilirsin."],
+       "Öğretici bitti. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
     // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Diana
-    q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Arena Kampı'na Git",
+    q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Eski Arena'ya Git",
        ["Şehre hoş geldin asker. Ben Komutan Diana; bu surların ardında hayatta kalanları ben toplarım.",
         "Şehir üç kuşaktır: banliyö, merkez ve sanayi. Kuzeydoğudaki eski arena artık boş; Titan her çeyrek saatte başka bir bölgede uyanıyor.",
-        "Arena Kampı'na kadar git, şehri tanı. Haritanda işaretledim. Titan'ın nerede olduğunu Aldric'in haritasında görürsün."],
+        "Eski Arena'ya kadar git, şehri tanı. Haritanda işaretledim. Titan'ın nerede olduğunu Aldric'in haritasında görürsün."],
        "Şehri tanıdın. Titan büyük ganimet bırakır ama klansız gidene mezar olur.",
        Goal::Reach("arena_post"), 1, 10, 150, 200, &[("medkit", 2)], &[]),
     q!("g9", N_COMMANDER, "Eğitim Üssü", "Eğitim Üssündeki Askerleri Yen Ve Üssü Ele Geçir",
@@ -209,10 +209,10 @@ pub const MAIN: &[Quest] = &[
         "Panzehir taşımayı unutma, evlat."],
        "Kaynak duruldu! Kurbağalar bile geri döndü. Bunu hak ettin.",
        Goal::Cleanse("spring"), 6, 8, 220, 420, &[("antidote", 3), ("potion_heal", 2)], &[]),
-    q!("q9", N_QUEST, "Şehrin Kapısı", "Seviye 10'a Ulaş ve Şehre Gir",
-       ["Kuzeydeki şehir kapısı ancak güçlü olanlara açılıyor.",
-        "10. seviyeye ulaş ve şehre adım at. Orada daha büyük tehlikeler ve hazineler var."],
-       "Şehre girdin! Artık bu kampın hikâyesi seninle anlatılacak.",
+    q!("q9", N_QUEST, "Şehre Yolculuk", "Seviye 10'a Ulaş",
+       ["Şehir ancak güçlü olanları kabul eder. Oraya yürüyerek gidilmez; Büyücü Aldric götürür.",
+        "10. seviyeye ulaş, sonra Aldric'ten seni şehre götürmesini iste. Orada daha büyük tehlikeler ve hazineler var."],
+       "10. seviyedesin! Aldric seni şehre götürmeye hazır. Artık bu kampın hikâyesi seninle anlatılacak.",
        Goal::Level, 10, 8, 300, 0, &[("medkit", 2)], &[]),
 ];
 
@@ -542,7 +542,7 @@ impl Game {
                         if !given.is_empty() {
                             lines.push(format!("Al bunları, işine yarar: {}.", given.join(", ")));
                         }
-                        lines.push("Hedefin sol üstteki takipçide ve haritada işaretli. İşin bitince bana dön.".into());
+                        lines.push("Hedefin haritada işaretli, Görevler tuşunda da yazıyor. İşin bitince bana dön.".into());
                         if q.goal == Goal::Train {
                             self.start_training();
                             lines.push("Kapıyı açıyorum… Bol şans asker!".into());
@@ -566,7 +566,8 @@ impl Game {
             }
             t if t.starts_with("t:") => {
                 let seed = (self.time as usize).wrapping_add(self.progress.level as usize);
-                lines.extend(crate::talk::topic_lines(kind, &t[2..], seed).into_iter().map(String::from));
+                let area = crate::areas::AREAS[crate::areas::area_at(self.player.x, self.player.y)].id;
+                lines.extend(crate::talk::topic_lines(kind, &t[2..], seed, area).into_iter().map(String::from));
                 menu = Menu::Topics;
             }
             "back" => lines.push(match kind {

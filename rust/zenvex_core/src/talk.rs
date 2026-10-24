@@ -1,6 +1,6 @@
 //! NPC sohbet konuları: her NPC'nin kendi bölgesi, geçmişi, söylentileri ve oyun ipuçları.
 //! Satırlar normal cümledir; seçenek etiketleri Baş Harfi Büyük yazılır.
-use crate::story::{N_COMMANDER, N_DOCTOR, N_GUIDE, N_MECHANIC, N_MERCHANT, N_QUEST, N_TRAINER, N_WIZARD};
+use crate::story::{N_COMMANDER, N_DOCTOR, N_MECHANIC, N_MERCHANT, N_QUEST, N_TRAINER, N_WIZARD};
 
 /// Sohbet menüsü konuları (kimlik, etiket). "todo" oyuncunun durumuna göre story.rs'de üretilir.
 pub fn topics(kind: u8) -> &'static [(&'static str, &'static str)] {
@@ -10,7 +10,6 @@ pub fn topics(kind: u8) -> &'static [(&'static str, &'static str)] {
         N_DOCTOR => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Sağlık Tavsiyesi"), ("rumor", "Söylenti Var Mı?")],
         N_MECHANIC => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Araçlar Hakkında"), ("rumor", "Söylenti Var Mı?")],
         N_TRAINER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Köpekler Hakkında"), ("rumor", "Söylenti Var Mı?")],
-        N_GUIDE => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Temel Bilgiler"), ("rumor", "Söylenti Var Mı?")],
         N_WIZARD => &[("todo", "Ne Yapmalıyım?"), ("area", "Kişisel Üs Nedir?"), ("self", "Kendinden Bahset"), ("tip", "Bölgeler ve Üsler"), ("rumor", "Söylenti Var Mı?")],
         N_COMMANDER => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Devlet Üsleri"), ("rumor", "Söylenti Var Mı?")],
         _ => &[("todo", "Ne Yapmalıyım?"), ("area", "Bu Bölge Hakkında"), ("self", "Kendinden Bahset"), ("tip", "Kuleler Hakkında"), ("rumor", "Söylenti Var Mı?")],
@@ -25,58 +24,101 @@ pub fn chat_intro(kind: u8) -> &'static str {
         N_DOCTOR => "Hastalarım şimdilik uyuyor, birkaç dakikam var. Ne merak ediyorsun?",
         N_MECHANIC => "Elim yağlı ama kulağım sende. Sor bakalım.",
         N_TRAINER => "Köpekler dinlenirken ben de biraz soluklanayım. Ne konuşalım?",
-        N_GUIDE => "Sorularını sevdim; soru soran hayatta kalır. Ne öğrenmek istersin?",
         N_WIZARD => "Otur, ateş sıcak. Sorularının cevabı bende; ama bazı cevaplar soru sormaktan daha ağırdır.",
         N_COMMANDER => "Nöbet değişimine kadar vaktim var. Sor asker, ama kısa kes.",
         _ => "Nöbetteyim ama gözüm ufukta, kulağım sende. Çabuk sor.",
     }
 }
 
-/// Sabit konuların satırları; `seed` söylentileri ve kişisel hikâyeleri değiştirir.
-pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
+/// Bulunulan bölgenin tanıtımı (her NPC "Bu Bölge Hakkında" sorulunca bunu anlatır; V15 kare bölgeler)
+fn area_lines(area: &str) -> Vec<&'static str> {
+    match area {
+        "city" => vec![
+            "Yıkık Şehir'desin. Güneydeki surun dibinde güvenli meydan var: pazar, doktor, tamirci, eğitmen ve büyücü orada.",
+            "Kuzeye çıktıkça önce banliyö, sonra merkez, en tepede sanayi gelir. Her adımda zombiler biraz daha sertleşir.",
+            "Kuzeydoğu köşedeki eski arena boş. Titan artık her çeyrek saatte başka bir bölgede uyanıyor.",
+            "Elektronik parça, dişli, pil, paslı anahtar ve altın saat en çok bu şehirden çıkar.",
+        ],
+        "burnt" => vec![
+            "Yanık Orman'dasın: kül, duman ve kömürleşmiş ağaçlar. Kül Karakolu güneyde, büyücü de orada.",
+            "Koşucular ve karanlık zombiler dumanın içinde avlanır. Uzun süre aynı yerde durma.",
+            "Kömür ve yanık reçine bu küllerin arasından çıkar; güç ve hız iksirleri için lazım.",
+        ],
+        "desert" => vec![
+            "Çöl Otoyolu'ndasın. Çöl Karakolu güneyde; büyücü onun yanında bekler.",
+            "Tank zombiler yavaştır ama vurdukları yer çöker. Kuduz köpekler sürüyle gelir, kenarda kalma.",
+            "Kurutulmuş deri, benzin ve akrep zehri bu kumların malıdır.",
+        ],
+        "bswamp" => vec![
+            "Kara Bataklık: zehirli sis ve kara su. Karakol güneyde, büyücü yanında.",
+            "Toksik zombilerin vuruşu zehirler. Yanına panzehir almadan buraya gelme.",
+            "Bataklık yosunu, toksik öz ve bataklık demiri burada çıkar.",
+        ],
+        "harbor" => vec![
+            "Donmuş Liman'dasın: buz tutmuş rıhtım, konteynerler ve donmuş gemiler. Liman Karakolu güneyde.",
+            "Dünyanın en tehlikeli zombileri burada. Can iksirlerin cebinde olsun.",
+            "Donmuş balık, buz kristali ve karanlık kristal yalnız bu limandan çıkar.",
+        ],
+        "front" => vec![
+            "Cephe Hattı'ndasın. Burada zombi yok, askerler var. Karargâh güneyin ortasında.",
+            "Kuzeye doğru elli üs ızgara gibi dizili. Her üsün duvarları, kuleleri ve askerleri var.",
+            "Üsleri klanınla ele geçirirsin; tuttuğun üs klanına tecrübe ve ödül kazandırır.",
+            "Barut kesesi ve askerî devre kartı askerlerden ve üs sandıklarından düşer.",
+        ],
+        "home" => vec![
+            "Burası senin üssün. Kimse göremez, kimse giremez; yalnız büyücü kapı açar.",
+            "Sandıklarını ve tezgâhlarını buraya kurarsan kalıcı olur. Dışarıda kurduğun tezgâh on dakika durur.",
+        ],
+        _ => vec![
+            "Başlangıç Ormanı'ndasın. Kamp güneyde: ateş, tüccarın durağı ve Büyücü Aldric orada.",
+            "Batıda Doktor Elena'nın sahra hastanesi, doğuda Jack'in köpek barınağı, kuzeyde Viktor'un benzinliği var. Üçü de güvenli.",
+            "Doğuya gittikçe ağaçlar sıklaşır ve Derin Orman başlar. Batıdaki bataklıkta zehirli bir kaynak var.",
+            "Bu orman bir kare; kenarlarının ötesi boşluk. Başka bölgelere yürüyerek gidilmez, Büyücü Aldric götürür.",
+        ],
+    }
+}
+
+/// Sabit konuların satırları; `seed` söylentileri ve kişisel hikâyeleri değiştirir, `area` bulunulan bölge.
+pub fn topic_lines(kind: u8, topic: &str, seed: usize, area: &str) -> Vec<&'static str> {
     let pick = |all: &[&'static [&'static str]]| all[seed % all.len()].to_vec();
     match (kind, topic) {
-        // ------------------------------------------------------------------ tüccar
-        (N_MERCHANT, "area") => vec![
-            "Burası kampın kalbi. Kamp ateşi, tezgâhlar, çadırlar… Zombiler sınırı geçemez; nöbetçiler ve tanrılar buna izin vermez.",
-            "Batıda Doktor Elena'nın sahra hastanesi, doğuda Jack'in köpek barınağı, kuzeyde de Viktor'un benzinliği var.",
-            "Hepsi güvenli karakoldur. Bir yere sıkışırsan oralardan birine koş.",
+        (N_WIZARD, "area") => vec![
+            "Kişisel üssün, dünyanın kıyısında duvarlarla çevrili küçük bir bahçe. Oraya yalnız ben kapı açabilirim.",
+            "Kimse göremez, kimse giremez. Sandıklarını orada kur, eşyalarını sakla; çantan hafiflesin.",
+            "İstersen öldüğünde orada uyanırsın. Bunu bana üssünde söyle, ayarlarım.",
         ],
+        (_, "area") => area_lines(area),
+        // ------------------------------------------------------------------ tüccar
         (N_MERCHANT, "self") => pick(&[
             &["Ben Marco. Salgından önce kasabanın en büyük nalbur dükkânı benimdi.",
-              "Çivi, ip, bant… Bugün bunlar altından kıymetli. Ben de onları satarak hayatta kalıyorum.",
-              "Kimse beni kahraman sanmasın; ben sadece insanlara ihtiyaçlarını veriyorum."],
+              "Şimdi dükkânım bu kamyonet. Karakoldan karakola gider, her durakta birkaç dakika beklerim.",
+              "Kimse beni kahraman sanmasın; ben sadece insanlara ihtiyaçlarını getiriyorum."],
             &["Karım ve kızım güneydeki kampa kaçtı. Bir gün yollar açılırsa onları bulacağım.",
-              "O güne kadar bu tezgâhtan ayrılmam. Kervan gelirse ilk ben duyarım."],
+              "O güne kadar direksiyonu bırakmam. Her durakta birilerine onları sorarım."],
         ]),
         (N_MERCHANT, "tip") => vec![
-            "Malzemeyi çöpe atma; kumaş, bant ve ip neredeyse her tarifte lazım.",
-            "Fazla kemiğin, dişin varsa bana sat. Ama zehir bezini satma; panzehir için sakla.",
-            "Ticaret dalını geliştirirsen sana daha ucuza satarım. Söz.",
-            "Bir de… Gece fiyatlarım aynıdır ama yolların fiyatı canındır. Akşam olmadan dön.",
+            "Her gelişimde başka mallar getiririm ve herkes aynı malları görür. Neyi ne sıklıkla getirdiğimi Olasılıklar sekmesinde gösteririm.",
+            "Malzemeyi çöpe atma: kumaş, ip ve paslı metal neredeyse her tarifte lazım.",
+            "Fazla kemiğin ya da derin varsa bana sat; kaç tane satacağını sen seçersin.",
+            "Ticaret yeteneğini geliştirirsen eşyalarını daha iyi fiyata alırım. Söz.",
         ],
         (N_MERCHANT, "rumor") => pick(&[
             &["Bir müşterim şehirde, eski bankanın kasasında asker sandıkları gördüğünü söyledi.", "Doğru mu bilmem; o adam bir kere de beni kandırmıştı."],
-            &["Kuzeyden gelen bir yolcu, Titan'ın göğsünde ateş yandığını anlattı.", "Kalbi bir fırın gibiymiş. Ben görmek istemem."],
+            &["Bir yolcu, Titan'ın göğsünde ateş yandığını anlattı.", "Kalbi bir fırın gibiymiş. Ben görmek istemem."],
             &["Gizemli ağacın altında mantar toplayan bir kadın varmış.", "Kimse yüzünü görmemiş. Selamını alanlar zombi görmeden eve dönmüş."],
         ]),
         // ------------------------------------------------------------------ görevci
-        (N_QUEST, "area") => vec![
-            "Kampın etrafı Başlangıç Ormanı; aylak zombiler dolaşır ama yavaştırlar.",
-            "Daha kuzeye gidersen Derin Orman başlar. Orada koşucular avlanır; nefesini iyi ayarla.",
-            "Batıda bataklık var, zehirli kaynağın çevresi. En kuzeyde de şehir surları… 10. seviyeye kadar kapı sana açılmaz.",
-        ],
         (N_QUEST, "self") => pick(&[
             &["Kırk yıl köy öğretmenliği yaptım evlat. Çocuklara harita okumayı öğretirdim.",
               "Şimdi haritaları kendim çiziyorum; her kâğıt bir hayat kurtarır.",
               "Bacaklarım artık yürümüyor ama aklım hâlâ yolları hatırlıyor."],
-            &["Bu kampı üç kişi kurduk: ben, Marco ve bir de asker. Adını söylemem; o kuledeki nöbetinden hiç dönmedi.",
+            &["Bu kampı üç kişi kurduk: ben, Marco ve bir asker. Adını söylemem; o kuledeki nöbetinden hiç dönmedi.",
               "Onun mızrağı hâlâ kulede asılı. Askerler onu uğur sayar."],
         ]),
         (N_QUEST, "tip") => vec![
-            "Eskiden bu ormanda ayı yoktu ama av vardı. Şimdi avcı biziz, av da onlar.",
-            "Görevlerimi bitirdikçe sana daha zor işler veririm. Her biri haritada işaretlidir; takipçiye dokun, nereye gideceğini görürsün.",
-            "Günlük görevleri de unutma. Küçük işlerdir ama altını ve tecrübeyi iyi verir.",
+            "Eskiden bu ormanda av vardı. Şimdi avcı biziz, av da onlar.",
+            "Görevlerimi bitirdikçe sana daha zor işler veririm. Hedef haritanda işaretlidir; Görevler tuşunda da yazar.",
+            "Günlük ve haftalık görevleri unutma. Küçük işlerdir ama altın, tecrübe ve bilet puanı verir.",
         ],
         (N_QUEST, "rumor") => pick(&[
             &["Bataklıkta bir kurbağanın konuştuğunu duydum. Herhalde zehirli suyu içen biri uydurmuştur.", "Ama yine de… Kaynağı temizlersen öğreniriz."],
@@ -84,10 +126,6 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Geceleri ormanda bir ışık dolaşıyormuş.", "Fener mi, ruh mu, bilmiyorum. Bir gece sen de bak."],
         ]),
         // ------------------------------------------------------------------ doktor
-        (N_DOCTOR, "area") => vec![
-            "Sahra hastanesi kamptan biraz batıda. Çadır eski ama yataklar temiz.",
-            "Burası güvenli karakol; zombiler içeri giremez. Yaralıysan buraya kadar koş, gerisini ben hallederim.",
-        ],
         (N_DOCTOR, "self") => pick(&[
             &["Şehir hastanesinde acil serviste çalışıyordum. İlk ısırık vakası bana geldi.",
               "Ne olduğunu anlamamız iki gün sürdü. O iki gün her şeyi değiştirdi.",
@@ -95,21 +133,16 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Uyumuyorum desem yalan olur, ama az uyuyorum.", "Her gece birileri kapıya gelir. Ben de kapıyı her gece açarım."],
         ]),
         (N_DOCTOR, "tip") => vec![
-            "Bandaj küçük yaralar içindir; az iyileştirir ama hemen etki eder.",
-            "İlk yardım kiti ağır yaralanmalarda hayat kurtarır. Tezgâhta bandaj, bant ve zehir beziyle üretilir.",
-            "Zehirlendiysen canın yavaş yavaş akar. Panzehir iç ya da bana gel.",
+            "Bandaj küçük yaralar içindir: iki kumaş ve bir reçineyle elde yapılır, hemen etki eder.",
+            "İlk yardım kiti ağır yaralarda hayat kurtarır. Tezgâhta iki bandaj, bataklık yosunu ve kurutulmuş deriyle yapılır.",
+            "Zehirlendiysen canın yavaş yavaş akar. Panzehir iç ya da bana gel; yirmi altına seni temizlerim.",
             "Sağlık eşyalarını ceplerine koy; çantayı karıştırırken zombi beklemez.",
         ],
         (N_DOCTOR, "rumor") => pick(&[
-            &["Bataklıktan gelen yaralıların kanı yeşile çalıyor.", "Zehir orada bir yerden kaynıyor, kaynağı temizlenmeli."],
+            &["Kara Bataklık'tan gelen yaralıların kanı yeşile çalıyor.", "Zehir orada bir yerden kaynıyor."],
             &["Karanlık zombilerin gözleri mor parlıyor. Işıktan kaçmıyorlar, ışığa koşuyorlar.", "Fenerini gece dikkatli kullan."],
         ]),
         // ------------------------------------------------------------------ tamirci
-        (N_MECHANIC, "area") => vec![
-            "Bu benzinlik kampın kuzeyinde, yolun kıyısında. Depolarda hâlâ biraz yakıt var.",
-            "Etrafta hurda araçlar dolu; parça sökmeye çalışma, alarmı öter, sürü gelir.",
-            "Burası da güvenli karakol. Aracın bozulursa yanıma getir.",
-        ],
         (N_MECHANIC, "self") => pick(&[
             &["Otuz yıl kamyon tamir ettim. Motorun sesinden derdini anlarım.",
               "Salgın başladığında herkes kaçıyordu; ben kaçanların arabalarını tamir ediyordum.",
@@ -117,109 +150,69 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             &["Bir arabayı tamir etmek için üç gün uğraştım.", "Sonra bir tank zombi devirdi. Hayat işte."],
         ]),
         (N_MECHANIC, "tip") => vec![
-            "Motor tek kişiliktir ama çevik. Araba iki kişiliktir; yanına bir arkadaşını al, dışarıdan ikiniz de görünürsünüz.",
-            "Yakıt biterse araç durur. Yakıt bidonu ya da benim pompam lazım.",
+            "Bana parçaları getir, aracını ben yaparım: tekerlek, motor ve gövde. Hazır olunca anahtarı postayla yollarım.",
+            "Motosiklet tek kişilik ama çeviktir. Araba iki kişiliktir; yanına bir arkadaşını al.",
+            "Yakıt biterse araç durur. Benzin çölde bulunur; bidonu çantanda taşı.",
             "Zombilere çarpmak onları ezer ama aracın da hasar alır. Duman çıkıyorsa yanıma getir.",
         ],
         (N_MECHANIC, "rumor") => pick(&[
             &["Şehirdeki sanayi bölgesinde çalışan bir jeneratör sesi duyuluyormuş.", "Biri orada yaşıyor olmalı. Ya da bir şey."],
-            &["Askerî kamyonların konvoyu son kez kuzeye giderken görülmüş.", "İçlerinde ne vardı, kimse bilmiyor."],
+            &["Askerî kamyonların konvoyu son kez cepheye giderken görülmüş.", "İçlerinde ne vardı, kimse bilmiyor."],
         ]),
         // ------------------------------------------------------------------ köpek eğitmeni
-        (N_TRAINER, "area") => vec![
-            "Barınak kampın doğusunda. Sahipsiz kalan köpekleri burada topluyorum.",
-            "Çevredeki zombi köpekler bir zamanlar bu köpeklerin kardeşiydi. Onlara acı ama dikkatli ol; sürüyle saldırırlar.",
-        ],
         (N_TRAINER, "self") => pick(&[
             &["Ben Jack. Eskiden polis köpeklerini eğitirdim.",
               "Salgın gecesi köpeklerim beni uyandırdı; havlamasalar şimdi burada olmazdım.",
               "O yüzden onlara borçluyum. Her sahipsiz köpeğe bir yuva bulacağım."],
-            &["İlk köpeğimin adı Karabaş'tı.", "Şimdi bu barınaktaki her yavru onun torunu sayılır."],
+            &["İlk köpeğimin adı Karabaş'tı.", "Şimdi barınaktaki her yavru onun torunu sayılır."],
         ]),
         (N_TRAINER, "tip") => vec![
-            "Köpek yalnızca benden, bu barınaktan alınır. Başka kimseye güvenme.",
-            "Köpeğin seni takip eder, yakındaki düşmana saldırır. Zombiler de ona saldırır, onu korumayı unutma.",
-            "Canı biterse bayılır ve 30 saniye sonra kendine gelir.",
-            "Isırık, can ve iyileşme olmak üzere üç yönü var; altınla burada geliştiririm.",
+            "Köpek yalnızca benden alınır. Başka kimseye güvenme.",
+            "Köpeğin seni takip eder, yakındaki düşmana saldırır. Zombiler de ona saldırır; onu korumayı unutma.",
+            "Canı biterse bayılır ve otuz saniye sonra kendine gelir.",
+            "Isırık, can ve iyileşme olmak üzere üç yönü var; altınla ben geliştiririm.",
         ],
         (N_TRAINER, "rumor") => pick(&[
             &["Ormanda beyaz bir kurt görülmüş. Zombi değilmiş.", "Gözleri insan gibi bakıyormuş. Bulursan bana söyle."],
             &["Zombi köpekler geceleri uluyunca barınaktakiler susuyor.", "Korkudan değil; dinliyorlar sanki."],
         ]),
-        // ------------------------------------------------------------------ rehber
-        (N_GUIDE, "area") => vec![
-            "Bu kamp güvenli bölge: içeride kimse sana saldıramaz, peşindeki zombi sınırda durur.",
-            "Kampın çevresi Başlangıç Ormanı. Seviye arttıkça kuzeye, derin ormana ve bataklığa açılırsın.",
-            "Haritayı açınca keşfetmediğin yerler bulutla kaplı görünür; gezdikçe açılır.",
-        ],
-        (N_GUIDE, "self") => pick(&[
-            &["Benim adım Nova. Bu kampa ilk gelenlere yol gösteriyorum.",
-              "Ben de bir zamanlar senin gibi uyandım; kimse bana bir şey anlatmadı.",
-              "Kimse aynı korkuyu yaşamasın diye buradayım."],
-            &["Üniversitede coğrafya okuyordum. Haritayı ezbere bilirim.", "Ama haritada olmayan şeyler de var; onları sen keşfedeceksin."],
-        ]),
-        (N_GUIDE, "tip") => vec![
-            "Yürümek ve koşmak yorulmaz; ama yumruk, kılıç savurmak ve takla dayanıklılık harcar. Sarı çubuk biterse saldırın yavaşlar.",
-            "Takla atarken hiçbir saldırı sana işlemez; kuşatıldığında baktığın yöne yuvarlan.",
-            "Ağaç kesmek emek ister; birkaç vuruşta değil, sabırla devrilir. Odun, tarifler için şart.",
-            "Çantada bir eşyaya basılı tutup ceplere sürükle; cepteki eşyalar ekranın altında tek dokunuşla kullanılır.",
-        ],
-        (N_GUIDE, "rumor") => pick(&[
-            &["Gizemli ağacın çevresinde zombilerin durup baktığını gördüm.", "Ağaca değil, gökyüzüne bakıyorlardı."],
-            &["Bazı hayatta kalanlar güneydeki eski askerî üslerden bahsediyor.", "Askerler hâlâ oradaymış, ama kimin için savaştıklarını bilen yok."],
-        ]),
         // ------------------------------------------------------------------ büyücü
-        (N_WIZARD, "area") => vec![
-            "Kişisel üssün, dünyanın kıyısında, duvarlarla çevrili küçük bir bahçe. Oraya yalnız ben kapı açabilirim.",
-            "Kimse göremez, kimse giremez. Sandıklarını orada kur, eşyalarını sakla; çantan hafiflesin.",
-            "İstersen öldüğünde orada uyanırsın. Bunu bana üssünde söyle, ayarlarım.",
-        ],
         (N_WIZARD, "self") => pick(&[
             &["Adım Aldric. Salgından önce şehrin rasathanesinde yıldızları sayardım.",
               "Gökyüzü değişince ben de değiştim. Artık yıldızlar değil, kapılar sayıyorum.",
-              "Her kapı bir bölgeyi hatırlar. Dünya artık parça parça; bölgeden bölgeye yürünmez, kapımdan geçilir."],
+              "Dünya artık parça parça; her bölge ayrı bir kare. Bölgeden bölgeye yürünmez, kapımdan geçilir."],
             &["Bu kapıları bana kim öğretti diye sorma. Rüyamda yaşlı bir kadın vardı; gizemli ağacın altında oturuyordu.",
               "Uyandığımda ellerimde mavi bir ışık vardı. O günden beri yolcuları taşırım."],
         ]),
         (N_WIZARD, "tip") => vec![
-            "Dünya bölgelere ayrıldı: orman, şehir, yanık orman, çöl, kara bataklık, liman ve cephe. Her birinden yalnız kendi malzemesi çıkar.",
+            "Dünya yedi bölgeye ayrıldı: orman, şehir, yanık orman, çöl, kara bataklık, liman ve cephe. Her birinden kendi malzemesi çıkar.",
             "Haritama bak: bir bölgeye dokunursan orada ne yaşadığını, ne düştüğünü ve kaçıncı seviyede gitmen gerektiğini söylerim.",
-            "Elli devlet üssünün hepsi Cephe Hattı'nda; oraya yürüyerek gidilmez, 10. seviyeden sonra seni ben götürürüm.",
-            "Askerler duvarların ardında bekler: M4'lüler yakına seri atar, keskin nişancılar uzaktan.",
-            "Keskin nişancının kırmızı lazerini görürsen yerinden kıpırda ya da takla at; mermi lazerin olduğu yere gider.",
+            "Kilitli adalar karanlık ve kilitlidir; seviyen yetince kilit açılır.",
+            "Elli devlet üssünün hepsi Cephe Hattı'nda; 10. seviyeden sonra seni oraya ben götürürüm.",
             "Askerleri temizleyip klanınla bayrağın dibinde on saniye durursan üs klanının olur.",
-            "Klanının üssü dakikada 15 klan tecrübesi verir; ödül süresi dolunca eşya klan deposuna düşer.",
-            "Yeni askerler helikopterle iner ve ilk beş saniye hiçbir şey onlara işlemez. Boşuna vurma, siper al.",
+            "Keskin nişancının kırmızı lazerini görürsen yerinden kıpırda ya da takla at; mermi lazerin olduğu yere gider.",
         ],
         (N_WIZARD, "rumor") => pick(&[
             &["Donmuş Liman'dan gelen bir tüccar, buz tutmuş konteynerlerin içinde ışık gördüğünü anlattı.", "Kim bilir, belki asker sandıklarıdır, belki de daha kötüsü."],
-            &["Yanık Orman hâlâ tütüyor. Ateşi kimin yaktığını bilen yok; ama küllerin arasında koşan şeyler var."],
-            &["Titan tek yerde durmuyor. Her çeyrek saatte başka bir bölgede uyanıyor; haritama bakarsan nerede olduğunu görürsün."],
+            &["Yanık Orman hâlâ tütüyor. Ateşi kimin yaktığını bilen yok.", "Ama küllerin arasında koşan şeyler var; yalnız gitme."],
+            &["Titan tek yerde durmuyor. Her çeyrek saatte başka bir bölgede uyanıyor.", "Haritama bakarsan nerede olduğunu görürsün; kırmızı işaret onun."],
         ]),
-        // ------------------------------------------------------------------ komutan (şehir)
-        (N_COMMANDER, "area") => vec![
-            "Bu surların içi şehrin tek güvenli yeri. Pazar, doktor, tamirci; hepsi burada.",
-            "Güneyde sur, kuzeyde banliyö, merkez ve en tepede sanayi. Kuzeydoğu köşede Titan Arenası.",
-            "Şehir kendi başına bir bölge; ormana, cepheye ya da başka bölgelere yalnız Aldric götürür. Büyücü güvenli bölgede.",
-        ],
+        // ------------------------------------------------------------------ komutan
         (N_COMMANDER, "self") => vec![
             "Salgından önce sınır karakolundaydım. Emir gelmedi, ben de emir vermeye başladım.",
-            "Şehre giren her hayatta kalanı kayda geçiririm. Sen de artık kayıtlısın asker.",
+            "Şehre ve cepheye gelen her hayatta kalanı kayda geçiririm. Sen de artık kayıtlısın asker.",
         ],
         (N_COMMANDER, "tip") => vec![
             "Üs almak için önce askerleri temizle, sonra bayrak halkasında on saniye dur. Klanın yoksa üs tutamazsın.",
             "Keskin nişancının lazeri üstündeyse yer değiştir ya da takla at.",
-            "Tuttuğun üssü boş bırakma: devlet geri almak için helikopterle asker indirir, bazen de bombalar.",
+            "Yeni askerler helikopterle iner ve ilk beş saniye hiçbir şey onlara işlemez. Boşuna vurma, siper al.",
+            "Tuttuğun üssü boş bırakma: devlet geri almak için asker indirir, bazen de bombalar.",
         ],
         (N_COMMANDER, "rumor") => pick(&[
             &["Cephe Hattı'nda klanların gece boyu çatıştığı söyleniyor.", "Sabah olunca bayrakların yarısı el değiştirmiş oluyor."],
-            &["Karargâhtaki telsizci, güneyde kimsenin tutamadığı bir üs olduğunu söyledi.", "Her alan kişi bir hafta içinde kaybediyormuş."],
+            &["Karargâhtaki telsizci, kimsenin uzun süre tutamadığı bir üs olduğunu söyledi.", "Her alan bir hafta içinde kaybediyormuş."],
         ]),
         // ------------------------------------------------------------------ kule askeri
-        (_, "area") => vec![
-            "Kuleden her şeyi görürüm: orman, yol, şehrin dumanı.",
-            "Kampa yaklaşan her yaratığa mızrağımı atarım. Sen içerideyken rahat ol.",
-        ],
         (_, "self") => vec![
             "Bölüğümden geriye ben kaldım. Mızrak kullanmayı burada öğrendim; mermi çoktan bitti.",
             "Nöbet bana iyi geliyor. Düşünecek vakit bırakmıyor.",
@@ -229,8 +222,8 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize) -> Vec<&'static str> {
             "Zombiler güvenli bölgeye giremez; girmeye kalkanı gökten bir yıldırım çarpar.",
         ],
         (_, "rumor") => pick(&[
-            &["Dün gece kuzeyde bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
-            &["Titan arenasından gelen kükremeyi kulede bile hissettim.", "Hazır olmadan oraya gitme."],
+            &["Dün gece cephe tarafından bir helikopter sesi duydum.", "Kim uçurur bu zamanda? Bir bilen varsa söylesin."],
+            &["Titan'ın kükremesini kulede bile hissettim.", "Hazır olmadan peşine düşme."],
         ]),
         _ => vec!["Bunu bilmiyorum, kusura bakma."],
     }
@@ -242,12 +235,14 @@ mod tests {
 
     #[test]
     fn every_npc_has_rich_topics() {
-        for k in [0u8, N_MERCHANT, N_QUEST, N_DOCTOR, N_MECHANIC, N_TRAINER, N_GUIDE] {
+        for k in [0u8, N_MERCHANT, N_QUEST, N_DOCTOR, N_MECHANIC, N_TRAINER, N_WIZARD, N_COMMANDER] {
             assert!(topics(k).len() >= 5);
             for (id, _) in topics(k) {
                 if *id != "todo" {
                     for seed in 0..3 {
-                        assert!(topic_lines(k, id, seed).len() >= 2, "{k} {id}");
+                        for area in ["forest", "city", "burnt", "desert", "bswamp", "harbor", "front", "home"] {
+                            assert!(topic_lines(k, id, seed, area).len() >= 2, "{k} {id} {area}");
+                        }
                     }
                 }
             }
