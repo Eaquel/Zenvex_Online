@@ -394,3 +394,57 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_netApply<'l>(env: JNIE
     }
     g.net_apply(&v);
 }
+
+/// V15 gerçek harita: bölgenin zemini oyunun kendi dokularıyla küçük ölçekte (`w`x`hh`, piksel başına `step` dünya pikseli).
+/// Bölge dokuları yüklü değilse 0 döner (çağıran sonra yeniden dener).
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_renderRegion<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    x0: jfloat,
+    y0: jfloat,
+    step: jfloat,
+    w: jint,
+    hh: jint,
+    out: JIntArray<'l>,
+) -> jint {
+    let Some(g) = game(h) else { return 0 };
+    if !g.textures.ready() {
+        return 0;
+    }
+    let (w, hh) = (w.max(1) as usize, hh.max(1) as usize);
+    let mut buf = vec![0u32; w * hh];
+    zenvex_core::ground::render_scaled(&g.world, &g.textures, x0, y0, step.max(0.1), w, hh, &mut buf);
+    let ints: Vec<i32> = buf.iter().map(|&p| p as i32).collect();
+    let _ = env.set_int_array_region(&out, 0, &ints);
+    1
+}
+
+/// V15 gerçek harita: dikdörtgendeki sabit nesneler (kırılmamış) — kayıt başına [sprite, x, y, tür]; yazılan kayıt sayısı döner.
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_regionStatics<'l>(
+    env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    h: jlong,
+    x0: jfloat,
+    y0: jfloat,
+    x1: jfloat,
+    y1: jfloat,
+    out: JFloatArray<'l>,
+) -> jint {
+    let Some(g) = game(h) else { return 0 };
+    let cap = env.get_array_length(&out).unwrap_or(0).max(0) as usize / 4;
+    let mut v: Vec<f32> = Vec::with_capacity(cap.min(g.world.statics.len()) * 4);
+    for s in &g.world.statics {
+        if v.len() / 4 >= cap {
+            break;
+        }
+        if s.broken || s.x < x0 || s.x >= x1 || s.y < y0 || s.y >= y1 {
+            continue;
+        }
+        v.extend_from_slice(&[s.sprite as f32, s.x, s.y, s.kind as u8 as f32]);
+    }
+    let _ = env.set_float_array_region(&out, 0, &v);
+    (v.len() / 4) as jint
+}

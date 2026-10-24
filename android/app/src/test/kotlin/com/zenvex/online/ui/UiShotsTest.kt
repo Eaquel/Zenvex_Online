@@ -56,6 +56,8 @@ class UiShotsTest {
     @Test fun shopFeatured() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 0, {}) {} } }
     @Test fun shopGems() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 1, {}) {} } }
     @Test fun shopCards() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 3, {}) {} } }
+    @Test fun merchantSell() { val d = sample("merchant"); paparazzi.snapshot { MerchantView(d, 1, {}, {}, {}, {}, {}) } }
+    @Test fun merchantOdds() { val d = sample("merchant"); paparazzi.snapshot { MerchantView(d, 2, {}, {}, {}, {}, {}) } }
     @Test fun characters() { val d = sample("characters"); paparazzi.snapshot { CharactersView(d, {}, {}) {} } }
     @Test fun shopVip() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 4, {}) {} } }
 
@@ -98,7 +100,7 @@ class UiShotsTest {
         val marks = mapMarks(w, JSONObject()) + baseMarks(sample("bases")) +
             MapMark(me.getDouble("x").toFloat() + 900f, me.getDouble("y").toFloat() - 1400f, 3, "Gizemli Ağaç")
         paparazzi.snapshot {
-            WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {}) {}
+            WorldMapView(img, fog, w, me.getDouble("x").toFloat(), me.getDouble("y").toFloat(), 3, marks, {})
         }
     }
 
@@ -129,7 +131,7 @@ class UiShotsTest {
             for (i in 0 until 50) put(org.json.JSONObject(sample("bases").getJSONArray("bases").getJSONObject(i).toString()).put("found", true))
         })
         paparazzi.snapshot {
-            WorldMapView(img, null, w, b.getDouble("x").toFloat(), b.getDouble("y").toFloat(), 30, mapMarks(w, JSONObject()) + baseMarks(all), {}, baseMarks(all).firstOrNull { it.icon == "map_war" }) {}
+            WorldMapView(img, null, w, b.getDouble("x").toFloat(), b.getDouble("y").toFloat(), 30, mapMarks(w, JSONObject()) + baseMarks(all), {}, baseMarks(all).firstOrNull { it.icon == "map_war" })
         }
     }
 

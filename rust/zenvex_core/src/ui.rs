@@ -296,7 +296,10 @@ impl Game {
                                                "src": data::item_source(id) }))
                         .collect();
                     let has = r.inputs.iter().all(|(id, n)| g.inv.count_id(id) >= *n as u32);
-                    let v = json!({ "i": i, "count": r.count, "inputs": inputs, "bench": r.bench, "can": has && (!r.bench || bench) });
+                    // malzemelerin yettiği en çok üretim (çoklu üretim tuşları buna göre açılır)
+                    let max = r.inputs.iter().map(|(id, n)| g.inv.count_id(id) / (*n as u32).max(1)).min().unwrap_or(0).min(50);
+                    let v = json!({ "i": i, "count": r.count, "inputs": inputs, "bench": r.bench, "can": has && (!r.bench || bench),
+                                    "max": max });
                     match groups.iter_mut().find(|(o, _)| *o == r.out) {
                         Some((_, vs)) => vs.push(v),
                         None => groups.push((r.out, vec![v])),
@@ -467,6 +470,7 @@ impl Game {
         let v: Value = serde_json::from_str(s).unwrap_or(Value::Null);
         let cmd = v["cmd"].as_str().unwrap_or("");
         let int = |k: &str| v[k].as_u64().unwrap_or(0) as usize;
+        let num = |k: &str| v[k].as_f64().unwrap_or(0.0) as f32;
         // çanta komutlarından önce düzen güncel olsun (seviye atlayınca ana çanta büyür)
         if matches!(cmd, "equip" | "unequip" | "use" | "drop" | "move" | "split" | "move_page" | "sort" | "chest_take" | "chest_all") {
             self.progress.relayout_inv();
@@ -777,6 +781,9 @@ impl Game {
             }
             "travel" => self.travel(v["to"].as_str().unwrap_or("")),
             "pickup_bench" => self.pickup_bench(),
+            // V15 inşa modu: önizleme yeri uygun mu / seçilen yere kur
+            "bench_spot" => self.bench_spot(num("x"), num("y")).map(|_| String::new()),
+            "place_bench" => self.place_bench_at(int("slot"), num("x"), num("y")),
             // V12 büyücü haritası: yalnız büyücünün yanında
             "wizard_tp" => {
                 if self.near_wizard() {
@@ -1654,6 +1661,7 @@ mod v4_tests {
             g.progress.char_daily_kill(g.day_index);
         }
         std::fs::write(format!("{dir}/characters.json"), g.ui_json("characters")).unwrap();
+        std::fs::write(format!("{dir}/merchant.json"), g.ui_json("merchant")).unwrap();
         // Elmas Sandığı: iki kaplama sahip, biri giyili
         g.command(r#"{"cmd":"skins_sync","owned":["sk_gold","vs_neon","sk_toxic"]}"#);
         g.command(r#"{"cmd":"skin_equip","id":"sk_gold","kind":"char"}"#);

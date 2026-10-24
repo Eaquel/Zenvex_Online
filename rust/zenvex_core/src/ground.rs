@@ -18,6 +18,21 @@ impl Textures {
     }
 }
 
+/// dokunun ortalama rengi (küçük ölçekli harita için)
+fn mean_color(t: &[u32]) -> u32 {
+    if t.is_empty() {
+        return 0xFF4F8A3A;
+    }
+    let (mut r, mut g, mut b) = (0u64, 0u64, 0u64);
+    for &c in t {
+        r += ((c >> 16) & 255) as u64;
+        g += ((c >> 8) & 255) as u64;
+        b += (c & 255) as u64;
+    }
+    let n = t.len() as u64;
+    0xFF00_0000 | (((r / n) as u32) << 16) | (((g / n) as u32) << 8) | (b / n) as u32
+}
+
 /// bölge dokusu yüklenmemişse yerine geçen ortak doku
 fn fallback(m: u8) -> u8 {
     match m {
@@ -85,7 +100,15 @@ pub fn zone_tint(z: Zone, c: u32) -> u32 {
 
 /// (x0, y0) dünya pikselinden başlayan `size`x`size` parçayı `out` içine yazar (ARGB).
 pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize, out: &mut [u32]) {
+    render_scaled(world, tex, x0, y0, 1.0, size, size, out);
+}
+
+/// V15 gerçek harita: aynı zemin çizimi küçük ölçekte (bir çıktı pikseli `step` dünya pikseli, `w`x`h`).
+/// Büyük adımda doku pikseli yerine dokunun ortalama rengi alınır (titreşimsiz, karonun gerçek tonu).
+pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32, w: usize, h: usize, out: &mut [u32]) {
     let ts = tex.size.max(1);
+    let coarse = step > 2.0;
+    let means: Vec<u32> = if coarse { tex.tex.iter().map(|t| mean_color(t)).collect() } else { Vec::new() };
     let seed = world.seed;
     let warp = 26.0;
     let mat_at = |wx: f32, wy: f32| -> u8 {
@@ -96,11 +119,11 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
         }
         world.ground_at(tx as usize, ty as usize)
     };
-    for py in 0..size {
-        let wy = y0 + py as f32;
-        for px in 0..size {
-            let wx = x0 + px as f32;
-            let idx = py * size + px;
+    for py in 0..h {
+        let wy = y0 + py as f32 * step;
+        for px in 0..w {
+            let wx = x0 + px as f32 * step;
+            let idx = py * w + px;
             if wx < 0.0 || wy < 0.0 || wx >= MAP_PX || wy >= MAP_PX {
                 out[idx] = 0xFF1E3A22;
                 continue;
@@ -121,6 +144,9 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
                     return 0xFF4F8A3A;
                 }
                 let mm = if (mm as usize) < tex.tex.len() && !tex.tex[mm as usize].is_empty() { mm } else { fallback(mm) };
+                if coarse {
+                    return means.get(mm as usize).copied().unwrap_or(0xFF4F8A3A);
+                }
                 let t = &tex.tex[mm as usize];
                 let u = (wx as usize) % ts;
                 let v = (wy as usize) % ts;
@@ -142,8 +168,8 @@ pub fn render_chunk(world: &World, tex: &Textures, x0: f32, y0: f32, size: usize
             if !ground::own_color(m) && !matches!(z, Zone::Camp | Zone::Forest | Zone::DeepForest | Zone::Swamp | Zone::Wall | Zone::SafeCity | Zone::Suburb | Zone::Downtown | Zone::Industrial | Zone::BossArena | Zone::Home) {
                 c = zone_tint(z, c);
             }
-            // yol şeritleri
-            if m == ground::ASPHALT {
+            // yol şeritleri (yalnız tam ölçekte)
+            if m == ground::ASPHALT && !coarse {
                 let tx = (wx / TILE) as usize;
                 let ty = (wy / TILE) as usize;
                 let (cx, cy) = World::is_road_center(tx, ty);

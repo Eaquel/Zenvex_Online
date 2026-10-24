@@ -143,10 +143,10 @@ private class DragState {
 }
 
 /** Miktar seçimi: yere bırak, böl, sandığa koy, çantaya al */
-private class AmountAsk(val action: String, val slot: Int, val max: Int, val start: Int, val title: String)
+internal class AmountAsk(val action: String, val slot: Int, val max: Int, val start: Int, val title: String)
 
 @Composable
-fun InventoryScreen(back: () -> Unit, inGame: Boolean = false, onCraft: (() -> Unit)? = null) {
+fun InventoryScreen(back: () -> Unit, inGame: Boolean = false, onBuild: ((Int) -> Unit)? = null, onCraft: (() -> Unit)? = null) {
     var tick by remember { mutableIntStateOf(0) }
     val inv = remember(tick) { GameSession.ui("inventory") }
     val hero = remember(tick / 20) { GameSession.ui("profile").optInt("character") }
@@ -154,7 +154,7 @@ fun InventoryScreen(back: () -> Unit, inGame: Boolean = false, onCraft: (() -> U
     val chest = remember(tick, ci) { if (ci >= 0) GameSession.ui("chest:$ci") else null }
     // bekleme süreleri akarken cepleri tazele
     LaunchedEffect(Unit) { while (true) { delay(500); tick++ } }
-    BagView(inv, hero, inGame, back, { name, kv -> GameSession.cmd(name, *kv) }, onCraft = onCraft, chest = chest) { tick++ }
+    BagView(inv, hero, inGame, back, { name, kv -> GameSession.cmd(name, *kv) }, onCraft = onCraft, chest = chest, onBuild = onBuild) { tick++ }
 }
 
 private val EQ_LEFT = listOf("helmet" to "Kask", "jacket" to "Ceket", "pants" to "Pantolon", "boots" to "Bot")
@@ -173,7 +173,7 @@ private val BagPanel2 = Color(0xA82B2B26)
 internal fun BagView(
     inv: JSONObject, hero: Int, inGame: Boolean, back: () -> Unit,
     cmd: (String, Array<Pair<String, Any>>) -> GameSession.Reply, onCraft: (() -> Unit)? = null,
-    chest: JSONObject? = null, refresh: () -> Unit,
+    chest: JSONObject? = null, onBuild: ((Int) -> Unit)? = null, refresh: () -> Unit,
 ) {
     var sel by remember { mutableStateOf<Int?>(null) }
     var selEq by remember { mutableStateOf<String?>(null) }
@@ -393,6 +393,10 @@ internal fun BagView(
                             val placeable = kind == "Chest" && inGame
                             val key = item.optString("id").startsWith("veh_") && inGame
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                // V15 (R8b): tezgâh → inşa modu (yeri parmakla seç, ✓ ile kur)
+                                if (kind == "Bench" && onBuild != null) PxButton("Kur", Modifier.fillMaxWidth(), icon = "hammer", height = 38.dp, size = 14.sp) {
+                                    sel = null; onBuild(s)
+                                }
                                 if (equippable || usable || placeable || key) PxButton(when { equippable -> "Kuşan"; placeable -> "Üsse Kur"; key -> "Aracı Çağır"; else -> "Kullan" },
                                     Modifier.fillMaxWidth(), height = 38.dp, size = 14.sp) {
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
@@ -474,7 +478,7 @@ private fun BagTab(p: Int, o: JSONObject, selected: Boolean, glow: Boolean, modi
 
 /** Miktar penceresi: −/+ adım, kaydırıcı, hızlı seçimler (1, yarısı, tümü). */
 @Composable
-private fun AmountDialog(a: AmountAsk, close: () -> Unit, ok: (Int) -> Unit) {
+internal fun AmountDialog(a: AmountAsk, close: () -> Unit, ok: (Int) -> Unit) {
     var k by remember(a) { mutableIntStateOf(a.start.coerceIn(1, a.max.coerceAtLeast(1))) }
     Box(Modifier.fillMaxSize().background(Color(0x99000000)).clickable(remember { MutableInteractionSource() }, null) { close() }, contentAlignment = Alignment.Center) {
         PxPanel(Modifier.width(360.dp).clickable(remember { MutableInteractionSource() }, null) {}, color = Color(0xF0201F1C), pad = 16.dp) {

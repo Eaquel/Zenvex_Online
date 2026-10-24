@@ -820,6 +820,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawHud(c)
         drawBaseHud(c)
         drawControls(c)
+        drawBuild(c)
         drawTutorial(c)
         // FPS ve ping: sağ alt köşede tek satır (sol alttaki seviye/koordinat yazılarıyla çakışmaz)
         if (s.showFps || s.showPing) {
@@ -885,6 +886,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             GameSession.setRegion(ai, areas[ai].id)
             clearChunks()
         }
+        // gerçek bölge haritası (mini harita ve büyük harita): bölgenin dokuları yüklenince bir kez
+        if (ai >= 0 && groundReady) RegionMap.ensure(ai, areas, staticSprites)
         val x0 = floor((camX - viewW / 2) / CH).toInt() - 0
         val y0 = floor((camY - viewH / 2) / CH).toInt() - 0
         val x1 = floor((camX + viewW / 2) / CH).toInt()
@@ -2724,6 +2727,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val mapDst = RectF()
     private val mapClip = Path()
     private var radarCx = 0f; private var radarCy = 0f; private var radarR = 0f
+    private val mapSrcF = RectF()
     private fun drawRadar(c: Canvas, cx: Float, cy: Float, r: Float) {
         val d = density
         radarCx = cx; radarCy = cy; radarR = r
@@ -2733,7 +2737,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.save()
         mapClip.reset(); mapClip.addCircle(cx, cy, r, Path.Direction.CW); c.clipPath(mapClip)
         fill.color = 0xFF2A3A20.toInt(); c.drawCircle(cx, cy, r, fill)
-        if (bmp != null) {
+        val rm = RegionMap.snap?.takeIf { it.area == groundArea }
+        if (rm != null) {
+            // V15: bölgenin gerçek küçültülmüş görüntüsü
+            mapSrcF.set(rm.u(px - range), rm.v(py - range), rm.u(px + range), rm.v(py + range))
+            mapSrcF.round(mapSrc)
+            mapDst.set(cx - r, cy - r, cx + r, cy + r)
+            c.drawBitmap(rm.bmp, mapSrc, mapDst, bmpPaint)
+        } else if (bmp != null) {
             val k = bmp.width / mapPx
             val sr = range * k
             mapSrc.set((px * k - sr).toInt(), (py * k - sr).toInt(), (px * k + sr).toInt(), (py * k + sr).toInt())
@@ -3015,6 +3026,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (btnInteract.visible) {
             if (nearNpc >= 5 || hud[Native.NEAR_MERCHANT] > 0) roundBtn(c, btnInteract, "chat", "Konuş", 0xFFC08A20.toInt(), false)
             else if (nearChest >= 0 && hud[Native.NEAR_BENCH] <= 0) roundBtn(c, btnInteract, "bag", "Sandık", 0xFF8A6A3A.toInt(), false)
+            else if (hud[Native.NEAR_BENCH] > 0) roundBtn(c, btnInteract, "craft", "Tezgâh", 0xFFC08A20.toInt(), false)
             else roundBtn(c, btnInteract, "craft", null, 0xFFC08A20.toInt(), false)
         }
     }
@@ -3170,6 +3182,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val i = e.actionIndex
                 val id = e.getPointerId(i)
                 val x = e.getX(i); val y = e.getY(i)
+                // inşa modu: dokunuşlar önizlemeyi taşır (joystick ve tuşlar beklemede)
+                if (buildTouch(x, y, id)) return true
                 // mini haritaya dokunma: tam harita
                 if (radarR > 0 && hypot(x - radarCx, y - radarCy) < radarR) { Audio.play("click", 0.7f, bus = Audio.Bus.Ui); ui.onOpen("map"); return true }
                 // başka oyuncuya dokunma: oyuncu menüsü
@@ -3205,11 +3219,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
             MotionEvent.ACTION_MOVE -> for (i in 0 until e.pointerCount) {
                 val id = e.getPointerId(i)
+                if (buildSlot >= 0 && buildPtr == id) moveBuild(e.getX(i), e.getY(i))
                 if (moveStick.pointer == id) moveStickTo(moveStick, e.getX(i), e.getY(i))
                 if (atkStick.pointer == id) moveStickTo(atkStick, e.getX(i), e.getY(i))
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
                 val id = e.getPointerId(e.actionIndex)
+                if (buildPtr == id || e.actionMasked == MotionEvent.ACTION_CANCEL) buildPtr = -1
                 for (st in listOf(moveStick, atkStick)) if (st.pointer == id || e.actionMasked == MotionEvent.ACTION_CANCEL) {
                     st.pointer = -1; st.vx = 0f; st.vy = 0f; st.cx = st.homeX; st.cy = st.homeY; st.x = st.cx; st.y = st.cy
                 }
@@ -3218,6 +3234,87 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
         return true
+    }
+
+    // ------------------------------------------------------------------ V15 inşa modu (tezgâh kurma)
+    /** kurulacak tezgâhın çanta yuvası (-1: inşa modu kapalı); önizleme parmağı izler, ✓ kurar, ✕ vazgeçer */
+    @Volatile private var buildSlot = -1
+        set(v) { field = v; building.value = v >= 0 }
+    /** inşa modu açık mı (Compose HUD bu sırada gizlenir) */
+    val building = androidx.compose.runtime.mutableStateOf(false)
+    private var buildX = 0f
+    private var buildY = 0f
+    private var buildOk = false
+    private var buildWhy = ""
+    private var buildPtr = -1
+    private val buildYes = RectF()
+    private val buildNo = RectF()
+    private val buildPaint = Paint().apply { alpha = 170; isFilterBitmap = false }
+
+    fun startBuild(slot: Int) {
+        buildX = hud[Native.PX] + 70f; buildY = hud[Native.PY] + 10f
+        buildSlot = slot
+        checkBuild()
+    }
+
+    private fun checkBuild() {
+        val r = GameSession.cmdNoSave("bench_spot", "x" to buildX, "y" to buildY)
+        buildOk = r.ok; buildWhy = r.msg
+    }
+
+    private fun moveBuild(x: Float, y: Float) {
+        // önizleme parmağın biraz üstünde (parmak tezgâhı örtmesin)
+        buildX = (x - sw / 2f) / scale + camX
+        buildY = (y - 36 * density - sh / 2f) / scale + camY
+        checkBuild()
+    }
+
+    /** true: dokunuş inşa modunda kullanıldı */
+    private fun buildTouch(x: Float, y: Float, id: Int): Boolean {
+        if (buildSlot < 0) return false
+        when {
+            buildYes.contains(x, y) -> {
+                if (!buildOk) { ui.onToast(buildWhy.ifEmpty { "Buraya kurulamaz" }); return true }
+                val r = GameSession.cmd("place_bench", "slot" to buildSlot, "x" to buildX, "y" to buildY)
+                ui.onToast(r.msg)
+                if (r.ok) { buildSlot = -1; Audio.play("craft"); fx("dust", buildX, buildY, 140f); shake(2f, 0.1f) }
+            }
+            buildNo.contains(x, y) -> { buildSlot = -1; Audio.play("click", 0.7f, bus = Audio.Bus.Ui) }
+            else -> { buildPtr = id; moveBuild(x, y) }
+        }
+        return true
+    }
+
+    private fun drawBuild(c: Canvas) {
+        if (buildSlot < 0) return
+        val d = density
+        val col = if (buildOk) 0xFF5BE38A.toInt() else 0xFFFF5A4A.toInt()
+        // menzil halkası (6 karo)
+        val rr = 6 * 64f * scale
+        stroke.color = alphaC(0xFFFFFFFF.toInt(), 0.35f); stroke.strokeWidth = 2 * d
+        c.drawCircle(wx(hud[Native.PX]), wy(hud[Native.PY]), rr, stroke)
+        // yerde renkli halka + yarı saydam tezgâh
+        val gx = wx(buildX); val gy = wy(buildY)
+        val pulse = 0.75f + 0.25f * sin(time * 5f)
+        fill.color = alphaC(col, 0.28f * pulse); c.drawOval(gx - 46 * d, gy - 16 * d, gx + 46 * d, gy + 16 * d, fill)
+        stroke.color = alphaC(col, 0.9f); stroke.strokeWidth = 2.5f * d
+        c.drawOval(gx - 46 * d, gy - 16 * d, gx + 46 * d, gy + 16 * d, stroke)
+        atlas["s/workbench"]?.let { atlas.draw(c, it, gx, gy, scale, buildPaint) }
+        // üst bilgi ve ✓ / ✕
+        // bilgi ve tuşlar alt ortada (inşa modunda Compose HUD gizli; joystick'lerle çakışmaz)
+        val bx = sw / 2f; val by = sh - 64 * d; val br = 28 * d
+        fill.color = 0xC0141210.toInt()
+        rect.set(bx - 130 * d, by - br - 46 * d, bx + 130 * d, by + br + 10 * d); c.drawRoundRect(rect, 8 * d, 8 * d, fill)
+        drawText(c, if (buildOk) "Tezgâhı buraya kur?" else buildWhy.ifEmpty { "Buraya kurulamaz" }, bx, by - br - 24 * d, 14 * d, col, center = true)
+        drawText(c, "Yeri seçmek için dokun ya da sürükle", bx, by - br - 8 * d, 10 * d, 0xFFE8E0C8.toInt(), center = true)
+        buildYes.set(bx + 16 * d, by - br, bx + 16 * d + 2 * br, by + br)
+        buildNo.set(bx - 16 * d - 2 * br, by - br, bx - 16 * d, by + br)
+        for ((r, ok) in listOf(buildYes to true, buildNo to false)) {
+            fill.color = if (ok) alphaC(if (buildOk) 0xFF2E8A4A.toInt() else 0xFF4A4A40.toInt(), 0.95f) else 0xF08A2A22.toInt()
+            c.drawCircle(r.centerX(), r.centerY(), br, fill)
+            stroke.color = 0xFFFFFFFF.toInt(); stroke.strokeWidth = 2 * d; c.drawCircle(r.centerX(), r.centerY(), br, stroke)
+            drawText(c, if (ok) "✓" else "✕", r.centerX(), r.centerY() + 9 * d, 26 * d, 0xFFFFFFFF.toInt(), center = true)
+        }
     }
 
     private fun moveStickTo(st: Stick, x: Float, y: Float) {
@@ -3266,6 +3363,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 nearNpc >= 5 -> ui.onOpen("npc:${nearNpc - 4}")
                 hud[Native.NEAR_MERCHANT] > 0 -> ui.onOpen("npc:1")
                 nearChest >= 0 && hud[Native.NEAR_BENCH] <= 0 -> ui.onOpen("bag")
+                // V15 (R8): tezgâhın yanında tezgâh tarifleri açılır (önceden el üretimi açılıyordu)
+                hud[Native.NEAR_BENCH] > 0 -> ui.onOpen("craft_bench")
                 else -> ui.onOpen("craft")
             }
             "trade" -> nearCache?.let { Online.requestTrade(it.uid); ui.onOpen("trade") }

@@ -308,8 +308,12 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
                     Spacer(Modifier.height(6.dp))
                     // tuşlar her zaman görünür (malzeme listesi uzasa da kaydırma gerekmez)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PxButton("Üret", Modifier.weight(1f), color = Px.Green, icon = "craft", height = 40.dp, size = 15.sp, enabled = can) { craft(v, 1) }
-                        PxButton("×5", Modifier.width(76.dp), color = Px.Blue, height = 40.dp, size = 15.sp, enabled = can) { craft(v, 5) }
+                        PxButton("Üret", Modifier.weight(1f), color = Px.Green, icon = "craft", height = 40.dp, size = 14.sp, enabled = can) { craft(v, 1) }
+                        // çoklu üretim: her biri ayrı sayılır (görev, sezon bileti, sıralama); malzeme yetmeyen tuş kapalı
+                        val max = v.optInt("max", if (can) 1 else 0)
+                        for (n in listOf(5, 10, 25, 50)) {
+                            PxButton("×$n", Modifier.width(46.dp), color = Px.Blue, height = 40.dp, size = 12.sp, enabled = can && max >= n) { craft(v, n) }
+                        }
                     }
                     if (!can) {
                         Spacer(Modifier.height(4.dp))
@@ -352,23 +356,48 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
     }
 }
 
-// =========================================================================== tüccar / mağaza
+// =========================================================================== gezgin tüccar
+/**
+ * Gezgin Tüccar Marco: Satın Al (bu gelişin malları), Sat (miktar seçerek), Olasılıklar (tüm mallar tek ekranda).
+ * V15: tüccarda elmas yok; gerçek para ürünleri Mağaza'da ([openStore]).
+ */
 @Composable
-fun ShopScreen(back: () -> Unit) {
+fun MerchantScreen(back: () -> Unit, openStore: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     var tab by remember { mutableIntStateOf(0) }
+    var ask by remember { mutableStateOf<AmountAsk?>(null) }
     val data = remember(tick) { GameSession.ui("merchant") }
-    val prof = remember(tick) { GameSession.ui("profile") }
+    MerchantView(data, tab, { tab = it }, back, openStore,
+        buy = { o -> val r = GameSession.cmd("buy", "i" to o.optInt("i"), "n" to 1); Toaster.show(r.msg, r.ok); tick++; if (r.ok) com.zenvex.online.game.Audio.play("coin") },
+        sell = { o ->
+            val n = o.optInt("count")
+            val name = o.optJSONObject("item")?.optString("name") ?: ""
+            if (n > 1) ask = AmountAsk("sell", o.optInt("slot"), n, n, "$name Sat · Tanesi ${o.optInt("price")} Altın")
+            else { val r = GameSession.cmd("sell", "slot" to o.optInt("slot"), "n" to 1); Toaster.show(r.msg, r.ok); tick++ }
+        })
+    ask?.let { a ->
+        AmountDialog(a, { ask = null }) { k ->
+            val r = GameSession.cmd("sell", "slot" to a.slot, "n" to k); Toaster.show(r.msg, r.ok)
+            if (r.ok) com.zenvex.online.game.Audio.play("coin")
+            ask = null; tick++
+        }
+    }
+}
+
+@Composable
+internal fun MerchantView(data: JSONObject, tab: Int, setTab: (Int) -> Unit, back: () -> Unit, openStore: () -> Unit,
+                          buy: (JSONObject) -> Unit, sell: (JSONObject) -> Unit) {
     ScreenFrame("GEZGİN TÜCCAR MARCO", "shop", back, right = {
-        Chip("coin", fmt(data.optInt("gold")), Pal.Gold); Spacer(Modifier.width(8.dp)); Chip("gem", fmt(prof.optInt("gems")), Pal.Gem)
+        Chip("coin", fmt(data.optInt("gold")), Pal.Gold); Spacer(Modifier.width(8.dp))
+        GButton("Mağaza", tone = Tone.Blue, icon = "crate", height = 34.dp, size = 12.sp) { openStore() }
     }) {
-        Tabs(listOf("shop" to "Satın Al", "coin" to "Sat", "gem" to "Elmas"), tab) { tab = it }
+        Tabs(listOf("shop" to "Satın Al", "coin" to "Sat", "star" to "Olasılıklar"), tab) { setTab(it) }
         Spacer(Modifier.height(10.dp))
+        val next = data.optDouble("next").toInt()
         when (tab) {
             0 -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                // V12.2 gezgin tüccar: bu gelişin malları (gelme olasılığı, stok), süre ve getirmedikleri
-                val next = data.optDouble("next").toInt()
-                T("Tüccar Marco her gelişinde başka mallar getirir; aynı anda herkes aynı malları görür. " +
+                // V12.2 gezgin tüccar: bu gelişin malları (gelme olasılığı, stok), süre
+                T("Marco her gelişinde başka mallar getirir; herkes aynı malları görür. " +
                     "${next / 60}:${"%02d".format(next % 60)} sonra kamyonetiyle başka bir karakola gider.", 13.sp, Pal.Sub)
                 Spacer(Modifier.height(8.dp))
                 @OptIn(ExperimentalLayoutApi::class)
@@ -386,58 +415,55 @@ fun ShopScreen(back: () -> Unit) {
                             if (locked) GButton("Sv ${o.optInt("req")}", Modifier.fillMaxWidth(), Tone.Dark, icon = "lock", height = 34.dp, size = 12.sp) {}
                             else if (left == 0) GButton("Tükendi", Modifier.fillMaxWidth(), Tone.Dark, height = 34.dp, size = 12.sp) {}
                             else GButton("${o.optInt("price")}", Modifier.fillMaxWidth(), if (o.optBoolean("afford")) Tone.Gold else Tone.Dark, icon = "coin", height = 34.dp, size = 13.sp) {
-                                val r = GameSession.cmd("buy", "i" to o.optInt("i"), "n" to 1); Toaster.show(r.msg, r.ok); tick++
-                                if (r.ok) com.zenvex.online.game.Audio.play("coin")
-                            }
-                        }
-                    }
-                }
-                val missing = data.optJSONArray("missing").objs()
-                if (missing.isNotEmpty()) {
-                    Spacer(Modifier.height(12.dp))
-                    T("Bu Sefer Getirmedikleri (Gelme Olasılığı)", 14.sp, Pal.Sub, bold = true)
-                    Spacer(Modifier.height(6.dp))
-                    @OptIn(ExperimentalLayoutApi::class)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        for (o in missing) {
-                            val it = o.optJSONObject("item") ?: JSONObject()
-                            Row(Modifier.glass(10.dp).padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                                ItemSlot(it.optString("id"), 0, it.optInt("rarity"), 30.dp)
-                                Spacer(Modifier.width(6.dp))
-                                T("${it.optString("name")} %${o.optInt("chance")}", 12.sp, Pal.Sub, maxLines = 1)
+                                buy(o)
                             }
                         }
                     }
                 }
             }
-            1 -> {
+            1 -> Column(Modifier.fillMaxSize()) {
+                T("Dokun, kaç tane satacağını seç. Satış fiyatı eşyanın değerinin %${(35 + data.optDouble("bonus") * 100).toInt()}'i.", 12.sp, Pal.Sub)
+                Spacer(Modifier.height(6.dp))
                 @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    val sell = data.optJSONArray("sell").objs()
-                    if (sell.isEmpty()) T("Satacak eşyan yok.", 14.sp, Pal.Sub)
-                    for (o in sell) {
+                    val list = data.optJSONArray("sell").objs()
+                    if (list.isEmpty()) T("Satacak eşyan yok.", 14.sp, Pal.Sub)
+                    for (o in list) {
                         val it = o.optJSONObject("item") ?: JSONObject()
+                        val n = o.optInt("count")
                         Column(Modifier.width(150.dp).glass(16.dp).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                            ItemSlot(it.optString("id"), o.optInt("count"), it.optInt("rarity"), 70.dp)
+                            ItemSlot(it.optString("id"), n, it.optInt("rarity"), 70.dp)
                             T(it.optString("name"), 13.sp, bold = true, maxLines = 1)
-                            Spacer(Modifier.height(6.dp))
-                            GButton("+${o.optInt("price")}", Modifier.fillMaxWidth(), Tone.Green, icon = "coin", height = 34.dp, size = 13.sp, sub = "tanesi") {
-                                val r = GameSession.cmd("sell", "slot" to o.optInt("slot"), "n" to 1); Toaster.show(r.msg, r.ok); tick++
-                            }
+                            T(if (n > 1) "Hepsi: ${fmt(o.optInt("price") * n)}" else " ", 11.sp, Pal.Sub, maxLines = 1)
+                            Spacer(Modifier.height(4.dp))
+                            GButton("+${o.optInt("price")}", Modifier.fillMaxWidth(), Tone.Green, icon = "coin", height = 34.dp, size = 13.sp, sub = "tanesi") { sell(o) }
                         }
                     }
                 }
             }
-            else -> Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                for ((n, p) in listOf(100 to "19,99 TL", 550 to "89,99 TL", 1200 to "179,99 TL", 2600 to "349,99 TL")) {
-                    Column(Modifier.width(170.dp).glass(18.dp, Pal.Gem).padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon("gem", 54.dp, Pal.Gem)
-                        T("$n Elmas", 18.sp, Pal.Gem, bold = true)
-                        Spacer(Modifier.height(8.dp))
-                        GButton(p, Modifier.fillMaxWidth(), Tone.Blue, height = 38.dp, size = 14.sp) {
-                            Toaster.show("Ödeme sistemi (Google Play) henüz bağlı değil.", false)
+            // tüm mallar tek ekranda: getirdikleri yeşil çerçeveli, olasılığa göre sıralı
+            else -> Column(Modifier.fillMaxSize()) {
+                T("Marco'nun her gelişte getirebileceği mallar ve gelme olasılıkları. Yeşil olanlar şu an tezgâhında.", 12.sp, Pal.Sub)
+                Spacer(Modifier.height(6.dp))
+                val here = data.optJSONArray("buy").objs().map { it to true }
+                val away = data.optJSONArray("missing").objs().map { it to false }
+                val all = (here + away).sortedByDescending { it.first.optInt("chance") }
+                // sütun sayısı mal sayısına göre: en çok 7 sıra, kaydırma yok
+                val cols = ((all.size + 6) / 7).coerceIn(4, 6)
+                @OptIn(ExperimentalLayoutApi::class)
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(4.dp), maxItemsInEachRow = cols) {
+                    for ((o, on) in all) {
+                        val it = o.optJSONObject("item") ?: JSONObject()
+                        Row(Modifier.weight(1f).height(29.dp).glass(8.dp, if (on) Pal.Green else null).padding(horizontal = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically) {
+                            ItemSlot(it.optString("id"), 0, it.optInt("rarity"), 22.dp)
+                            Spacer(Modifier.width(5.dp))
+                            T(it.optString("name"), 11.sp, Pal.rarity(it.optInt("rarity")), maxLines = 1, modifier = Modifier.weight(1f))
+                            T("%${o.optInt("chance")}", 12.sp, if (on) Pal.Green else Pal.Gold, bold = true)
                         }
                     }
+                    // son sıra boş hücrelerle tamamlanır (tek kalan mal tüm satıra yayılmaz)
+                    repeat((cols - all.size % cols) % cols) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }

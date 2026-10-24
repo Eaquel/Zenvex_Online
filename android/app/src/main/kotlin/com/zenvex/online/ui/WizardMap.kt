@@ -80,6 +80,28 @@ private val ISLAND_SLOT = mapOf(
     "bswamp" to (0 to 1), "harbor" to (1 to 1), "front" to (2 to 1), "home" to (3 to 1),
 )
 
+/**
+ * Piksel kilit (12×12 ızgara): demir halka, altın gövde, anahtar deliği; hafif nefes alır.
+ * Kilitli adanın ortasında çizilir.
+ */
+private val LOCK_PX = listOf(
+    "....XXXX....", "...X....X...", "..X......X..", "..X......X..", "..X......X..",
+    ".BBBBBBBBBB.", ".BGGGGGGGGB.", ".BGGG..GGGB.", ".BGGG..GGGB.", ".BGGGG.GGGB.", ".BGGGGGGGGB.", ".BBBBBBBBBB.",
+)
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.pixelLock(c: Offset, size: Float, t: Float) {
+    val k = 1f + 0.04f * sin(t * 2.4f)
+    val px = size * 2f / 12f * k
+    val x0 = c.x - px * 6f; val y0 = c.y - px * 6f
+    // gölge ve parıltı
+    drawCircle(Color(0x66FFC85A), size * 1.1f * k, c)
+    for ((r, row) in LOCK_PX.withIndex()) for ((q, ch) in row.withIndex()) {
+        val col = when (ch) { 'X' -> Color(0xFFB8C0CC); 'B' -> Color(0xFF3A2406); 'G' -> if (r < 7) Color(0xFFFFD86A) else Color(0xFFE0A830); else -> continue }
+        drawRect(Color(0xFF0C0810), Offset(x0 + q * px + px * 0.25f, y0 + r * px + px * 0.25f), Size(px, px))
+        drawRect(col, Offset(x0 + q * px, y0 + r * px), Size(px + 0.5f, px + 0.5f))
+    }
+}
+
 /** Arka plan yıldızları (sabit): x, y (0-1), boy */
 private val STARS = java.util.Random(11).let { r -> List(70) { floatArrayOf(r.nextFloat(), r.nextFloat(), 0.6f + r.nextFloat() * 1.4f) } }
 
@@ -168,6 +190,10 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                             val dw = art.width * k; val dh = art.height * k
                             drawImage(art, IntOffset.Zero, IntSize(art.width, art.height), IntOffset((c.x - dw / 2).toInt(), (c.y - dh / 2).toInt()),
                                 IntSize(dw.toInt(), dh.toInt()), filterQuality = FilterQuality.Medium)
+                            // V15: gidilemeyen ada adanın kendi silüetiyle kararır (yalnız piksellerine)
+                            if (!open) drawImage(art, IntOffset.Zero, IntSize(art.width, art.height), IntOffset((c.x - dw / 2).toInt(), (c.y - dh / 2).toInt()),
+                                IntSize(dw.toInt(), dh.toInt()), filterQuality = FilterQuality.Medium,
+                                colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color(0xD0080610), androidx.compose.ui.graphics.BlendMode.SrcAtop))
                         } else {
                             // kayalık alt yüz (süzülen ada) + üstte bölgenin kendi haritası
                             val rock = androidx.compose.ui.graphics.Path().apply {
@@ -190,7 +216,7 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                             drawPath(top, col.copy(alpha = 0.9f), style = Stroke(2.dp.toPx()))
                             if (!open) drawPath(top, Color(0xC0080610))
                         }
-                        if (art != null && !open) drawCircle(Color(0x99080610), half * 0.9f, c)
+                        if (!open) pixelLock(c, half * 0.55f, t + i)
                         if (i == sel) drawRoundRect(Color(0xFFFFD860).copy(alpha = 0.7f + 0.3f * sin(t * 4f)), Offset(c.x - half - 4.dp.toPx(), c.y - half * 0.8f - 4.dp.toPx()),
                             Size(s + 8.dp.toPx(), half * 1.55f + 8.dp.toPx()), androidx.compose.ui.geometry.CornerRadius(half * 0.4f), style = Stroke(3.dp.toPx()))
                         if (i == here) {

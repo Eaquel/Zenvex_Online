@@ -46,7 +46,7 @@ class GameShotsTest {
     private fun cmd(o: JSONObject) = synchronized(GameSession.lock) { Native.command(GameSession.handle, o.toString()) }
 
     private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null, hud: Boolean = true,
-                     overlay: (@androidx.compose.runtime.Composable () -> Unit)? = null) {
+                     after: ((GameView) -> Unit)? = null, overlay: (@androidx.compose.runtime.Composable () -> Unit)? = null) {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
@@ -56,6 +56,7 @@ class GameShotsTest {
         val w = 2340; val h = 1080
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         view.previewFrames(Canvas(bmp), w, h, steps, input = input)
+        if (after != null) { after(view); view.previewFrames(Canvas(bmp), w, h, 2) }
         // tam çözünürlüklü kopya (incelemek için): app/build/game-shots/<ad>.png
         runCatching {
             val dir = java.io.File("build/game-shots").apply { mkdirs() }
@@ -109,6 +110,36 @@ class GameShotsTest {
     }
 
     @Test fun g13_bench() = shot("bench", { placeBench() }, steps = 40)
+
+    /** V15 inşa modu: tezgâh çantadan "Kur" ile seçilir; önizleme yeşil (uygun) ya da kırmızı, ✓ / ✕ */
+    @Test fun g16_buildMode() = shot("build_mode", {
+        cheat("level 12"); cheat("tp 150 320"); cheat("item workbench 1")
+    }, steps = 30, hud = false, after = { v ->
+        val slots = GameSession.ui("inventory").optJSONArray("slots")!!
+        v.startBuild((0 until slots.length()).first { slots.optJSONObject(it)?.optString("id") == "workbench" })
+    })
+
+    /** V15 gerçek bölge haritası: bölge oyunun kendi dokuları ve görselleriyle küçültülmüş; büyük harita bunu gösterir */
+    @Test fun g17_regionMap() {
+        var snap: RegionMap.Snap? = null
+        shot("region_map", { cheat("level 8"); cheat("tp camp") }, steps = 30, hud = false, after = {
+            val w = GameSession.world()
+            val areas = com.zenvex.online.ui.mapAreas(w)
+            val names = w.getJSONArray("names")
+            val atlas = Atlas.get(paparazzi.context)
+            val statics = Array(names.length()) { atlas["s/" + names.getString(it)] }
+            val hud = GameSession.hud()
+            val ai = com.zenvex.online.ui.areaIndexAt(areas, hud[Native.PX], hud[Native.PY])
+            snap = RegionMap.buildNow(ai, areas[ai], statics)
+            snap?.let { s ->
+                val dir = java.io.File("build/game-shots").apply { mkdirs() }
+                java.io.FileOutputStream(java.io.File(dir, "region_map_raw.png")).use { s.bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }, overlay = {
+            val hud = GameSession.hud()
+            com.zenvex.online.ui.WorldMapView(null, null, GameSession.world(), hud[Native.PX], hud[Native.PY], 8, emptyList(), {}, region = snap)
+        })
+    }
 
     @Test fun g14_benchCraft() = shot("bench_craft", { placeBench() }, steps = 20, hud = false,
         overlay = { com.zenvex.online.ui.CraftScreen({}, bench = true) })

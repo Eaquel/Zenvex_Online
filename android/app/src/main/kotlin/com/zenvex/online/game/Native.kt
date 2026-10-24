@@ -50,6 +50,10 @@ object Native {
     external fun setRegionTextures(h: Long, area: Int, size: Int, pixels: IntArray)
     external fun renderChunk(h: Long, x0: Float, y0: Float, size: Int, out: IntArray): Int
     external fun minimap(h: Long, n: Int, out: IntArray)
+    /** V15 gerçek harita: bölge zemini küçük ölçekte (0: dokular hazır değil) */
+    external fun renderRegion(h: Long, x0: Float, y0: Float, step: Float, w: Int, hh: Int, out: IntArray): Int
+    /** V15 gerçek harita: dikdörtgendeki sabit nesneler [sprite, x, y, tür] × n */
+    external fun regionStatics(h: Long, x0: Float, y0: Float, x1: Float, y1: Float, out: FloatArray): Int
     external fun setRemotes(h: Long, data: FloatArray, count: Int)
     external fun localState(h: Long, out: FloatArray)
     external fun netSnapshot(h: Long, out: FloatArray): Int

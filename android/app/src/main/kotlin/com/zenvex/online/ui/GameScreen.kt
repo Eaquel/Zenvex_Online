@@ -202,7 +202,7 @@ fun GameScreen(toLobby: () -> Unit) {
     }
     Box(Modifier.fillMaxSize()) {
         AndroidView({ view }, Modifier.fillMaxSize())
-        if (overlay == Overlay.None) Hud { overlay = it }
+        if (overlay == Overlay.None && !view.building.value) Hud { overlay = it }
         // tam ekran pencerelerin arkası düz (oyun görünmez); ayarlardan şeffaf yapılabilir
         // her pencerenin altında dokunuşu yutan katman: pencere dışına dokunmak alttaki oyun tuşlarına geçmez
         // (sohbet hariç: sohbet açıkken oyun oynanmaya devam eder, ama oyun tuşları pencere açmaz)
@@ -214,10 +214,10 @@ fun GameScreen(toLobby: () -> Unit) {
         when (overlay) {
             Overlay.Menu -> SideMenu(close, { overlay = it }) { GameSession.save(cloud = true); toLobby() }
             Overlay.Settings -> SettingsScreen(back = { overlay = Overlay.Menu; view.post { view.requestLayout() } }, inGame = true)
-            Overlay.Bag -> InventoryScreen(close, inGame = true) { overlay = Overlay.Craft }
+            Overlay.Bag -> InventoryScreen(close, inGame = true, onBuild = { s -> overlay = Overlay.None; view.startBuild(s) }) { overlay = Overlay.Craft }
             Overlay.Craft -> CraftScreen(close)
             Overlay.CraftBench -> CraftScreen(close, bench = true)
-            Overlay.Merchant -> ShopScreen(close)
+            Overlay.Merchant -> MerchantScreen(close) { overlay = Overlay.Shop }
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)
             Overlay.Crate -> CrateScreen(close)

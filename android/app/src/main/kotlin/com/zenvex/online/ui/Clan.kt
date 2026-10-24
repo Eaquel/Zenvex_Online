@@ -397,28 +397,64 @@ private fun DepositPicker(changed: () -> Unit) {
 @Composable
 private fun DepotSend(c: JSONObject, item: JSONObject, close: () -> Unit, changed: () -> Unit) {
     var to by remember { mutableStateOf<JSONObject?>(null) }
-    var n by remember { mutableStateOf("1") }
+    // V15 (R3): bir eşyadan tek seferde en çok 50 (sunucu da denetler); altında depodaki kadar
+    val max = item.optInt("n").coerceIn(1, 50)
+    var n by remember { mutableIntStateOf(1) }
     var note by remember { mutableStateOf("") }
-    PxDialog("Depodan Gönder", close, 560.dp) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PxSlot(JSONObject().put("id", item.optString("id")).put("count", item.optInt("n")), 52.dp)
-            Spacer(Modifier.width(8.dp))
-            Field(n, { n = it.filter(Char::isDigit).take(5) }, "Adet", Modifier.width(100.dp))
-            Spacer(Modifier.width(8.dp))
-            Field(note, { note = it.take(120) }, "Açıklama (Neden Gönderiliyor)", Modifier.weight(1f))
-        }
-        Spacer(Modifier.height(6.dp))
-        Column(Modifier.height(150.dp).verticalScroll(rememberScrollState())) {
-            val m = c.optJSONArray("members") ?: JSONArray()
-            for (i in 0 until m.length()) {
-                val o = m.getJSONObject(i)
-                Row(Modifier.fillMaxWidth().background(if (to?.optLong("id") == o.optLong("id")) Color(0x553A6AB0) else Color.Transparent)
-                    .clickable { to = o }.padding(5.dp)) { PT(o.optString("name"), 14.sp) }
+    var busy by remember { mutableStateOf(false) }
+    PxDialog("Depodan Gönder", close, 600.dp) {
+        Row(Modifier.fillMaxWidth().height(210.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            // sol: eşya, miktar, açıklama
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PxSlot(JSONObject().put("id", item.optString("id")).put("count", item.optInt("n")), 52.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        PT(item.optString("name").ifEmpty { item.optString("id") }, 14.sp, Px.Text, maxLines = 1)
+                        PT("Depoda ${item.optInt("n")} · En Çok $max", 11.sp, Px.Sub)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PxIcon("minus", size = 34.dp) { if (n > 1) n-- }
+                    PT("$n", 22.sp, Px.Text, Modifier.width(52.dp).padding(start = 14.dp), outline = true)
+                    PxIcon("plus", size = 34.dp) { if (n < max) n++ }
+                    Spacer(Modifier.width(6.dp))
+                    PxButton("Tümü", color = if (n == max) Px.Blue else Px.Dark, height = 32.dp, size = 12.sp) { n = max }
+                }
+                if (max > 1) androidx.compose.material3.Slider(
+                    value = n.toFloat(), onValueChange = { n = it.toInt().coerceIn(1, max) }, valueRange = 1f..max.toFloat(), steps = (max - 2).coerceAtLeast(0),
+                    colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Px.Clan, activeTrackColor = Px.Orange, inactiveTrackColor = Px.Dark),
+                )
+                Field(note, { note = it.take(120) }, "Açıklama (İsteğe Bağlı)", Modifier.fillMaxWidth())
+            }
+            // sağ: üye seçimi
+            Column(Modifier.width(220.dp).fillMaxHeight().pxPanel(Px.PanelDark).padding(4.dp)) {
+                PT("Kime?", 13.sp, Px.Clan)
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                    val m = c.optJSONArray("members") ?: JSONArray()
+                    for (i in 0 until m.length()) {
+                        val o = m.getJSONObject(i)
+                        val on = to?.optLong("id") == o.optLong("id")
+                        Row(Modifier.fillMaxWidth().background(if (on) Color(0x553A6AB0) else Color.Transparent)
+                            .clickable { to = o }.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            PT(o.optString("name"), 14.sp, if (on) Px.Text else Px.Sub, Modifier.weight(1f), maxLines = 1)
+                            if (on) Icon("check", 16.dp, Px.Name)
+                        }
+                    }
+                }
             }
         }
-        PxButton("Gönder", Modifier.fillMaxWidth(), height = 40.dp, size = 15.sp, enabled = to != null) {
-            Account.clanSend(to!!.optLong("id"), item.optString("id"), n.toIntOrNull() ?: 1, note) { r ->
-                r.onSuccess { Toaster.show(it) }.onFailure { Toaster.show(it.message ?: "", false) }; close(); changed()
+        Spacer(Modifier.height(8.dp))
+        val who = to
+        PxButton(if (who == null) "Önce Üye Seç" else "${who.optString("name")} Adlı Üyeye $n Adet Gönder", Modifier.fillMaxWidth(), icon = "mail",
+            height = 42.dp, size = 14.sp, enabled = who != null && !busy) {
+            busy = true
+            Account.clanSend(who!!.optLong("id"), item.optString("id"), n, note) { r ->
+                busy = false
+                r.onSuccess { Toaster.show("$n× ${item.optString("name").ifEmpty { item.optString("id") }} postayla gönderildi") }
+                    .onFailure { Toaster.show(it.message ?: "", false) }
+                close(); changed()
             }
         }
     }

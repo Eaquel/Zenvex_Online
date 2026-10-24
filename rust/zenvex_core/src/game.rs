@@ -690,7 +690,7 @@ impl Game {
         g.update_caravans();
         g.restore_pos();
         if refund > 0 {
-            g.msg(format!("Oyundan kaldırılan eşyaların karşılığı olarak {refund} altın verildi"));
+            g.msg(format!("Eski eşyaların altına çevrildi: +{refund} altın"));
         }
         g
     }

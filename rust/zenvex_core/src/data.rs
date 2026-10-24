@@ -303,7 +303,7 @@ pub fn vip_sell_bonus(vip: u8) -> f32 {
     }
 }
 
-/// V15: oyundan kalkan eşyanın altın karşılığı (değerinin yarısı; değeri olmayan etkinlik kaskı ve pelerin sabit)
+/// V15: oyundan kalkan eşyanın altın karşılığı (değerinin 2 katı; değeri olmayan etkinlik kaskı ve pelerin sabit)
 pub fn retired_refund(id: &str) -> u32 {
     if id.starts_with("ev_") && id.ends_with("_helm") {
         return 2000;
@@ -311,7 +311,7 @@ pub fn retired_refund(id: &str) -> u32 {
     if id == "cloak" {
         return 150;
     }
-    item_index(id).map_or(0, |i| (ITEMS[i].value / 2).max(1))
+    item_index(id).map_or(0, |i| (ITEMS[i].value * 2).max(1))
 }
 
 /// Eşya şu an oyunda elde edilebilir mi

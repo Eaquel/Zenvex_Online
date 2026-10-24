@@ -2,6 +2,7 @@ package com.zenvex.online.ui
 
 import android.graphics.Bitmap
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -49,6 +50,7 @@ import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Native
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
@@ -76,6 +78,56 @@ fun areaIndexAt(areas: List<MapArea>, x: Float, y: Float): Int {
 
 /** Haritadaki bir işaret (dünya pikseli). kind: 0 oyuncu, 1 seyahat, 2 titan, 3 görev, 4 kamp NPC'si, 5 devlet üssü */
 data class MapMark(val x: Float, val y: Float, val kind: Int, val label: String = "", val sub: String = "", val color: Int = 0, val icon: String = "")
+
+/** işaret türleri (MapMark.kind) */
+const val MK_TITAN = 2
+const val MK_QUEST = 3
+const val MK_PLACE = 4
+const val MK_BASE = 5
+const val MK_MERCHANT = 6
+
+/** Haritadaki ve lejanttaki işaret çizimi (aynı fırça: lejant haritayla birebir) */
+internal fun DrawScope.drawMarkIcon(kind: Int, p: Offset, t: Float, k: Float = 1f) {
+    val d = density * k
+    val ink = Color(0xFF15140F)
+    when (kind) {
+        MK_TITAN -> {
+            // kızıl kafatası rozeti: dönen diken halkası
+            for (i in 0 until 8) {
+                val a = t * 0.8f + i * (PI.toFloat() / 4f)
+                drawCircle(Color(0xFFE03030), 2.2f * d, Offset(p.x + kotlin.math.cos(a) * 11f * d, p.y + sin(a) * 11f * d))
+            }
+            drawCircle(ink, 9f * d, p); drawCircle(Color(0xFFE03030), 7f * d, p)
+            drawCircle(ink, 1.8f * d, Offset(p.x - 2.5f * d, p.y - 1f * d)); drawCircle(ink, 1.8f * d, Offset(p.x + 2.5f * d, p.y - 1f * d))
+        }
+        MK_QUEST -> {
+            val pulse = 1f + 0.25f * sin(t * 4f)
+            drawCircle(Color(0x55FF9A2A), 16f * d * pulse, p)
+            // ünlem kalkanı
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(p.x, p.y - 10f * d); lineTo(p.x + 8f * d, p.y - 5f * d); lineTo(p.x + 6f * d, p.y + 5f * d)
+                lineTo(p.x, p.y + 10f * d); lineTo(p.x - 6f * d, p.y + 5f * d); lineTo(p.x - 8f * d, p.y - 5f * d); close()
+            }
+            drawPath(path, ink); drawPath(path, Color(0xFFFF9A2A), style = androidx.compose.ui.graphics.drawscope.Stroke(2f * d))
+            drawRect(Color(0xFFFFD08A), Offset(p.x - 1.2f * d, p.y - 5f * d), Size(2.4f * d, 6f * d))
+            drawRect(Color(0xFFFFD08A), Offset(p.x - 1.2f * d, p.y + 3f * d), Size(2.4f * d, 2.4f * d))
+        }
+        MK_MERCHANT -> {
+            // altın kese
+            drawCircle(ink, 9f * d, p); drawCircle(Color(0xFFFFC83A), 7f * d, p)
+            drawRect(Color(0xFF8A5A08), Offset(p.x - 4f * d, p.y - 8f * d), Size(8f * d, 3f * d))
+            drawCircle(Color(0xFF8A5A08), 2.2f * d, Offset(p.x, p.y + 1f * d))
+        }
+        MK_PLACE -> {
+            // yer imi: elmas biçimli taş
+            val path = androidx.compose.ui.graphics.Path().apply {
+                moveTo(p.x, p.y - 7f * d); lineTo(p.x + 6f * d, p.y); lineTo(p.x, p.y + 7f * d); lineTo(p.x - 6f * d, p.y); close()
+            }
+            drawPath(path, ink); drawPath(path, Color(0xFFB0E0FF), style = androidx.compose.ui.graphics.drawscope.Stroke(2f * d))
+        }
+        else -> drawCircle(Color(0xFFB0E0FF), 4f * d, p)
+    }
+}
 
 /** Keşif bulutu maskesi: keşfedilmemiş hücre opak (yumuşak kenar için küçük bitmap büyütülerek çizilir). */
 fun fogMask(fog: JSONObject): ImageBitmap? {
@@ -135,11 +187,7 @@ fun WorldMapScreen(close: () -> Unit) {
         mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) + titanMark(ar) + merchantMarks(ar)
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { com.zenvex.online.game.Bases.refresh() }
-    WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close) { to ->
-        val r = GameSession.cmd("travel", "to" to to)
-        Toaster.show(r.msg, r.ok)
-        if (r.ok) close()
-    }
+    WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close, region = com.zenvex.online.game.RegionMap.snap)
 }
 
 /** V12.1: Titan her 15 dakikada başka bir bölgede; bu dilimde öldürülmediyse yeri ve kalan süresi */
@@ -155,7 +203,7 @@ fun merchantMarks(areas: JSONObject): List<MapMark> {
     val a = areas.optJSONArray("merchant") ?: return emptyList()
     return (0 until a.length()).map { i ->
         val o = a.getJSONObject(i)
-        MapMark(o.optDouble("x").toFloat(), o.optDouble("y").toFloat(), 4, "Gezgin Tüccar Marco",
+        MapMark(o.optDouble("x").toFloat(), o.optDouble("y").toFloat(), MK_MERCHANT, "Gezgin Tüccar Marco",
             if (o.optBoolean("parked")) "Park Etti: Alışveriş Açık" else "Yolda, Birazdan Park Eder")
     }
 }
@@ -181,14 +229,9 @@ fun baseMarks(b: JSONObject): List<MapMark> {
     return out
 }
 
-/** Seyahat noktaları, titan, kamp NPC'leri ve etkin görev hedefi. */
+/** Görev hedefleri ve yer imleri. V15: haritadan ışınlanma (eski karakol seyahati) kalktı; bölgeler arası yalnız Büyücü Aldric. */
 fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
     val out = ArrayList<MapMark>()
-    val travel = w.optJSONArray("travel") ?: JSONArray()
-    for (i in 0 until travel.length()) {
-        val a = travel.getJSONArray(i)
-        out += MapMark(a.getDouble(2).toFloat(), a.getDouble(3).toFloat(), 1, a.getString(1))
-    }
     val st = quests.optJSONArray("story") ?: JSONArray()
     for (i in 0 until st.length()) {
         val q = st.getJSONObject(i)
@@ -204,7 +247,7 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
 @Composable
 internal fun WorldMapView(
     img: ImageBitmap?, fog: ImageBitmap?, w: JSONObject, meX: Float, meY: Float, level: Int, allMarks: List<MapMark>,
-    close: () -> Unit, initialPick: MapMark? = null, travel: (String) -> Unit,
+    close: () -> Unit, initialPick: MapMark? = null, region: com.zenvex.online.game.RegionMap.Snap? = null,
 ) {
     val mapPx = w.optDouble("map_px", 23040.0).toFloat()
     // V12: harita yalnız bulunulan bölgeyi gösterir (kamera bölgeye sınırlı, dışı karanlık; diğer bölgeler büyücüden)
@@ -213,17 +256,14 @@ internal fun WorldMapView(
     val area = areas.getOrNull(here)
     val bx0 = area?.rects?.minOf { it[0] } ?: 0f; val by0 = area?.rects?.minOf { it[1] } ?: 0f
     val bx1 = area?.rects?.maxOf { it[2] } ?: mapPx; val by1 = area?.rects?.maxOf { it[3] } ?: mapPx
-    val travelAll = w.optJSONArray("travel") ?: JSONArray()
-    val travelList = remember(travelAll) {
-        JSONArray().also { out -> for (i in 0 until travelAll.length()) { val a = travelAll.getJSONArray(i); if (here < 0 || a.optInt(6, here) == here) out.put(a) } }
-    }
     val marks = remember(allMarks, areas) { if (area == null) allMarks else allMarks.filter { areaIndexAt(areas, it.x, it.y) == here } }
     var view by remember { mutableStateOf(IntSize.Zero) }
     // kamera: dünya pikseli cinsinden merkez + ekran pikseli/dünya pikseli ölçeği
     var zoom by remember { mutableFloatStateOf(0f) }
     var cx by remember { mutableFloatStateOf(meX) }
     var cy by remember { mutableFloatStateOf(meY) }
-    var showTravel by remember { mutableStateOf(false) }
+    var showLegend by remember { mutableStateOf(true) }
+    val rimg = remember(region, here) { region?.takeIf { it.area == here }?.let { it to it.bmp.asImageBitmap() } }
     var picked by remember { mutableStateOf(initialPick) }
     val t = rememberTime()
     val ctx = androidx.compose.ui.platform.LocalContext.current
@@ -273,7 +313,13 @@ internal fun WorldMapView(
             val ox = size.width / 2f - cx * z
             val oy = size.height / 2f - cy * z
             fun at(x: Float, y: Float) = Offset(ox + x * z, oy + y * z)
-            if (img != null) {
+            // V15: bölgenin gerçek küçültülmüş görüntüsü (yoksa eski renkli harita)
+            if (rimg != null) {
+                val (rs, bi) = rimg
+                val tl = at(rs.x0, rs.y0)
+                drawImage(bi, IntOffset.Zero, IntSize(bi.width, bi.height), IntOffset(tl.x.toInt(), tl.y.toInt()),
+                    IntSize((bi.width * rs.step * z).toInt(), (bi.height * rs.step * z).toInt()), filterQuality = FilterQuality.Low)
+            } else if (img != null) {
                 val k = mapPx / img.width * z
                 drawImage(img, IntOffset.Zero, IntSize(img.width, img.height), IntOffset(ox.toInt(), oy.toInt()),
                     IntSize((img.width * k).toInt(), (img.height * k).toInt()), filterQuality = FilterQuality.None)
@@ -294,14 +340,7 @@ internal fun WorldMapView(
             for (m in marks) {
                 val p = at(m.x, m.y)
                 when (m.kind) {
-                    1 -> { drawCircle(Color(0xFF15140F), 9.dp.toPx(), p); drawCircle(Px.Clan, 6.dp.toPx(), p) }
-                    2 -> { drawCircle(Color(0xFF15140F), 10.dp.toPx(), p); drawCircle(Color(0xFFE03030), 7.dp.toPx(), p) }
-                    3 -> {
-                        val pulse = 1f + 0.25f * sin(t * 4f)
-                        drawCircle(Color(0x55FF9A2A), 18.dp.toPx() * pulse, p)
-                        drawCircle(Color(0xFF15140F), 9.dp.toPx(), p); drawCircle(Color(0xFFFF9A2A), 6.dp.toPx(), p)
-                    }
-                    5 -> {
+                    MK_BASE -> {
                         val s = 9.dp.toPx()
                         val b = badges[m.icon]
                         if (b != null) {
@@ -316,7 +355,7 @@ internal fun WorldMapView(
                         drawRect(Color(m.color), Offset(p.x - s, p.y - s), Size(2 * s, 2 * s))
                         drawRect(Color(0x80FFFFFF), Offset(p.x - s * 0.35f, p.y - s * 0.35f), Size(s * 0.7f, s * 0.7f))
                     }
-                    else -> drawCircle(Color(0xFFB0E0FF), 4.dp.toPx(), p)
+                    else -> drawMarkIcon(m.kind, p, t)
                 }
             }
             val me = at(meX, meY)
@@ -330,22 +369,16 @@ internal fun WorldMapView(
             Spacer(Modifier.width(10.dp))
             Column {
                 PT(area?.name ?: "Dünya Haritası", 24.sp, Px.Orange, outline = true)
-                if (area != null) PT("Diğer Bölgelere Büyücü Aldric Işınlar", 12.sp, Color(0xFFC8A0FF))
+                if (area != null) PT("Diğer Bölgelere Büyücü Aldric Işınlar · İki Parmakla Yakınlaştır", 12.sp, Color(0xFFC8A0FF))
             }
         }
         Row(Modifier.align(Alignment.TopEnd).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PxIcon("pin", size = 44.dp) { cx = meX; cy = meY; clampCam() }
             PxIcon("plus", size = 44.dp) { zoom = (zoom * 1.6f).coerceIn(minZoom(), 0.6f); clampCam() }
             PxIcon("minus", size = 44.dp) { zoom = (zoom / 1.6f).coerceIn(minZoom(), 0.6f); clampCam() }
-            PxButton("Seyahat", height = 44.dp, size = 16.sp, color = Px.Blue, icon = "map") { showTravel = !showTravel }
         }
-        PxPanel(Modifier.align(Alignment.BottomStart).padding(12.dp), color = Color(0xD0201F1C), pad = 8.dp) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Legend(Color(0xFF3A8AFF), "Sen"); Legend(Px.Clan, "Seyahat"); Legend(Color(0xFFFF9A2A), "Görev"); Legend(Color(0xFFE03030), "Titan")
-                LegendArt("map_gov", "Devlet Üssü"); LegendArt("map_war", "Klan Üssü")
-                PT("İki Parmakla Yakınlaştır", 12.sp, Px.Sub)
-            }
-        }
+        // V15 lejant: haritadaki işaretlerin aynısı, bu bölgedeki sayılarıyla; dokununca daralır
+        MapLegend(marks, showLegend, t, Modifier.align(Alignment.BottomStart).padding(12.dp)) { showLegend = !showLegend }
         picked?.let { m ->
             if (m.kind == 5) {
                 // üs kartı: V8 tehlike şeritli askeri panel + rozet
@@ -362,42 +395,50 @@ internal fun WorldMapView(
                 for (l in m.sub.split('\n').filter { it.isNotEmpty() }) PT(l, 14.sp, Px.Sub, maxLines = 2)
             }
         }
-        AnimatedVisibility(showTravel, Modifier.align(Alignment.CenterEnd)) {
-            Column(
-                Modifier.padding(top = 68.dp, end = 12.dp, bottom = 12.dp).width(290.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for (i in 0 until travelList.length()) {
-                    val a = travelList.getJSONArray(i)
-                    val need = a.getInt(4); val cost = a.getInt(5)
-                    val ok = level >= need
-                    PxPanel(Modifier.fillMaxWidth(), Color(0xE02B2B26), pad = 8.dp) {
-                        PT(a.getString(1), 17.sp, if (ok) Px.Text else Px.Sub)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            PxButton("Git", height = 36.dp, size = 15.sp, enabled = ok) { travel(a.getString(0)) }
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                PT(if (ok) "Seviye $need+" else "Seviye $need Gerekli", 13.sp, if (ok) Px.Level else Color(0xFFE07060))
-                                PT(if (cost > 0) "$cost Altın" else "Ücretsiz", 13.sp, Px.Clan)
-                            }
+    }
+}
+
+/** Lejant: başlık şeridi + işaret satırları (simge haritadaki fırçayla çizilir, sağda bu bölgedeki adet) */
+@Composable
+private fun MapLegend(marks: List<MapMark>, open: Boolean, t: Float, modifier: Modifier, toggle: () -> Unit) {
+    val rows = listOf(
+        Triple(-1, "Sen", 1), Triple(MK_QUEST, "Görev Hedefi", marks.count { it.kind == MK_QUEST }),
+        Triple(MK_TITAN, "Titan", marks.count { it.kind == MK_TITAN }), Triple(MK_MERCHANT, "Gezgin Tüccar", marks.count { it.kind == MK_MERCHANT }),
+        Triple(MK_PLACE, "Önemli Yer", marks.count { it.kind == MK_PLACE }),
+    )
+    val bases = listOf("map_gov" to "Devlet Üssü", "map_clan" to "Klanının Üssü", "map_war" to "Rakip Klan Üssü")
+    Column(modifier.width(212.dp).metalFrame(1.dp, "panel_base", 24).padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Row(Modifier.fillMaxWidth().clickable { toggle() }, verticalAlignment = Alignment.CenterVertically) {
+            Icon("map", 16.dp, Px.Clan); Spacer(Modifier.width(6.dp))
+            PT("Lejant", 14.sp, Px.Clan, Modifier.weight(1f))
+            PT(if (open) "▾" else "▸", 14.sp, Px.Sub)
+        }
+        AnimatedVisibility(open) {
+            Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                for ((kind, label, n) in rows) {
+                    if (kind >= 0 && n == 0) continue
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Canvas(Modifier.size(22.dp)) {
+                            val c = Offset(size.width / 2, size.height / 2)
+                            if (kind < 0) { drawCircle(Color.White, 6.dp.toPx(), c); drawCircle(Color(0xFF3A8AFF), 4.dp.toPx(), c) }
+                            else drawMarkIcon(kind, c, t, 0.8f)
                         }
+                        Spacer(Modifier.width(6.dp))
+                        PT(label, 12.sp, Px.Text, Modifier.weight(1f))
+                        if (kind >= 0) PT("$n", 12.sp, Px.Sub)
+                    }
+                }
+                for ((art, label) in bases) {
+                    val n = marks.count { it.kind == MK_BASE && it.icon == art }
+                    if (n == 0) continue
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArtImage(art, Modifier.size(22.dp)); Spacer(Modifier.width(6.dp))
+                        PT(label, 12.sp, Px.Text, Modifier.weight(1f)); PT("$n", 12.sp, Px.Sub)
                     }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun LegendArt(name: String, s: String) {
-    ArtImage(name, Modifier.size(16.dp))
-    Spacer(Modifier.width(5.dp)); PT(s, 13.sp); Spacer(Modifier.width(12.dp))
-}
-
-@Composable
-private fun Legend(c: Color, s: String) {
-    Box(Modifier.size(12.dp).background(Color(0xFF15140F)).padding(2.dp).background(c))
-    Spacer(Modifier.width(5.dp)); PT(s, 13.sp); Spacer(Modifier.width(12.dp))
 }
 
 private fun DrawScope.drawClouds(fog: ImageBitmap, ox: Float, oy: Float, side: Float, t: Float) {

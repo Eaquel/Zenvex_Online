@@ -161,6 +161,8 @@ class Atlas private constructor(ctx: Context) {
 
     companion object {
         @Volatile private var inst: Atlas? = null
+        /** yüklüyse atlas (bağlam olmadan; arka plan çizimleri için) */
+        fun peek(): Atlas? = inst
         fun get(ctx: Context): Atlas = inst ?: synchronized(this) { inst ?: Atlas(ctx.applicationContext).also { inst = it } }
     }
 }

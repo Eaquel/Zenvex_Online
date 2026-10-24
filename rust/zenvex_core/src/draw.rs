@@ -365,11 +365,8 @@ impl Game {
             0.0
         };
         let near_m = self.near_caravan().is_some();
-        let near_b = self
-            .world
-            .benches
-            .iter()
-            .any(|&(x, y)| (x - p.x).hypot(y - p.y) < 150.0);
+        // kamp tezgâhı ve kurulan tezgâhlar (kalıcı ya da süreli) aynı ölçüyle
+        let near_b = self.near_bench();
         let boss = self
             .zombies
             .iter()

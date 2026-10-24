@@ -10,19 +10,46 @@ pub const BENCH_TTL: f32 = 600.0;
 pub const HOME_MAX: usize = 3;
 /// Tezgâha yakınlık (dünya pikseli)
 pub const BENCH_NEAR: f32 = 160.0;
+/// V15 inşa modu: tezgâh oyuncudan en çok 6 karo uzağa kurulur
+pub const BUILD_RANGE: f32 = 6.0 * crate::world::TILE;
 
 impl Game {
     /// Tezgâhı oyuncunun önüne kurar.
     pub fn place_bench(&mut self, slot: usize) -> Result<String, String> {
+        // oyuncunun sağ yanına (önüne kurulunca karakteri örtüyordu)
+        let (x, y) = (self.player.x + 70.0, self.player.y + 10.0);
+        self.place_bench_at(slot, x, y)
+    }
+
+    /// V15 inşa modu: seçilen yer uygun mu (menzil, aynı bölge, engel, başka tezgâha yakınlık)
+    pub fn bench_spot(&mut self, x: f32, y: f32) -> Result<(), String> {
+        if self.player.dead {
+            return Err("Önce yeniden doğ".into());
+        }
+        let (px, py) = (self.player.x, self.player.y);
+        if (x - px).hypot(y - py) > BUILD_RANGE {
+            return Err("Çok uzak (en çok 6 karo)".into());
+        }
+        if crate::areas::area_at(x, y) != crate::areas::area_at(px, py) {
+            return Err("Bölge sınırının ötesine kurulamaz".into());
+        }
+        if self.world.blocked(x, y, 26.0, &mut self.scratch) {
+            return Err("Burası dolu".into());
+        }
+        let near = |&(bx, by): &(f32, f32)| (bx - x).hypot(by - y) < 90.0;
+        if self.world.benches.iter().any(near) || self.placed_benches().iter().any(|&(bx, by, _)| near(&(bx, by))) {
+            return Err("Başka bir tezgâha çok yakın".into());
+        }
+        Ok(())
+    }
+
+    /// Tezgâhı verilen yere kurar (inşa modu; yer [bench_spot] ile denetlenir).
+    pub fn place_bench_at(&mut self, slot: usize, x: f32, y: f32) -> Result<String, String> {
         let s = self.progress.inv.slots.get(slot).copied().flatten().ok_or("Boş slot")?;
         if ITEMS[s.item as usize].id != "workbench" {
             return Err("Bu bir tezgâh değil".into());
         }
-        if self.player.dead {
-            return Err("Önce yeniden doğ".into());
-        }
-        // oyuncunun sağ yanına (önüne kurulunca karakteri örtüyordu)
-        let (x, y) = (self.player.x + 70.0, self.player.y + 10.0);
+        self.bench_spot(x, y)?;
         let msg = if self.at_home() {
             if self.progress.benches.len() >= HOME_MAX {
                 return Err(format!("Üssüne en çok {HOME_MAX} tezgâh kurabilirsin"));
@@ -86,6 +113,28 @@ impl Game {
 mod tests {
     use crate::game::Game;
     use crate::Progress;
+
+    #[test]
+    fn build_mode_checks_range_and_spot() {
+        let mut g = Game::new(7, Progress::default(), 0);
+        g.progress.relayout_inv();
+        g.progress.inv.add_id("workbench", 1);
+        g.player.x = 150.0 * crate::world::TILE;
+        g.player.y = 320.0 * crate::world::TILE;
+        let (px, py) = (g.player.x, g.player.y);
+        assert!(g.bench_spot(px + 10.0 * crate::world::TILE, py).is_err(), "menzil dışı");
+        // menzil içinde boş bir yer bulunur ve oraya kurulur
+        let spot = (1..6)
+            .flat_map(|r| (0..8).map(move |k| (r as f32 * crate::world::TILE, k as f32 * std::f32::consts::FRAC_PI_4)))
+            .map(|(d, a)| (px + a.cos() * d, py + a.sin() * d))
+            .find(|&(x, y)| g.bench_spot(x, y).is_ok())
+            .expect("yakında boş yer");
+        let s = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "workbench")).unwrap();
+        g.place_bench_at(s, spot.0, spot.1).unwrap();
+        assert_eq!(g.temp_benches[0].0, spot.0);
+        // aynı yere ikinci tezgâh olmaz
+        assert!(g.bench_spot(spot.0 + 10.0, spot.1).is_err());
+    }
 
     #[test]
     fn workbench_places_temporary_outside_and_permanent_at_home() {
