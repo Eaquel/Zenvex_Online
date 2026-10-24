@@ -83,7 +83,7 @@ object Px {
     val Hard = Color(0xFFE8A060)
 }
 
-private val TR = java.util.Locale("tr", "TR")
+private val TR = java.util.Locale.forLanguageTag("tr-TR")
 
 /**
  * Türkçe "Her Kelimenin İlk Harfi Büyük": yalnız küçük harfle başlayan kelimelerin ilk harfi büyütülür

@@ -760,7 +760,7 @@ impl Game {
     pub fn light(&self) -> f32 {
         // 0.25-0.75 gündüz; geceye yumuşak geçiş
         let t = self.day_t.fract();
-        let d = (t * TAU - std::f32::consts::FRAC_PI_2).sin() * -1.0; // t=0.5 öğlen → 1
+        let d = -(t * TAU - std::f32::consts::FRAC_PI_2).sin(); // t=0.5 öğlen → 1
         (0.42 + 0.58 * ((d + 0.35) / 1.35).clamp(0.0, 1.0)).clamp(0.4, 1.0)
     }
 

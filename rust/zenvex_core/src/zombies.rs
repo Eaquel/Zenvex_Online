@@ -363,15 +363,14 @@ impl Game {
                         z.alpha += (target - z.alpha) * (1.0 - (-4.0 * dt).exp());
                     }
                 }
-                ZKind::Toxic => {
-                    if z.state != ZState::Dead && z.anim == Z_WALK {
+                ZKind::Toxic
+                    if z.state != ZState::Dead && z.anim == Z_WALK => {
                         z.puddle_t -= dt;
                         if z.puddle_t <= 0.0 {
                             z.puddle_t = 2.2;
                             spawn_puddles.push((z.x, z.y));
                         }
                     }
-                }
                 _ => {}
             }
             let sees = !pdead

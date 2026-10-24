@@ -423,12 +423,11 @@ impl Game {
                         self.story_ready(q);
                     }
                 }
-                Goal::Level | Goal::Dog => {
-                    if self.quest_progress(q, n) >= q.count {
+                Goal::Level | Goal::Dog
+                    if self.quest_progress(q, n) >= q.count => {
                         self.story_set(which, idx, true, q.count);
                         self.story_ready(q);
                     }
-                }
                 _ => {}
             }
         }

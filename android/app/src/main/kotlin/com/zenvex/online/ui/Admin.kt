@@ -37,7 +37,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private val tsFmt = SimpleDateFormat("dd.MM HH:mm", Locale("tr"))
+private val tsFmt = SimpleDateFormat("dd.MM HH:mm", Locale.forLanguageTag("tr"))
 internal fun ts(ms: Long) = if (ms <= 0) "" else tsFmt.format(Date(ms))
 
 /** Oyundaki eşyalar: [kimlik, ad, tür, nadirlik] (sıra = kayıttaki eşya numarası) */

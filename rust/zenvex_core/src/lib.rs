@@ -1,5 +1,9 @@
 //! Zenvex Online oyun çekirdeği. Motordan ve platformdan bağımsızdır;
 //! Android tarafı `zenvex_jni` üzerinden kullanır, ileride sunucu da aynı kodu kullanacak.
+// Oyun verisi tabloları (tarif, düşme, ödül demetleri) ve çizim yardımcıları bilinçli olarak geniş imzalı.
+#![allow(clippy::too_many_arguments, clippy::type_complexity)]
+// Testlerde bir alanı değiştirilmiş varsayılan ilerleme kurmak okunaklı kalıyor.
+#![cfg_attr(test, allow(clippy::field_reassign_with_default))]
 pub mod bases;
 pub mod chests;
 pub mod data;

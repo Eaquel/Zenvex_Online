@@ -295,7 +295,7 @@ impl Hub {
     /// 10 Hz: odalara konum paketleri (yalnız ilgi alanındakiler), sessiz bağlantıları kapat
     pub fn tick(&mut self) {
         self.ticks += 1;
-        let full = self.ticks % FULL_EVERY == 0;
+        let full = self.ticks.is_multiple_of(FULL_EVERY);
         let r2 = self.interest * self.interest;
         let mut out: Vec<(u64, String)> = Vec::new();
         for room in self.rooms.values() {
@@ -333,7 +333,7 @@ impl Hub {
         for (to, msg) in out {
             self.send(to, &msg);
         }
-        if self.ticks % 50 == 0 {
+        if self.ticks.is_multiple_of(50) {
             let now = Instant::now();
             let dead: Vec<u64> = self.clients.iter().filter(|(_, c)| now.duration_since(c.last_msg) > Duration::from_secs(40)).map(|(k, _)| *k).collect();
             for k in dead {
@@ -413,7 +413,7 @@ pub mod loadtest {
                     if tx.send(Message::text(s)).await.is_err() {
                         break;
                     }
-                    if k % 3 == 0 {
+                    if k.is_multiple_of(3) {
                         sent_at.lock().unwrap().insert(k, Instant::now());
                         let _ = tx.send(Message::text(json!({"t": "ping", "i": k}).to_string())).await;
                     }

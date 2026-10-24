@@ -127,7 +127,7 @@ pub fn creatures(i: usize) -> Vec<(ZKind, u32, u32)> {
             }
         }
     }
-    out.sort_by(|a, b| b.3.cmp(&a.3));
+    out.sort_by_key(|o| std::cmp::Reverse(o.3));
     out.into_iter().map(|(k, lo, hi, _)| (k, lo, hi)).collect()
 }
 
@@ -277,6 +277,39 @@ impl crate::game::Game {
     }
 }
 
+
+/// V13 bölge zemini: ortak malzemeyi bölgenin kendi dokusuna çevirir (ana, ikinci, yol). Beton (güvenli bölge, karargâh)
+/// ve üs içi çakıl olduğu gibi kalır. Bölge dokuları yalnız o bölgedeyken yüklenir (ground::R_*).
+pub fn region_ground(area: usize, m: u8, alt_noise: f32) -> u8 {
+    use crate::world::ground::*;
+    let (main, alt, path) = (R_MAIN, R_ALT, R_PATH);
+    match (AREAS[area].id, m) {
+        (_, CONCRETE) => m,
+        ("forest", GRASS | DRY_GRASS) => if alt_noise > 0.72 { alt } else { main },
+        ("forest", DARK_GRASS | MUD) => alt,
+        ("forest", DIRT | GRAVEL) => path,
+        ("city", ASPHALT) => main,
+        ("city", SIDEWALK | GRASS | DRY_GRASS | DARK_GRASS) => alt,
+        ("city", DIRT | GRAVEL) => path,
+        ("burnt", ASH | GRASS | DARK_GRASS) => if alt_noise > 0.74 { alt } else { main },
+        ("burnt", DRY_GRASS) => alt,
+        ("burnt", DIRT | GRAVEL) => path,
+        ("desert", DRY_GRASS | GRASS | DIRT | GRAVEL) => if alt_noise > 0.8 { alt } else { main },
+        ("desert", DESERT_ROAD | ASPHALT) => path,
+        ("bswamp", MUD | DARK_GRASS | GRASS) => main,
+        ("bswamp", SWAMP) => alt,
+        ("bswamp", DIRT | GRAVEL) => path,
+        ("harbor", SNOW_DOCK) => if alt_noise > 0.7 { alt } else { main },
+        ("harbor", ASPHALT | GRAVEL | DIRT) => path,
+        ("front", MUD | BASE_DIRT) => main,
+        ("front", DRY_GRASS | GRASS) => alt,
+        ("front", DIRT) => path,
+        ("home", GRASS | DRY_GRASS | DARK_GRASS) => main,
+        ("home", BASE_DIRT | DIRT | GRAVEL) => path,
+        _ => m,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,10 +380,10 @@ mod tests {
     fn front_has_no_zombies_and_every_area_lists_info() {
         assert!(creatures(FRONT).is_empty());
         assert!(Zone::Front.spawns().is_empty());
-        for i in 0..AREAS.len() {
+        for (i, a) in AREAS.iter().enumerate() {
             if i != FRONT && i != HOME {
-                assert!(!creatures(i).is_empty(), "{}", AREAS[i].id);
-                assert!(!drops(i).is_empty(), "{}", AREAS[i].id);
+                assert!(!creatures(i).is_empty(), "{}", a.id);
+                assert!(!drops(i).is_empty(), "{}", a.id);
             }
         }
         for i in 0..AREAS.len() {
@@ -358,38 +391,5 @@ mod tests {
                 assert!(crate::data::resolve_item_id(id).is_some(), "bilinmeyen eşya {id}");
             }
         }
-    }
-}
-
-
-/// V13 bölge zemini: ortak malzemeyi bölgenin kendi dokusuna çevirir (ana, ikinci, yol). Beton (güvenli bölge, karargâh)
-/// ve üs içi çakıl olduğu gibi kalır. Bölge dokuları yalnız o bölgedeyken yüklenir (ground::R_*).
-pub fn region_ground(area: usize, m: u8, alt_noise: f32) -> u8 {
-    use crate::world::ground::*;
-    let (main, alt, path) = (R_MAIN, R_ALT, R_PATH);
-    match (AREAS[area].id, m) {
-        (_, CONCRETE) => m,
-        ("forest", GRASS | DRY_GRASS) => if alt_noise > 0.72 { alt } else { main },
-        ("forest", DARK_GRASS | MUD) => alt,
-        ("forest", DIRT | GRAVEL) => path,
-        ("city", ASPHALT) => main,
-        ("city", SIDEWALK | GRASS | DRY_GRASS | DARK_GRASS) => alt,
-        ("city", DIRT | GRAVEL) => path,
-        ("burnt", ASH | GRASS | DARK_GRASS) => if alt_noise > 0.74 { alt } else { main },
-        ("burnt", DRY_GRASS) => alt,
-        ("burnt", DIRT | GRAVEL) => path,
-        ("desert", DRY_GRASS | GRASS | DIRT | GRAVEL) => if alt_noise > 0.8 { alt } else { main },
-        ("desert", DESERT_ROAD | ASPHALT) => path,
-        ("bswamp", MUD | DARK_GRASS | GRASS) => main,
-        ("bswamp", SWAMP) => alt,
-        ("bswamp", DIRT | GRAVEL) => path,
-        ("harbor", SNOW_DOCK) => if alt_noise > 0.7 { alt } else { main },
-        ("harbor", ASPHALT | GRAVEL | DIRT) => path,
-        ("front", MUD | BASE_DIRT) => main,
-        ("front", DRY_GRASS | GRASS) => alt,
-        ("front", DIRT) => path,
-        ("home", GRASS | DRY_GRASS | DARK_GRASS) => main,
-        ("home", BASE_DIRT | DIRT | GRAVEL) => path,
-        _ => m,
     }
 }

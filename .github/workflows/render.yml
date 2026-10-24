@@ -25,8 +25,8 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - name: Blender (bpy) ve MakeHuman kur
@@ -43,7 +43,7 @@ jobs:
           export MH_ROOT="$HOME/mh" MPFB_HOME="$HOME/mh/user"
           python tools/blender/render_actors3.py ${{ inputs.groups }} 2>&1 | grep -v "^Fra\|Saved\|^\[" | tail -40
           if [ "${{ matrix.shard }}" = "0" ]; then python tools/blender/render_items3.py icons equip 2>&1 | tail -3 || true; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: shard-${{ matrix.shard }}
           path: out
@@ -53,12 +53,12 @@ jobs:
     needs: render
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: pip install -q numpy pillow
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: shards
       - name: Parçaları birleştir

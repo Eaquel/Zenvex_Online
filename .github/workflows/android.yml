@@ -20,9 +20,9 @@ jobs:
     env:
       NDK_VERSION: 27.2.12479018
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
@@ -44,7 +44,7 @@ jobs:
       - name: cargo-ndk kur
         run: cargo install cargo-ndk --locked
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
 
       - name: APK derle
         working-directory: android
@@ -62,12 +62,12 @@ jobs:
           # emülatör testi: otomatik gösterim yalnız hata ayıklama sürümünde çalışır (yayın sürümü çevrimdışı oynatmaz)
           cp app/build/outputs/apk/debug/app-debug.apk ../dist-debug/ZenvexOnline-debug.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ZenvexOnline-apk
           path: dist/*.apk
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ZenvexOnline-debug-apk
           path: dist-debug/*.apk
@@ -104,9 +104,9 @@ jobs:
         # Android 9 (en eski desteklenen) ve Android 15 (16 KB sayfa / kenardan kenara)
         api: [28, 35]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: ZenvexOnline-debug-apk
           path: apk
@@ -128,7 +128,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
           script: bash .github/scripts/ui_smoke.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ui-shots-api${{ matrix.api }}

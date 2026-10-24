@@ -209,9 +209,9 @@ pub struct Travel {
 impl Travel {
     pub fn pos(&self) -> (f32, f32) {
         match self.tile {
-            (a, _) if a == -1.0 => camp_spawn(),
-            (a, _) if a == -2.0 => city_spawn(),
-            (a, _) if a == -3.0 => (BOSS.0 - 600.0, BOSS.1 + 400.0),
+            (-1.0, _) => camp_spawn(),
+            (-2.0, _) => city_spawn(),
+            (-3.0, _) => (BOSS.0 - 600.0, BOSS.1 + 400.0),
             (x, y) => (x * TILE, y * TILE),
         }
     }
@@ -424,10 +424,10 @@ pub fn camp_spawn() -> (f32, f32) {
 }
 
 fn road_x(tx: usize) -> bool {
-    tx >= 8 && tx < OLD_TILES && (tx - 8) % 34 < 4
+    (8..OLD_TILES).contains(&tx) && (tx - 8) % 34 < 4
 }
 fn road_y(ty: usize) -> bool {
-    ty < WALL_Y && ty >= 6 && (ty - 6) % 30 < 4
+    (6..WALL_Y).contains(&ty) && (ty - 6) % 30 < 4
 }
 
 // ---- V8: kişisel üs (karo, duvar dahil) — haritanın güneydoğu köşesinde, duvarla kapalı; yalnız büyücüyle girilir
@@ -1223,7 +1223,7 @@ impl World {
         while y < WALL_Y {
             let mut x = 8usize;
             while x < OLD_TILES - 4 {
-                if road_y(y) && (x % 12 == 0) && zone_at_tile(x, y) != Zone::SafeCity {
+                if road_y(y) && x.is_multiple_of(12) && zone_at_tile(x, y) != Zone::SafeCity {
                     self.push(
                         "lamp",
                         Kind::Lamp,
@@ -2088,6 +2088,7 @@ impl World {
     ///  - şehir suru harita kenarından 2 karo içeride başlıyordu (kenardan sıyrılıp şehre girilebiliyordu) → batı ucu kapatılır
     ///  - şehrin doğusu (Askerî Bölge tarafı) açıktı → doğu suru (x = OLD_TILES), kuzey kenardan sura kadar
     ///  - harita kenarı boştu → çepeçevre karantina duvarı, aralıklı gözetleme kuleleri, lambalar ve uyarı tabelaları
+    ///
     /// V13: her bölgenin kendi sınır parçaları kenar boyunca dizilir (öteki bölge görünmesin), dekorlar serpilir,
     /// iki simge yapı (biri giriş karakolunun yanında, biri bölgenin içinde) kurulur.
     fn place_region_art(&mut self) {
@@ -2149,7 +2150,7 @@ impl World {
                             }
                             let k = rng.below(6);
                             let name = format!("b_{id}_{k}");
-                            self.push(&name, Kind::Prop, px, py, Shape::Rect(1.45 * t, 0.45 * t), 0.0, rng.range(0.0, 6.28));
+                            self.push(&name, Kind::Prop, px, py, Shape::Rect(1.45 * t, 0.45 * t), 0.0, rng.range(0.0, std::f32::consts::TAU));
                             grid.entry(cell(px, py)).or_default().push((px, py, 1.45 * t));
                         }
                     }
@@ -2201,7 +2202,7 @@ impl World {
                     continue;
                 }
                 let name = format!("d_{id}_{}", rng.below(8));
-                self.push(&name, Kind::Deco, x, y, Shape::None, 0.0, rng.range(0.0, 6.28));
+                self.push(&name, Kind::Deco, x, y, Shape::None, 0.0, rng.range(0.0, std::f32::consts::TAU));
                 grid.entry(cell(x, y)).or_default().push((x, y, 0.5 * t));
                 placed += 1;
             }
@@ -2541,7 +2542,7 @@ impl World {
             return (v, h);
         }
         let cx = tx >= 8 && (tx - 8) % 34 == 2;
-        let cy = ty < WALL_Y && ty >= 6 && (ty - 6) % 30 == 2;
+        let cy = (6..WALL_Y).contains(&ty) && (ty - 6) % 30 == 2;
         (cx, cy)
     }
 }

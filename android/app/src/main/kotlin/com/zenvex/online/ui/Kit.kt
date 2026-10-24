@@ -275,7 +275,7 @@ fun Dim(onDismiss: (() -> Unit)? = null, content: @Composable BoxScope.() -> Uni
 @Composable
 fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable RowScope.() -> Unit = {}, bg: String? = null,
                 content: @Composable ColumnScope.() -> Unit) {
-    PxFrame(title.lowercase(java.util.Locale("tr", "TR")).titleTr(), icon, onBack, right, bg, content)
+    PxFrame(title.lowercase(java.util.Locale.forLanguageTag("tr-TR")).titleTr(), icon, onBack, right, bg, content)
 }
 
 /** Yavaş yükselen parıltı/kor parçacıkları (arka plan canlılığı). */

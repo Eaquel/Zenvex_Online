@@ -3,8 +3,6 @@ use crate::data::{self, QuestKind, WeaponClass, ZKind, ZOMBIES};
 use crate::game::*;
 use crate::world::{Kind, Zone};
 
-/// Ağaç/taşa vuruş oranı (kesim hızı)
-
 impl Game {
     /// PvP açık mı: devlet üssü çevresi ya da yüksek seviyeli bölge (Donmuş Liman, Cephe Hattı); güvenli bölgede asla.
     pub fn pvp_at(&self, x: f32, y: f32) -> bool {
@@ -741,7 +739,7 @@ impl Game {
         } else if self.time - self.xp_warn_t > 60.0 {
             self.xp_warn_t = self.time;
             let min = self.progress.level.saturating_sub(crate::progress::XP_LEVEL_GAP).max(1);
-            self.msg(&format!("XP kazanmak için seviyene uygun zombi avla (Sv {min}+)."));
+            self.msg(format!("XP kazanmak için seviyene uygun zombi avla (Sv {min}+)."));
         }
         self.progress.pass.xp += if z.boss { 500 } else { 5 + z.level / 3 };
         self.quests_done(done);

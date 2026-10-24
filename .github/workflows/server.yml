@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -44,7 +44,7 @@ jobs:
           mkdir -p dist/zenvex-server
           cp rust/target/release/zenvex_server deploy/install.sh deploy/update.sh deploy/zenvex-server.service dist/zenvex-server/
           tar -C dist -czf zenvex-server-${{ matrix.arch }}.tar.gz zenvex-server
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: zenvex-server-${{ matrix.arch }}
           path: zenvex-server-${{ matrix.arch }}.tar.gz
