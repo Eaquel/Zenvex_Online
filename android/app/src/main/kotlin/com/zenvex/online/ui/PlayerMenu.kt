@@ -1,6 +1,7 @@
 package com.zenvex.online.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +47,8 @@ fun PlayerMenu(uid: String, name: String, close: () -> Unit, trade: () -> Unit, 
     var p by remember(uid) { mutableStateOf<JSONObject?>(null) }
     var mode by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf("") }
+    var reason by remember { mutableStateOf("") }
+    var note by remember { mutableStateOf("") }
     LaunchedEffect(uid) { Account.viewProfile(name) { r -> r.onSuccess { p = it } } }
     val target = uid.removePrefix("a").toLongOrNull()
     val quiet = remember { MutableInteractionSource() }
@@ -93,19 +96,29 @@ fun PlayerMenu(uid: String, name: String, close: () -> Unit, trade: () -> Unit, 
                         }
                     }
                     "report" -> {
+                        // V15 (R41c): neden seç + kısa açıklama (yönetici bildirimde iki profili yan yana görür)
                         PT("Neden Şikâyet Ediyorsun?", 13.sp, Px.Clan)
                         Spacer(Modifier.height(6.dp))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             for (r in REPORT_REASONS) {
-                                Box(Modifier.clip(RoundedCornerShape(3.dp)).background(Color(0xCC5A2420)).clickable {
-                                    if (target == null) { Toaster.show("Misafir Oyuncu Şikâyet Edilemez", false); return@clickable }
-                                    Account.report(target, r) { e -> if (e != null) Toaster.show(e, false) else Toaster.show("Şikâyetin Yöneticilere İletildi") }
-                                    mode = ""
-                                }.padding(horizontal = 9.dp, vertical = 7.dp)) { PT(r, 12.sp) }
+                                val on = reason == r
+                                Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xFFB0402E) else Color(0xCC5A2420))
+                                    .border(if (on) 2.dp else 0.dp, if (on) Color.White else Color.Transparent, RoundedCornerShape(3.dp))
+                                    .clickable { reason = r }.padding(horizontal = 9.dp, vertical = 7.dp)) { PT(r, 12.sp) }
                             }
                         }
                         Spacer(Modifier.height(6.dp))
-                        PxButton("Geri", Modifier.fillMaxWidth(), color = Px.Dark, height = 36.dp, size = 13.sp) { mode = "" }
+                        Field(note, { if (it.length <= 200) note = it }, "Ne oldu? (İsteğe bağlı, en çok 200 harf)", Modifier.fillMaxWidth())
+                        PT("${note.length}/200", 10.sp, Px.Sub)
+                        Spacer(Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            PxButton("Şikâyet Et", Modifier.weight(1f), color = Px.Red, height = 38.dp, size = 13.sp, enabled = reason.isNotEmpty()) {
+                                if (target == null) { Toaster.show("Misafir Oyuncu Şikâyet Edilemez", false); return@PxButton }
+                                Account.report(target, reason, note) { e -> if (e != null) Toaster.show(e, false) else Toaster.show("Şikâyetin Yöneticilere İletildi") }
+                                mode = ""; reason = ""; note = ""
+                            }
+                            PxButton("Geri", color = Px.Dark, height = 38.dp, size = 13.sp) { mode = "" }
+                        }
                     }
                     else -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         PxButton("Fısıltı", Modifier.fillMaxWidth(), color = Px.Green, icon = "chat", height = 44.dp, size = 15.sp) { mode = "whisper" }

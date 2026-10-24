@@ -58,9 +58,9 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
     PxFrame("Ayarlar", "gear", back) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(180.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Grafik" to "eye", "Kontroller" to "fist", "Ses" to "volume", "Bildirimler" to "mail", "Hesap" to "user", "Yasal" to "info")
+                listOf("Grafik" to "eye", "Kontroller" to "fist", "Ses" to "volume", "Bildirimler" to "mail", "Hesap" to "user", "Destek" to "chat", "Yasal" to "info")
                     .forEachIndexed { i, (n, ic) ->
-                        PxButton(n, Modifier.fillMaxWidth(), if (tab == i) Px.Green else Px.Dark, icon = ic, height = 44.dp, size = 15.sp) { tab = i }
+                        PxButton(n, Modifier.fillMaxWidth(), if (tab == i) Px.Green else Px.Dark, icon = ic, height = 40.dp, size = 14.sp) { tab = i }
                     }
             }
             Spacer(Modifier.width(10.dp))
@@ -151,6 +151,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                                 }
                             }
                         }
+                        5 -> SupportSection()
                         else -> LegalSection()
                     }
                 }

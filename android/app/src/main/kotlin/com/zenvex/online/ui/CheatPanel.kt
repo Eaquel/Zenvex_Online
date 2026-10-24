@@ -46,6 +46,7 @@ fun DevMenu(onClose: () -> Unit) {
     var log by remember { mutableStateOf("Hazır.") }
     var ok by remember { mutableStateOf(true) }
     val report: (String, Boolean) -> Unit = { m, g -> log = m; ok = g }
+    var file by remember { mutableStateOf(-1L) }
     Dim {
         Column(Modifier.width(820.dp).fillMaxHeight(0.94f).metalFrame().clickable(remember { MutableInteractionSource() }, null) {}
             .padding(horizontal = 18.dp, vertical = 14.dp)) {
@@ -61,7 +62,8 @@ fun DevMenu(onClose: () -> Unit) {
             if (!Account.admin.value) { PT("Bu Hesapta Yönetici Yetkisi Yok.", 15.sp, Px.Sub); return@Column }
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                listOf("Oyuncular" to "people", "Posta" to "mail", "Etkinlik" to "star", "Bakım" to "gear", "Hileler" to "dev").forEachIndexed { i, (n, ic) ->
+                listOf("Oyuncular" to "people", "Bildirimler" to "shield", "Destek" to "chat", "Ekonomi" to "coin", "Posta" to "mail", "Etkinlik" to "star", "Bakım" to "gear",
+                    "Hileler" to "dev").forEachIndexed { i, (n, ic) ->
                     PxButton(n, Modifier.weight(1f), if (tab == i) Px.Green else Px.Dark, icon = ic, size = 13.sp, height = 38.dp) { tab = i }
                 }
             }
@@ -69,9 +71,13 @@ fun DevMenu(onClose: () -> Unit) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())) {
                 when (tab) {
                     0 -> PlayersTab(report)
-                    1 -> MailTab(report)
-                    2 -> EventTab(report)
-                    3 -> MaintTab(report)
+                    // V15 (R41c, R41b): bildirimler iki profil kartıyla, destek talepleri fotoğraflarıyla
+                    1 -> AdminReportsTab({ file = it }, report)
+                    2 -> AdminSupportTab({ file = it }, report)
+                    3 -> AdminEconomyTab({ file = it }, report)
+                    4 -> MailTab(report)
+                    5 -> EventTab(report)
+                    6 -> MaintTab(report)
                     else -> CheatTab(report)
                 }
             }
@@ -81,6 +87,7 @@ fun DevMenu(onClose: () -> Unit) {
             }
         }
     }
+    if (file > 0) AdminPlayerFile(file) { file = -1 }
 }
 
 @Composable
