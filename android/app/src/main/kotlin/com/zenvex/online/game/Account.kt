@@ -133,6 +133,11 @@ object Account {
 
     /** Sıralama: kategoride ilk 10 (level, kills, pvp, titan, soldiers, bases, dog, crafted, time) */
     fun board(kind: String, done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_board", JSONObject().put("p_kind", kind)) { r -> done(arr(r)) }
+    /** oyuncunun kendi sırası (ilk 10'da olmasa da): {"rank": 0 = sıralamada yok, "v"} */
+    fun boardMe(kind: String, done: (JSONObject) -> Unit) {
+        if (!loggedIn) return
+        Supa.rpc("zx_board_me", authJson().put("p_kind", kind)) { r -> r.getOrNull()?.let { runCatching { JSONObject(it) }.getOrNull() }?.let(done) }
+    }
     /** sıralamanın bir sonraki sunucu yenilemesi (ms; tablolar 15 dakikada bir hesaplanır) */
     fun boardNext(kind: String, done: (Long) -> Unit) = Supa.rpc("zx_board_next", JSONObject().put("p_kind", kind)) { r ->
         r.getOrNull()?.trim()?.toLongOrNull()?.let(done)

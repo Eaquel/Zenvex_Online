@@ -209,13 +209,16 @@ class Plate(val name: String, val capL: Int, val capR: Int, val barTop: Int, val
     }
 }
 
-/** Unvan rozeti: ilk 3 kayan altın/gümüş/bronz parıltılı ve hale efektli, 4-10 sade. */
+/**
+ * Unvan rozeti. V15: kanatlı şeritler kaldırıldı (dar yerlerde yazıyı eziyordu); ilk 3 ince metal plaka + üstünde
+ * parıldayan ✦ işaretleri ve kayan ışık, 4-10 sade çelik şerit. Oyun içi isim etiketi (GameView.drawTitle) ile aynı dil.
+ */
 @Composable
 fun TitleChip(title: JSONObject?, size: Float = 12f) {
     if (title == null || title.optString("name").isEmpty()) return
     val rank = title.optInt("rank")
     val col = rankColor(rank)
-    // V10 isim şeritleri: 1. kanatlı altın, 2. kanatlı gümüş, 3. boynuzlu bronz, 4-10 sade çelik
+    if (rank in 1..3) { SlimTitle(title.optString("name"), rank, size); return }
     val pl = Plate.of(rank)
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val img = remember(pl.name) { UiArt.image(ctx, pl.name) }
@@ -261,6 +264,42 @@ fun TitleChip(title: JSONObject?, size: Float = 12f) {
     }
 }
 
+/** İlk 3 unvanı: altın/gümüş/bronz ince plaka, kayan parlama, üstünde rank kadar parıldayan ✦ */
+@Composable
+private fun SlimTitle(name: String, rank: Int, size: Float) {
+    val col = rankColor(rank)
+    val dark = when (rank) { 1 -> Color(0xFF6A4204); 2 -> Color(0xFF4A5462); else -> Color(0xFF5A2E10) }
+    val t = rememberTime()
+    val stars = 4 - rank
+    Box(contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.padding(top = (size * 0.55f).dp).clip(RoundedCornerShape(2.dp))
+            .drawBehind {
+                val w = this.size.width; val h = this.size.height
+                drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.9f), col, dark), 0f, h))
+                drawRect(dark, style = Stroke(2f))
+                drawRect(Color.White.copy(alpha = 0.5f), Offset(2f, 2f), Size(w - 4f, 2f))
+                // uçlarda küçük elmas perçin
+                for (x in listOf(5f, w - 5f)) {
+                    val p = Path().apply { moveTo(x, h / 2 - 4f); lineTo(x + 3f, h / 2); lineTo(x, h / 2 + 4f); lineTo(x - 3f, h / 2); close() }
+                    drawPath(p, dark)
+                }
+                val u = ((t * 0.35f + rank * 0.27f) % 1.4f) * (w + 120f) - 60f
+                drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.6f), Color.Transparent), Offset(u - 30f, 0f), Offset(u + 30f, h)))
+            }.padding(horizontal = 12.dp, vertical = 2.dp)) {
+            Text(name, style = TextStyle(fontFamily = PixelFont, fontSize = size.sp, color = Color(0xFF1E1206),
+                shadow = Shadow(Color.White.copy(alpha = 0.55f), Offset(0f, 1f), 0f)))
+        }
+        // parıldayan işaretler: plakanın üst kenarında, sırayla yanıp söner
+        Row(horizontalArrangement = Arrangement.spacedBy((size * 0.5f).dp)) {
+            for (i in 0 until stars) {
+                val a = 0.35f + 0.65f * (0.5f + 0.5f * sin(t * 4f + i * 2.1f))
+                Text("✦", style = TextStyle(fontSize = (size * 0.95f).sp, color = col.copy(alpha = a),
+                    shadow = Shadow(Color.White.copy(alpha = a * 0.8f), Offset.Zero, 6f)))
+            }
+        }
+    }
+}
+
 /** "YASAKLI" damgası (sıralamada ve profilde yasaklı oyuncular görünür kalır) */
 @Composable
 fun BannedStamp(size: Float = 13f, modifier: Modifier = Modifier) {
@@ -277,12 +316,13 @@ fun BoardDialog(close: () -> Unit, preview: JSONArray? = null) {
     PxDialog("Sıralama", close, width = 860.dp) {
         Row(Modifier.fillMaxWidth().height(272.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // sol: kategoriler
-            Column(Modifier.width(160.dp).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // kategoriler kaydırmasız: hepsi sütuna eşit bölünür
+            Column(Modifier.width(160.dp).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 (BOARD_CATS.map { it.name to it.icon } + ("Klanlar" to "people")).forEachIndexed { i, (n, ic) ->
                     val on = i == tab
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xFF4A3A1E) else Px.PanelDark)
+                    Row(Modifier.fillMaxWidth().weight(1f).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xFF4A3A1E) else Px.PanelDark)
                         .border(if (on) 2.dp else 0.dp, if (on) GOLD.copy(alpha = 0.7f) else Color.Transparent, RoundedCornerShape(3.dp))
-                        .clickable { tab = i }.padding(horizontal = 8.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        .clickable { tab = i }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         val art = if (i < BOARD_CATS.size) BOARD_CATS[i].art else "lb_clan"
                         if (art != null) ArtImage(art, Modifier.size(20.dp)) else Icon(ic, 18.dp, if (on) GOLD else Px.Sub)
                         Spacer(Modifier.width(8.dp))
@@ -305,16 +345,18 @@ private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit
     // sunucu tabloyu 15 dakikada bir hesaplar: ekran açıkken yenileme anı gelince kendiliğinden yeniden yüklenir
     var next by remember(cat.kind) { mutableLongStateOf(0L) }
     var now by remember { mutableLongStateOf(Pass.now()) }
+    var me by remember(cat.kind) { mutableStateOf<JSONObject?>(null) }
     LaunchedEffect(cat.kind) {
         if (preview != null) return@LaunchedEffect
         while (true) {
             Account.board(cat.kind) { r -> r.onSuccess { rows = it; err = "" }.onFailure { if (rows == null) err = it.message ?: "Bağlantı Yok" } }
+            Account.boardMe(cat.kind) { me = it }
             Account.boardNext(cat.kind) { next = it }
             do { kotlinx.coroutines.delay(1000); now = Pass.now() } while (next == 0L || now < next + 2000)
         }
     }
     BOARD_HOW[cat.kind]?.let {
-        PT("Nasıl Girilir: $it İlk 10 unvan kazanır.", 11.sp, Px.Sub, maxLines = 2)
+        PT("Nasıl Girilir: $it İlk 10 \"${cat.title}\" unvanını kazanır.", 11.sp, Px.Sub, maxLines = 2)
         Spacer(Modifier.height(3.dp))
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -322,9 +364,15 @@ private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit
         Spacer(Modifier.width(8.dp))
         if (next > 0) PT("Yenilenme ${fmtLeft(next - now)}", 11.sp, Px.Sub)
         Spacer(Modifier.weight(1f))
-        PT("İlk 10 Unvanı:", 12.sp, Px.Sub)
-        Spacer(Modifier.width(6.dp))
-        TitleChip(JSONObject().put("name", cat.title + " #1").put("rank", 1), 11f)
+        // V15: unvan adı yerine oyuncunun kendi sırası
+        val mr = me?.optInt("rank") ?: 0
+        if (mr > 0) {
+            PT("Mevcut Sıralaman", 12.sp, Px.Sub)
+            Spacer(Modifier.width(6.dp))
+            PT("#$mr", 16.sp, if (mr <= 3) rankColor(mr) else if (mr <= 10) GOLD else Px.Text)
+            Spacer(Modifier.width(6.dp))
+            PT("· ${cat.unit(me?.optLong("v") ?: 0L)}", 12.sp, Px.Level)
+        } else if (me != null) PT("Henüz Sıralamada Değilsin", 12.sp, Px.Sub)
     }
     Spacer(Modifier.height(6.dp))
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -389,7 +437,8 @@ fun PlayerProfileDialog(key: String, close: () -> Unit) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close: () -> Unit, edit: () -> Unit, addFriend: (String) -> Unit) {
-    PxDialog(if (mine) "Profilim" else "Oyuncu Profili", close, width = 640.dp) {
+    // geniş pencere: istatistikler 4'lü iki sıra, unvanlar ekranın altına kaymaz
+    PxDialog(if (mine) "Profilim" else "Oyuncu Profili", close, width = 820.dp) {
         if (o == null || o.length() == 0) { PT(if (o != null) "Profil Bulunamadı" else err.ifEmpty { "Yükleniyor…" }, 15.sp, Px.Sub, maxLines = 2); return@PxDialog }
         val banned = o.optBoolean("banned")
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -439,7 +488,7 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
                     PT("Kazanılan Unvanlar", 13.sp, Px.Sub)
                     Spacer(Modifier.height(3.dp))
                     // çok unvan varsa alan büyümez, kendi içinde kayar
-                    FlowRow(Modifier.heightIn(max = 96.dp).verticalScroll(rememberScrollState()),
+                    FlowRow(Modifier.heightIn(max = 70.dp).verticalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         for (i in 0 until titles.length()) TitleChip(titles.getJSONObject(i), 10f)
                     }
