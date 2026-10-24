@@ -284,6 +284,36 @@ pub const RETIRED_ITEMS: &[&str] = &["w_bat", "w_baton", "w_glock", "w_ak47", "w
     // etkinlik kaskları yerine etkinlik silahları geldi (elde olanlar süresi dolana dek çalışır)
     "ev_blood_helm", "ev_titan_helm", "ev_base_helm", "ev_scrap_helm", "ev_pack_helm", "ev_breath_helm"];
 
+/// V15 VIP: ek çanta yuvası (V2 +5, V5 +10, V9 +15)
+pub fn vip_bag_slots(vip: u8) -> usize {
+    match vip {
+        9.. => 15,
+        5.. => 10,
+        2.. => 5,
+        _ => 0,
+    }
+}
+
+/// V15 VIP: tüccara satışta ek pay (V3 +%3, V6 +%5)
+pub fn vip_sell_bonus(vip: u8) -> f32 {
+    match vip {
+        6.. => 0.05,
+        3.. => 0.03,
+        _ => 0.0,
+    }
+}
+
+/// V15: oyundan kalkan eşyanın altın karşılığı (değerinin yarısı; değeri olmayan etkinlik kaskı ve pelerin sabit)
+pub fn retired_refund(id: &str) -> u32 {
+    if id.starts_with("ev_") && id.ends_with("_helm") {
+        return 2000;
+    }
+    if id == "cloak" {
+        return 150;
+    }
+    item_index(id).map_or(0, |i| (ITEMS[i].value / 2).max(1))
+}
+
 /// Eşya şu an oyunda elde edilebilir mi
 pub fn item_in_game(id: &str) -> bool {
     !RETIRED_ITEMS.iter().any(|r| if r.ends_with('_') { id.starts_with(r) } else { id == *r })

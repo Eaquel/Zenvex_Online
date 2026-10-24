@@ -309,10 +309,14 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     var gold by remember { mutableLongStateOf(0L) }
     var gems by remember { mutableLongStateOf(0L) }
     var story by remember { mutableStateOf(JSONArray()) }
+    var level by remember { mutableIntStateOf(0) }
+    // seviye atlayınca mağaza durumu yenilenir: seviye paketi teklifi (5/10/25) o an açılır
+    LaunchedEffect(level) { if (level > 0) com.zenvex.online.game.Store.refresh() }
     LaunchedEffect(Unit) {
         while (true) {
             inv = GameSession.ui("inventory")
             val prof = GameSession.ui("profile")
+            level = prof.optInt("level")
             points = prof.optInt("points")
             gold = prof.optLong("gold"); gems = prof.optLong("gems")
             story = GameSession.ui("quests").optJSONArray("story") ?: JSONArray()
@@ -346,6 +350,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             CurrencyChip("coin", gold, Px.Clan) { open(Overlay.Shop) }
             CurrencyChip("gem", gems, Color(0xFF7FE0FF)) { open(Overlay.Shop) }
         }
+        OfferStrip { open(Overlay.Shop) }
     }
     // alt orta: hızlı eşyalar + çanta + sohbet çubuğu
     Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -407,6 +412,38 @@ private fun CurrencyChip(icon: String, value: Long, color: Color, plus: () -> Un
 }
 
 /** Mağaza tuşu: kapağı aralık sandık, nabız gibi altın parıltı */
+/** Süreli seviye paketi teklifi: en yakın biten paketin geri sayımı (dokununca Mağaza) */
+@Composable
+private fun OfferStrip(onClick: () -> Unit) {
+    val s = com.zenvex.online.game.Store.state.value ?: return
+    val offers = s.optJSONArray("offers").objs()
+    if (offers.isEmpty()) return
+    val skew = remember(s) { s.optLong("now", System.currentTimeMillis()) - System.currentTimeMillis() }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis() + skew) }
+    LaunchedEffect(skew) { while (true) { now = System.currentTimeMillis() + skew; delay(1000) } }
+    val o = offers.filter { it.optLong("ends") > now }.minByOrNull { it.optLong("ends") } ?: return
+    val title = s.optJSONArray("products").objs().firstOrNull { it.optString("id") == o.optString("id") }?.optString("title") ?: "Paket"
+    val t = rememberTime()
+    Spacer(Modifier.height(6.dp))
+    Row(Modifier.clip(RoundedCornerShape(5.dp)).background(Color(0xD02A1608))
+        .border(1.dp, Px.Orange.copy(alpha = 0.5f + 0.5f * sin(t * 4f)), RoundedCornerShape(5.dp))
+        .clickable { onClick() }.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon("crate", 16.dp, Px.Orange)
+        Spacer(Modifier.width(5.dp))
+        Column {
+            PT(title, 11.sp, Px.Text, maxLines = 1)
+            PT(fmtClock(o.optLong("ends") - now), 12.sp, Px.Orange)
+        }
+    }
+}
+
+/** Geri sayım: "2g 04:12:09" ya da "04:12:09" */
+internal fun fmtClock(ms: Long): String {
+    val s = (ms / 1000).coerceAtLeast(0); val d = s / 86400
+    val hms = "%02d:%02d:%02d".format(s % 86400 / 3600, s % 3600 / 60, s % 60)
+    return if (d > 0) "${d}g $hms" else hms
+}
+
 @Composable
 private fun ShopButton(onClick: () -> Unit) {
     val t = rememberTime()

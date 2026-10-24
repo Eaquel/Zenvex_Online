@@ -38,6 +38,7 @@ object Events {
         Account.claimLevelGems()
         Pass.sync()
         Skins.sync()
+        Store.refresh()
     }
 
     fun refresh() = Account.eventCurrent { r -> r.onSuccess { current = it } }

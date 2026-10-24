@@ -538,6 +538,7 @@ impl Game {
         progress.ensure_dailies(day_index);
         // V12.1: oyundan kalkan ara malzemeler karşılığına dönüşür
         progress.retire_items();
+        let refund = progress.sell_off_retired();
         let _ = progress.quest_event(data::QuestKind::Level, 0);
         let (x, y) = world::camp_spawn();
         let player = Player {
@@ -688,6 +689,9 @@ impl Game {
         // kervanlar ilk karede yerinde olsun (harita ve dükkân hemen doğru konumu görsün)
         g.update_caravans();
         g.restore_pos();
+        if refund > 0 {
+            g.msg(format!("Oyundan kaldırılan eşyaların karşılığı olarak {refund} altın verildi"));
+        }
         g
     }
 

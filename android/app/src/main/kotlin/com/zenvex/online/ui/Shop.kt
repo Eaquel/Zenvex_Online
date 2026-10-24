@@ -47,20 +47,20 @@ private val GEM = Color(0xFF7FE0FF)
 private val GOLD = Color(0xFFFFC83A)
 private val VIP = Color(0xFFE6B4FF)
 
-/** VIP seviyelerinin açtıkları (plan 4.3); görünüm ödülleri görselleri gelince karakterde çizilir */
+/** VIP seviyelerinin açtıkları (puan eşiği → ayrıcalık); hepsi oyunda çalışır: çanta/satış Rust tarafında, elmas sunucuda, tema sohbette */
 internal val VIP_PERKS = listOf(
     0 to "—",
-    50 to "Günlük ücretsiz sandığa +1 hak, isminin yanında VIP rozeti",
-    150 to "Çanta +10 yuva, tüccar yenileme günde 1 kez ücretsiz",
-    350 to "Bronz sohbet balonu teması, üretim süresi −%10",
-    700 to "Her gün 20 elmas, köpek deneyimi +%10",
-    1250 to "Kıvılcım ayak izi, oyuna girişin genel sohbette duyurulur",
-    2250 to "Gece Kamuflajı (araç), çanta +10, günde 1 kez ölünce eşya kaybı yok",
-    3750 to "Obsidyen Katana görünümü, Gümüş sohbet teması",
-    6000 to "Kül Kanatları, her gün 40 elmas",
-    10000 to "Altın Kaplama (araç), alev ayak izi, VIP profil çerçevesi",
-    20000 to "Ejder Kanatları, Altın sohbet teması, girişin herkese afiş, her gün 80 elmas",
-    50000 to "Titan Kanatları, Titan Tırpanı görünümü, özel isim rengi, kişisel destek, her gün 150 elmas",
+    50 to "Sohbette isminin yanında VIP rozeti",
+    150 to "Çanta +5 yuva",
+    350 to "Bronz sohbet teması, tüccara satış +%3",
+    700 to "Her gün 20 elmas",
+    1250 to "Çanta +10 yuva (toplam)",
+    2250 to "Tüccara satış +%5 (toplam)",
+    3750 to "Gümüş sohbet teması",
+    6000 to "Her gün 40 elmas",
+    10000 to "Çanta +15 yuva (toplam)",
+    20000 to "Altın sohbet teması, her gün 80 elmas",
+    50000 to "Her gün 150 elmas, kişisel destek",
 )
 
 @Composable

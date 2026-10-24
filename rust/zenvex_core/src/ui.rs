@@ -607,6 +607,12 @@ impl Game {
                 self.progress.gems += gems;
                 Ok(serde_json::json!({ "got": got, "gems": gems }).to_string())
             }
+            // V15: VIP seviyesi (Mağaza durumundan); çanta yuvaları hemen yeniden dizilir
+            "vip_set" => {
+                self.progress.vip = (v["level"].as_u64().unwrap_or(0) as u8).min(11);
+                self.progress.relayout_inv();
+                Ok(String::new())
+            }
             // karakter görevi ödülü: o karakterin 1 kartı
             "char_daily_claim" => {
                 let i = int("i").min(CHARACTERS.len() - 1);
