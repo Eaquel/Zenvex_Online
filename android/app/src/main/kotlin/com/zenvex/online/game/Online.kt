@@ -54,13 +54,19 @@ object Online {
     @Volatile var onChat: ((ChatLine) -> Unit)? = null
 
     private val main = Handler(Looper.getMainLooper())
-    private var channel: Supa.Channel? = null
+    private var channel: com.zenvex.online.net.Link? = null
+    /** kendi oyun sunucumuz kullanılıyorsa (Account.gameServer dolu ve oturum açık): tek bağlantı, oda = bölge */
+    private var gameNet: com.zenvex.online.net.GameNet? = null
+    /** oyun sunucusunun bu bölge için seçtiği ev sahibi */
+    @Volatile private var hostUid = ""
     /**
      * Bölge kanalı (`zx-<sunucu>-a<bölge>`): konum, zombi ve vuruş yalnız aynı bölgedekilere gider. Ana kanal sohbet,
      * kimlik (presence), takas ve fısıltı için. Supabase her yayını alıcı sayısı kadar sayar; bölgelere bölmek ve
      * seyrek göndermek (duran oyuncu 2 sn'de bir) mesaj sayısını ~10 kat düşürür.
      */
-    private var areaCh: Supa.Channel? = null
+    private var areaCh: com.zenvex.online.net.Link? = null
+    /** konum / zombi / vuruş bağlantısı: oyun sunucusu ya da Supabase bölge kanalı */
+    private val areaLink: com.zenvex.online.net.Link? get() = gameNet ?: areaCh
     private var areaIdx = -1
     private var areaList: List<com.zenvex.online.ui.MapArea>? = null
     private val lastSent = FloatArray(Native.REMOTE_STRIDE)
@@ -129,12 +135,17 @@ object Online {
                 }
             }
         }
-        channel = Supa.Channel(
+        val onStatus = { s: String -> main.post { status.value = s; online.value = s == "Çevrimiçi" }; Unit }
+        val gs = Account.gameServer
+        channel = if (gs.isNotEmpty() && Account.loggedIn && Session.sid.isNotEmpty()) {
+            com.zenvex.online.net.GameNet(gs, { Session.netHello(sid, myMeta()) }, ::onBroadcast, ::onPresence, onStatus) { h -> hostUid = h }
+                .also { gameNet = it; it.open() }
+        } else Supa.Channel(
             topic = "realtime:zx-$sid",
             presenceKey = uid,
             onBroadcast = ::onBroadcast,
             onPresence = ::onPresence,
-            onStatus = { s -> main.post { status.value = s; online.value = s == "Çevrimiçi" } },
+            onStatus = onStatus,
         ).also { it.open() }
         trackMe()
     }
@@ -149,6 +160,8 @@ object Online {
     fun stop() {
         channel?.close()
         channel = null
+        gameNet = null
+        hostUid = ""
         areaCh?.close()
         areaCh = null
         areaIdx = -1
@@ -170,6 +183,7 @@ object Online {
         // isim/klan (ana kanaldaki presence) kalır; konumu bilinmeyenler yeni bölgeden yayın gelene dek çizilmez
         synchronized(remotes) { remotes.values.forEach { it.ts = 0L; it.vx = 0f; it.vy = 0f } }
         pendingSnap = null
+        gameNet?.let { hostUid = ""; it.area(a); areaCh = null; return }
         areaCh = if (a < 0 || channel == null) null else Supa.Channel(
             topic = "realtime:zx-$serverId-a$a",
             presenceKey = uid,
@@ -188,11 +202,13 @@ object Online {
     /** Unvan değişince yayındaki kimliği yenile */
     fun retrack() = trackMe()
 
-    private fun trackMe() {
+    private fun myMeta(): JSONObject {
         val t = Account.profile.value.optJSONObject("title")
-        channel?.track(JSONObject().put("n", name).put("g", Account.clan.value?.name ?: tag)
-            .put("tt", t?.optString("name") ?: "").put("tr", t?.optInt("rank") ?: 0).put("sk", Skins.char))
+        return JSONObject().put("n", name).put("g", Account.clan.value?.name ?: tag)
+            .put("tt", t?.optString("name") ?: "").put("tr", t?.optInt("rank") ?: 0).put("sk", Skins.char)
     }
+
+    private fun trackMe() { channel?.track(myMeta()) }
 
     // =========================================================== gelen
     private fun onPresence(joins: JSONObject, leaves: JSONObject, full: Boolean) {
@@ -346,7 +362,7 @@ object Online {
             // hareket ediyorsan 3,3 kez/sn, duruyorsan 2 sn'de bir (yalnız bölge kanalına)
             var moved = false
             for (i in local.indices) if (kotlin.math.abs(local[i] - lastSent[i]) > (if (i < 2) 4f else 0.01f)) { moved = true; break }
-            val ac = areaCh
+            val ac = areaLink
             if (ac != null && ac.joined && ((moved && now - lastSentAt >= 300) || now - lastSentAt >= 2000)) {
                 lastSentAt = now
                 System.arraycopy(local, 0, lastSent, 0, local.size)
@@ -356,7 +372,7 @@ object Online {
             }
             elect(h)
         }
-        val c = areaCh
+        val c = areaLink
         if (c == null) return
         when (mode) {
             1 -> {
@@ -387,6 +403,8 @@ object Online {
         val active = synchronized(remotes) { remotes.filter { now - it.value.ts < 8000 }.keys.toList() }
         val newMode = when {
             channel == null || active.isEmpty() -> 0
+            // oyun sunucusu ev sahibini kendisi seçer
+            gameNet != null -> if (hostUid == uid) 1 else if (hostUid.isNotEmpty()) 2 else 0
             active.all { uid < it } -> 1
             else -> 2
         }
@@ -408,7 +426,7 @@ object Online {
 
     /** Oyun olaylarından ağ ile ilgili olanlar (GameView çağırır). */
     fun onEvent(e: JSONObject) {
-        val c = areaCh ?: return
+        val c = areaLink ?: return
         when (e.optString("t")) {
             "zhit" -> if (mode == 2) c.send("hit", JSONObject().put("u", uid).put("id", e.optLong("id")).put("dmg", e.optDouble("dmg"))
                 .put("kx", e.optDouble("kx")).put("ky", e.optDouble("ky")).put("st", e.optBoolean("stun")))
@@ -488,13 +506,13 @@ object Online {
     /** Yerel vuruş uzak oyuncuya (Rust "pvp" olayı, k = uzak oyuncu sırası). */
     fun sendPvp(k: Int, v: Float, crit: Boolean) {
         val to = lastIds.getOrNull(k) ?: return
-        areaCh?.send("pvp", JSONObject().put("to", to).put("u", uid).put("n", name).put("v", v.toDouble()).put("c", crit))
+        areaLink?.send("pvp", JSONObject().put("to", to).put("u", uid).put("n", name).put("v", v.toDouble()).put("c", crit))
     }
 
     /** Yerel oyuncu öldü: son 8 sn içinde bir oyuncu vurduysa öldürme ona yazılır. */
     fun onLocalDeath() {
         if (lastPvpFrom.isEmpty() || SystemClock.elapsedRealtime() - lastPvpAt > 8000) return
-        areaCh?.send("pvpk", JSONObject().put("to", lastPvpFrom).put("u", uid).put("n", name))
+        areaLink?.send("pvpk", JSONObject().put("to", lastPvpFrom).put("u", uid).put("n", name))
         system("$lastPvpName seni öldürdü")
         lastPvpFrom = ""
     }

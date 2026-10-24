@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["zenvex_core", "zenvex_jni"]
+members = ["zenvex_core", "zenvex_jni", "zenvex_server"]
 
 [workspace.package]
 version = "0.1.0"

@@ -120,9 +120,9 @@ object Supa {
         private val onBroadcast: (event: String, payload: JSONObject) -> Unit,
         private val onPresence: (joins: JSONObject, leaves: JSONObject, full: Boolean) -> Unit,
         private val onStatus: (String) -> Unit,
-    ) {
+    ) : Link {
         private var ws: WebSocket? = null
-        @Volatile var joined = false
+        @Volatile override var joined = false
             private set
         @Volatile private var closed = false
         private var ref = 0
@@ -130,7 +130,7 @@ object Supa {
         private var beat: ScheduledFuture<*>? = null
         private var trackMeta: JSONObject? = null
         /** gidiş-dönüş süresi (ms): 5 sn'de bir kalp atışı yanıtından; -1 = ölçülmedi */
-        @Volatile var pingMs = -1
+        @Volatile override var pingMs = -1
             private set
         @Volatile private var pingRef = ""
         @Volatile private var pingAt = 0L
@@ -143,7 +143,7 @@ object Supa {
         }
 
         /** Uygulama öne gelince: bağlı değilse beklemeden yeniden bağlan */
-        fun reconnectNow() {
+        override fun reconnectNow() {
             if (closed || joined) return
             backoff = 200L
             ws?.cancel()
@@ -232,19 +232,19 @@ object Supa {
         }
 
         /** Herkese yayın (gönderen hariç). */
-        fun send(event: String, payload: JSONObject) {
+        override fun send(event: String, payload: JSONObject) {
             if (!joined) return
             push(topic, "broadcast", JSONObject().put("type", "broadcast").put("event", event).put("payload", payload), joinRef)
         }
 
         /** Kimlik bilgisini (isim, klan…) tüm kanala bildirir. */
-        fun track(meta: JSONObject) {
+        override fun track(meta: JSONObject) {
             trackMeta = meta
             if (!joined) return
             push(topic, "presence", JSONObject().put("type", "presence").put("event", "track").put("payload", meta), joinRef)
         }
 
-        fun close() {
+        override fun close() {
             closed = true
             joined = false
             beat?.cancel(false)

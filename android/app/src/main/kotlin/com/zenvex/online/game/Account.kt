@@ -52,6 +52,7 @@ object Account {
         id.value = if (key.isEmpty()) -1L else prefs.getLong("id", -1L)
         name.value = prefs.getString("name", "") ?: ""
         adminDevice.value = prefs.getBoolean("admin_device", false)
+        gameServer = prefs.getString("game_server", "").orEmpty()
         if (loggedIn) refresh()
     }
 
@@ -99,6 +100,9 @@ object Account {
         Supa.rpc("zx_status", JSONObject().put("p_device", dev)) { r ->
             done(obj(r).map { o ->
                 adminDevice.value = o.optBoolean("admin_device")
+                // V15: kendi oyun sunucumuzun adresi (boşsa canlı oyun Supabase Realtime üzerinden)
+                gameServer = o.optJSONObject("net")?.optString("url").orEmpty()
+                if (::prefs.isInitialized) prefs.edit().putString("game_server", gameServer).apply()
                 if (::prefs.isInitialized) prefs.edit().putBoolean("admin_device", adminDevice.value).apply()
                 o.optJSONObject("maintenance") ?: JSONObject()
             })
@@ -107,6 +111,8 @@ object Account {
 
     /** bu cihaz yönetici cihazı mı (bakım ekranı gösterilmez) */
     val adminDevice = androidx.compose.runtime.mutableStateOf(false)
+    /** oyun sunucusu adresi (wss://…); boşsa Supabase Realtime */
+    @Volatile var gameServer = ""
 
     // ------------------------------------------------------------------ profil
     fun setProfile(avatar: Int, frame: String, done: (String?) -> Unit) =

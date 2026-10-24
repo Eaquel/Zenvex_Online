@@ -169,6 +169,22 @@ object Session {
         if (send && my.isNotEmpty()) Supa.bg { runCatching { Supa.rpcSync("zx_session_end", Account.authJson().put("p_sid", my)) } }
     }
 
+    /**
+     * Oyun sunucusu (rust/zenvex_server) kimlik mesajı: oturum numarası ve oturum sırrıyla imzalanmış zaman damgası.
+     * Sır cihazdan çıkmaz; sunucu aynı sırrı Supabase'den (zx_net_auth) alıp imzayı karşılaştırır.
+     */
+    fun netHello(server: String, meta: JSONObject?): JSONObject? {
+        val my = sid; val sec = secret
+        if (my.isEmpty() || sec.isEmpty()) return null
+        val acc = Account.id.value
+        val ts = Pass.now()
+        val mac = Mac.getInstance("HmacSHA256")
+        mac.init(SecretKeySpec(sec.toByteArray(), "HmacSHA256"))
+        val sig = mac.doFinal("net:$acc:$my:$ts".toByteArray()).joinToString("") { "%02x".format(it) }
+        return JSONObject().put("t", "hello").put("acc", acc).put("sid", my).put("ts", ts).put("sig", sig).put("server", server)
+            .put("meta", meta ?: JSONObject())
+    }
+
     private fun sign(seq: Long, data: String): String {
         val mac = Mac.getInstance("HmacSHA256")
         mac.init(SecretKeySpec(secret.toByteArray(), "HmacSHA256"))

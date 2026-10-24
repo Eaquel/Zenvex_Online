@@ -1,0 +1,50 @@
+# Oyun sunucusu (rust/zenvex_server): Linux x86_64 ve ARM64 (Oracle Cloud Ampere gibi) için derler, kurulum
+# betikleriyle birlikte paketler. Çıktı: Actions → bu iş → Artifacts → zenvex-server-<mimari>.tar.gz
+name: Oyun Sunucusu
+
+on:
+  push:
+    paths:
+      - "rust/zenvex_server/**"
+      - "deploy/**"
+      - ".github/workflows/server.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Test ve derle
+        working-directory: rust
+        run: |
+          cargo test -p zenvex_server --release
+          cargo build -p zenvex_server --release
+      - name: Yük testi (100 bot)
+        working-directory: rust
+        run: |
+          ALLOW_GUESTS=1 BIND=127.0.0.1:7790 HEALTH_BIND=127.0.0.1:7791 ./target/release/zenvex_server &
+          sleep 1
+          ./target/release/zenvex_server loadtest ws://127.0.0.1:7790 100 15
+          curl -s 127.0.0.1:7791
+      - name: Paketle
+        run: |
+          mkdir -p dist/zenvex-server
+          cp rust/target/release/zenvex_server deploy/install.sh deploy/update.sh deploy/zenvex-server.service dist/zenvex-server/
+          tar -C dist -czf zenvex-server-${{ matrix.arch }}.tar.gz zenvex-server
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zenvex-server-${{ matrix.arch }}
+          path: zenvex-server-${{ matrix.arch }}.tar.gz
