@@ -13,10 +13,11 @@ import java.util.concurrent.ConcurrentLinkedQueue
 import kotlin.math.hypot
 
 /**
- * Çevrimiçi dünya: Supabase Realtime, sunucu başına bir kanal (`zx-<sunucu>`), "ev sahibi" modeli.
+ * Çevrimiçi dünya: Supabase Realtime, "ev sahibi" modeli. İki kanal: sunucu kanalı (`zx-<sunucu>`: presence, sohbet,
+ * fısıltı, takas) ve bulunulan bölgenin kanalı (`zx-<sunucu>-a<bölge>`: konum, zombi, vuruş, PvP).
  *  presence  isim / klan (kim bağlı)
- *  p         konum + görünüm (5 Hz, herkes)
- *  z         ev sahibinin zombi anlık görüntüsü (5 Hz)
+ *  p         konum + görünüm (hareket ederken 3,3 Hz, dururken 2 sn'de bir; yalnız aynı bölge)
+ *  z         ev sahibinin zombi anlık görüntüsü (2,5 Hz)
  *  hit       istemcinin zombi vuruşu → ev sahibi uygular
  *  kill      öldürme ödülü → vuran oyuncu
  *  pd        zombi hasarı → hedef oyuncu
@@ -24,7 +25,7 @@ import kotlin.math.hypot
  *  treq, tr  takas isteği ve takas teklifleri
  *  pvp       oyuncu vuruşu → hedef (hasarı hedefin cihazı, PvP bölgesindeyse uygular)
  *  pvpk      öldürme bildirimi → öldüren
- * Ev sahibi: kanaldaki oyuncular arasında en küçük kimlik. O ayrılırsa sıradaki devralır.
+ * Ev sahibi: bölgedeki oyuncular arasında en küçük kimlik. O ayrılırsa sıradaki devralır.
  */
 object Online {
     /** [avatar]/[frame]: gönderenin profil resmi ve çerçevesi (sohbette yanında çizilir; -1: bilinmiyor) */
@@ -54,6 +55,16 @@ object Online {
 
     private val main = Handler(Looper.getMainLooper())
     private var channel: Supa.Channel? = null
+    /**
+     * Bölge kanalı (`zx-<sunucu>-a<bölge>`): konum, zombi ve vuruş yalnız aynı bölgedekilere gider. Ana kanal sohbet,
+     * kimlik (presence), takas ve fısıltı için. Supabase her yayını alıcı sayısı kadar sayar; bölgelere bölmek ve
+     * seyrek göndermek (duran oyuncu 2 sn'de bir) mesaj sayısını ~10 kat düşürür.
+     */
+    private var areaCh: Supa.Channel? = null
+    private var areaIdx = -1
+    private var areaList: List<com.zenvex.online.ui.MapArea>? = null
+    private val lastSent = FloatArray(Native.REMOTE_STRIDE)
+    private var lastSentAt = 0L
     private var serverId = ""
     @Volatile var uid: String = ""
         private set
@@ -138,6 +149,9 @@ object Online {
     fun stop() {
         channel?.close()
         channel = null
+        areaCh?.close()
+        areaCh = null
+        areaIdx = -1
         synchronized(remotes) { remotes.clear() }
         online.value = false
         status.value = "Çevrimdışı"
@@ -148,7 +162,22 @@ object Online {
     }
 
     /** Uygulama öne geldi: kopmuş kanal hemen yeniden bağlansın */
-    fun onForeground() { channel?.reconnectNow() }
+    fun onForeground() { channel?.reconnectNow(); areaCh?.reconnectNow() }
+
+    private fun switchArea(a: Int) {
+        areaCh?.close()
+        areaIdx = a
+        // isim/klan (ana kanaldaki presence) kalır; konumu bilinmeyenler yeni bölgeden yayın gelene dek çizilmez
+        synchronized(remotes) { remotes.values.forEach { it.ts = 0L; it.vx = 0f; it.vy = 0f } }
+        pendingSnap = null
+        areaCh = if (a < 0 || channel == null) null else Supa.Channel(
+            topic = "realtime:zx-$serverId-a$a",
+            presenceKey = uid,
+            onBroadcast = ::onBroadcast,
+            onPresence = { _, _, _ -> },
+            onStatus = { },
+        ).also { it.open() }
+    }
 
     fun setIdentity(playerName: String, playerTag: String) { name = playerName; tag = playerTag; trackMe() }
     /** İsim değişti: sonraki konum paketiyle (≤0,2 sn) diğer oyuncularda da yenilenir */
@@ -304,19 +333,30 @@ object Online {
     // =========================================================== oyun döngüsü (GameSession.lock altında)
     /** Yerel durumu yayınlar, ev sahibini seçer, kuyruktaki ağ olaylarını uygular. */
     fun tick(h: Long) {
-        val c = channel
         val now = SystemClock.elapsedRealtime()
-        if (now - lastPub >= 200) {
+        if (now - lastPub >= 100) {
             lastPub = now
             Native.localState(h, local)
             myX = local[0]; myY = local[1]
-            if (c != null && c.joined) {
+            if (channel != null) {
+                val areas = areaList ?: com.zenvex.online.ui.mapAreas(GameSession.world()).also { areaList = it }
+                val a = com.zenvex.online.ui.areaIndexAt(areas, myX, myY)
+                if (a != areaIdx) switchArea(a)
+            }
+            // hareket ediyorsan 3,3 kez/sn, duruyorsan 2 sn'de bir (yalnız bölge kanalına)
+            var moved = false
+            for (i in local.indices) if (kotlin.math.abs(local[i] - lastSent[i]) > (if (i < 2) 4f else 0.01f)) { moved = true; break }
+            val ac = areaCh
+            if (ac != null && ac.joined && ((moved && now - lastSentAt >= 300) || now - lastSentAt >= 2000)) {
+                lastSentAt = now
+                System.arraycopy(local, 0, lastSent, 0, local.size)
                 val s = JSONArray()
                 for (v in local) s.put((v * 10).toInt() / 10.0)
-                c.send("p", JSONObject().put("u", uid).put("n", name).put("s", s))
+                ac.send("p", JSONObject().put("u", uid).put("n", name).put("s", s))
             }
             elect(h)
         }
+        val c = areaCh
         if (c == null) return
         when (mode) {
             1 -> {
@@ -326,7 +366,7 @@ object Online {
                         .put("kx", o.optDouble("kx")).put("ky", o.optDouble("ky")).put("stun", o.optBoolean("st"))
                         .put("killer", killerIndex(o.optString("u"))).toString())
                 }
-                if (now - lastSnap >= 200) {
+                if (now - lastSnap >= 400) {
                     lastSnap = now
                     val n = Native.netSnapshot(h, snapBuf)
                     val d = JSONArray()
@@ -368,7 +408,7 @@ object Online {
 
     /** Oyun olaylarından ağ ile ilgili olanlar (GameView çağırır). */
     fun onEvent(e: JSONObject) {
-        val c = channel ?: return
+        val c = areaCh ?: return
         when (e.optString("t")) {
             "zhit" -> if (mode == 2) c.send("hit", JSONObject().put("u", uid).put("id", e.optLong("id")).put("dmg", e.optDouble("dmg"))
                 .put("kx", e.optDouble("kx")).put("ky", e.optDouble("ky")).put("st", e.optBoolean("stun")))
@@ -448,13 +488,13 @@ object Online {
     /** Yerel vuruş uzak oyuncuya (Rust "pvp" olayı, k = uzak oyuncu sırası). */
     fun sendPvp(k: Int, v: Float, crit: Boolean) {
         val to = lastIds.getOrNull(k) ?: return
-        channel?.send("pvp", JSONObject().put("to", to).put("u", uid).put("n", name).put("v", v.toDouble()).put("c", crit))
+        areaCh?.send("pvp", JSONObject().put("to", to).put("u", uid).put("n", name).put("v", v.toDouble()).put("c", crit))
     }
 
     /** Yerel oyuncu öldü: son 8 sn içinde bir oyuncu vurduysa öldürme ona yazılır. */
     fun onLocalDeath() {
         if (lastPvpFrom.isEmpty() || SystemClock.elapsedRealtime() - lastPvpAt > 8000) return
-        channel?.send("pvpk", JSONObject().put("to", lastPvpFrom).put("u", uid).put("n", name))
+        areaCh?.send("pvpk", JSONObject().put("to", lastPvpFrom).put("u", uid).put("n", name))
         system("$lastPvpName seni öldürdü")
         lastPvpFrom = ""
     }
