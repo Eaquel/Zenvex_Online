@@ -22,11 +22,14 @@ import java.util.concurrent.TimeUnit
  *  - [Channel]: Realtime WebSocket (Phoenix protokolü 1.0.0) — yayın (broadcast) ve kimler bağlı (presence)
  */
 object Supa {
-    val http: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .pingInterval(20, TimeUnit.SECONDS)
-        .build()
+    /** ilk ağ isteğinde kurulur (ekran görüntüsü testlerinde ağ hiç kullanılmaz; OkHttp 5 Android TLS katmanını kurarken arar) */
+    val http: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(15, TimeUnit.SECONDS)
+            .pingInterval(20, TimeUnit.SECONDS)
+            .build()
+    }
     private val io = Executors.newFixedThreadPool(3)
     private val main = Handler(Looper.getMainLooper())
     private val json = "application/json".toMediaType()
@@ -48,7 +51,7 @@ object Supa {
         val body: String
         val code: Int
         try {
-            http.newCall(req).execute().use { r: Response -> code = r.code; body = r.body?.string().orEmpty() }
+            http.newCall(req).execute().use { r: Response -> code = r.code; body = r.body.string() }
         } catch (e: Exception) {
             throw RpcError("Sunucuya ulaşılamadı")
         }
@@ -80,7 +83,7 @@ object Supa {
         val body: String
         val code: Int
         try {
-            http.newCall(req).execute().use { r: Response -> code = r.code; body = r.body?.string().orEmpty() }
+            http.newCall(req).execute().use { r: Response -> code = r.code; body = r.body.string() }
         } catch (e: Exception) {
             throw RpcError("Sunucuya ulaşılamadı")
         }

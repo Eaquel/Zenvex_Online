@@ -282,7 +282,7 @@ internal fun BagView(
                 if (chestOn) {
                     PxPanel(Modifier.width(250.dp).fillMaxHeight(), color = Color(0xB82A2116), pad = 8.dp) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            PT(chest!!.optString("name"), 14.sp, Px.Clan)
+                            PT(chest.optString("name"), 14.sp, Px.Clan)
                             Spacer(Modifier.weight(1f))
                             PT("${chest.optInt("used")} / ${chest.optInt("cap")}", 12.sp, Px.Sub)
                         }

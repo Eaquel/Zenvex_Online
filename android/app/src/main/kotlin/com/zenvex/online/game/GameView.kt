@@ -541,7 +541,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     }
                     tracers += Tracer(x1, y1, x2, y2, if (sniper) 0xFFFFE0A0.toInt() else 0xFFFFC870.toInt(), 0.12f, if (sniper) 2.6f else 1.6f)
                     val a = atan2(x2 - x1, y2 - y1)
-                    fx("muzzle", x1, y1, if (sniper) 95f else 62f, Math.toDegrees((-a + PI / 2).toDouble()).toFloat(), dur = 0.06f, frame = (0..2).random())
+                    fx("muzzle", x1, y1, if (sniper) 95f else 62f, Math.toDegrees(-a + PI / 2).toFloat(), dur = 0.06f, frame = (0..2).random())
                     flashes += Light(x1, y1, 180f, 0xFFFFC870.toInt(), 0.05f, 0.05f)
                     Audio.play(if (sniper) "shot_sniper" else "shot_rifle", near(x1, y1) * 0.8f, 0.9f + Math.random().toFloat() * 0.2f)
                     if (!e.optBoolean("hit")) { burst(x2, y2 + 40, 4, 0xFF9A8A70.toInt(), 90f, 3f, 0, 0.5f, 120f); fx(if (atlas.fx["miss"] != null) "miss" else "dust", x2, y2 + 30, 60f) }
@@ -647,7 +647,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val a = e.getDouble("a").toFloat()
                     Audio.play(when (w) { 3 -> "shot_pistol"; 6 -> "shot_sniper"; 7 -> "rocket"; else -> "shot_rifle" }, near(x, y), 0.95f + Math.random().toFloat() * 0.1f)
                     flashes += Light(x + sin(a) * 50, y + cos(a) * 30 - 70, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
-                    fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees((-a + PI / 2).toDouble()).toFloat(), dur = 0.07f, frame = (0..2).random())
+                    fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees(-a + PI / 2).toFloat(), dur = 0.07f, frame = (0..2).random())
                     shake(if (w == 6 || w == 7) 6f else 2.5f, 0.07f)
                     burst(x + sin(a) * 40, y + cos(a) * 25, 2, 0xFFD8B060.toInt(), 120f, 2.5f, 0, 0.8f, 200f)
                 }
@@ -1928,7 +1928,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             for (side in if (kind >= 2) intArrayOf(-1, 1) else intArrayOf(0)) {
                 val tx = x + bx * back + by * side * wide * 0.7f
                 val ty = y + by * back * 0.7f - bx * side * wide * 0.5f
-                tracks += Track(tx, ty, a, col.toInt(), life, life, if (kind >= 2) 9f else 6f)
+                tracks += Track(tx, ty, a, col, life, life, if (kind >= 2) 9f else 6f)
             }
             if (tracks.size > 600) tracks.subList(0, tracks.size - 600).clear()
         }

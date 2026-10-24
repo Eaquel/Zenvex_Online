@@ -2,7 +2,6 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     // arayüz ekran görüntüsü testleri (emülatörsüz, JVM'de layoutlib ile): ./gradlew :app:recordPaparazziDebug
     id("app.cash.paparazzi")
@@ -11,7 +10,8 @@ plugins {
 android {
     namespace = "com.zenvex.online"
     // Android 9 (API 28) ve sonrası; Android 16 (API 36) hedeflenir, Android 17 (API 37) cihazlarda da çalışır
-    compileSdk = 36
+    // Android 17 (API 37) SDK'sıyla derlenir (güncel Compose bunu ister); davranış hedefi Android 16 (API 36)
+    compileSdk = 37
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
@@ -60,9 +60,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
         buildConfig = true
@@ -79,7 +76,7 @@ android {
 // Rust kütüphanesini (libzenvex.so) cargo-ndk ile derleyip jniLibs'e koyar.
 val rustDir = rootProject.file("../rust")
 val jniLibsDir = file("src/main/jniLibs")
-val cargoBuild by tasks.registering(Exec::class) {
+val cargoBuild = tasks.register<Exec>("cargoBuild") {
     group = "rust"
     description = "Rust çekirdeğini Android için derler"
     workingDir = rustDir
@@ -94,22 +91,30 @@ val cargoBuild by tasks.registering(Exec::class) {
 }
 tasks.named("preBuild") { dependsOn(cargoBuild) }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        // sıfır uyarı: CI'da her Kotlin uyarısı derlemeyi durdurur (yerelde yalnız uyarı)
+        allWarningsAsErrors.set(System.getenv("CI") == "true")
+    }
+}
+
 dependencies {
     implementation("com.android.billingclient:billing:9.1.0")
-    implementation("androidx.credentials:credentials:1.3.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.1")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20240303")
-    val composeBom = platform("androidx.compose:compose-bom:2025.02.00")
+    testImplementation("org.json:json:20260814")
+    val composeBom = platform("androidx.compose:compose-bom:2026.09.00")
     implementation(composeBom)
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("androidx.work:work-runtime-ktx:2.9.1")
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.core:core-ktx:1.19.1")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:okhttp:5.5.1")
 }
 
 // oyun ekranı görüntü testleri (GameShotsTest) Rust çekirdeğini bilgisayar için derlenmiş haliyle yükler:
