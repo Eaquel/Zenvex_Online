@@ -60,7 +60,7 @@ private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay
 
 internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench, Shop,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench, Shop, Chars,
 }
 
 /**
@@ -250,6 +250,7 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.PlayerProfile -> PlayerProfileDialog(picked.second, close)
             Overlay.Cheat -> DevMenu(close)
             Overlay.Shop -> ShopScreen(close)
+            Overlay.Chars -> CharactersScreen(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
         }
@@ -326,6 +327,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PassButton { open(Overlay.Pass) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
+        PxIcon("profile", size = 46.dp, tint = Color(0xFFB277FF)) { open(Overlay.Chars) }
         PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
@@ -442,6 +444,7 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
                 Triple("Devam Et", "play", Overlay.None), Triple("Klan", "people", Overlay.Clan),
                 Triple("Profil", "profile", Overlay.Me), Triple("Sıralama", "trophy", Overlay.Top),
                 Triple("Battle Pass", "crown", Overlay.Pass), Triple("Elmas Sandığı", "gem", Overlay.Crate),
+                Triple("Karakterler", "profile", Overlay.Chars), Triple("Mağaza", "crate", Overlay.Shop),
                 Triple("Ayarlar", "gear", Overlay.Settings),
             )
             // iki sütun: küçük ekranda da taşmaz

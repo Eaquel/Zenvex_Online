@@ -56,6 +56,7 @@ class UiShotsTest {
     @Test fun shopFeatured() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 0, {}) {} } }
     @Test fun shopGems() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 1, {}) {} } }
     @Test fun shopCards() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 3, {}) {} } }
+    @Test fun characters() { val d = sample("characters"); paparazzi.snapshot { CharactersView(d, {}, {}) {} } }
     @Test fun shopVip() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 4, {}) {} } }
 
     @Test
@@ -256,13 +257,13 @@ class UiShotsTest {
     @Test
     fun passRewards() {
         val now = 1_793_000_000_000L
-        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, { _, _ -> }, { _, _, _ -> }) }
+        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, {}, { _, _, _ -> }) }
     }
 
     @Test
     fun passWeekly() {
         val now = 1_793_000_000_000L
-        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, { _, _ -> }, { _, _, _ -> }, startTab = 2) }
+        paparazzi.snapshot { PassView(sample("pass"), "Sezon 1: Kan Ve Pas", now + 6_480_000_000L, now, {}, {}, {}, { _, _, _ -> }, startTab = 2) }
     }
 
     @Test

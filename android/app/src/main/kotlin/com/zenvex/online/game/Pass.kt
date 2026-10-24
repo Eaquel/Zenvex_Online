@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 import com.zenvex.online.ui.Toaster
 
 /**
- * Sezon Bileti: sezon bilgisi sunucudan gelir, bilet elmasla alınır ve sunucuya kaydedilir,
+ * Sezon Bileti: sezon bilgisi sunucudan gelir, bilet Mağaza'dan (Google Play) alınır ve [sync] ile oyuna uygulanır,
  * elmaslı kademe ödülleri sunucudan onaylanır (kayıt doğrulayıcısı elmas artışını ancak böyle kabul eder).
  */
 object Pass {
@@ -29,25 +29,6 @@ object Pass {
             val res = GameSession.cmdNoSave("pass_sync", "season" to o.optInt("season"), "normal" to o.optBoolean("normal"), "elite" to o.optBoolean("elite"))
             if (res.msg.isNotEmpty()) Toaster.show(res.msg)
             GameSession.save(cloud = true)
-        }
-    }
-
-    /** Bilet al: önce son durum sunucuya kaydedilir, sunucu bileti yazar, sonra elmas yerelde düşülür ve hemen kaydedilir. */
-    fun buy(elite: Boolean, price: Int, gems: Int, done: () -> Unit) {
-        if (busy) return
-        if (gems < price) { Toaster.show("$price Elmas Gerekli", false); return }
-        busy = true
-        GameSession.save(cloud = true) { ok ->
-            if (!ok) { busy = false; Toaster.show("Sunucuya Ulaşılamadı", false); return@save }
-            Account.passBuy(elite) { r ->
-                r.onSuccess {
-                    val res = GameSession.cmdNoSave("pass_buy", "elite" to elite)
-                    GameSession.save(cloud = true)
-                    Toaster.show(res.msg, res.ok)
-                }.onFailure { Toaster.show(it.message ?: "Hata", false) }
-                busy = false
-                done()
-            }
         }
     }
 

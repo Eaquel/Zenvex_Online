@@ -240,6 +240,8 @@ pub struct Player {
     pub shield: f32,
     pub shield_t: f32,
     pub rage_t: f32,
+    /// Gölge'nin Kan Yemini: can çalma +%15, saldırı hızı +%30
+    pub oath_t: f32,
     pub cloak_t: f32,
     pub cloak_cd: f32,
     pub energy_t: f32,
@@ -785,7 +787,6 @@ impl Game {
             self.update_player(dt, input);
         }
         self.update_zone();
-        self.update_drone(dt);
         self.update_dog(dt);
         self.update_zombies(dt);
         self.update_projectiles(dt);
@@ -870,6 +871,7 @@ impl Game {
         p.locked_t = (p.locked_t - dt).max(0.0);
         for t in [
             &mut p.rage_t,
+            &mut p.oath_t,
             &mut p.cloak_t,
             &mut p.energy_t,
             &mut p.shield_t,
@@ -1144,7 +1146,7 @@ impl Game {
         // yorgunken savurma yavaşlar
         let tired = if self.player.stamina < ST_SWING { 1.6 } else { 1.0 };
         let p = &mut self.player;
-        let period = tired / (w.rate * (1.0 + b.atk_speed));
+        let period = tired / (w.rate * (1.0 + b.atk_speed + if p.oath_t > 0.0 { 0.3 } else { 0.0 }));
         if wants && !p.atk_active {
             p.atk_active = true;
             p.hit_done = false;
@@ -1182,7 +1184,7 @@ impl Game {
             k *= 1.2;
         }
         if self.player.rage_t > 0.0 {
-            k *= 1.4 + 0.03 * self.progress.char_level[0] as f32;
+            k *= 1.4;
         }
         if self.player.cloak_t > 0.0 {
             k *= 1.25;
@@ -1417,147 +1419,46 @@ impl Game {
         if self.player.ability_cd > 0.0 {
             return Err(format!("Bekleme: {:.0} sn", self.player.ability_cd));
         }
-        let c = self.progress.character;
-        let lvl = self.progress.char_level[c] as f32;
-        if c == 0 {
-            return self.start_roll();
-        }
-        match c {
-            0 => {
-                self.player.rage_t = 5.0;
-                self.player.ability_cd = 40.0;
+        let lvl = self.progress.char_level[self.progress.character.min(3)] as f32;
+        match self.progress.character {
+            // İz Sürücü: Gölge Atılımı — takla gibi atılır, 3 sn vuruşlar sert
+            1 => {
+                self.start_roll()?;
+                self.player.rage_t = 3.0;
+                self.player.ability_cd = if self.player.no_cd { 0.0 } else { 7.0 * (1.0 - self.progress.bonus().roll_cd).max(0.3) };
                 self.events.push(Event::Rage);
-                Ok("Öfke!".into())
+                Ok("Gölge Atılımı!".into())
             }
-            1 => Err("Dron otomatik çalışır".into()),
+            // Muhafız: Kalkan Duvarı — canın %30'u kalkan, çevredekiler geri savrulur
             2 => {
-                let v = 50.0 + 20.0 * (lvl - 1.0);
+                let v = self.progress.max_hp() * 0.30;
                 self.player.shield = v;
-                self.player.shield_t = 8.0;
-                self.player.ability_cd = 25.0;
-                self.player.cast_t = 0.5;
+                self.player.shield_t = 4.0;
+                self.player.ability_cd = if self.player.no_cd { 0.0 } else { 20.0 };
+                self.player.cast_t = 0.4;
                 self.player.anim = A_CAST;
                 self.player.anim_t = 0.0;
                 let (x, y) = (self.player.x, self.player.y);
-                self.areas.push(Area {
-                    kind: AreaKind::ShieldFx,
-                    x,
-                    y,
-                    r: m(4.0),
-                    life: 0.8,
-                    max_life: 0.8,
-                    dps: 0.0,
-                    hit_done: true,
-                });
+                let near: Vec<usize> = self.zombies.iter().enumerate()
+                    .filter(|(_, z)| z.hp > 0.0 && (z.x - x).hypot(z.y - y) < m(3.5)).map(|(i, _)| i).collect();
+                for i in near.into_iter().rev() {
+                    self.hurt_zombie(i, 15.0 + 5.0 * lvl, false, x, y, true, true);
+                }
+                self.areas.push(Area { kind: AreaKind::ShieldFx, x, y, r: m(3.5), life: 0.8, max_life: 0.8, dps: 0.0, hit_done: true });
                 self.events.push(Event::Shield { v: v as i32 });
-                Ok(format!("Büyü Kalkanı: {v:.0}"))
+                Ok(format!("Kalkan Duvarı: {v:.0}"))
             }
-            _ => {
-                // Lv1 %5/5sn, Lv5 %10/4sn, Lv10 %20/3sn
-                let (pct, dur) = if lvl <= 5.0 {
-                    let k = (lvl - 1.0) / 4.0;
-                    (0.05 + 0.05 * k, 5.0 - 1.0 * k)
-                } else {
-                    let k = (lvl - 5.0) / 5.0;
-                    (0.10 + 0.10 * k, 4.0 - 1.0 * k)
-                };
-                let total = self.progress.max_hp() * pct;
-                self.player.heal_t = dur;
-                self.player.heal_rate = total / dur;
-                self.player.ability_cd = 30.0;
-                self.player.cast_t = 0.5;
-                self.player.anim = A_CAST;
-                self.player.anim_t = 0.0;
-                let (x, y) = (self.player.x, self.player.y);
-                self.areas.push(Area {
-                    kind: AreaKind::Heal,
-                    x,
-                    y,
-                    r: m(4.0),
-                    life: dur,
-                    max_life: dur,
-                    dps: 0.0,
-                    hit_done: true,
-                });
-                self.events.push(Event::Heal {
-                    x,
-                    y: y - 120.0,
-                    v: total as i32,
-                });
-                Ok(format!("Şifa Alanı: +{total:.0} can / {dur:.1} sn"))
+            // Gölge: Kan Yemini — 6 sn can çalma ve saldırı hızı
+            3 => {
+                self.player.oath_t = 6.0;
+                self.player.ability_cd = if self.player.no_cd { 0.0 } else { 25.0 };
+                self.events.push(Event::Rage);
+                Ok("Kan Yemini!".into())
             }
+            _ => self.start_roll(),
         }
     }
 
-    fn update_drone(&mut self, dt: f32) {
-        if self.progress.character != 1 || self.player.dead {
-            return;
-        }
-        let lvl = self.progress.char_level[1];
-        let (px, py) = (self.player.x, self.player.y);
-        self.drone.t += dt;
-        let tx = px + (self.drone.t * 1.3).cos() * 60.0;
-        let ty = py - 40.0 + (self.drone.t * 1.3).sin() * 30.0;
-        let k = 1.0 - (-6.0 * dt).exp();
-        self.drone.x += (tx - self.drone.x) * k;
-        self.drone.y += (ty - self.drone.y) * k;
-        self.drone.cd -= dt;
-        if self.drone.cd > 0.0 {
-            return;
-        }
-        let range = m(9.0);
-        let filt = self.progress.drone_targets;
-        let mut best: Option<(usize, f32)> = None;
-        for (i, z) in self.zombies.iter().enumerate() {
-            if z.state == ZState::Dead || z.alpha < 0.3 {
-                continue;
-            }
-            let ok = match z.kind {
-                ZKind::Dog => filt[1],
-                ZKind::Titan => filt[2],
-                _ => filt[0],
-            };
-            if !ok {
-                continue;
-            }
-            let d = (z.x - self.drone.x).hypot(z.y - self.drone.y);
-            if d < range && best.is_none_or(|(_, bd)| d < bd) {
-                best = Some((i, d));
-            }
-        }
-        if let Some((i, d)) = best {
-            let z = &self.zombies[i];
-            let (dx, dy) = ((z.x - self.drone.x) / d, (z.y - 40.0 - self.drone.y) / d);
-            let dmg = (6.0 + 1.2 * (lvl as f32 - 1.0)) * self.progress.damage_mult();
-            let rocket = lvl >= 10 && self.rng.chance(0.15);
-            let barrels = if lvl >= 5 { 2 } else { 1 };
-            for b in 0..barrels {
-                let off = (b as f32 - 0.5 * (barrels - 1) as f32) * 10.0;
-                self.projectiles.push(Projectile {
-                    kind: if rocket {
-                        ProjKind::DroneRocket
-                    } else {
-                        ProjKind::DroneBullet
-                    },
-                    x: self.drone.x + off * dy,
-                    y: self.drone.y - off * dx,
-                    vx: dx * m(22.0),
-                    vy: dy * m(22.0),
-                    dmg: if rocket { dmg * 4.0 } else { dmg },
-                    pierce: 0,
-                    life: 0.8,
-                    splash: if rocket { m(1.8) } else { 0.0 },
-                    hostile: false,
-                    hit: Vec::new(),
-                });
-            }
-            let (x, y) = (self.drone.x, self.drone.y);
-            self.events.push(Event::DroneShot { x, y });
-            self.drone.cd = 0.8;
-        }
-    }
-
-    // ------------------------------------------------------------------ eşyalar
     pub fn spawn_drop(&mut self, item: usize, count: u32, x: f32, y: f32) {
         if count == 0 {
             return;

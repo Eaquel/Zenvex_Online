@@ -129,8 +129,9 @@ object Store {
             res.onSuccess {
                 // içerik postada: jeton tüketilir, ürün yeniden alınabilir
                 client?.consumeAsync(ConsumeParams.newBuilder().setPurchaseToken(p.purchaseToken).build()) { _, _ -> }
-                Toaster.show("Satın alma tamam! Ödülün postana geldi.")
-                Account.unread.intValue = Account.unread.intValue + 1
+                // bilet postayla değil doğrudan açılır: sunucudaki bilet oyuna uygulanır
+                if (product.startsWith("pass_")) { Toaster.show("Satın alma tamam! Sezon Biletin açıldı."); Pass.sync() }
+                else { Toaster.show("Satın alma tamam! Ödülün postana geldi."); Account.unread.intValue = Account.unread.intValue + 1 }
                 refresh()
             }.onFailure { e ->
                 Log.w("zenvex", "satın alma doğrulanamadı", e)

@@ -54,7 +54,6 @@ import kotlin.math.sin
  */
 @Composable
 fun TreeScreen(close: () -> Unit) {
-    var tab by remember { mutableIntStateOf(0) }
     var tick by remember { mutableIntStateOf(0) }
     val data = remember(tick) { GameSession.ui("tree") }
     Box(Modifier.fillMaxSize().background(Color(0xF2141310))) {
@@ -62,11 +61,9 @@ fun TreeScreen(close: () -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PxIcon("close", size = 40.dp) { close() }
                 Spacer(Modifier.width(10.dp))
-                PxButton("Skill Ağacı", color = if (tab == 0) Px.Green else Px.Dark, size = 16.sp, height = 40.dp) { tab = 0 }
-                Spacer(Modifier.width(6.dp))
-                PxButton("Savaşçı", color = if (tab == 1) Px.Green else Px.Dark, size = 16.sp, height = 40.dp) { tab = 1 }
+                PT("YETENEK AĞACI", 24.sp, Px.Clan, outline = true)
                 Spacer(Modifier.weight(1f))
-                if (tab == 0) {
+                run {
                     Icon("gem", 22.dp, Color(0xFF7FE0FF))
                     Spacer(Modifier.width(4.dp))
                     PT(fmt(data.optInt("gems")), 20.sp, Color(0xFF7FE0FF))
@@ -81,7 +78,7 @@ fun TreeScreen(close: () -> Unit) {
                 }
             }
             Spacer(Modifier.height(8.dp))
-            if (tab == 0) TreeView(data) { tick++ } else WarriorView(data)
+            TreeView(data) { tick++ }
         }
     }
 }
@@ -266,35 +263,3 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
     }
 }
 
-@Composable
-private fun WarriorView(data: JSONObject) {
-    val lv = data.optInt("char_level", 1)
-    Row(Modifier.fillMaxSize()) {
-        PxPanel(Modifier.width(260.dp).fillMaxHeight(), pad = 12.dp) {
-            PT("SAVAŞÇI", 26.sp, Color(0xFFB277FF), outline = true)
-            PT("Karakter seviyesi $lv / 10", 16.sp)
-            Spacer(Modifier.height(6.dp))
-            if (lv < 10) {
-                PxBar(data.optInt("char_xp") / data.optInt("char_next", 1).toFloat().coerceAtLeast(1f), Color(0xFFB277FF), Modifier.fillMaxWidth(), 12.dp)
-                PT("${fmt(data.optInt("char_xp"))} / ${fmt(data.optInt("char_next"))}", 12.sp, Px.Sub)
-            }
-            Spacer(Modifier.height(8.dp))
-            PT("Karakter XP'si zombi öldürdükçe dolar. Her seviye yeni bir özellik açar.", 13.sp, Px.Sub, maxLines = 4)
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val perks = data.optJSONArray("perks")
-            for (i in 0 until (perks?.length() ?: 0)) {
-                val on = i < lv
-                Row(Modifier.fillMaxWidth().background(if (on) Color(0xFF2E2A3A) else Px.Row).padding(horizontal = 10.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically) {
-                    LevelBadge(i + 1, size = 28.dp)
-                    Spacer(Modifier.width(10.dp))
-                    PT(perks!!.getString(i), 15.sp, if (on) Px.Text else Px.Sub, maxLines = 2)
-                    Spacer(Modifier.weight(1f))
-                    PT(if (on) "✔" else "🔒", 16.sp, if (on) Px.Name else Px.Sub)
-                }
-            }
-        }
-    }
-}

@@ -195,8 +195,7 @@ impl Game {
                 }).collect();
                 json!({ "points": g.tree_points(), "gems": g.gems, "credit": g.tree_credit, "spent": g.tree_spent, "level": g.level,
                         "reset_cost": g.tree_reset_cost(), "branches": crate::rpg::BRANCHES,
-                        "nodes": nodes, "perks": crate::rpg::WARRIOR_PERKS, "char_level": g.char_level[0],
-                        "char_xp": g.char_xp[0], "char_next": data::char_xp_to_next(g.char_level[0]) })
+                        "nodes": nodes })
             }
             "dog" => {
                 let lv = g.dog_lv;
@@ -368,19 +367,23 @@ impl Game {
                 json!({ "points": g.points, "level": g.level, "reset_cost": 200 * g.level, "skills": list })
             }
             "characters" => {
+                let day = self.day_index;
+                let cd = &g.char_daily;
                 let list: Vec<Value> = CHARACTERS
                     .iter()
                     .enumerate()
                     .map(|(i, c)| {
+                        let kills = if cd.day == day { cd.kills[i] } else { 0 };
+                        let claimed = cd.day == day && cd.claimed[i];
                         json!({ "i": i, "id": c.id, "name": c.name, "class": c.class, "desc": c.desc, "ability": c.ability,
-                                "ability_desc": c.ability_desc, "unlocked": g.unlocked[i], "level": g.char_level[i],
-                                "xp": g.char_xp[i], "xp_next": data::char_xp_to_next(g.char_level[i]), "max": progress::MAX_CHAR_LEVEL,
-                                "gold": c.unlock_gold, "req": c.unlock_level, "selected": g.character == i,
-                                "can_unlock": !g.unlocked[i] && g.level >= c.unlock_level && g.gold >= c.unlock_gold,
-                                "costume": g.costume[i] })
+                                "ability_desc": c.ability_desc, "rarity": c.rarity, "perks": c.perks, "unlocked": g.unlocked[i],
+                                "level": g.char_level[i], "cards": g.char_cards[i], "per_level": data::CHAR_CARDS_PER_LEVEL,
+                                "max_cards": data::CHAR_MAX_CARDS, "selected": g.character == i, "costume": g.costume[i],
+                                "daily": { "kills": kills.min(data::CHAR_DAILY_KILLS), "goal": data::CHAR_DAILY_KILLS, "claimed": claimed } })
                     })
                     .collect();
-                json!({ "chars": list, "gold": g.gold, "level": g.level })
+                json!({ "chars": list, "gold": g.gold, "gems": g.gems, "level": g.level, "pull_one": data::CHAR_PULL_ONE,
+                        "pull_ten": data::CHAR_PULL_TEN, "odds": data::CHAR_ODDS, "dupe_gems": data::CHAR_DUPE_GEMS })
             }
             "quests" => {
                 let main = data::MAIN_QUESTS.get(g.quests.main).map(|q| {
@@ -401,9 +404,9 @@ impl Game {
                                 "reached": *t <= tier })
                     })
                     .collect();
-                json!({ "season_id": g.pass.season, "tier": tier, "xp": g.pass.xp % data::PASS_XP_PER_TIER, "xp_total": g.pass.xp,
-                        "xp_per_tier": data::PASS_XP_PER_TIER, "tiers": data::PASS_TIERS, "normal": g.pass.normal, "elite": g.pass.elite,
-                        "price_normal": data::PASS_PRICE_NORMAL, "price_elite": data::PASS_PRICE_ELITE, "gems": g.gems, "rewards": rewards,
+                json!({ "season_id": g.pass.season, "tier": tier, "xp": g.pass.xp.saturating_sub(data::pass_xp_for(tier)), "xp_total": g.pass.xp,
+                        "xp_per_tier": data::pass_tier_xp(tier + 1), "tiers": data::PASS_TIERS, "normal": g.pass.normal, "elite": g.pass.elite,
+                        "gems": g.gems, "rewards": rewards,
                         "daily": quest_list(&g.quests.daily, data::DAILY_POOL), "weekly": quest_list(&g.quests.weekly, data::WEEKLY_POOL),
                         "season": quest_list(&g.quests.season, data::SEASON_QUESTS) })
             }
@@ -590,8 +593,36 @@ impl Game {
             "upgrade_skill" => self.progress.upgrade(int("id")).map(|_| "Yetenek geliştirildi".into()).map_err(String::from),
             "reset_skills" => self.progress.reset_skills().map(|_| "Yetenekler sıfırlandı".into()).map_err(String::from),
             "select_char" => self.select_char(int("i")),
-            "unlock_char" => self.unlock_char(int("i")),
-            "pass_buy" => self.buy_pass(v["elite"].as_bool().unwrap_or(false)),
+            // kart açma: sunucunun (zx_char_pull) attığı zarlar uygulanır; altın düşer, en üst seviyedeki karakterin kartı elmasa döner
+            "char_apply" => {
+                let cost = v["cost"].as_u64().unwrap_or(0) as u32;
+                let mut gems = 0;
+                let mut got = Vec::new();
+                for r in v["results"].as_array().cloned().unwrap_or_default() {
+                    let i = (r.as_u64().unwrap_or(0) as usize).min(CHARACTERS.len() - 1);
+                    gems += self.progress.add_char_card(i);
+                    got.push(i);
+                }
+                self.progress.gold = self.progress.gold.saturating_sub(cost);
+                self.progress.gems += gems;
+                Ok(serde_json::json!({ "got": got, "gems": gems }).to_string())
+            }
+            // karakter görevi ödülü: o karakterin 1 kartı
+            "char_daily_claim" => {
+                let i = int("i").min(CHARACTERS.len() - 1);
+                let day = self.day_index;
+                let cd = &mut self.progress.char_daily;
+                if cd.day != day || cd.kills[i] < data::CHAR_DAILY_KILLS {
+                    Err("Görev henüz bitmedi".to_string())
+                } else if cd.claimed[i] {
+                    Err("Bugünkü ödül alındı".to_string())
+                } else {
+                    cd.claimed[i] = true;
+                    let gems = self.progress.add_char_card(i);
+                    self.progress.gems += gems;
+                    Ok(format!("{} kartı kazandın!", CHARACTERS[i].name))
+                }
+            }
             // Elmas Sandığı: sunucunun attığı zar sonucu uygulanır (elmas düşer, ödüller verilir)
             "crate_apply" => {
                 let cost = v["cost"].as_u64().unwrap_or(0) as u32;
@@ -645,18 +676,15 @@ impl Game {
                 let reset = self.progress.sync_season(v["season"].as_u64().unwrap_or(0) as u32);
                 // sunucu bileti kayıtlı gösteriyor ama yerelde yoksa (satın alma sonrası kayıt yetişmediyse) şimdi uygula
                 let (n, e) = (v["normal"].as_bool().unwrap_or(false), v["elite"].as_bool().unwrap_or(false));
+                // V15: bilet gerçek parayla (Google Play) alınır; elmas düşülmez
                 if e && !self.progress.pass.elite {
-                    let price = if self.progress.pass.normal { data::PASS_PRICE_ELITE - data::PASS_PRICE_NORMAL } else { data::PASS_PRICE_ELITE };
-                    self.progress.gems = self.progress.gems.saturating_sub(price);
                     self.activate_pass(true);
                 } else if n && !self.progress.pass.normal {
-                    self.progress.gems = self.progress.gems.saturating_sub(data::PASS_PRICE_NORMAL);
                     self.activate_pass(false);
                 }
                 Ok(if reset { "Yeni Sezon Başladı!".into() } else { String::new() })
             }
             "claim_pass" => self.claim_pass(v["tier"].as_u64().unwrap_or(0) as u32, v["premium"].as_bool().unwrap_or(false)),
-            "buy_pass" => Err("Ödeme sistemi (Google Play Faturalandırma) henüz bağlı değil. Test için geliştirici menüsü: \"pass buy\"".into()),
             "equip_cosmetic" => self.equip_cosmetic(v["id"].as_str().unwrap_or("")),
             "set_name" => {
                 let n: String = v["name"].as_str().unwrap_or("").trim().chars().filter(|c| !c.is_control()).take(16).collect();
@@ -927,6 +955,15 @@ impl Game {
             ItemKind::Bench => return self.place_bench(slot),
             ItemKind::Tool if d.id.starts_with("veh_") => return self.summon_vehicle(if d.id == "veh_car" { 2 } else { 1 }),
             ItemKind::Tool => return Err("Alet çantanda durdukça işe yarar".into()),
+            ItemKind::Consumable if d.id == "char_card" => {
+                self.progress.inv.take_n(slot, Some(1));
+                let r = self.rng.below(100);
+                let i = data::char_roll(r);
+                let gems = self.progress.add_char_card(i);
+                self.progress.gems += gems;
+                let c = &CHARACTERS[i];
+                return Ok(if gems > 0 { format!("{} kartı (en üst seviyede: +{gems} elmas)", c.name) } else { format!("{} kartı! ({} kart)", c.name, self.progress.char_cards[i]) });
+            }
             ItemKind::Consumable => {}
             _ if d.id == "fuel" => {
                 let vi = self.player.vehicle.ok_or("Önce bir araca bin")?;
@@ -1093,22 +1130,6 @@ impl Game {
         Ok(format!("{} seçildi", CHARACTERS[i].name))
     }
 
-    fn unlock_char(&mut self, i: usize) -> Result<String, String> {
-        let c = CHARACTERS.get(i).ok_or("Karakter yok")?;
-        if self.progress.unlocked[i] {
-            return Err("Zaten açık".into());
-        }
-        if self.progress.level < c.unlock_level {
-            return Err(format!("Seviye {} gerekli", c.unlock_level));
-        }
-        if self.progress.gold < c.unlock_gold {
-            return Err(format!("{} altın gerekli", c.unlock_gold));
-        }
-        self.progress.gold -= c.unlock_gold;
-        self.progress.unlocked[i] = true;
-        Ok(format!("{} açıldı!", c.name))
-    }
-
     fn claim_pass(&mut self, tier: u32, premium: bool) -> Result<String, String> {
         let &(t, free, prem) = PASS_REWARDS
             .iter()
@@ -1141,23 +1162,12 @@ impl Game {
         p.pass.normal = true;
         if elite && !p.pass.elite {
             p.pass.elite = true;
-            p.pass.xp += 10 * data::PASS_XP_PER_TIER;
+            p.pass.xp += data::PASS_PREMIUM_XP;
+            // Premium bilet: Sezon 1 çerçevesi
+            if !p.cosmetics.iter().any(|c| c == "frame_s1") {
+                p.cosmetics.push("frame_s1".into());
+            }
         }
-    }
-
-    /// Elmasla bilet: önce sunucu kaydı (zx_pass_buy) alınır, sonra bu komut elması düşer ve bileti açar.
-    fn buy_pass(&mut self, elite: bool) -> Result<String, String> {
-        let p = &self.progress;
-        if elite && p.pass.elite || !elite && p.pass.normal {
-            return Err("Bu bilet zaten sende".into());
-        }
-        let price = if elite && p.pass.normal { data::PASS_PRICE_ELITE - data::PASS_PRICE_NORMAL } else if elite { data::PASS_PRICE_ELITE } else { data::PASS_PRICE_NORMAL };
-        if p.gems < price {
-            return Err(format!("{price} elmas gerekli"));
-        }
-        self.progress.gems -= price;
-        self.activate_pass(elite);
-        Ok(if elite { "Elit Bilet Açıldı! +10 Kademe".into() } else { "Premium Bilet Açıldı!".into() })
     }
 
     fn equip_cosmetic(&mut self, id: &str) -> Result<String, String> {
@@ -1433,7 +1443,7 @@ impl Game {
                 }
                 _ => {
                     let t = (num(1, 30.0) as u32).min(data::PASS_TIERS);
-                    self.progress.pass.xp = t * data::PASS_XP_PER_TIER;
+                    self.progress.pass.xp = data::pass_xp_for(t);
                     Ok(format!("Sezon Bileti kademesi {t}"))
                 }
             },
@@ -1620,7 +1630,7 @@ mod v4_tests {
         g.progress.sync_season(1);
         g.progress.pass.xp = 7450;
         g.progress.gems = 1240;
-        g.command(r#"{"cmd":"pass_buy","elite":false}"#);
+        g.command(r#"{"cmd":"pass_sync","season":1,"normal":true,"elite":false}"#);
         for t in 1..=3 {
             let _ = g.command(&format!(r#"{{"cmd":"claim_pass","tier":{t},"premium":false}}"#));
             let _ = g.command(&format!(r#"{{"cmd":"claim_pass","tier":{t},"premium":true}}"#));
@@ -1631,6 +1641,13 @@ mod v4_tests {
         g.progress.quest_event(crate::data::QuestKind::Crate, 4);
         g.progress.quest_event(crate::data::QuestKind::Soldier, 9);
         std::fs::write(format!("{dir}/pass.json"), g.ui_json("pass")).unwrap();
+        // karakterler: Kaan 2. seviyede, ikinci karakter açık, günlük görev yarıda
+        g.progress.char_cards = [37, 12, 1, 0];
+        g.progress.sync_chars();
+        for _ in 0..15 {
+            g.progress.char_daily_kill(g.day_index);
+        }
+        std::fs::write(format!("{dir}/characters.json"), g.ui_json("characters")).unwrap();
         // Elmas Sandığı: iki kaplama sahip, biri giyili
         g.command(r#"{"cmd":"skins_sync","owned":["sk_gold","vs_neon","sk_toxic"]}"#);
         g.command(r#"{"cmd":"skin_equip","id":"sk_gold","kind":"char"}"#);

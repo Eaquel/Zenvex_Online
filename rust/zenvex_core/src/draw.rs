@@ -334,25 +334,6 @@ impl Game {
                 ],
             ));
         }
-        if self.progress.character == 1 && !self.player.dead {
-            self.draw_tmp.push((
-                self.drone.y + 80.0,
-                [
-                    D_DRONE,
-                    0.0,
-                    self.drone.x,
-                    self.drone.y,
-                    0.0,
-                    0.0,
-                    self.drone.t,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ],
-            ));
-        }
         if let Some(e) = self.dog_draw() {
             self.draw_tmp.push(e);
         }

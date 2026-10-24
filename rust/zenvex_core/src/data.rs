@@ -227,6 +227,8 @@ pub const ITEMS: &[ItemDef] = &[
     item!("ev_breath_weapon", "Son Nefes Tırpanı", Weapon, Seasonal, 1, 0, "Son Nefes etkinliğinde 3. sırada bitirerek elde edilir. Uzun menzilli, önündeki her şeyi biçer. Sınırlı sürelidir (30 gün), takas edilemez."),
     // V12.1 (sona eklenir: kayıtlar eşyayı sırasıyla tutar)
     item!("workbench", "Tezgâh", Bench, Rare, 3, 80, "Kullan: bulunduğun yere kurulur. Kişisel üssünde kalıcıdır, başka yerde 10 dakika durur. Gelişmiş tarifler tezgâhta üretilir."),
+    // V15 karakter sistemi
+    item!("char_card", "Karakter Kartı", Consumable, Epic, 99, 0, "Kullanınca 4 karakterden birinin kartı çıkar (Sıradan %55, Nadir %28, Destansı %13, Efsanevi %4). İlk kart karakteri açar, her 25 kart seviye atlatır."),
 ];
 
 /// Malzemenin nereden çıktığı (üretim ekranında malzemenin altında yazar).
@@ -910,19 +912,73 @@ pub struct CharDef {
     pub id: &'static str,
     pub name: &'static str,
     pub class: &'static str,
+    /// 0 Sıradan, 1 Nadir, 2 Destansı, 3 Efsanevi
+    pub rarity: u8,
     pub desc: &'static str,
     pub unlock_gold: u32,
     pub unlock_level: u32,
     pub ability: &'static str,
     pub ability_desc: &'static str,
+    /// seviye 1-10 özellikleri (1. seviye karakter açılınca)
+    pub perks: [&'static str; 10],
 }
 
-/// V4: tek kahraman. (Görseller "kaan" kimliğiyle paketli.)
+/// V15: 4 karakter; kartla açılır ve gelişir (her 25 kart +1 seviye, en çok 10). Savaşçı başlangıçta açık.
+/// Görselleri gelene dek hepsi "kaan" görselleriyle çizilir.
 pub const CHARACTERS: &[CharDef] = &[
-    CharDef { id: "kaan", name: "Savaşçı", class: "Yumruk Dövüşçüsü", desc: "Siyah kapüşonlu hayatta kalan. Yumruklarıyla dövüşür, taklayla kaçar.",
-              unlock_gold: 0, unlock_level: 1,
-              ability: "Takla", ability_desc: "Bakılan yöne yuvarlanır, yuvarlanırken hasar almaz. 5 sn bekleme." },
+    CharDef { id: "kaan", name: "Savaşçı", class: "Yumruk Dövüşçüsü", rarity: 0,
+              desc: "Siyah kapüşonlu hayatta kalan. Yumruklarıyla dövüşür, taklayla kaçar.", unlock_gold: 0, unlock_level: 1,
+              ability: "Takla", ability_desc: "Bakılan yöne yuvarlanır, yuvarlanırken hasar almaz. 5 sn bekleme.",
+              perks: ["Takla", "Yumruk hasarı +%10", "Hasardan kaçınma +%5", "Hareket hızı +%10", "Takladan sonra 1 sn hasar almama",
+                      "Can +50", "Yumruk hasarı +%15", "Takla bekleme −%25", "Öldürünce canın %5'i yenilenir", "Karanlık Aura: yakındaki düşmanlara saniyede 20 hasar"] },
+    CharDef { id: "tracker", name: "İz Sürücü", class: "Bıçak ve Hız", rarity: 1,
+              desc: "Sessiz ve hızlı bir avcı. Bıçaklarla kritik vuruşlar yapar, düşmanın arkasına geçer.", unlock_gold: 0, unlock_level: 1,
+              ability: "Gölge Atılımı", ability_desc: "İleri atılır; 3 sn boyunca vuruşları %40 daha sert. 7 sn bekleme.",
+              perks: ["Gölge Atılımı", "Kılıç/bıçak hasarı +%10", "Kritik şansı +%3", "Hareket hızı +%8", "Atılım bekleme −%20",
+                      "Can +40", "Kritik hasarı +%25", "Saldırı hızı +%10", "Hasardan kaçınma +%5", "Avcı İçgüdüsü: kritik hasarı +%50"] },
+    CharDef { id: "guardian", name: "Muhafız", class: "Kalkan ve Dayanıklılık", rarity: 2,
+              desc: "Hurda zırhlı, kocaman kalkanlı bir koruyucu. Hasarı göğüsler, çevresindekileri sersemletir.", unlock_gold: 0, unlock_level: 1,
+              ability: "Kalkan Duvarı", ability_desc: "Canının %30'u kadar kalkan (4 sn), çevredeki düşmanları sersemletir. 20 sn bekleme.",
+              perks: ["Kalkan Duvarı", "Can +60", "Alınan hasar −%5", "Hasar yansıtma +%5", "Patlama direnci +%20",
+                      "Can +100", "Saniyede +1 can yenilenmesi", "Alınan hasar −%5", "Sersemletme şansı +%10", "Demir İrade: can +250"] },
+    CharDef { id: "shadow", name: "Gölge", class: "Katana ve Can Çalma", rarity: 3,
+              desc: "Kızıl gözlü gizemli kılıç ustası. Katanasıyla kombo yapar, vurduğu her darbeyle can çalar.", unlock_gold: 0, unlock_level: 1,
+              ability: "Kan Yemini", ability_desc: "6 sn boyunca vuruşlar hasarın %15'i kadar can çalar, saldırı hızı +%30. 25 sn bekleme.",
+              perks: ["Kan Yemini", "Kılıç hasarı +%12", "Can çalma +%2", "Saldırı hızı +%8", "Kritik şansı +%4",
+                      "Can +50", "Kılıç hasarı +%15", "Can çalma +%3", "Hareket hızı +%8", "Kan Gölgesi: kritik hasarı +%40, can çalma +%3"] },
 ];
+
+/// Karakter kartı: her 25 kart bir seviye; ilk kart karakteri açar
+pub const CHAR_CARDS_PER_LEVEL: u32 = 25;
+pub const CHAR_MAX_CARDS: u32 = 1 + 9 * CHAR_CARDS_PER_LEVEL;
+/// Kart açma (altın): 1 kart, 10 kart (%20 indirimli)
+pub const CHAR_PULL_ONE: u32 = 2500;
+pub const CHAR_PULL_TEN: u32 = 20000;
+/// Nadirliğe göre çıkma şansı (%) ve karakter en üst seviyedeyken kartın elmas karşılığı
+pub const CHAR_ODDS: [u32; 4] = [55, 28, 13, 4];
+pub const CHAR_DUPE_GEMS: [u32; 4] = [1, 3, 8, 20];
+/// Karakter görevi: o karakterle günde bu kadar zombi → o karakterin 1 kartı
+pub const CHAR_DAILY_KILLS: u32 = 40;
+
+pub fn char_level_of(cards: u32) -> u32 {
+    if cards == 0 {
+        0
+    } else {
+        (1 + (cards - 1) / CHAR_CARDS_PER_LEVEL).min(10)
+    }
+}
+
+/// Nadirlik zarı (0-99) → karakter
+pub fn char_roll(r: u32) -> usize {
+    let mut acc = 0;
+    for (i, p) in CHAR_ODDS.iter().enumerate() {
+        acc += p;
+        if r < acc {
+            return i;
+        }
+    }
+    0
+}
 
 pub fn char_xp_to_next(level: u32) -> u32 {
     (200.0 * (level as f32).powf(1.5)).round() as u32
@@ -1166,44 +1222,55 @@ pub const DAILY_POOL: &[QuestDef] = &[
 
 // --------------------------------------------------------------------------- sezon / pass
 pub const PASS_TIERS: u32 = 30;
-pub const PASS_XP_PER_TIER: u32 = 1000;
-/// Sezon Bileti elmasla alınır (sunucu kaydı tutar, elmas düşüşünü doğrular)
-pub const PASS_PRICE_NORMAL: u32 = 600;
-pub const PASS_PRICE_ELITE: u32 = 1500;
+/// Kademe başı XP: 1-10 → 1.000, 11-20 → 2.000, 21-30 → 5.000 (toplam 80.000)
+pub fn pass_tier_xp(tier: u32) -> u32 {
+    match tier {
+        0..=10 => 1000,
+        11..=20 => 2000,
+        _ => 5000,
+    }
+}
+/// Bu kademeye ulaşmak için gereken toplam XP
+pub fn pass_xp_for(tier: u32) -> u32 {
+    (1..=tier.min(PASS_TIERS)).map(pass_tier_xp).sum()
+}
+/// Premium bilet: anında bu kadar kademe XP'si
+pub const PASS_PREMIUM_XP: u32 = 10_000;
 
-/// (kademe, ücretsiz ödül, premium ödül) — ödül biçimi: "eşya:adet" | "gold:n" | "gem:n"
-/// Elmas ödülleri sunucudan onaylanır (supabase _zx_pass_gems ile aynı tablo).
+/// (kademe, ücretsiz ödül, premium ödül) — ödül biçimi: "eşya:adet" | "gold:n" | "gem:n" | "cos:kozmetik"
+/// Elmas ödülleri sunucudan onaylanır (supabase _zx_pass_gems ile aynı tablo). Ücretsiz yol 150, premium 900 elmas;
+/// premium yolda 30 karakter kartı, 25'te Kanlı Ay Kılıcı görünümü, 30'da Sezon 1 Kanatları.
 pub const PASS_REWARDS: &[(u32, &str, &str)] = &[
-    (1, "gold:200", "chest_wood:2"),
-    (2, "bandage:5", "gem:20"),
-    (3, "food:5", "potion_heal:3"),
-    (4, "gold:300", "ring_copper:1"),
-    (5, "gem:10", "chest_iron:1"),
-    (6, "cloth:20", "neck_bone:1"),
-    (7, "gold:400", "gem:30"),
-    (8, "medkit:2", "pants_police:1"),
-    (9, "energy:5", "potion_speed:3"),
-    (10, "chest_iron:1", "ring_hunter:1"),
-    (11, "gold:500", "gem:40"),
-    (12, "scrap:20", "chest_military:1"),
-    (13, "antidote:3", "potion_power:3"),
-    (14, "gold:600", "neck_amulet:1"),
-    (15, "gem:15", "helm_military:1"),
-    (16, "powder:15", "gem:50"),
-    (17, "gold:700", "boots_military:1"),
-    (18, "medkit:3", "chest_military:2"),
-    (19, "electronics:10", "gem:60"),
-    (20, "chest_military:1", "jacket_military:1"),
-    (21, "gold:800", "pants_military:1"),
-    (22, "battery:5", "gem:70"),
-    (23, "gold:900", "neck_dark:1"),
-    (24, "titan_shard:1", "potion_power:5"),
-    (25, "gem:25", "w_katana:1"),
-    (26, "dark_crystal:2", "gem:100"),
-    (27, "gold:1000", "chest_military:3"),
-    (28, "medkit:5", "titan_shard:3"),
-    (29, "gold:1200", "gem:150"),
-    (30, "chest_military:2", "ring_titan:1"),
+    (1, "gold:500", "char_card:4"),
+    (2, "bandage:5", "char_card:3"),
+    (3, "food:5", "gem:40"),
+    (4, "char_card:1", "potion_heal:5"),
+    (5, "gem:15", "chest_iron:2"),
+    (6, "gold:1000", "char_card:3"),
+    (7, "medkit:3", "gem:60"),
+    (8, "char_card:1", "potion_speed:5"),
+    (9, "gold:1500", "char_card:4"),
+    (10, "gem:25", "chest_military:1"),
+    (11, "potion_heal:3", "gem:80"),
+    (12, "char_card:1", "potion_power:5"),
+    (13, "gold:2000", "char_card:4"),
+    (14, "medkit:5", "gem:90"),
+    (15, "gem:30", "chest_military:2"),
+    (16, "char_card:2", "titan_shard:2"),
+    (17, "gold:2500", "gem:100"),
+    (18, "potion_speed:3", "char_card:4"),
+    (19, "char_card:2", "cos:camo_s1"),
+    (20, "gem:35", "chest_military:3"),
+    (21, "gold:3000", "gem:120"),
+    (22, "potion_power:3", "char_card:4"),
+    (23, "char_card:2", "titan_shard:3"),
+    (24, "gold:3500", "gem:130"),
+    (25, "gem:45", "cos:skin_w_bloodmoon"),
+    (26, "titan_shard:2", "char_card:4"),
+    (27, "gold:4000", "gem:140"),
+    (28, "char_card:3", "ring_titan:1"),
+    (29, "medkit:5", "gem:140"),
+    (30, "chest_military:3", "cos:wings_s1"),
 ];
 
 /// Haftalık havuz: her hafta 4 tanesi seçilir.
@@ -1348,6 +1415,10 @@ pub const COSMETICS: &[Cosmetic] = &[
         name: "RPG: Altın",
         kind: "weapon_skin",
     },
+    // V15 sezon / VIP görünümleri (görselleri docs/22 Bölüm 10; gelene dek koleksiyonda görünür)
+    Cosmetic { id: "skin_w_bloodmoon", name: "Kanlı Ay Kılıcı", kind: "weapon_skin" },
+    Cosmetic { id: "camo_s1", name: "Sezon 1 Kamuflajı", kind: "camo" },
+    Cosmetic { id: "wings_s1", name: "Sezon 1 Kanatları", kind: "wings" },
 ];
 
 #[cfg(test)]
@@ -1384,6 +1455,7 @@ mod tests {
                 let (k, _) = r.split_once(':').unwrap();
                 match k {
                     "gold" | "gem" => {}
+                    "cos" => assert!(COSMETICS.iter().any(|c| c.id == r.split_once(':').unwrap().1), "{r}"),
                     _ => {
                         assert!(item_index(k).is_some(), "{r}");
                         assert!(!matches!(ITEMS[item_index(k).unwrap()].kind, ItemKind::Ammo | ItemKind::Cloak), "{r}");

@@ -105,7 +105,7 @@ impl Game {
             }
             let st = self.rng.chance(stun.max(self.progress.stun_chance()));
             self.hurt_zombie(i, dmg, crit, fx, fy, st, true);
-            let ls = self.progress.bonus().lifesteal;
+            let ls = self.progress.bonus().lifesteal + if self.player.oath_t > 0.0 { 0.15 } else { 0.0 };
             if ls > 0.0 && dmg < 1e5 {
                 let max_hp = self.progress.max_hp();
                 self.player.hp = (self.player.hp + dmg * ls).min(max_hp);
@@ -316,7 +316,7 @@ impl Game {
         let keep = self.player.inf_ammo;
         let mag = if keep { mag + 1 } else { mag };
         self.progress.set_mag(w.item, mag - 1);
-        self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.atk_speed));
+        self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.atk_speed + if self.player.oath_t > 0.0 { 0.3 } else { 0.0 }));
         self.player.combat_t = 0.0;
         let (px, py) = (self.player.x, self.player.y);
         let spread = w.spread * self.rng.range(-1.0, 1.0);
@@ -732,6 +732,8 @@ impl Game {
             let id = if self.rng.chance(0.5) { "medkit" } else { "energy" };
             self.spawn_drop_id(id, 1, z.x, z.y);
         }
+        // karakter görevi: seçili karakterle öldürülen zombi
+        self.progress.char_daily_kill(self.day_index);
         let lf = crate::progress::xp_level_factor(self.progress.level, z.level, z.boss);
         let xp = ((def.xp + z.level * 3) as f32 * crate::data::species(z.species).map_or(1.0, |s| s.xp) * lf).round() as u32;
         if xp > 0 {

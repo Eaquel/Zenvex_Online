@@ -77,7 +77,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     // oyun tamamen çevrimiçi: hesapsız oynanmaz (misafir yok)
     var dialog by remember { mutableStateOf(if (!Account.loggedIn) "welcome" else "") }
     var devTaps by remember { mutableIntStateOf(0) }
-    val sel = 0
+    val sel = prof.optInt("character").coerceIn(0, 3)
     var dir by remember { mutableIntStateOf(1) }
     LaunchedEffect(Unit) { Account.servers(); if (Account.loggedIn) Account.refresh() }
     // oyundan atıldıysak (başka cihaz, bakım, yasak, bağlantı) nedeni göster
@@ -106,7 +106,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
             Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 PT(ch.optString("name").uppercase(), 28.sp, Color(0xFFB277FF), outline = true)
                 PT(ch.optString("class") + " · Karakter Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 13.sp, Px.Text)
-                PT("Takla: bakılan yöne yuvarlan, hasardan kaç", 12.sp, Px.Sub)
+                PT(ch.optString("ability") + ": " + ch.optString("ability_desc"), 12.sp, Px.Sub)
             }
         }
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
@@ -120,6 +120,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            PxIcon("profile", size = 48.dp, tint = Color(0xFFB277FF)) { dialog = "chars" }
             PxIcon("trophy", size = 48.dp, tint = Px.Clan) { dialog = "top" }
             PxIcon("info", size = 48.dp) { dialog = "news" }
             PxIcon("gear", size = 48.dp, color = Px.Blue) { go(Screen.Settings) }
@@ -148,19 +149,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
                 PT(if (n > 0) "$n çevrimiçi" else "", 13.sp, Px.Name)
             }
             Spacer(Modifier.height(10.dp))
-            when {
-                !unlocked -> {
-                    val can = ch.optBoolean("can_unlock")
-                    PxButton("Aç · Sv ${ch.optInt("req")} · ${ch.optInt("gold")} altın", Modifier.fillMaxWidth(), if (can) Px.Orange else Px.Dark,
-                        icon = "lock", size = 16.sp, textColor = if (can) Color(0xFF2A1A04) else Color.White) {
-                        val r = GameSession.cmd("unlock_char", "i" to sel); Toaster.show(r.msg, r.ok); if (r.ok) tick++
-                    }
-                }
-                prof.optInt("character") != sel -> PxButton("Bu karakteri seç", Modifier.fillMaxWidth(), Px.Blue, size = 18.sp, height = 52.dp) {
-                    val r = GameSession.cmd("select_char", "i" to sel); Toaster.show(r.msg, r.ok); tick++
-                }
-                else -> PxButton("OYNA", Modifier.fillMaxWidth(), Px.Green, icon = "play", size = 32.sp, height = 64.dp) { if (Account.loggedIn) go(Screen.Loading) else dialog = "welcome" }
-            }
+            PxButton("OYNA", Modifier.fillMaxWidth(), Px.Green, icon = "play", size = 32.sp, height = 64.dp) { if (Account.loggedIn) go(Screen.Loading) else dialog = "welcome" }
         }
         // ---- sağ alt: sürüm (7 dokunuş → geliştirici menüsü)
         PT(appVersion(), 13.sp, Px.Sub, Modifier.align(Alignment.BottomEnd).padding(10.dp)
@@ -172,6 +161,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         when (dialog) {
             "welcome" -> AccountDialog(first = true) { dialog = if (Account.loggedIn) "" else "welcome"; tick++ }
             "top" -> TopDialog { dialog = "" }
+            "chars" -> CharactersScreen { dialog = ""; tick++ }
             "news" -> NewsDialog { dialog = "" }
             "dev" -> DevMenu(onClose = { dialog = ""; tick++ })
             "profile" -> ProfileEditor({ dialog = "" }) { dialog = "rename" }
@@ -182,7 +172,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
 
 
 @Composable
-private fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
+internal fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
     val ctx = LocalContext.current
     val frame = ((t * 6f).toInt()) % 6
     val key = "l/${HERO_IDS[sel]}/0_$frame"  // tek görünüm; sağa bakış aynalanır

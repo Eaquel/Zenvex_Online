@@ -272,6 +272,12 @@ pub struct Progress {
     pub unlocked: [bool; 4],
     pub char_level: [u32; 4],
     pub char_xp: [u32; 4],
+    /// V15: karakter kartları (seviye bunlardan hesaplanır)
+    #[serde(default)]
+    pub char_cards: [u32; 4],
+    /// V15: karakter görevleri (gün, karakter başına ilerleme, alındı mı)
+    #[serde(default)]
+    pub char_daily: CharDaily,
     pub quests: QuestState,
     pub pass: PassState,
     pub cosmetics: Vec<String>,
@@ -326,6 +332,15 @@ pub struct Progress {
     /// V15: son kayıttaki konum (dünya pikseli); oyuna yeniden girince (uygulama kapanıp açılsa da) buradan devam edilir
     #[serde(default)]
     pub last_pos: Option<(f32, f32)>,
+}
+
+/// Karakter görevleri: her gün her karakter için "o karakterle N zombi öldür" → o karakterin 1 kartı
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CharDaily {
+    pub day: u32,
+    pub kills: [u32; 4],
+    pub claimed: [bool; 4],
 }
 
 /// Etkinlik sayaçları: yalnız artar; istemci son gönderilenden farkı sunucuya yazar.
@@ -448,6 +463,8 @@ impl Default for Progress {
             unlocked: [true, false, false, false],
             char_level: [1; 4],
             char_xp: [0; 4],
+            char_cards: [1, 0, 0, 0],
+            char_daily: CharDaily::default(),
             quests: QuestState::default(),
             pass: PassState::default(),
             cosmetics: Vec::new(),
@@ -494,18 +511,43 @@ impl Progress {
         self.skills[id] as f32
     }
 
-    pub fn add_xp(&mut self, amount: u32) -> u32 {
-        // karakter XP'si (toplam XP'nin yarısı)
-        let c = self.character;
-        if self.char_level[c] < MAX_CHAR_LEVEL {
-            self.char_xp[c] += amount / 2 + 1;
-            while self.char_level[c] < MAX_CHAR_LEVEL
-                && self.char_xp[c] >= data::char_xp_to_next(self.char_level[c])
-            {
-                self.char_xp[c] -= data::char_xp_to_next(self.char_level[c]);
-                self.char_level[c] += 1;
-            }
+    /// V15: karakter seviyesi kartlardan (her 25 kart +1); açık olanlar ilk kartla. Savaşçı her zaman açık.
+    /// Eski kayıtlar: Savaşçı'nın XP ile kazanılmış seviyesi kart karşılığına çevrilir.
+    pub fn sync_chars(&mut self) {
+        if self.char_cards == [0; 4] {
+            self.char_cards[0] = 1 + self.char_level[0].saturating_sub(1).min(9) * data::CHAR_CARDS_PER_LEVEL;
         }
+        self.char_cards[0] = self.char_cards[0].max(1);
+        for i in 0..4 {
+            self.char_cards[i] = self.char_cards[i].min(data::CHAR_MAX_CARDS);
+            self.char_level[i] = data::char_level_of(self.char_cards[i]);
+            self.unlocked[i] = self.char_cards[i] > 0;
+        }
+        if !self.unlocked[self.character.min(3)] {
+            self.character = 0;
+        }
+    }
+
+    pub fn char_daily_kill(&mut self, day: u32) {
+        let c = self.character.min(3);
+        let d = &mut self.char_daily;
+        if d.day != day {
+            *d = CharDaily { day, ..Default::default() };
+        }
+        d.kills[c] = d.kills[c].saturating_add(1);
+    }
+
+    /// Karakter kartı ekler; karakter en üst seviyedeyse kartın elmas karşılığını döner
+    pub fn add_char_card(&mut self, i: usize) -> u32 {
+        if self.char_cards[i] >= data::CHAR_MAX_CARDS {
+            return data::CHAR_DUPE_GEMS[data::CHARACTERS[i].rarity as usize];
+        }
+        self.char_cards[i] += 1;
+        self.sync_chars();
+        0
+    }
+
+    pub fn add_xp(&mut self, amount: u32) -> u32 {
         if self.level >= MAX_LEVEL {
             return 0;
         }
@@ -878,7 +920,7 @@ impl Progress {
     }
 
     pub fn pass_tier(&self) -> u32 {
-        (self.pass.xp / data::PASS_XP_PER_TIER).min(data::PASS_TIERS)
+        (1..=data::PASS_TIERS).take_while(|&t| self.pass.xp >= data::pass_xp_for(t)).count() as u32
     }
 
     pub fn grant(&mut self, reward: &str) -> String {
@@ -979,12 +1021,47 @@ mod tests {
     }
 
     #[test]
-    fn level_up_gives_points_and_char_xp() {
+    fn level_up_gives_points() {
         let mut p = Progress::default();
         assert_eq!(p.add_xp(50), 1);
         assert_eq!(p.level, 2);
         assert_eq!(p.points, 1);
-        assert!(p.char_xp[0] > 0);
+    }
+
+    #[test]
+    fn character_cards_level_and_dupes() {
+        let mut p = Progress::default();
+        p.sync_chars();
+        assert!(p.unlocked[0] && !p.unlocked[3]);
+        assert_eq!(p.add_char_card(3), 0);
+        assert!(p.unlocked[3]);
+        assert_eq!(p.char_level[3], 1);
+        for _ in 0..25 {
+            p.add_char_card(3);
+        }
+        assert_eq!(p.char_level[3], 2, "26. kartta 2. seviye");
+        p.char_cards[1] = data::CHAR_MAX_CARDS;
+        p.sync_chars();
+        assert_eq!(p.char_level[1], 10);
+        assert_eq!(p.add_char_card(1), data::CHAR_DUPE_GEMS[1], "en üst seviyede kart elmasa döner");
+        // eski kayıt: Savaşçı XP ile 4. seviyedeydi → 76 kart
+        let mut o = Progress::default();
+        o.char_cards = [0; 4];
+        o.char_level[0] = 4;
+        o.sync_chars();
+        assert_eq!(o.char_level[0], 4);
+    }
+
+    #[test]
+    fn pass_tiers_get_harder() {
+        assert_eq!(data::pass_xp_for(10), 10_000);
+        assert_eq!(data::pass_xp_for(20), 30_000);
+        assert_eq!(data::pass_xp_for(30), 80_000);
+        let mut p = Progress::default();
+        p.pass.xp = 29_999;
+        assert_eq!(p.pass_tier(), 19);
+        p.pass.xp = 30_000;
+        assert_eq!(p.pass_tier(), 20);
     }
 
     #[test]

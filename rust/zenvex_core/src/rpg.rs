@@ -204,48 +204,58 @@ pub struct Bonus {
     pub aura: bool,
 }
 
-/// Savaşçı seviye özellikleri (seviye → açıklama)
-pub const WARRIOR_PERKS: [&str; 10] = [
-    "Yumruk + Takla: bakılan yöne yuvarlanma (5 sn bekleme)",
-    "Yumruk hasarı +%10",
-    "Hasardan kaçınma şansı %5",
-    "Hareket hızı +%10",
-    "Takladan sonra 1 sn hasar almama",
-    "Can +50",
-    "Yumruk hasarı +%15",
-    "Takla bekleme süresi −%25",
-    "Öldürünce canın %5'i yenilenir",
-    "Karanlık Aura: yakındaki düşmanlara saniyede 20 hasar",
-];
 
 pub fn bonus(p: &Progress) -> Bonus {
     let mut b = Bonus::default();
-    let lv = p.char_level[0];
-    if lv >= 2 {
-        b.fist_pct += 0.10;
+    // seçili karakterin seviye özellikleri (data::CHARACTERS[..].perks ile aynı sıra)
+    let lv = p.char_level[p.character.min(3)];
+    let at = |n: u32| lv >= n;
+    match p.character {
+        1 => {
+            if at(2) { b.blade_pct += 0.10; }
+            if at(3) { b.crit += 0.03; }
+            if at(4) { b.speed += 0.08; }
+            if at(5) { b.roll_cd += 0.20; }
+            if at(6) { b.hp_flat += 40.0; }
+            if at(7) { b.crit_dmg += 0.25; }
+            if at(8) { b.atk_speed += 0.10; }
+            if at(9) { b.dodge += 0.05; }
+            if at(10) { b.crit_dmg += 0.50; }
+        }
+        2 => {
+            if at(2) { b.hp_flat += 60.0; }
+            if at(3) { b.dmg_taken += 0.05; }
+            if at(4) { b.reflect += 0.05; }
+            if at(5) { b.blast_res += 0.20; }
+            if at(6) { b.hp_flat += 100.0; }
+            if at(7) { b.regen += 1.0; }
+            if at(8) { b.dmg_taken += 0.05; }
+            if at(9) { b.stun += 0.10; }
+            if at(10) { b.hp_flat += 250.0; }
+        }
+        3 => {
+            if at(2) { b.blade_pct += 0.12; }
+            if at(3) { b.lifesteal += 0.02; }
+            if at(4) { b.atk_speed += 0.08; }
+            if at(5) { b.crit += 0.04; }
+            if at(6) { b.hp_flat += 50.0; }
+            if at(7) { b.blade_pct += 0.15; }
+            if at(8) { b.lifesteal += 0.03; }
+            if at(9) { b.speed += 0.08; }
+            if at(10) { b.crit_dmg += 0.40; b.lifesteal += 0.03; }
+        }
+        _ => {
+            if at(2) { b.fist_pct += 0.10; }
+            if at(3) { b.dodge += 0.05; }
+            if at(4) { b.speed += 0.10; }
+            if at(5) { b.iframe += 1.0; }
+            if at(6) { b.hp_flat += 50.0; }
+            if at(7) { b.fist_pct += 0.15; }
+            if at(8) { b.roll_cd += 0.25; }
+            if at(9) { b.kill_heal = 0.05; }
+            b.aura = at(10);
+        }
     }
-    if lv >= 3 {
-        b.dodge += 0.05;
-    }
-    if lv >= 4 {
-        b.speed += 0.10;
-    }
-    if lv >= 5 {
-        b.iframe += 1.0;
-    }
-    if lv >= 6 {
-        b.hp_flat += 50.0;
-    }
-    if lv >= 7 {
-        b.fist_pct += 0.15;
-    }
-    if lv >= 8 {
-        b.roll_cd += 0.25;
-    }
-    if lv >= 9 {
-        b.kill_heal = 0.05;
-    }
-    b.aura = lv >= 10;
     let t = tree();
     for &id in &p.tree {
         let Some(n) = t.get(id as usize) else { continue };
@@ -447,6 +457,7 @@ mod tests {
         let b1 = bonus(&p);
         assert_eq!(b1.fist_pct, 0.0);
         p.char_level[0] = 10;
+        p.char_cards[0] = crate::data::CHAR_MAX_CARDS;
         let b = bonus(&p);
         assert!((b.fist_pct - 0.25).abs() < 1e-5);
         assert!(b.aura && b.kill_heal > 0.0 && b.hp_flat >= 50.0 && b.iframe >= 1.0);

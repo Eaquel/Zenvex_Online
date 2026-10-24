@@ -27,6 +27,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -64,10 +65,13 @@ fun PassScreen(back: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     var now by remember { mutableLongStateOf(Pass.now()) }
     LaunchedEffect(Unit) { while (true) { now = Pass.now(); kotlinx.coroutines.delay(1000) } }
+    var shop by remember { mutableStateOf(false) }
     val p = remember(tick) { GameSession.ui("pass") }
     PassView(p, Pass.name, Pass.ends, now, back, changed = { tick++ },
-        buy = { elite, price -> Pass.buy(elite, price, p.optInt("gems")) { tick++ } },
+        buy = { shop = true },
         claim = { tier, premium, gem -> Pass.claim(tier, premium, gem) { tick++ } })
+    // V15: bilet gerçek parayla Mağaza'nın Sezon Bileti sekmesinden alınır
+    if (shop) com.zenvex.online.ui.ShopScreen({ shop = false; Pass.sync(); tick++ }, startTab = 5)
 }
 
 /** Süre yazısı: "12 Gün 4 Saat", "3 Saat 12 Dk", "8 Dk 20 Sn" */
@@ -88,7 +92,7 @@ private fun nextWeek(now: Long): Long {
 @Composable
 internal fun PassView(
     p: JSONObject, season: String, ends: Long, now: Long, back: () -> Unit, changed: () -> Unit,
-    buy: (Boolean, Int) -> Unit, claim: (Int, Boolean, Boolean) -> Unit, startTab: Int = 0,
+    buy: () -> Unit, claim: (Int, Boolean, Boolean) -> Unit, startTab: Int = 0,
 ) {
     var tab by remember { mutableIntStateOf(startTab) }
     val t = rememberTime()
@@ -119,7 +123,7 @@ internal fun PassView(
                     1 -> PT("Yenilenmeye: ${fmtLeft(nextDay(now) - now)}", 13.sp, Px.Sub)
                     2 -> PT("Yenilenmeye: ${fmtLeft(nextWeek(now) - now)}", 13.sp, Px.Sub)
                     3 -> PT("Sezon Sonuna Kadar", 13.sp, Px.Sub)
-                    else -> PT("1.000 Bilet XP = 1 Kademe", 12.sp, Px.Sub)
+                    else -> PT("Kademe 1-10: 1.000 · 11-20: 2.000 · 21-30: 5.000 XP", 12.sp, Px.Sub)
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -147,7 +151,7 @@ private fun countClaimable(p: JSONObject): Int {
 }
 
 @Composable
-private fun PassHeader(p: JSONObject, season: String, ends: Long, now: Long, back: () -> Unit, buy: (Boolean, Int) -> Unit) {
+private fun PassHeader(p: JSONObject, season: String, ends: Long, now: Long, back: () -> Unit, buy: () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         CloseButton(40.dp) { back() }
         Spacer(Modifier.width(10.dp))
@@ -170,10 +174,11 @@ private fun PassHeader(p: JSONObject, season: String, ends: Long, now: Long, bac
             Icon("gem", 20.dp, GEM); Spacer(Modifier.width(4.dp)); PT(fmt(p.optInt("gems")), 17.sp, GEM)
         }
         val normal = p.optBoolean("normal"); val elite = p.optBoolean("elite")
-        val pn = p.optInt("price_normal", 600); val pe = p.optInt("price_elite", 1500)
-        TicketCard("Premium Bilet", "Tüm Premium Ödüller", if (normal) 0 else pn, normal, false) { buy(false, pn) }
+        // V15: biletler gerçek parayla Mağaza'dan (Google Play); fiyat Play'in yerel fiyatı
+        TicketCard("VIP Bilet", "Tüm Premium Ödüller", com.zenvex.online.game.Store.price("pass_vip", 99.99), normal || elite, false) { buy() }
         Spacer(Modifier.width(8.dp))
-        TicketCard("Elit Bilet", "Premium + 10 Kademe", if (elite) 0 else if (normal) pe - pn else pe, elite, true) { buy(true, if (normal) pe - pn else pe) }
+        TicketCard("Premium Bilet", "Premium + S1 Çerçeve + Unvan + 10.000 XP", com.zenvex.online.game.Store.price(if (normal) "pass_upgrade" else "pass_premium", if (normal) 99.99 else 199.99),
+            elite, true) { buy() }
     }
 }
 
@@ -241,11 +246,11 @@ private fun XpBar(k: Float, label: String, modifier: Modifier) {
 }
 
 /**
- * Bilet kartı (sıradan buton değil): altın/mavi kabartmalı plaka, kayan parlama, taç simgesi, elmas fiyatı.
+ * Bilet kartı (sıradan buton değil): altın/mavi kabartmalı plaka, kayan parlama, taç simgesi, Google Play fiyatı.
  * Sahipse yeşil "Açık" mührü.
  */
 @Composable
-private fun TicketCard(title: String, sub: String, price: Int, owned: Boolean, elite: Boolean, onClick: () -> Unit) {
+private fun TicketCard(title: String, sub: String, price: String, owned: Boolean, elite: Boolean, onClick: () -> Unit) {
     val t = rememberTime()
     val main = if (elite) PGOLD else PBLUE
     val dark = if (elite) Color(0xFF5A3A06) else Color(0xFF14305A)
@@ -275,11 +280,7 @@ private fun TicketCard(title: String, sub: String, price: Int, owned: Boolean, e
             }
             PT(sub, 10.sp, if (elite) Color(0xFF4A3008) else Color(0xFFD8E8FF))
             if (owned) PT("✔ Açık", 13.sp, Color(0xFF8CFF7A))
-            else Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon("gem", 15.dp, if (elite) Color(0xFF1A3A5A) else GEM)
-                Spacer(Modifier.width(4.dp))
-                PT(fmt(price), 14.sp, if (elite) Color(0xFF1A2A3A) else Color.White)
-            }
+            else PT(price, 14.sp, if (elite) Color(0xFF1A2A3A) else Color.White)
         }
     }
 }

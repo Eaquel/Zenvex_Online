@@ -583,7 +583,7 @@ impl Game {
             }
             // mevziye yürü (helikopterden inenler) ya da mevzide hafif yer değiştir
             let b = &base_defs()[s.base as usize];
-            let (mut hx, mut hy) = ((b.tx + POSTS[s.post as usize].0) * TILE, (b.ty + POSTS[s.post as usize].1) * TILE);
+            let (mut hx, hy) = ((b.tx + POSTS[s.post as usize].0) * TILE, (b.ty + POSTS[s.post as usize].1) * TILE);
             if s.kind != K_SNIPER && tp.is_some() {
                 hx += (s.anim_t * 0.7 + s.post as f32).sin() * 26.0;
             }
