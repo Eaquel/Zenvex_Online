@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        com.zenvex.online.game.Store.attach(this)
         com.zenvex.online.game.Notifier.foreground = true
         Audio.resumeMusic()
     }

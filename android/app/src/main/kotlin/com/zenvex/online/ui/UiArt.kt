@@ -50,6 +50,8 @@ object UiArt {
         return b
     }
 
+    fun has(ctx: Context, name: String): Boolean = bitmap(ctx, name) != null
+
     fun image(ctx: Context, name: String): ImageBitmap? {
         imgs[name]?.let { return it }
         val i = bitmap(ctx, name)?.asImageBitmap() ?: return null

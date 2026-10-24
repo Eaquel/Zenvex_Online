@@ -40,6 +40,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.mutableLongStateOf
+import kotlin.math.sin
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -58,7 +60,7 @@ private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay
 
 internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
-    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench,
+    Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench, Shop,
 }
 
 /**
@@ -247,6 +249,7 @@ fun GameScreen(toLobby: () -> Unit) {
                 profile = { overlay = Overlay.PlayerProfile })
             Overlay.PlayerProfile -> PlayerProfileDialog(picked.second, close)
             Overlay.Cheat -> DevMenu(close)
+            Overlay.Shop -> ShopScreen(close)
             Overlay.Dead -> DeadDialog({ overlay = Overlay.None }, toLobby)
             Overlay.None -> {}
         }
@@ -302,11 +305,15 @@ private fun ConnectionLost() {
 internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     var inv by remember { mutableStateOf(JSONObject()) }
     var points by remember { mutableIntStateOf(0) }
+    var gold by remember { mutableLongStateOf(0L) }
+    var gems by remember { mutableLongStateOf(0L) }
     var story by remember { mutableStateOf(JSONArray()) }
     LaunchedEffect(Unit) {
         while (true) {
             inv = GameSession.ui("inventory")
-            points = GameSession.ui("profile").optInt("points")
+            val prof = GameSession.ui("profile")
+            points = prof.optInt("points")
+            gold = prof.optLong("gold"); gems = prof.optLong("gems")
             story = GameSession.ui("quests").optJSONArray("story") ?: JSONArray()
             delay(400)
         }
@@ -325,10 +332,18 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     // etkinlik afişi: üst orta, bölge adı ve PvP uyarısının altında
     EventBanner(Modifier.align(Alignment.TopCenter).padding(top = 54.dp)) { open(Overlay.Event) }
     // (görev takipçisi kaldırıldı: görevler Görevler tuşunda; ekranda yalnız haritadaki hedef işareti kalır)
-    // sağ üst (radarın solunda): posta + menü (oyuncular, klan, sıralama menünün içinde)
-    Row(Modifier.align(Alignment.TopEnd).padding(end = 146.dp, top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
-        PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
+    // sağ üst (radarın solunda): mağaza + posta + menü, altında altın ve elmas (+ → mağaza)
+    Column(Modifier.align(Alignment.TopEnd).padding(end = 150.dp, top = 12.dp), horizontalAlignment = Alignment.End) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ShopButton { open(Overlay.Shop) }
+            PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
+            PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            CurrencyChip("coin", gold, Px.Clan) { open(Overlay.Shop) }
+            CurrencyChip("gem", gems, Color(0xFF7FE0FF)) { open(Overlay.Shop) }
+        }
     }
     // alt orta: hızlı eşyalar + çanta + sohbet çubuğu
     Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -367,6 +382,35 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             PT("Mesaj", 15.sp, Px.Sub, Modifier.weight(1f).padding(start = 14.dp))
             ArtImage("btn_chat", Modifier.padding(end = 4.dp).size(34.dp))
         }
+    }
+}
+
+/** Para gösterimi: 100.000'e kadar tam ("12.345"), sonra kısaltılmış ("123,4 B", "12,50 M", "1,25 Mr") */
+fun fmtMoney(n: Long): String = when {
+    n < 100_000 -> fmtL(n)
+    n < 1_000_000 -> "%.1f B".format(n / 1_000.0)
+    n < 1_000_000_000 -> "%.2f M".format(n / 1_000_000.0)
+    else -> "%.2f Mr".format(n / 1_000_000_000.0)
+}.replace('.', ',').let { if (n < 100_000) fmtL(n) else it }
+
+/** Altın / elmas kapsülü: sabit genişlik (6-7 haneli para haritaya taşmaz), sağda "+" (mağaza) */
+@Composable
+private fun CurrencyChip(icon: String, value: Long, color: Color, plus: () -> Unit) {
+    Row(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).background(Color(0xD0141310)).border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(15.dp))
+        .clickable { plus() }.padding(start = 4.dp, end = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, 22.dp, color)
+        PT(fmtMoney(value), 14.sp, color, Modifier.width(76.dp).padding(start = 4.dp), maxLines = 1)
+        Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(Px.Green), contentAlignment = Alignment.Center) { PT("+", 16.sp, Color.White) }
+    }
+}
+
+/** Mağaza tuşu: kapağı aralık sandık, nabız gibi altın parıltı */
+@Composable
+private fun ShopButton(onClick: () -> Unit) {
+    val t = rememberTime()
+    Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xCC3A2A12)).border(1.5.dp, Px.Clan.copy(alpha = 0.55f + 0.45f * sin(t * 3f)), RoundedCornerShape(6.dp))
+        .clickable { onClick() }, contentAlignment = Alignment.Center) {
+        if (UiArt.has(LocalContext.current, "btn_shop")) ArtImage("btn_shop", Modifier.size(38.dp)) else Icon("crate", 30.dp, Px.Clan)
     }
 }
 

@@ -53,6 +53,11 @@ class UiShotsTest {
         }
     }
 
+    @Test fun shopFeatured() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 0, {}) {} } }
+    @Test fun shopGems() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 1, {}) {} } }
+    @Test fun shopCards() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 3, {}) {} } }
+    @Test fun shopVip() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 4, {}) {} } }
+
     @Test
     fun skillTree() {
         val data = sample("tree")

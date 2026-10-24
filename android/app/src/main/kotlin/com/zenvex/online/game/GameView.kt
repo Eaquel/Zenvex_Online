@@ -288,23 +288,25 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         left.homeX = m + 24 * density; left.homeY = h - m * 0.92f
         right.homeX = w - m - 24 * density; right.homeY = h - m * 0.92f
         for (st in listOf(left, right)) if (!st.active) { st.cx = st.homeX; st.cy = st.homeY; st.x = st.cx; st.y = st.cy }
-        // saldırı joystiğinin çevresinde yay şeklinde tuşlar
+        // saldırı joystiğinin çevresinde tek yay: hepsi aynı uzaklıkta, komşular arasında boşluk kalacak açılarla
+        // (en sık kullanılan takla en büyük, saldırı tuşunun hemen üstünde)
         val ax = right.homeX; val ay = right.homeY
-        val br = 30 * density
-        fun place(b: Btn, angDeg: Float, dist: Float, r: Float = br) {
+        val d = density
+        val ring = stickR + 58 * d
+        fun place(b: Btn, angDeg: Float, r: Float) {
             val a = Math.toRadians(angDeg.toDouble())
             val sx = if (s.leftHanded) -1 else 1
-            val cx = ax - sx * cos(a).toFloat() * dist
-            val cy = ay - sin(a).toFloat() * dist
+            val cx = ax - sx * cos(a).toFloat() * ring
+            val cy = ay - sin(a).toFloat() * ring
             b.r.set(cx - r, cy - r, cx + r, cy + r)
         }
-        place(btnAbility, 100f, stickR * 2.25f, br * 1.2f)
-        place(btnWeapon, 140f, stickR * 2.15f)
-        place(btnReload, 172f, stickR * 2.1f, br * 0.8f)
-        place(btnVehicle, 62f, stickR * 2.3f)
-        place(btnInteract, 30f, stickR * 2.45f)
-        place(btnTrade, 4f, stickR * 2.6f, br * 0.85f)
-        place(btnRide, -20f, stickR * 2.6f, br * 0.85f)
+        place(btnAbility, 100f, 32 * d)
+        place(btnWeapon, 140f, 28 * d)
+        place(btnReload, 175f, 24 * d)
+        place(btnVehicle, 62f, 28 * d)
+        place(btnInteract, 28f, 28 * d)
+        place(btnTrade, -2f, 24 * d)
+        place(btnRide, -30f, 24 * d)
     }
 
     private fun loop() {
@@ -2667,18 +2669,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             hudBar(c, sw / 2f - w / 2, 70 * d, w, 12 * d, hud[Native.BOSS_HP] / hud[Native.BOSS_MAX], 0xFFD02A20.toInt(),
                 "${hud[Native.BOSS_HP].roundToInt()}", 0f)
         }
-        // ---- sağ üst: altın + radar
-        val gold = hud[Native.GOLD].toInt()
+        // ---- sağ üst: radar (altın ve elmas Compose şeridinde: GameScreen.CurrencyBar)
         val rr = 64 * d
         val rcx = sw - 16 * d - rr; val rcy = 16 * d + rr
         drawRadar(c, rcx, rcy, rr)
-        // altın: posta/menü tuşlarının altında, radarın solunda (takla tuşu yayıyla çakışmaz)
-        val gs = "%,d".format(gold).replace(',', '.')
-        val gw = text.apply { typeface = fontBold; textSize = 15 * d }.measureText(gs)
-        val gx = sw - 150 * d - gw
-        fill.color = 0x9015140F.toInt(); tutOval.set(gx - 26 * d, 64 * d, sw - 142 * d, 88 * d); c.drawRoundRect(tutOval, 4 * d, 4 * d, fill)
-        drawCoin(c, gx - 13 * d, 76 * d, 8 * d)
-        drawText(c, gs, gx, 81 * d, 15 * d, 0xFFFFD34A.toInt())
         // ---- araç durumu
         if (hud[Native.IN_VEHICLE] > 0) {
             hudBar(c, 16 * d, py0 + 76 * d, 150 * d, 8 * d, hud[Native.VEHICLE_HP], 0xFF60D0FF.toInt(), null, 0f)
@@ -2723,17 +2717,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             fill.color = 0x9070C8FF.toInt(); c.drawRoundRect(rect, h / 2, h / 2, fill)
         }
         if (label != null) drawText(c, label, x + w / 2, y + h * 0.8f, h * 0.85f, Color.WHITE, true)
-    }
-
-    private fun drawCoin(c: Canvas, x: Float, y: Float, r: Float) {
-        // V11 piksel sikke
-        com.zenvex.online.ui.UiArt.bitmap(context, "ic_coin")?.let { b ->
-            artPaint.alpha = 255; artPaint.colorFilter = null
-            artRect.set(x - r * 1.2f, y - r * 1.2f, x + r * 1.2f, y + r * 1.2f); c.drawBitmap(b, null, artRect, artPaint); return
-        }
-        fill.shader = RadialGradient(x - r * 0.3f, y - r * 0.3f, r * 1.3f, 0xFFFFF0A0.toInt(), 0xFFC88A10.toInt(), Shader.TileMode.CLAMP)
-        c.drawCircle(x, y, r, fill); fill.shader = null
-        stroke.color = 0xFF8A5A08.toInt(); stroke.strokeWidth = r * 0.18f; c.drawCircle(x, y, r * 0.7f, stroke)
     }
 
     /** Mini harita: dünya görüntüsünden (binalar, ağaçlar) oyuncu çevresi + canlı noktalar. Dokununca tam harita. */
