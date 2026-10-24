@@ -66,6 +66,9 @@ private val AREA_FADE = floatArrayOf(0f, 0.7f, 1.4f, 2.2f, 3.2f, 4.5f, 6f)
  * Joystickler ve hızlı tuşlar (yetenek, silah, araç, etkileşim) çoklu dokunuş için tuvalde çizilir.
  */
 @SuppressLint("ViewConstructor")
+/** Bu kadar seviye altındaki yaratıktan XP gelmez (Rust: progress::XP_LEVEL_GAP ile aynı) */
+const val XP_LEVEL_GAP = 10
+
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
@@ -759,8 +762,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun wx(x: Float) = (x - camX) * scale + sw / 2f
     private fun wy(y: Float) = (y - camY) * scale + sh / 2f
 
+    /**
+     * Baş üstü yazısı. [lvl] > 0: yaratık plakası (adı üstte; altında can çubuğu, çubuğun solunda seviye rozeti, içinde
+     * "can / en çok"). [self]: kendi karakterin (asla gizlenmez). [hpCur] < 0: can sayısı yok.
+     */
     private class Plate(val x: Float, val y: Float, val text: String, val color: Int, val hp: Float, val boss: Boolean, val sub: String?, val subColor: Int = 0xFFDDDDDD.toInt(),
-                        val title: String? = null, val titleRank: Int = 0, val hpText: String? = null, val small: Boolean = false)
+                        val title: String? = null, val titleRank: Int = 0, val hpText: String? = null, val small: Boolean = false,
+                        val lvl: Int = 0, val hpCur: Int = -1, val hpMax: Int = 0, val self: Boolean = false)
     private val plates = ArrayList<Plate>()
 
     private fun render(c: Canvas, dt: Float) {
@@ -1140,7 +1148,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (localName.isNotEmpty()) {
                     val t = Account.profile.value.optJSONObject("title")
                     plates += Plate(sx, top - 4 * density, localName, 0xFFFFFFFF.toInt(), -1f, false, localClan.ifEmpty { null }, CLAN_COLOR,
-                        t?.optString("name")?.ifEmpty { null }, t?.optInt("rank") ?: 0)
+                        t?.optString("name")?.ifEmpty { null }, t?.optInt("rank") ?: 0, self = true)
                 }
                 if (hud[Native.SHIELD] > 0) drawFxSprite(c, "shield", x, y - 62, 175f, time)
                 if (Settings.current.particles && hud[Native.POISON] > 0 && Math.random() < 0.2)
@@ -1163,7 +1171,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     // V11 komutan (tür 8): kendi görseli gelene dek asker görseliyle ("npc/commander" atlasa girince o kullanılır)
     private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard", "commander")
     private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
-        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber Nova" to "Rehber", "Büyücü Aldric" to "Işınlanma",
+        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Büyücü Aldric" to "Işınlanma",
         "Komutan Diana" to "Komutan")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
     private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
@@ -1689,7 +1697,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val alpha = drawBuf[o + 10]
         val special = drawBuf[o + 11].toInt()
         val enraged = special and 1 == 1
-        val showBar = special and 2 == 2
         val maxHp = special shr 2
         val sx = wx(x); val sy = wy(y)
         if (sx < -400 || sx > sw + 400 || sy < -200 || sy > sh + 700) return
@@ -1732,18 +1739,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val boss = kind == 7
             // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
             val elite = kind == 5 || kind == 6
-            // seviye ve canı her zaman yan yana ("Sv 4 · 63/104"); seçkin ve boss'ta adıyla; vurulunca can çubuğu da
+            // yaratık plakası: adı üstte, can çubuğu altta; seviye rozeti ve "can / en çok" çubuğun içinde
             val cur = if (hp >= 0f && maxHp > 0) (hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0) else -1
-            val hpPart = if (cur >= 0) " · $cur/$maxHp" else ""
             val label = when {
-                sid != null && species > 0 -> "Sv $lvl " + speciesName.getOrElse(species - 1) { "" } + hpPart
-                boss || elite -> "Sv $lvl " + zombieName.getOrElse(kind) { "" } + hpPart
-                else -> "Sv $lvl$hpPart"
+                sid != null && species > 0 -> speciesName.getOrElse(species - 1) { "" }
+                else -> zombieName.getOrElse(kind) { "" }
             }
-            val hpText: String? = null
-            // başın hemen üstü: görselin çapası dünya ölçeğiyle (k) çarpılır; eskiden k unutulduğu için çubuk çok yukarıda kalıyordu
-            plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, if (showBar) hp else -1f, boss, null,
-                hpText = hpText, small = !boss && !elite)
+            plates += Plate(sx, sy - sp.ay * sp.k * scale + 4 * density, label, zombieColor.getOrElse(kind) { -1 }, if (hp >= 0f) hp else 1f, boss, null,
+                small = !boss && !elite, lvl = lvl.coerceAtLeast(1), hpCur = cur, hpMax = maxHp)
         }
         if (kind == 3 && Settings.current.particles && Math.random() < 0.12)
             particles += Particle(x + (Math.random().toFloat() - 0.5f) * 30, y, 50f, 0f, 0f, 30f, 1.0f, 1.0f, 0xFF9AFF40.toInt(), 5f, 3)
@@ -2356,59 +2359,132 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val plateRects = ArrayList<RectF>()
 
     /** Yazılan sohbet mesajını konuşanın kafasının üstünde 5 sn gösterir. */
-    fun bubble(name: String, text: String) { bubbles[name] = text.take(60) to time + 5f }
+    fun bubble(name: String, text: String) { bubbles[name] = text.take(140) to time + (4f + text.length * 0.05f).coerceAtMost(9f) }
 
     private fun drawPlates(c: Canvas) {
         plateRects.clear()
         val d = density
-        // kameraya yakın olanlar önce: kalabalıkta en fazla 10 isim, üst üste binen isimler yukarı kaydırılır
+        // kameraya yakın olanlar önce; kendi karakterin her zaman ilk. İsimler asla yerinden kaydırılmaz: başkasınınkiyle
+        // çakışan isim (kalabalıkta) saydamlaşır, kendi ismin ve boss'unki hep tam görünür.
         val cx = sw / 2f; val cy = sh / 2f
-        plates.sortBy { hypot(it.x - cx, it.y - cy) }
+        plates.sortWith(compareBy({ if (it.self) 0 else 1 }, { hypot(it.x - cx, it.y - cy) }))
+        val myLevel = GameSession.hud()[Native.LEVEL].toInt()
         var named = 0
         for (p in plates) {
+            if (p.lvl > 0) { drawCreaturePlate(c, p, myLevel); continue }
             val ts = if (p.boss) 15 * d else if (p.small) 9.5f * d else 11.5f * d
-            val tall = p.hpText != null
-            var y = p.y - (if (p.hp >= 0) (if (tall) 13 * d else 10 * d) else 2 * d)
-            if (p.hp >= 0) {
-                val bw = if (p.boss) 120 * d else 52 * d
-                if (tall) {
-                    // can sayılı çubuk: biraz daha kalın, sayı ortada
-                    val h = 9 * d
-                    rect.set(p.x - bw / 2 - 1.5f * d, p.y - 3 * d - h / 2 - 1.5f * d, p.x + bw / 2 + 1.5f * d, p.y - 3 * d + h / 2 + 1.5f * d)
-                    fill.color = 0xD0101418.toInt(); c.drawRoundRect(rect, 3 * d, 3 * d, fill)
-                    val col = if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt()
-                    rect.set(p.x - bw / 2, p.y - 3 * d - h / 2, p.x - bw / 2 + bw * p.hp.coerceIn(0f, 1f), p.y - 3 * d + h / 2)
-                    fill.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, lighten(col, 1.35f), col, Shader.TileMode.CLAMP)
-                    c.drawRoundRect(rect, 2 * d, 2 * d, fill); fill.shader = null
-                    drawText(c, p.hpText!!, p.x, p.y - 3 * d + 3 * d, 8 * d, 0xFFFFFFFF.toInt(), center = true)
-                } else bar(c, p.x, p.y - 3 * d, bw, p.hp, if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
-            }
+            val y = p.y - (if (p.hp >= 0) 10 * d else 2 * d)
+            if (p.hp >= 0) bar(c, p.x, p.y - 3 * d, if (p.boss) 120 * d else 52 * d, p.hp, if (p.boss) 0xFFFF4A3A.toInt() else 0xFFE04848.toInt())
             if (p.text.isEmpty()) continue
-            if (named >= 10 && !p.boss) continue
+            if (named >= 12 && !p.boss && !p.self) continue
             val w = text.apply { typeface = fontBold; textSize = ts }.measureText(p.text) / 2 + 3 * d
             val lines = 1 + (if (p.sub != null) 1 else 0) + (if (p.title != null) 1 else 0)
             val r = RectF(p.x - w, y - ts * lines - 2 * d, p.x + w, y + 3 * d)
-            var tries = 0
-            while (plateRects.any { RectF.intersects(it, r) } && tries < 4) { r.offset(0f, -(ts + 2 * d)); y -= ts + 2 * d; tries++ }
-            if (tries >= 4 && !p.boss) continue
+            val crowded = !p.self && !p.boss && plateRects.any { RectF.intersects(it, r) }
             plateRects += r
             named++
+            if (crowded) c.saveLayerAlpha(r.left - 40 * d, r.top - 30 * d, r.right + 40 * d, r.bottom + 4 * d, 80)
             drawText(c, p.text, p.x, y, ts, p.color, center = true)
             var top = y - ts
             if (p.sub != null) { drawText(c, p.sub, p.x, y - ts * 1.1f, ts * 0.85f, p.subColor, center = true); top -= ts }
             if (p.title != null && !Settings.current.hideTitles) { drawTitle(c, p.title, p.titleRank, p.x, top - 3 * d, ts * 0.85f); top -= ts * 1.25f }
-            // konuşma balonu (oyuncular)
+            if (crowded) c.restore()
+            // konuşma balonu (oyuncular): koyu yarı saydam balon, konturuz beyaz yazı, en çok 3 satır
             bubbles[p.text]?.let { (msg, until) ->
                 if (until < time) { bubbles.remove(p.text); return@let }
-                val bs = 12.5f * d
-                val bw = text.apply { typeface = fontBold; textSize = bs }.measureText(msg) / 2 + 8 * d
-                val bb = RectF(p.x - bw, top - bs - 14 * d, p.x + bw, top - 4 * d)
-                fill.color = 0xF0F4F0E6.toInt(); c.drawRoundRect(bb, 6 * d, 6 * d, fill)
-                path.reset(); path.moveTo(p.x - 5 * d, bb.bottom); path.lineTo(p.x + 5 * d, bb.bottom); path.lineTo(p.x, bb.bottom + 6 * d); path.close()
-                c.drawPath(path, fill)
-                drawText(c, msg, p.x, bb.bottom - 5 * d, bs, 0xFF1A1A1A.toInt(), center = true)
+                drawBubble(c, msg, p.x, top - 4 * d, until - time)
             }
         }
+    }
+
+    private val bubbleText = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFFFFFFF.toInt() }
+
+    /** Sohbet balonu: [bottom] kuyruğun ucu. Yazı konturuz, satırlara bölünür; son yarım saniyede söner. */
+    private fun drawBubble(c: Canvas, msg: String, x: Float, bottom: Float, left: Float) {
+        val d = density
+        val ts = 13f * d
+        bubbleText.typeface = fontBold; bubbleText.textSize = ts
+        val maxW = 210f * d
+        val lines = ArrayList<String>()
+        var line = StringBuilder()
+        for (word in msg.split(' ')) {
+            val tryLine = if (line.isEmpty()) word else "$line $word"
+            if (bubbleText.measureText(tryLine) <= maxW || line.isEmpty()) { line.clear(); line.append(tryLine) }
+            else { lines += line.toString(); line = StringBuilder(word) }
+            if (lines.size == 3) break
+        }
+        if (lines.size < 3 && line.isNotEmpty()) lines += line.toString()
+        if (lines.size == 3 && lines.joinToString(" ").length < msg.length) lines[2] = lines[2].trimEnd().take(28) + "…"
+        val w = lines.maxOf { bubbleText.measureText(it) } / 2 + 9 * d
+        val lh = ts * 1.22f
+        val h = lh * lines.size + 9 * d
+        val a = (left / 0.5f).coerceIn(0f, 1f)
+        val bb = RectF(x - w, bottom - 7 * d - h, x + w, bottom - 7 * d)
+        fill.color = Color.argb((235 * a).toInt(), 18, 20, 26); c.drawRoundRect(bb, 7 * d, 7 * d, fill)
+        path.reset(); path.moveTo(x - 6 * d, bb.bottom - 1); path.lineTo(x + 6 * d, bb.bottom - 1); path.lineTo(x, bottom); path.close()
+        c.drawPath(path, fill)
+        stroke.color = Color.argb((150 * a).toInt(), 255, 255, 255); stroke.strokeWidth = 1.2f * d
+        c.drawRoundRect(bb, 7 * d, 7 * d, stroke)
+        bubbleText.alpha = (255 * a).toInt(); bubbleText.textAlign = Paint.Align.CENTER
+        lines.forEachIndexed { i, l -> c.drawText(l, x, bb.top + 4.5f * d + lh * (i + 1) - lh * 0.22f, bubbleText) }
+    }
+
+    /**
+     * Yaratık plakası: üstte adı (türün rengi), altında can çubuğu. Çubuğun solunda kalkan biçimli seviye rozeti: rengi
+     * seviye farkını söyler (gri: XP vermez, yeşil: kolay, sarı: denk, turuncu: zor, kırmızı: çok zor). Can çubuğun içinde.
+     */
+    private fun drawCreaturePlate(c: Canvas, p: Plate, myLevel: Int) {
+        val d = density
+        val bw = if (p.boss) 150 * d else if (p.small) 66 * d else 84 * d
+        val bh = if (p.boss) 13 * d else 10 * d
+        val by = p.y - 2 * d
+        val left = p.x - bw / 2
+        // kalabalıkta üst üste binen plaka yerinden oynamaz, saydamlaşır
+        val area = RectF(left - bh, by - bh * 2.2f, left + bw, by + bh)
+        val crowded = !p.boss && plateRects.any { RectF.intersects(it, area) }
+        plateRects += area
+        if (crowded) c.saveLayerAlpha(area.left - 4 * d, area.top - 14 * d, area.right + 4 * d, area.bottom + 6 * d, 70)
+        drawCreaturePlateBody(c, p, myLevel, bw, bh, by, left)
+        if (crowded) c.restore()
+    }
+
+    private fun drawCreaturePlateBody(c: Canvas, p: Plate, myLevel: Int, bw: Float, bh: Float, by: Float, left: Float) {
+        val d = density
+        // çubuk
+        rect.set(left - 1.5f * d, by - bh / 2 - 1.5f * d, left + bw + 1.5f * d, by + bh / 2 + 1.5f * d)
+        fill.color = 0xE0101216.toInt(); c.drawRoundRect(rect, 3 * d, 3 * d, fill)
+        val col = if (p.boss) 0xFFFF4A3A.toInt() else 0xFFD8403C.toInt()
+        rect.set(left, by - bh / 2, left + bw * p.hp.coerceIn(0f, 1f), by + bh / 2)
+        if (rect.width() > 0) {
+            fill.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, lighten(col, 1.4f), col, Shader.TileMode.CLAMP)
+            c.drawRoundRect(rect, 2 * d, 2 * d, fill); fill.shader = null
+        }
+        if (p.hpCur >= 0) drawText(c, "${fmtShort(p.hpCur)} / ${fmtShort(p.hpMax)}", p.x + 7 * d, by + bh * 0.36f, bh * 0.92f, 0xFFFFFFFF.toInt(), center = true)
+        // seviye rozeti (kalkan)
+        val diff = p.lvl - myLevel
+        val lc = when {
+            myLevel - p.lvl > XP_LEVEL_GAP -> 0xFF8A8F96.toInt()
+            diff <= -3 -> 0xFF5CC85A.toInt()
+            diff <= 2 -> 0xFFF2C94A.toInt()
+            diff <= 5 -> 0xFFF08A3A.toInt()
+            else -> 0xFFE8433A.toInt()
+        }
+        val r = bh * 0.72f + 1 * d
+        val bx = left - 1 * d
+        path.reset()
+        path.moveTo(bx - r, by - r); path.lineTo(bx + r, by - r); path.lineTo(bx + r, by + r * 0.25f)
+        path.quadTo(bx + r, by + r * 0.8f, bx, by + r * 1.25f); path.quadTo(bx - r, by + r * 0.8f, bx - r, by + r * 0.25f); path.close()
+        fill.color = 0xF0161A20.toInt(); c.drawPath(path, fill)
+        stroke.color = lc; stroke.strokeWidth = 1.8f * d; c.drawPath(path, stroke)
+        drawText(c, p.lvl.toString(), bx, by + r * 0.38f, if (p.lvl >= 100) r * 0.95f else r * 1.15f, lc, center = true)
+        // ad
+        if (p.text.isNotEmpty()) drawText(c, p.text, p.x, by - bh / 2 - 4 * d, if (p.boss) 14 * d else 10.5f * d, p.color, center = true)
+    }
+
+    private fun fmtShort(n: Int): String = when {
+        n >= 1_000_000 -> "%.1fM".format(n / 1_000_000f).replace(".0M", "M")
+        n >= 10_000 -> "${n / 1000}B"
+        else -> n.toString()
     }
 
     private val glintPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP) }
@@ -2432,13 +2508,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         text.typeface = fontBold; text.textSize = ts
         val tw = text.measureText(t)
         val left = x - tw / 2; val top = y - ts
-        // etkinlik unvanı: kanatlı kızıl kurdele (ortası yazıya ayrılmış, kenarlar %18'er)
-        com.zenvex.online.ui.UiArt.bitmap(context, "title_ribbon_event")?.let { b ->
-            val rw = tw / 0.64f + 16 * d; val rh = rw * b.height / b.width
-            val cy = y - ts * 0.36f
-            tutOval.set(x - rw / 2, cy - rh / 2, x + rw / 2, cy + rh / 2)
-            pixelPaint.alpha = 225; c.drawBitmap(b, null, tutOval, pixelPaint); pixelPaint.alpha = 255
-        }
+        // ince plaka: koyu zemin, sıra renginde ince kenar ve üst ışık çizgisi (kanatlı kurdele kaldırıldı; sıralama
+        // plakası görselleri gelince onlar çizilecek, istem: docs/22 Bölüm 6)
+        val pw = tw / 2 + 10 * d; val pcy = y - ts * 0.36f; val ph = ts * 0.78f
+        tutOval.set(x - pw, pcy - ph, x + pw, pcy + ph * 0.92f)
+        fill.color = 0xC8100E0C.toInt(); c.drawRoundRect(tutOval, 3 * d, 3 * d, fill)
+        stroke.color = alphaC(mid, 0.85f); stroke.strokeWidth = 1.1f * d; c.drawRoundRect(tutOval, 3 * d, 3 * d, stroke)
+        stroke.color = alphaC(hi, 0.35f); stroke.strokeWidth = 0.8f * d
+        c.drawLine(tutOval.left + 4 * d, tutOval.top + 1.6f * d, tutOval.right - 4 * d, tutOval.top + 1.6f * d, stroke)
         // koyu kontur
         textStroke.typeface = fontBold; textStroke.textSize = ts; textStroke.strokeWidth = ts * 0.2f
         textStroke.textAlign = Paint.Align.CENTER; textStroke.alpha = 230
@@ -2460,18 +2537,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             for (i in -1..1) c.drawRect(cx + i * 4 * k - k, cy - 3 * k, cx + i * 4 * k + k, cy, fill)
             fill.color = 0xFFE03A3A.toInt(); c.drawRect(cx - k, cy + k, cx + k, cy + 2 * k, fill)
         }
-        // göz kırpan piksel yıldızlar (ilk 3; 1.'de daha çok)
-        val n = 4 - rank + 2
+        // plakanın kenarlarında doğup sönen dört köşeli yıldız parıltıları (ilk 3; 1.'de daha çok)
+        val n = 6 - rank * 1
         for (i in 0 until n) {
-            val ph = time * (1.3f + i * 0.21f) + i * 1.7f + rank
-            val a = (sin(ph) * 0.5f + 0.5f)
-            if (a < 0.35f) continue
-            val px = left + ((i * 0.37f + 0.11f) % 1f) * tw + sin(ph * 0.5f) * 4 * d
-            val py = top + (if (i % 2 == 0) -3 * d else ts * 0.95f) + sin(ph * 0.7f) * 2 * d
-            val r = (1.2f + 1.2f * a) * d
-            fill.color = alphaC(hi, a)
-            c.drawRect(px - r * 0.35f, py - r, px + r * 0.35f, py + r, fill)
-            c.drawRect(px - r, py - r * 0.35f, px + r, py + r * 0.35f, fill)
+            val life = (time * (0.55f + i * 0.07f) + i * 0.618f) % 1f
+            val a = sin(life * PI.toFloat())
+            if (a < 0.08f) continue
+            val side = ((i * 0.37f + 0.11f + (time * 0.05f).toInt() * 0.29f) % 1f)
+            val px = tutOval.left + side * tutOval.width()
+            val py = if (i % 2 == 0) tutOval.top else tutOval.bottom
+            val r = (2.2f + 2.6f * a) * d * (if (rank == 1) 1.15f else 1f)
+            path.reset()
+            path.moveTo(px, py - r); path.quadTo(px, py, px + r, py); path.quadTo(px, py, px, py + r)
+            path.quadTo(px, py, px - r, py); path.quadTo(px, py, px, py - r); path.close()
+            fill.color = alphaC(hi, a); c.drawPath(path, fill)
+            fill.color = alphaC(0xFFFFFFFF.toInt(), a * 0.9f); c.drawCircle(px, py, r * 0.18f, fill)
         }
     }
 
@@ -2827,7 +2907,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
         stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, if (diana) "Komutan Diana" else "Rehber Nova", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
+        drawText(c, if (diana) "Komutan Diana" else "İlk Adımlar", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
         for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
     }
 

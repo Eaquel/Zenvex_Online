@@ -35,9 +35,7 @@ class UiArtShotsTest {
         paparazzi.snapshot {
             SceneBackground("bg_lobby", 0f, dim = 0.3f, zoom = 1.75f, ax = 0.97f, ay = 0.55f, drift = 0.03f) {
                 Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Emblem(64.dp)
-                    Spacer(Modifier.width(6.dp))
-                    PT("ZENVEX", 40.sp, Px.Orange, outline = true)
+                    GameLogo(62.dp)
                 }
                 Row(Modifier.align(Alignment.BottomStart).padding(20.dp)) {
                     for (b in listOf("btn_attack", "btn_roll", "btn_chat", "btn_drive", "btn_drive2", "btn_swap", "btn_hand"))

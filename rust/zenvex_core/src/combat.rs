@@ -732,8 +732,15 @@ impl Game {
             let id = if self.rng.chance(0.5) { "medkit" } else { "energy" };
             self.spawn_drop_id(id, 1, z.x, z.y);
         }
-        let xp = ((def.xp + z.level * 3) as f32 * crate::data::species(z.species).map_or(1.0, |s| s.xp)).round() as u32;
-        self.give_xp(z.x, z.y, xp);
+        let lf = crate::progress::xp_level_factor(self.progress.level, z.level, z.boss);
+        let xp = ((def.xp + z.level * 3) as f32 * crate::data::species(z.species).map_or(1.0, |s| s.xp) * lf).round() as u32;
+        if xp > 0 {
+            self.give_xp(z.x, z.y, xp);
+        } else if self.time - self.xp_warn_t > 60.0 {
+            self.xp_warn_t = self.time;
+            let min = self.progress.level.saturating_sub(crate::progress::XP_LEVEL_GAP).max(1);
+            self.msg(&format!("XP kazanmak için seviyene uygun zombi avla (Sv {min}+)."));
+        }
         self.progress.pass.xp += if z.boss { 500 } else { 5 + z.level / 3 };
         self.quests_done(done);
     }

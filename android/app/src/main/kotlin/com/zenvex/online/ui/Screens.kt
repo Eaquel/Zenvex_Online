@@ -84,8 +84,7 @@ fun SplashScreen(done: () -> Unit) {
     }
     SceneBackground("bg_lobby", t, dim = 0.35f) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            Emblem(150.dp)
-            PT("Zenvex Online", 48.sp, Px.Orange, outline = true)
+            GameLogo(96.dp)
             Spacer(Modifier.height(18.dp))
             PxBar(progress, Px.Green, Modifier.width(320.dp), 14.dp)
             Spacer(Modifier.height(8.dp))
@@ -152,7 +151,7 @@ fun LoadingScreen(back: () -> Unit = {}, done: () -> Unit) {
         done()
     }
     SceneBackground("bg_lobby", t, dim = 0.3f) {
-        Emblem(120.dp, Modifier.align(Alignment.TopCenter).padding(top = 24.dp))
+        GameLogo(80.dp, Modifier.align(Alignment.TopCenter).padding(top = 24.dp))
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             PT(GameSession.server.value.title, 26.sp, Px.Clan, outline = true)
             Spacer(Modifier.height(10.dp))
@@ -519,16 +518,18 @@ internal fun QuestsView(q: JSONObject, back: () -> Unit) {
 
 // =========================================================================== sohbet
 @Composable
-fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
+fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit, onPlayer: ((uid: String, name: String) -> Unit)? = null) {
     var tab by remember { mutableIntStateOf(0) }
     var msg by remember { mutableStateOf("") }
-    val channels = listOf("global", "local", "clan", "dm", "system")
+    // oyuncu menüsü yoksa (lobi) adına dokununca doğrudan profil açılır
+    var profileOf by remember { mutableStateOf<String?>(null) }
+    val channels = listOf("global", "clan", "dm", "system")
     val lines = Online.chat.filter { it.channel == channels[tab] }
     val state = rememberLazyListState()
     LaunchedEffect(lines.size) { if (lines.isNotEmpty()) state.animateScrollToItem(lines.size - 1) }
     Column(modifier.pxPanel(Color(0x9C141310)).padding(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            listOf("Genel", "Yakın", "Klan", "Özel", "Sistem").forEachIndexed { i, n ->
+            listOf("Genel", "Klan", "Özel", "Sistem").forEachIndexed { i, n ->
                 Box(Modifier.background(if (i == tab) Px.Panel else Px.PanelDark).clickable { tab = i }.padding(horizontal = 9.dp, vertical = 6.dp)) {
                     PT(n, 14.sp, if (i == tab) Px.Text else Px.Sub)
                 }
@@ -542,7 +543,10 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
         if (channels[tab] == "dm") { FriendsPanel(Modifier.weight(1f).fillMaxWidth()); return@Column }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state) {
             items(lines) { l ->
-                Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                val who = l.uid.takeIf { !l.mine && l.channel != "system" && it.isNotEmpty() }
+                Row(Modifier.padding(vertical = 2.dp).then(if (who != null) Modifier.clickable {
+                    if (onPlayer != null) onPlayer(who, l.name) else profileOf = l.name
+                } else Modifier), verticalAlignment = Alignment.CenterVertically) {
                     // gönderenin resmi ve çerçevesi (animasyonlu); sistem satırlarında yok
                     if (l.channel != "system" && l.avatar >= 0) { ProfileAvatar(l.avatar, l.frame, 30.dp); Spacer(Modifier.width(5.dp)) }
                     if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
@@ -552,13 +556,13 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
             }
         }
         val needClan = channels[tab] == "clan" && Account.clan.value == null
-        if (tab != 4 && (Online.chatLocked() || needClan)) {
+        if (tab != 3 && (Online.chatLocked() || needClan)) {
             Row(Modifier.fillMaxWidth().pxPanel(Px.PanelDark).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon("lock", 18.dp, Px.Sub)
                 Spacer(Modifier.width(8.dp))
                 PT(if (needClan) "Klan Sohbeti İçin Bir Klana Katıl" else "Sohbet ${Online.CHAT_LEVEL}. Seviyede Açılır", 14.sp, Px.Sub)
             }
-        } else if (tab != 4) Row(verticalAlignment = Alignment.CenterVertically) {
+        } else if (tab != 3) Row(verticalAlignment = Alignment.CenterVertically) {
             var wait by remember { mutableLongStateOf(0L) }
             LaunchedEffect(wait) { if (wait > 0) { delay(200); wait = Online.chatWait() } }
             fun go() {
@@ -566,12 +570,13 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit) {
                 if (err == null) msg = "" else Toaster.show(err, false)
                 wait = Online.chatWait()
             }
-            Field(msg, { if (it.length <= 140) msg = it }, when (tab) { 0 -> "Herkese Yaz…"; 1 -> "Yakındakilere Yaz…"; else -> "Klanına Yaz…" }, Modifier.weight(1f)) { go() }
+            Field(msg, { if (it.length <= 140) msg = it }, if (tab == 0) "Herkese Yaz…" else "Klanına Yaz…", Modifier.weight(1f)) { go() }
             Spacer(Modifier.width(8.dp))
             if (wait > 0) Box(Modifier.size(44.dp).pxPanel(Px.PanelDark), contentAlignment = Alignment.Center) { PT("${(wait + 999) / 1000}", 16.sp, Px.Sub) }
             else PxButton("", height = 44.dp, icon = "play", color = Px.Blue) { go() }
         }
     }
+    profileOf?.let { PlayerProfileDialog(it) { profileOf = null } }
 }
 
 // =========================================================================== takas

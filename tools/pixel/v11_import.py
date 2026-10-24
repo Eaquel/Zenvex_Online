@@ -8,7 +8,7 @@ indirilir, eski görselle aynı dünya boyuna ölçeklenir ve atlasa yamanır; a
   F eğitim üssü       → s/air_bomb, s/bomber_shadow, s/train_*; ui/tut_hand.png
   G dünya sınırı      → s/quarantine_*, s/border_*
   H arayüz            → ui/tab_*.png, ui/bg_garage.webp, ui/card_order.png, ui/commander_portrait.png, ui/event_frame*.png,
-                         ui/mail_badge.png, ui/ping_0..3.png, ui/title_ribbon_event.png
+                         ui/mail_badge.png, ui/ping_0..3.png
   I efektler          → fx/<ad>/<kare> (+ manifest fx tablosu)
 
 python3 tools/pixel/v11_import.py <paket dizini>
@@ -193,7 +193,6 @@ def main(src):
     ui(f"{H}/mail_badge.png", "mail_badge", 96)
     ui(f"{H}/commander_portrait.png", "commander_portrait", 192)
     ui(f"{H}/card_order.png", "card_order", 600)
-    ui(f"{H}/title_ribbon_event.png", "title_ribbon_event", 520)
     ui(f"{F}/tut_hand.png", "tut_hand", 96)
     # etkinlik çerçevesi: ortası da yeşil → saydam
     ui(f"{H}/event_frame.png", "event_frame", 1032)

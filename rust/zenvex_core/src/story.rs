@@ -26,7 +26,7 @@ pub fn npc_name(kind: u8) -> (&'static str, &'static str) {
         N_DOCTOR => ("Doktor Elena", "Doktor"),
         N_MECHANIC => ("Tamirci Viktor", "Tamirci"),
         N_TRAINER => ("Eğitmen Jack", "Köpek Eğitmeni"),
-        N_GUIDE => ("Rehber Nova", "Rehber"),
+        N_GUIDE => ("Öğretici", "İlk Adımlar"),
         N_WIZARD => ("Büyücü Aldric", "Büyücü"),
         N_COMMANDER => ("Komutan Diana", "Komutan"),
         _ => ("Kule Askeri", "Muhafız"),
@@ -383,7 +383,7 @@ impl Game {
         got
     }
 
-    /// V12.2: Rehber Nova'nın adımları otomatik: kabul ve teslim için konuşmak gerekmez. Seviye yetince adım kendiliğinden
+    /// İlk adımlar öğreticisi (dünyada NPC'si yok) otomatik: kabul ve teslim için konuşmak gerekmez. Seviye yetince adım kendiliğinden
     /// başlar, hedef tamamlanınca ödül verilir ve sıradaki adım açılır. (Komutan Diana'nın şehir adımları elle alınır.)
     fn auto_guide(&mut self) {
         let (idx, on, n) = self.story_slot(0);
@@ -397,7 +397,7 @@ impl Game {
             }
         } else if self.quest_progress(q, n) >= q.count {
             let got = self.quest_turnin(0, idx);
-            self.msg(format!("Rehber Nova: {} ({})", q.done, got.join(", ")));
+            self.msg(format!("{} ({})", q.done, got.join(", ")));
         }
     }
 
@@ -779,17 +779,15 @@ mod tests {
         g.player.y = y;
     }
 
-    /// V12.2: Nova'nın rehberi otomatik — konuşmadan başlar, hedef bitince ödül verilir ve sıradaki adım açılır
+    /// İlk adımlar öğreticisi otomatik — konuşmadan başlar, hedef bitince ödül verilir ve sıradaki adım açılır
     #[test]
     fn guide_runs_automatically() {
         let mut g = Game::new(5, Progress::default(), 1);
         assert!(!g.progress.story.guide_on);
         g.story_tick();
         assert!(g.progress.story.guide_on, "ilk adım kendiliğinden başlamalı");
-        // Nova görev seçeneği sunmaz
-        npc_at(&mut g, N_GUIDE);
-        let d = g.talk(N_GUIDE, "");
-        assert!(!d["opts"].as_array().unwrap().iter().any(|o| o["id"] == "accept" || o["id"] == "turnin"));
+        // öğreticinin dünyada NPC'si yok
+        assert!(!g.npcs.iter().any(|n| n.kind == N_GUIDE));
         for _ in 0..3 {
             g.story_event(Ev::Kill { kind: ZKind::Walker, x: 0.0, y: 0.0 });
         }
@@ -869,7 +867,7 @@ mod tests {
     #[test]
     fn chat_topics_menu() {
         let mut g = Game::new(5, Progress::default(), 1);
-        for k in [N_MERCHANT, N_QUEST, N_DOCTOR, N_MECHANIC, N_TRAINER, N_GUIDE] {
+        for k in [N_MERCHANT, N_QUEST, N_DOCTOR, N_MECHANIC, N_TRAINER] {
             npc_at(&mut g, k);
             let d = g.talk(k, "chat");
             let opts = d["opts"].as_array().unwrap();

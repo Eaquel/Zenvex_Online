@@ -1657,12 +1657,12 @@ mod v4_tests {
         std::fs::write(format!("{dir}/player.json"), serde_json::json!({"x": sx, "y": sy}).to_string()).unwrap();
         // konuşma ve görev örnekleri
         let mut h = Game::new(5, Progress::default(), 1);
-        let n = h.npcs.iter().rev().find(|n| n.kind == crate::story::N_GUIDE).unwrap();
+        let n = h.npcs.iter().rev().find(|n| n.kind == crate::story::N_QUEST).unwrap();
         let (nx, ny) = (n.x, n.y + 60.0);
         h.player.x = nx;
         h.player.y = ny;
-        std::fs::write(format!("{dir}/talk.json"), h.talk(crate::story::N_GUIDE, "").to_string()).unwrap();
-        h.talk(crate::story::N_GUIDE, "accept");
+        std::fs::write(format!("{dir}/talk.json"), h.talk(crate::story::N_QUEST, "").to_string()).unwrap();
+        h.story_tick();
         h.story_event(crate::story::Ev::Kill { kind: crate::data::ZKind::Walker, x: 0.0, y: 0.0 });
         std::fs::write(format!("{dir}/quests.json"), h.ui_json("quests")).unwrap();
         for v in ["tree", "dog", "bag", "inventory", "fog", "areas"] {

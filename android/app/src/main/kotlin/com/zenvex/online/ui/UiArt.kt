@@ -9,6 +9,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -23,6 +25,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.sin
 
@@ -69,9 +72,20 @@ fun ArtImage(name: String, modifier: Modifier, silhouette: Boolean = false) {
     }
 }
 
-/** Oyun amblemi (kapüşonlu savaşçı + çapraz katana). */
+/**
+ * Oyun logosu: "ZENVEX / ONLINE". assets/ui/logo_wordmark varsa o görsel (istemi: docs/22 Bölüm 1), yoksa yazıyla.
+ * [height]: logonun yüksekliği.
+ */
 @Composable
-fun Emblem(size: Dp, modifier: Modifier = Modifier) = ArtImage("emblem", modifier.size(size))
+fun GameLogo(height: Dp, modifier: Modifier = Modifier) {
+    val ctx = LocalContext.current
+    val art = remember { UiArt.image(ctx, "logo_wordmark") }
+    if (art != null) { ArtImage("logo_wordmark", modifier.height(height).aspectRatio(art.width.toFloat() / art.height)); return }
+    androidx.compose.foundation.layout.Column(modifier, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
+        PT("ZENVEX", (height.value * 0.62f).sp, Px.Orange, outline = true)
+        PT("O N L I N E", (height.value * 0.24f).sp, Px.Clan, outline = true)
+    }
+}
 
 /**
  * Sahne arka planı: ekranı kaplar, yavaşça kayar ve hafif yakınlaşır (Ken Burns); [dim] kadar karartılır.

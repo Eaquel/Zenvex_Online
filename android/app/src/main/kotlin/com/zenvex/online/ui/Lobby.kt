@@ -116,12 +116,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         }
         // ---- üst orta: logo
         Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Emblem(64.dp)
-            Spacer(Modifier.width(6.dp))
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                PT("ZENVEX", 40.sp, Px.Orange, outline = true)
-                PT("O N L I N E", 15.sp, Px.Clan, outline = true)
-            }
+            GameLogo(62.dp)
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {

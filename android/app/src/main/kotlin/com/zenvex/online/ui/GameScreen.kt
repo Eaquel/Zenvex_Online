@@ -118,7 +118,7 @@ fun GameScreen(toLobby: () -> Unit) {
     DisposableEffect(Unit) {
         Online.onChat = { l ->
             if (l.channel != "system") view.bubble(l.name, l.text)
-            view.addChat((if (l.channel == "local") "[Yakın] " else if (l.channel == "system") "" else "") + "${l.name}: ${l.text}") }
+            view.addChat((if (l.tag == "Fısıltı") "[Fısıltı] " else "") + "${l.name}: ${l.text}") }
         onDispose {
             Online.onChat = null
             if (Online.trade.value != null) Online.cancelTrade()
@@ -231,7 +231,8 @@ fun GameScreen(toLobby: () -> Unit) {
             // imePadding: klavye açılınca sohbet paneli klavyenin üstüne kayar
             // sohbet: oyun arkada görünür ve oynanır (karartma yok); panel yarı saydam, ekranın yüksekliği boyunca
             Overlay.Chat -> Box(Modifier.fillMaxSize().imePadding().padding(start = 8.dp, top = 8.dp, bottom = 8.dp)) {
-                ChatPanel(Modifier.width(520.dp).fillMaxHeight().align(Alignment.CenterStart), close)
+                ChatPanel(Modifier.width(520.dp).fillMaxHeight().align(Alignment.CenterStart), close,
+                    onPlayer = { u, n -> picked = u to n; overlay = Overlay.Player })
             }
             Overlay.Map -> WorldMapScreen(close)
             Overlay.WizardMap -> WizardMapScreen(close)
@@ -419,17 +420,12 @@ private fun DeadDialog(respawned: () -> Unit, toLobby: () -> Unit) {
     Dim {
         PxPanel(Modifier.width(380.dp), pad = 14.dp) {
             PT("ÖLDÜN", 44.sp, Color(0xFFE04040), Modifier.align(Alignment.CenterHorizontally), outline = true)
-            PT(if (hard) "Hardcore: çantan ölüm yerinde kaldı. Koş, geri al!" else "Ekipmanın sende kalır. Nereden başlamak istersin?",
+            PT(if (hard) "Hardcore: çantan ölüm yerinde kaldı. Koş, geri al!" else "Ekipmanın sende kalır. Bu bölgenin giriş meydanında doğarsın.",
                 14.sp, Px.Sub, Modifier.align(Alignment.CenterHorizontally), maxLines = 2)
             Spacer(Modifier.height(14.dp))
-            PxButton("Kampta Doğ", Modifier.fillMaxWidth(), Px.Green, icon = "flame") { GameSession.cmd("respawn", "city" to false); respawned() }
+            PxButton("Bölgede Yeniden Doğ", Modifier.fillMaxWidth(), Px.Green, icon = "flame") { GameSession.cmd("respawn"); respawned() }
             Spacer(Modifier.height(8.dp))
-            val city = GameSession.ui("profile").optBoolean("city")
-            PxButton(if (city) "Şehirde Doğ" else "Şehirde Doğ (Sv 10)", Modifier.fillMaxWidth(), if (city) Px.Blue else Px.Dark, icon = "shield", enabled = city) {
-                GameSession.cmd("respawn", "city" to true); respawned()
-            }
-            Spacer(Modifier.height(8.dp))
-            PxButton("Lobiye Dön", Modifier.fillMaxWidth(), Px.Dark, icon = "exit") { GameSession.cmd("respawn", "city" to false); toLobby() }
+            PxButton("Lobiye Dön", Modifier.fillMaxWidth(), Px.Dark, icon = "exit") { GameSession.cmd("respawn"); toLobby() }
         }
     }
 }

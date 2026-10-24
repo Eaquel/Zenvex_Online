@@ -28,8 +28,9 @@ import kotlin.math.hypot
  */
 object Online {
     /** [avatar]/[frame]: gönderenin profil resmi ve çerçevesi (sohbette yanında çizilir; -1: bilinmiyor) */
+    /** [uid]: gönderenin oyun kimliği ("a<hesap>"); sohbette adına dokununca oyuncu menüsü açılır */
     data class ChatLine(val channel: String, val name: String, val text: String, val tag: String, val mine: Boolean, val ts: Long,
-                        val avatar: Int = -1, val frame: String = "")
+                        val avatar: Int = -1, val frame: String = "", val uid: String = "")
 
     private fun myAvatar() = Account.profile.value.optInt("avatar", 1)
     private fun myFrame() = Account.profile.value.optString("frame").takeIf { it != "null" } ?: ""
@@ -113,7 +114,7 @@ object Online {
                 for (i in 0 until arr.length()) {
                     val o = arr.getJSONObject(i)
                     chat += ChatLine("global", o.optString("n"), o.optString("m"), (if (o.isNull("g")) "" else o.optString("g")), "a${o.optLong("u")}" == uid, o.optLong("ts"),
-                        o.optInt("av", -1), o.optString("fr").takeIf { it != "null" } ?: "")
+                        o.optInt("av", -1), o.optString("fr").takeIf { it != "null" } ?: "", "a${o.optLong("u")}")
                 }
             }
         }
@@ -220,16 +221,16 @@ object Online {
             }
             "c" -> {
                 val ch = p.optString("ch", "global")
-                if (ch == "local" && hypot(p.optDouble("x").toFloat() - myX, p.optDouble("y").toFloat() - myY) > 1500f) return
+                if (ch != "global" && ch != "clan") return
                 // klan sohbeti yalnız aynı klanın üyelerine
                 if (ch == "clan" && (p.optLong("cid") != (Account.clan.value?.id ?: -1L))) return
                 val g = p.optString("g").takeUnless { it == "null" } ?: ""
                 addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), g, false, System.currentTimeMillis(),
-                    p.optInt("av", -1), p.optString("fr")))
+                    p.optInt("av", -1), p.optString("fr"), p.optString("u")))
             }
-            // fısıltı: yalnız alıcı görür (Yakın sekmesinde [Fısıltı] etiketiyle)
-            "w" -> if (p.optString("to") == me) addLine(ChatLine("local", p.optString("n", "?"), p.optString("m").take(140), "Fısıltı", false, System.currentTimeMillis(),
-                p.optInt("av", -1), p.optString("fr")))
+            // fısıltı: yalnız alıcı görür (Genel sekmesinde [Fısıltı] etiketiyle)
+            "w" -> if (p.optString("to") == me) addLine(ChatLine("global", p.optString("n", "?"), p.optString("m").take(140), "Fısıltı", false, System.currentTimeMillis(),
+                p.optInt("av", -1), p.optString("fr"), p.optString("u")))
             "treq" -> if (p.optString("to") == me) main.post { tradeRequest.value = p.optString("u") to p.optString("n", "Oyuncu") }
             "tr" -> if (p.optString("to") == me) main.post { onTradeMsg(p) }
         }
@@ -270,14 +271,12 @@ object Online {
         if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
         lastSend = SystemClock.elapsedRealtime()
         val g = Account.clan.value?.name ?: tag
-        addLine(ChatLine(channelName, name, t, g, true, System.currentTimeMillis(), myAvatar(), myFrame()))
+        addLine(ChatLine(channelName, name, t, g, true, System.currentTimeMillis(), myAvatar(), myFrame(), uid))
         val c = channel ?: return null
         val m = JSONObject().put("u", uid).put("n", name).put("g", g).put("m", t).put("ch", channelName).put("av", myAvatar()).put("fr", myFrame())
-        if (channelName == "local") m.put("x", myX.toDouble()).put("y", myY.toDouble())
         if (channelName == "clan") m.put("cid", Account.clan.value?.id ?: 0)
         c.send("c", m)
         if (channelName == "global") Account.postChat(serverId, t)
-        else if (channelName == "local") Account.chatLog("$serverId:local", t)
         else if (channelName == "clan") Account.chatLog("clan:${Account.clan.value?.id ?: 0}", t)
         return null
     }
@@ -291,7 +290,7 @@ object Online {
         if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
         val c = channel ?: return "Çevrimdışısın"
         lastSend = SystemClock.elapsedRealtime()
-        addLine(ChatLine("local", "→ $toName", t, "Fısıltı", true, System.currentTimeMillis(), myAvatar(), myFrame()))
+        addLine(ChatLine("global", "→ $toName", t, "Fısıltı", true, System.currentTimeMillis(), myAvatar(), myFrame(), uid))
         c.send("w", JSONObject().put("to", toUid).put("u", uid).put("n", name).put("m", t).put("av", myAvatar()).put("fr", myFrame()))
         Account.chatLog("$serverId:whisper:$toUid", t)
         return null

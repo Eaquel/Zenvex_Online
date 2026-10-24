@@ -6,6 +6,20 @@ use serde::{Deserialize, Serialize};
 pub const MAX_LEVEL: u32 = 50;
 pub const MAX_CHAR_LEVEL: u32 = 10;
 pub const CITY_LEVEL: u32 = 10;
+/// Oyuncunun bu kadar seviye altındaki yaratıktan XP gelmez; XP_LEVEL_GAP/2'den fazla altındakinden yarım gelir (boss hariç).
+pub const XP_LEVEL_GAP: u32 = 10;
+
+/// Yaratık öldürme XP'sinin seviye farkına göre katsayısı.
+pub fn xp_level_factor(player: u32, creature: u32, boss: bool) -> f32 {
+    let gap = player.saturating_sub(creature);
+    if boss || gap <= XP_LEVEL_GAP / 2 {
+        1.0
+    } else if gap <= XP_LEVEL_GAP {
+        0.5
+    } else {
+        0.0
+    }
+}
 
 /// Seviye için gereken XP. İlk 8 seviye hızlı (öğretici), sonra dikleşir (V12.2: eskiden 40. seviye ~120 öldürmeydi,
 /// şimdi ~1.000): 50·l^1,6 × (1 + ((l − 8) / 7)^1,5). Sv 10 ≈ 2,1 bin, Sv 20 ≈ 19,6 bin, Sv 30 ≈ 76 bin, Sv 49 ≈ 386 bin.
@@ -1079,5 +1093,19 @@ mod tests {
         p.grant("cloak:1");
         assert!(p.cosmetics.contains(&"frame_gold".to_string()));
         assert_eq!(p.inv.count_id("cloak"), 1);
+    }
+}
+
+#[cfg(test)]
+mod xp_gap_tests {
+    use super::*;
+
+    #[test]
+    fn low_level_creatures_give_no_xp() {
+        assert_eq!(xp_level_factor(20, 5, false), 0.0, "Sv 20, Sv 5 zombiden XP almamalı");
+        assert_eq!(xp_level_factor(20, 10, false), 0.5);
+        assert_eq!(xp_level_factor(20, 15, false), 1.0);
+        assert_eq!(xp_level_factor(20, 25, false), 1.0);
+        assert_eq!(xp_level_factor(40, 1, true), 1.0, "boss her zaman XP verir");
     }
 }

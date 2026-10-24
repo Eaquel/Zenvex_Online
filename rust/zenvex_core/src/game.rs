@@ -499,6 +499,8 @@ pub struct Game {
     /// V12.1 Titan: (dilim, bölge, x, y) ve bu dilimde öldürüldü mü
     pub titan: (i64, usize, f32, f32),
     pub titan_dead: bool,
+    /// "seviyene uygun zombi avla" uyarısının son gösterildiği an (dakikada en çok bir kez)
+    pub xp_warn_t: f32,
     pub textures: Textures,
     pub rng: Rng,
     pub scratch: Vec<u32>,
@@ -560,7 +562,7 @@ impl Game {
                 hit_id: 0,
             })
             .collect();
-        // NPC'ler: ormandaki kampta tüccar, görevci ve rehber; doktor sahra hastanesinde, tamirci benzinlikte,
+        // NPC'ler: ormandaki kampta tüccar ve görevci; doktor sahra hastanesinde, tamirci benzinlikte,
         // köpek eğitmeni barınakta. Şehirdeki pazarda hepsi tüccarın çevresinde.
         let mut scratch = Vec::new();
         for &(mx, my) in &world.merchants {
@@ -568,7 +570,6 @@ impl Game {
             // tüccar sabit değil: kendi kamyonetiyle dolaşır (caravan.rs)
             let mut spots: Vec<(u8, f32, f32)> = vec![(2, mx + m(2.6), my + m(1.2))];
             if forest {
-                spots.push((6, mx - m(2.6), my + m(1.2)));
                 // büyücü kampta, ateşin doğusunda: kişisel üsse ve keşfedilen karakollara ışınlar
                 spots.push((7, mx + m(9.0), my + m(2.4)));
                 for (kind, id, ox, oy) in [(3u8, "clinic", 0.0, 0.6), (4, "gas", 0.0, 2.2), (5, "kennel", 0.0, 0.8)] {
@@ -678,6 +679,7 @@ impl Game {
             caravans,
             titan: (i64::MIN, 0, 0.0, 0.0),
             titan_dead: false,
+            xp_warn_t: -999.0,
             train: 0,
             train_t: 0.0,
         };

@@ -135,9 +135,6 @@ mod tests {
         assert!((g.player.x - cx).hypot(g.player.y - cy) < 6.0 * TILE, "şehirde uyanmadı");
         let j = g.story_json();
         assert!(j.as_array().unwrap().iter().any(|q| q["id"] == "g9" && q["ready"] == true), "{j}");
-        // rehber Nova bu görevi vermez/almaz
-        let v = g.talk(crate::story::N_GUIDE, "");
-        assert!(!v["opts"].as_array().unwrap().iter().any(|o| o["id"] == "turnin"));
         let v = g.talk(N_COMMANDER, "turnin");
         assert!(v["lines"].to_string().contains("Ödülün"), "{v}");
     }
