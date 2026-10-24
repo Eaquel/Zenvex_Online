@@ -2501,7 +2501,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
      * 1. altın, 2. gümüş, 3. bronz: metal geçişli yazı, üstünden kayan ışık, çevresinde göz kırpan piksel yıldızlar;
      * 1.'nin önünde küçük taç. 4-10 sade açık mavi.
      */
-    private fun drawTitle(c: Canvas, t: String, rank: Int, x: Float, y: Float, size: Float) {
+    private fun drawTitle(c: Canvas, raw: String, rank: Int, x: Float, y: Float, size: Float) {
+        val t = I18n.t(raw)
         val d = density
         val ts = size * 0.92f
         if (rank !in 1..3) { drawText(c, t, x, y, ts, 0xFFAED6FF.toInt(), center = true); return }
@@ -2581,7 +2582,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
-    private fun drawText(c: Canvas, s: String, x: Float, y: Float, size: Float, color: Int, center: Boolean = false, font: Typeface = fontBold) {
+    private fun drawText(c: Canvas, raw: String, x: Float, y: Float, size: Float, color: Int, center: Boolean = false, font: Typeface = fontBold, tr: Boolean = true) {
+        val s = if (tr) I18n.t(raw) else raw
         text.typeface = font; textStroke.typeface = font
         text.textSize = size; textStroke.textSize = size
         textStroke.strokeWidth = size * 0.18f
@@ -2691,7 +2693,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         synchronized(chatLines) {
             var y = sh - stickR * 3.4f
             for ((line, life) in chatLines.reversed()) {
-                drawText(c, line, 16 * d, y, 12.5f * d, alphaC(0xFFEEF2F0.toInt(), min(1f, life)))
+                drawText(c, line, 16 * d, y, 12.5f * d, alphaC(0xFFEEF2F0.toInt(), min(1f, life)), tr = false)
                 y -= 17 * d
             }
         }
@@ -2870,7 +2872,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     /** Rehberin konuşma balonu: üst ortada, sözcük sözcük sarılır; 9 sn sonra söner */
-    private fun guideBubble(c: Canvas, msg: String) {
+    private fun guideBubble(c: Canvas, raw: String) {
+        val msg = I18n.t(raw)
         val d = density
         val a = (tutT / 0.35f).coerceIn(0f, 1f) * ((9.5f - tutT) / 0.6f).coerceIn(0f, 1f)
         if (a <= 0.01f) return

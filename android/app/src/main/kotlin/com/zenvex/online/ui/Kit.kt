@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import com.zenvex.online.R
+import com.zenvex.online.game.I18n
 import com.zenvex.online.game.Atlas
 import com.zenvex.online.game.Audio
 
@@ -113,7 +114,7 @@ fun T(
     glow: Color? = null,
 ) {
     Text(
-        if (maxLines == 1) text.titleTr() else text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        I18n.show(text, maxLines == 1), modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
             // tüm arayüz piksel yazı tipiyle (eski cam görünüm kaldırıldı)
             fontFamily = PixelFont, fontSize = size,
@@ -275,7 +276,7 @@ fun Dim(onDismiss: (() -> Unit)? = null, content: @Composable BoxScope.() -> Uni
 @Composable
 fun ScreenFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable RowScope.() -> Unit = {}, bg: String? = null,
                 content: @Composable ColumnScope.() -> Unit) {
-    PxFrame(title.lowercase(java.util.Locale.forLanguageTag("tr-TR")).titleTr(), icon, onBack, right, bg, content)
+    PxFrame(if (I18n.turkish) title.lowercase(java.util.Locale.forLanguageTag("tr-TR")).titleTr() else I18n.t(title), icon, onBack, right, bg, content)
 }
 
 /** Yavaş yükselen parıltı/kor parçacıkları (arka plan canlılığı). */
@@ -354,7 +355,7 @@ fun ToastPlate(text: String, accent: Color, icon: String) {
         Box(Modifier.size(26.dp).clip(RoundedCornerShape(3.dp)).background(accent.copy(alpha = 0.22f)).border(1.5.dp, accent, RoundedCornerShape(3.dp)),
             contentAlignment = Alignment.Center) { Icon(icon, 16.dp, accent) }
         Spacer(Modifier.width(10.dp))
-        PT(text.titleTr(), 15.sp, Px.Text, maxLines = 2)
+        PT(if (I18n.turkish) text.titleTr() else I18n.t(text), 15.sp, Px.Text, maxLines = 2)
     }
 }
 

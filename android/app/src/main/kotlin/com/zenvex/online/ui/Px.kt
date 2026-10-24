@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenvex.online.R
+import com.zenvex.online.game.I18n
 import com.zenvex.online.game.Audio
 import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Native
@@ -111,7 +112,7 @@ fun PT(
     outline: Boolean = false,
 ) {
     Text(
-        if (maxLines == 1) text.titleTr() else text, modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
+        I18n.show(text, maxLines == 1), modifier, color = color, textAlign = align, maxLines = maxLines, overflow = TextOverflow.Ellipsis,
         style = TextStyle(
             fontFamily = PixelFont, fontSize = size,
             shadow = Shadow(Color(0xE6000000), Offset(if (outline) 3f else 2f, if (outline) 3f else 2f), 0f),

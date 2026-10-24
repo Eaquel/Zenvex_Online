@@ -51,6 +51,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zenvex.online.game.I18n
 import com.zenvex.online.game.Account
 import com.zenvex.online.game.Pass
 import org.json.JSONArray
@@ -244,7 +245,7 @@ fun TitleChip(title: JSONObject?, size: Float = 12f) {
                 bottom = k * (img.height - pl.barBot).toFloat()),
             contentAlignment = Alignment.Center) {
             val glow = 0.5f + 0.5f * sin(tt * 3f)
-            Text(title.optString("name"), style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
+            Text(I18n.t(title.optString("name")), style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
                 color = if (rank in 1..3) Color.White else Color(0xFFCFE6FF),
                 shadow = Shadow(if (rank in 1..3) col.copy(alpha = 0.6f + 0.4f * glow) else Color.Black, Offset(0f, with(dens) { 1.dp.toPx() }), 6f)),
                 modifier = Modifier.padding(horizontal = 4.dp))
@@ -257,7 +258,7 @@ fun TitleChip(title: JSONObject?, size: Float = 12f) {
             val t = rememberTime()
             val glow = 0.5f + 0.5f * sin(t * 3f)
             val u = (t * 0.5f) % 1f
-            Text("✦ " + title.optString("name") + " ✦", style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
+            Text("✦ " + I18n.t(title.optString("name")) + " ✦", style = TextStyle(fontFamily = PixelFont, fontSize = size.sp,
                 brush = Brush.linearGradient(listOf(col, Color.White, col), start = Offset(-80f + 260f * u, 0f), end = Offset(20f + 260f * u, 24f)),
                 shadow = Shadow(col.copy(alpha = glow), Offset.Zero, 8f + 8f * glow)))
         } else PT(title.optString("name"), size.sp, col)

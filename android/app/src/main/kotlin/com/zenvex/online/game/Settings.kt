@@ -94,9 +94,11 @@ data class Settings(
                 sfx = p.getFloat("sfx", d.sfx),
                 ambient = p.getFloat("ambient", d.ambient),
                 uiSound = p.getFloat("uiSound", d.uiSound),
-                language = p.getString("language", d.language) ?: d.language,
+                // ilk açılışta cihaz dili (destekleniyorsa), sonra oyuncunun seçtiği
+                language = p.getString("language", null) ?: I18n.deviceDefault(),
                 colorBlind = p.getInt("colorBlind", d.colorBlind),
             )
+            I18n.load(ctx, current.language)
         }
 
         fun save(ctx: Context, s: Settings) {
@@ -118,6 +120,7 @@ data class Settings(
                 .putInt("colorBlind", s.colorBlind)
                 .apply()
             Audio.updateVolume()
+            if (s.language != I18n.lang) I18n.load(ctx, s.language)
         }
     }
 }

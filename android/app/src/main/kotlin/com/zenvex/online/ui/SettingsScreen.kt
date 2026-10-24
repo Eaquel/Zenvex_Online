@@ -58,7 +58,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
     PxFrame("Ayarlar", "gear", back) {
         Row(Modifier.fillMaxSize()) {
             Column(Modifier.width(180.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Grafik" to "eye", "Kontroller" to "fist", "Ses" to "volume", "Bildirimler" to "mail", "Hesap" to "user", "Destek" to "chat", "Yasal" to "info")
+                listOf("Grafik" to "eye", "Kontroller" to "fist", "Ses" to "volume", "Bildirimler" to "mail", "Hesap" to "user", "Destek" to "chat", "Dil · Language" to "globe", "Yasal" to "info")
                     .forEachIndexed { i, (n, ic) ->
                         PxButton(n, Modifier.fillMaxWidth(), if (tab == i) Px.Green else Px.Dark, icon = ic, height = 40.dp, size = 14.sp) { tab = i }
                     }
@@ -152,10 +152,29 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             }
                         }
                         5 -> SupportSection()
+                        6 -> LanguageSection(s.language) { set(s.copy(language = it)) }
                         else -> LegalSection()
                     }
                 }
             }
+        }
+    }
+}
+
+/** Dil seçimi: her dil kendi adıyla yazılır (seçen kişi okuyabilsin); seçince tüm arayüz hemen değişir. */
+@Composable
+private fun LanguageSection(current: String, pick: (String) -> Unit) {
+    PT("Oyunun dili. Oyuncuların sohbet mesajları çevrilmez.", 12.sp, Px.Sub, maxLines = 2)
+    Spacer(Modifier.height(8.dp))
+    for ((code, name) in com.zenvex.online.game.I18n.LANGS) {
+        val on = code == current
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp).background(if (on) Px.Green else Px.PanelDark).border(2.dp, Px.Edge)
+            .clickable { pick(code) }.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+            // ad çevrilmesin: düz Text
+            androidx.compose.material3.Text(name, color = if (on) Color.White else Px.Text,
+                style = androidx.compose.ui.text.TextStyle(fontFamily = PixelFont, fontSize = 16.sp))
+            Spacer(Modifier.weight(1f))
+            if (on) Icon("check", 20.dp, Color.White)
         }
     }
 }
