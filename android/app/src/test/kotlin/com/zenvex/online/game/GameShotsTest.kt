@@ -147,5 +147,11 @@ class GameShotsTest {
     // V13 Cephe botları: üsse girince kalkanlı ve alev makineli askerler
     @Test fun g26_baseBots() = shot("base_bots", { cheat("level 40"); cheat("god"); cheat("tp base 1"); cheat("tp 744 27") }, steps = 120)
 
+    // etkinlik silahları elde (kabza/uç doğrusu katana karelerinden)
+    private fun evWeapon(id: String) { cheat("level 20"); cheat("item ev_${id}_weapon 1"); cmd(JSONObject().put("cmd", "cycle_weapon")) }
+    @Test fun g27_evBlood() = shot("ev_blood", { evWeapon("blood") }, steps = 30)
+    @Test fun g28_evTitanWalk() = shot("ev_titan_walk", { evWeapon("titan") }, steps = 40, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
+    @Test fun g29_evPackAttack() = shot("ev_pack_attack", { evWeapon("pack"); cheat("spawn walker 2 2") }, steps = 50, input = floatArrayOf(0f, 0f, 1f, 0f, 0f))
+
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
 }

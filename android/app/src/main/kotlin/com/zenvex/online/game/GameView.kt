@@ -84,6 +84,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val zombieColor: IntArray
     private val vehicleIds: Array<String>
     private val weaponSprites: Array<String>
+    /** etkinlik silahları (ev_<etkinlik>_weapon): elde w/ev_<etkinlik> çizilir, animasyon katana / bıçak karelerinden */
+    private val evWeapons: Array<String?>
     private val itemIds: Array<String>
     private val itemSprites: Array<Sprite?>
     private val zones: Array<String>
@@ -110,6 +112,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         vehicleIds = Array(v.length()) { v.getJSONArray(it).getString(0) }
         val wp = w.getJSONArray("weapons")
         weaponSprites = Array(wp.length()) { wp.getJSONArray(it).getString(1) }
+        evWeapons = Array(wp.length()) { i -> wp.getJSONArray(i).getString(0).takeIf { it.startsWith("ev_") }?.removePrefix("ev_")?.removeSuffix("_weapon") }
         val it2 = w.getJSONArray("items")
         itemIds = Array(it2.length()) { it2.getJSONArray(it).getString(0) }
         itemSprites = Array(itemIds.size) { atlas["i/" + itemIds[it]] ?: atlas["s/" + itemIds[it]] }
@@ -993,6 +996,28 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         return 0
     }
 
+    /**
+     * Etkinlik silahı: kahramanın aynı karesinin katana / bıçaklı halinden çıkarılmış kabza→uç doğrusu boyunca
+     * (manifest attach "w_katana" / "w_knife", tools/pixel/event_import.py) silah görseli döndürülüp ölçeklenerek çizilir.
+     */
+    private fun drawEvWeapon(c: Canvas, prefix: String, key: String, id: String, cls: String, sx: Float, sy: Float, s: Float, flip: Boolean) {
+        val seg = atlas.attach4(prefix, key.substringAfter("$prefix/"), "w_$cls") ?: return
+        val ws = atlas["w/ev_$id"] ?: return
+        val m = atlas.evWeapon(id) ?: return
+        val f = if (flip) -1f else 1f
+        val gx = seg[0] * s * f; val gy = seg[1] * s
+        val tx = seg[2] * s * f; val ty = seg[3] * s
+        val len = hypot(tx - gx, ty - gy)
+        val wl = hypot(m[2] - m[0], m[3] - m[1])
+        if (len < 1f || wl < 1f) return
+        val ang = Math.toDegrees(atan2((ty - gy).toDouble(), (tx - gx).toDouble()) - atan2((m[3] - m[1]).toDouble(), (m[2] - m[0]).toDouble()))
+        c.save()
+        c.translate(sx + gx, sy + gy)
+        c.rotate(ang.toFloat())
+        atlas.draw(c, ws, 0f, 0f, len * m[4] / wl / ws.k, pixelPaint)
+        c.restore()
+    }
+
     private fun spriteKey(prefix: String, anim: String, dir: Int, f: Int, suffix: String = ""): String {
         keyBuf.setLength(0)
         keyBuf.append(prefix).append('/').append(anim).append('_').append(dir).append('_').append(f).append(suffix)
@@ -1037,7 +1062,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val flip = pix && viewFlip
         var key = spriteKey(prefix, anim, kdir, f)
         // elde gerçek silahla render edilmiş kare varsa onu kullan
-        val wKey = if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
+        val evw = if (wIdx > 0) evWeapons.getOrNull(wIdx) else null
+        val wKey = if (evw != null) null else if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
         var weaponBaked = false
         var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
         if (sp == null) sp = atlas[key]
@@ -1085,6 +1111,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
         atlas.draw(c, sp, sx, sy, scale, paint, flip)
+        if (evw != null && isHero) drawEvWeapon(c, prefix, key, evw, weaponSprites.getOrElse(wIdx) { "katana" }, sx, sy, scale * sp.k, flip)
         if (isHero) {
             if (sp.k == 1f) { // eski (düşük yoğunluklu) karakterlerde ceket/bot katmanı
                 if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }

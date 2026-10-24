@@ -117,3 +117,27 @@ def pixelize(a, s, hard=True):
 
 def flip(a):
     return a[:, ::-1].copy()
+
+
+def key_soft(path, lo=38.0, hi=95.0, spill=1.0):
+    """Parlayan (yarı saydam ışıltılı) nesneler için yeşil zemin: zemin rengi köşelerden ölçülür. Saydamlık "yeşil
+    baskınlığından" (g − max(r, b), zemininkine oranla) çıkarılır, zeminle karışmış pikseller ayrıştırılır
+    (c = (piksel − (1−a)·zemin) / a) ve yarı saydam piksellerde yeşil max(r, b)·[spill] ile sınırlanır. Böylece camgöbeği
+    ve mor ışıltılar yeşile kaymaz; asit yeşili vurgular için spill > 1 verilir."""
+    a = np.asarray(Image.open(path).convert("RGB")).astype(np.float32)
+    h, w = a.shape[:2]
+    s = max(4, min(h, w) // 40)
+    corners = np.concatenate([a[:s, :s].reshape(-1, 3), a[:s, -s:].reshape(-1, 3), a[-s:, :s].reshape(-1, 3), a[-s:, -s:].reshape(-1, 3)])
+    bg = np.median(corners, 0)
+    bgg = max(1.0, bg[1] - max(bg[0], bg[2]))
+    d = np.sqrt(((a - bg) ** 2).sum(-1))
+    gr = a[..., 1] - np.maximum(a[..., 0], a[..., 2])
+    al = np.clip(1.0 - gr / bgg, 0, 1)
+    al = np.where(d < lo, 0, al)
+    al = np.where((d < hi) & (al > 0.98), np.clip((d - lo) / (hi - lo), 0, 1), al)
+    rgb = (a - (1 - al[..., None]) * bg) / np.maximum(al[..., None], 1e-3)
+    mx = np.maximum(rgb[..., 0], rgb[..., 2])
+    g = rgb[..., 1]
+    rgb[..., 1] = np.where(al < 0.98, np.minimum(g, mx * spill), g)
+    al = np.where(al < 0.06, 0, al)
+    return np.dstack([np.clip(rgb, 0, 255), al * 255]).astype(np.uint8)

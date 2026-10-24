@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -142,6 +143,8 @@ fun EventDialog(close: () -> Unit) {
 @Composable
 internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit) {
     val t = rememberTime()
+    // ödül tanıtım afişi (assets/ui/art_ev_<etkinlik>_<yuva>): ödül satırına dokununca tam ekran
+    var poster by remember { mutableStateOf<String?>(null) }
     Box(Modifier.fillMaxSize().background(Color(0xF00A0806)).clickable(remember { MutableInteractionSource() }, null) {}) {
         if (b == null || !b.optBoolean("active")) {
             Column(Modifier.fillMaxSize().padding(14.dp)) {
@@ -200,9 +203,9 @@ internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit
                 Spacer(Modifier.height(8.dp))
                 PT("Ödüller", 15.sp, Px.Orange)
                 val title = b.optString("title")
-                RewardLine(1, "ev_${info.prefix}_ring", "$title Kralı Yüzüğü", "+1.000 Elmas · 30 Gün")
-                RewardLine(2, "ev_${info.prefix}_neck", "$title Şampiyonu Kolyesi", "+700 Elmas · 30 Gün")
-                RewardLine(3, "ev_${info.prefix}_weapon", EVENT_WEAPON[info.prefix] ?: "$title Silahı", "+500 Elmas · 30 Gün")
+                RewardLine(1, "ev_${info.prefix}_ring", "$title Kralı Yüzüğü", "+1.000 Elmas · 30 Gün · Dokun: Yakından Bak") { poster = "art_ev_${info.prefix}_ring" }
+                RewardLine(2, "ev_${info.prefix}_neck", "$title Şampiyonu Kolyesi", "+700 Elmas · 30 Gün · Dokun: Yakından Bak") { poster = "art_ev_${info.prefix}_neck" }
+                RewardLine(3, "ev_${info.prefix}_weapon", EVENT_WEAPON[info.prefix] ?: "$title Silahı", "+500 Elmas · 30 Gün · Dokun: Yakından Bak") { poster = "art_ev_${info.prefix}_weapon" }
                 PT("İlk 3 Ayrıca 30 Gün Takabileceği Etkinlik Unvanı Alır ($title Kralı / Şampiyonu / Savaşçısı).", 11.sp, Px.Sub, maxLines = 2)
                 RewardLine(10, "titan_shard", "İlk 10", "300 Elmas · Titan Parçası ×5 · Güç İksiri ×5 · İlk Yardım ×10")
                 RewardLine(100, "medkit", "İlk 100", "100 Elmas · İlk Yardım ×5")
@@ -230,12 +233,28 @@ internal fun EventView(b: JSONObject?, err: String, now: Long, close: () -> Unit
                 }
             }
         }
+        poster?.let { PosterView(it, info.color) { poster = null } }
     }
 }
 
 @Composable
-private fun RewardLine(rank: Int, item: String, name: String, sub: String) {
-    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun PosterView(name: String, color: Color, close: () -> Unit) {
+    val t = rememberTime()
+    Box(Modifier.fillMaxSize().background(Color(0xF0050404)).clickable(remember { MutableInteractionSource() }, null) { close() },
+        contentAlignment = Alignment.Center) {
+        // afiş hafifçe nefes alır, arkasında etkinlik renginde ışıma
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(Brush.radialGradient(listOf(color.copy(alpha = 0.28f + 0.08f * sin(t * 2f)), Color.Transparent)), size.minDimension * 0.6f)
+        }
+        ArtImage(name, Modifier.fillMaxHeight(0.94f).aspectRatio(0.75f).graphicsLayer { val k = 1f + 0.012f * sin(t * 1.6f); scaleX = k; scaleY = k })
+        Box(Modifier.align(Alignment.TopEnd).padding(12.dp)) { CloseButton(40.dp) { close() } }
+    }
+}
+
+@Composable
+private fun RewardLine(rank: Int, item: String, name: String, sub: String, onClick: (() -> Unit)? = null) {
+    Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable { onClick() } else Modifier).padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically) {
         if (rank <= 3) RankMedal(rank, 34.dp) else Box(Modifier.size(34.dp), contentAlignment = Alignment.Center) { PT(if (rank == 10) "4-10" else "11-100", 10.sp, Px.Sub) }
         Spacer(Modifier.width(4.dp))
         Box(Modifier.size(36.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x66000000))) { ItemArt(item, Modifier.fillMaxSize()) }

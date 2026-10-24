@@ -104,6 +104,20 @@ class Atlas private constructor(ctx: Context) {
         return floatArrayOf(a.getDouble(0).toFloat(), a.getDouble(1).toFloat())
     }
 
+    /** Çapaya göre iki nokta (ör. kahraman karesinde silahın kabza ve ucu: "w_katana") — px, ölçeksiz [x0, y0, x1, y1] */
+    fun attach4(actor: String, key: String, point: String): FloatArray? {
+        val a = attach.optJSONObject(actor)?.optJSONObject(key)?.optJSONArray(point) ?: return null
+        if (a.length() < 4) return null
+        return FloatArray(4) { a.getDouble(it).toFloat() }
+    }
+
+    /** Etkinlik silahının elde tutma verisi: [kabza x, kabza y, uç x, uç y, boy katsayısı] (doku pikseli) */
+    fun evWeapon(id: String): FloatArray? {
+        val o = attach.optJSONObject("w/ev")?.optJSONObject(id) ?: return null
+        val g = o.getJSONArray("grip"); val t = o.getJSONArray("tip")
+        return floatArrayOf(g.getDouble(0).toFloat(), g.getDouble(1).toFloat(), t.getDouble(0).toFloat(), t.getDouble(1).toFloat(), o.optDouble("len", 1.0).toFloat())
+    }
+
     private val dst = RectF()
 
     /** (x, y) ekran noktası çapaya gelecek şekilde çizer. */
@@ -156,6 +170,4 @@ private val ITEM_STANDIN = mapOf(
     "i/t_axe_stone" to "i/stone", "i/t_axe_iron" to "i/w_knife", "i/t_pick_stone" to "i/stone", "i/t_pick_iron" to "i/scrap",
     "i/v_wheel" to "i/gear", "i/v_engine" to "i/electronics", "i/v_frame_moto" to "i/scrap", "i/v_frame_car" to "i/scrap",
     "i/veh_moto" to "i/rusty_key", "i/veh_car" to "i/rusty_key",
-    "i/ev_blood_weapon" to "i/w_katana", "i/ev_titan_weapon" to "i/w_katana", "i/ev_base_weapon" to "i/w_katana",
-    "i/ev_scrap_weapon" to "i/w_knife", "i/ev_pack_weapon" to "i/w_knife", "i/ev_breath_weapon" to "i/w_katana",
 )
