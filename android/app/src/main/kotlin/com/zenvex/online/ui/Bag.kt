@@ -202,6 +202,15 @@ internal fun BagView(
     }
 
     fun drop(from: Int, to: Int?) {
+        // V15: kuşanılan eşya ekipman alanının dışına (çantaya ya da boşluğa) sürüklenince çıkarılır
+        if (from >= EQ) {
+            if (to != null && to >= EQ) return
+            val k = (EQ_LEFT + EQ_RIGHT).getOrNull(from - EQ)?.first ?: return
+            val r = cmd("unequip", arrayOf("slot" to k))
+            if (!r.ok) Toaster.show(r.msg, false) else Audio.play("pickup", 0.6f, 1.2f, bus = Audio.Bus.Ui)
+            selEq = null
+            return
+        }
         if (to == null || to == from) return
         val r = when {
             from >= CHEST -> when {
@@ -309,13 +318,13 @@ internal fun BagView(
                         PT("Ekipman", 14.sp, Px.Clan, Modifier.align(Alignment.CenterHorizontally))
                         Row(Modifier.weight(1f).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                for ((k, label) in EQ_LEFT) EqBox(eq, k, label, selEq == k, dragMod(EQ + EQ_LEFT.indexOfFirst { it.first == k }, null)) { selEq = k; sel = null; selChest = null }
+                                for ((k, label) in EQ_LEFT) EqBox(eq, k, label, selEq == k, dragMod(EQ + EQ_LEFT.indexOfFirst { it.first == k }, eq.optJSONObject(k))) { selEq = k; sel = null; selChest = null }
                             }
                             Box(Modifier.width(54.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
                                 SpriteImage("l/${HERO_IDS.getOrElse(hero) { "kaan" }}/0_0", Modifier.fillMaxWidth().height(120.dp))
                             }
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                for ((k, label) in EQ_RIGHT) EqBox(eq, k, label, selEq == k, dragMod(EQ + 4 + EQ_RIGHT.indexOfFirst { it.first == k }, null)) { selEq = k; sel = null; selChest = null }
+                                for ((k, label) in EQ_RIGHT) EqBox(eq, k, label, selEq == k, dragMod(EQ + 4 + EQ_RIGHT.indexOfFirst { it.first == k }, eq.optJSONObject(k))) { selEq = k; sel = null; selChest = null }
                             }
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {

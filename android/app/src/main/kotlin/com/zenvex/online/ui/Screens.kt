@@ -453,6 +453,9 @@ fun QuestsScreen(back: () -> Unit) {
 
 @Composable
 internal fun QuestsView(q: JSONObject, back: () -> Unit) {
+    // yenilenme sayacı sunucu saatiyle (Türkiye gece yarısı / Pazartesi)
+    var now by remember { mutableLongStateOf(com.zenvex.online.game.Pass.now()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); now = com.zenvex.online.game.Pass.now() } }
     PxFrame("Görevler", "quest", back) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PxPanel(Modifier.weight(1.2f).fillMaxHeight(), pad = 10.dp) {
@@ -489,9 +492,14 @@ internal fun QuestsView(q: JSONObject, back: () -> Unit) {
             }
             PxPanel(Modifier.weight(1f).fillMaxHeight(), pad = 10.dp) {
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-                    for ((key, title, sub) in listOf(Triple("daily", "Günlük Görevler", "Her Gün Yenilenir"), Triple("weekly", "Haftalık Görevler", "Her Pazartesi Yenilenir"))) {
-                        PT(title, 16.sp, Px.Clan)
-                        PT(sub + " · Sezon Bileti XP'si Verir", 11.sp, Px.Sub)
+                    for ((key, title, reset) in listOf(Triple("daily", "Günlük Görevler", nextDay(now)), Triple("weekly", "Haftalık Görevler", nextWeek(now)))) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PT(title, 16.sp, Px.Clan, Modifier.weight(1f))
+                            Icon("calendar", 14.dp, Px.Orange)
+                            Spacer(Modifier.width(4.dp))
+                            PT("Yenilenmeye ${fmtLeft(reset - now)}", 12.sp, Px.Orange)
+                        }
+                        PT("Sezon Bileti XP'si Verir", 11.sp, Px.Sub)
                         Spacer(Modifier.height(6.dp))
                         for (d in q.optJSONArray(key).objs()) {
                             val done = d.optBoolean("done")

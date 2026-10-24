@@ -82,8 +82,8 @@ fun fmtLeft(ms: Long): String {
 }
 
 /** Türkiye saatiyle bir sonraki gece yarısı / Pazartesi gece yarısı */
-private fun nextDay(now: Long): Long { val tr = now + 3 * 3_600_000L; return (tr / 86_400_000L + 1) * 86_400_000L - 3 * 3_600_000L }
-private fun nextWeek(now: Long): Long {
+internal fun nextDay(now: Long): Long { val tr = now + 3 * 3_600_000L; return (tr / 86_400_000L + 1) * 86_400_000L - 3 * 3_600_000L }
+internal fun nextWeek(now: Long): Long {
     val day = (now + 3 * 3_600_000L) / 86_400_000L
     val wk = (day + 3) / 7
     return ((wk + 1) * 7 - 3) * 86_400_000L - 3 * 3_600_000L
