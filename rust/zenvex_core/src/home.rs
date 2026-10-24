@@ -104,11 +104,6 @@ mod tests {
         for d in &dests {
             assert!(g.world.zone(d.x, d.y).safe(), "{} güvenli değil", d.id);
         }
-        // harita seyahatleri de
-        for t in world::TRAVEL {
-            let (x, y) = t.pos();
-            assert!(g.world.zone(x, y).safe(), "seyahat {} güvenli değil", t.id);
-        }
         g.player.combat_t = 99.0;
         g.progress.gold = 100;
         assert!(g.wizard_teleport("home").is_ok());

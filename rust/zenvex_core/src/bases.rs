@@ -34,8 +34,9 @@ pub const CLAN_RESPAWN: f32 = 60.0;
 /// ele geçirme alanında kalma süresi (sn)
 pub const CAPTURE_TIME: f32 = 10.0;
 pub const CAPTURE_R: f32 = 3.0 * TILE;
-const ACT_R: f32 = 48.0 * TILE;
-const DEACT_R: f32 = 62.0 * TILE;
+// V15: üsler ızgarada sık (34 karo); yalnız yanındaki üsler uyanır
+const ACT_R: f32 = 26.0 * TILE;
+const DEACT_R: f32 = 34.0 * TILE;
 /// çizim türleri (Kotlin GameView ile ortak)
 pub const D_SOLDIER: f32 = 10.0;
 pub const D_HELI: f32 = 11.0;
@@ -97,23 +98,25 @@ fn generate_defs() -> Vec<BaseDef> {
         (Zone::BlackSwamp, 4, 36),
         (Zone::Industrial, 4, 40),
     ];
-    // yuvalar: doğu şeritte (x 744/810/876) ve güney şeritte (y 744/810/876), 62 karo arayla; iki şerit dönüşümlü
-    let w = world::WORLD_TILES as f32;
-    let lanes = [w + 24.0, w + 90.0, w + 156.0];
-    let mut east = Vec::new();
-    let mut south = Vec::new();
-    for k in 0..12 {
-        let along = 30.0 + k as f32 * 62.0;
-        for &l in &lanes {
-            east.push((l, along));
-            south.push((along, l));
+    // V15 yuvalar: Cephe karesinde 8 sütun × 7 satır ızgara (34 karo arayla); karargâh güney ortada, eğitim üssü ona
+    // en yakın yuvada. Kimlik sırası, seviye ve kaynak bölge aynı; yalnız yerler değişti (sunucudaki sahiplikler korunur).
+    let (fx, fy, _) = crate::areas::SQUARES[crate::areas::FRONT];
+    let mut slots: Vec<(f32, f32)> = Vec::new();
+    for r in 0..7 {
+        for c in 0..8 {
+            slots.push((fx + 30.0 + c as f32 * 34.0, fy + 20.0 + r as f32 * 34.0));
         }
     }
-    let mut slots = Vec::new();
-    for i in 0..east.len() {
-        slots.push(east[i]);
-        slots.push(south[i]);
-    }
+    let hq = world::landmark("front_hq");
+    // eğitim üssü: karargâha en yakın yuva (son satırın ortası)
+    let train_at = slots
+        .iter()
+        .enumerate()
+        .min_by(|a, b| (a.1 .0 - hq.tx).hypot(a.1 .1 - hq.ty).total_cmp(&(b.1 .0 - hq.tx).hypot(b.1 .1 - hq.ty)))
+        .map(|(i, _)| i)
+        .unwrap_or(0);
+    let train = slots.remove(train_at);
+    let slots = slots;
     let mut out: Vec<BaseDef> = Vec::new();
     let mut it = slots.into_iter();
     for (zone, n, level) in quotas {
@@ -123,7 +126,7 @@ fn generate_defs() -> Vec<BaseDef> {
             out.push(BaseDef { id, tx, ty, level: level + (id as u32 % 3), region: zone });
         }
     }
-    out.push(BaseDef { id: TRAIN_BASE as u16, tx: world::WORLD_TILES as f32 + 146.0, ty: world::WORLD_TILES as f32 + 40.0, level: 10, region: Zone::Front });
+    out.push(BaseDef { id: TRAIN_BASE as u16, tx: train.0, ty: train.1, level: 10, region: Zone::Front });
     out
 }
 
@@ -987,12 +990,14 @@ mod tests {
             let z = zone_at_tile(b.tx as usize, b.ty as usize);
             assert!(!z.safe(), "üs {i} güvenli bölgede");
             for c in d.iter().skip(i + 1) {
-                assert!((b.tx - c.tx).hypot(b.ty - c.ty) >= 40.0);
+                assert!((b.tx - c.tx).hypot(b.ty - c.ty) >= 34.0);
             }
         }
         // V11: hepsi Cephe Hattı'nda
         assert!(d.iter().all(|b| zone_at_tile(b.tx as usize, b.ty as usize) == Zone::Front));
-        assert!(d.iter().all(|b| b.tx + BASE_HALF < world::MAP_TILES as f32 - 3.0 && b.ty + BASE_HALF < world::MAP_TILES as f32 - 3.0));
+        // V15: hepsi Cephe karesinin içinde (duvarlarıyla)
+        let (fx, fy, fs) = crate::areas::SQUARES[crate::areas::FRONT];
+        assert!(d.iter().all(|b| b.tx - BASE_HALF > fx + 2.0 && b.tx + BASE_HALF < fx + fs - 2.0 && b.ty - BASE_HALF > fy + 2.0 && b.ty + BASE_HALF < fy + fs - 2.0));
     }
 
     fn goto_base(g: &mut Game, i: usize) {

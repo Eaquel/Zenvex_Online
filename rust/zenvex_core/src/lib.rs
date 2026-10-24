@@ -57,13 +57,6 @@ pub fn world_json(g: &Game) -> String {
         .iter()
         .map(|z| json!([z.name(), z.level_range().0, z.level_range().1, z.safe()]))
         .collect();
-    let travel: Vec<_> = world::TRAVEL
-        .iter()
-        .map(|t| {
-            let (x, y) = t.pos();
-            json!([t.id, t.name, x, y, t.level, t.cost, areas::area_at(x, y)])
-        })
-        .collect();
     let chars: Vec<_> = data::CHARACTERS
         .iter()
         .map(|c| json!([c.id, c.name]))
@@ -78,7 +71,6 @@ pub fn world_json(g: &Game) -> String {
         "merchants": w.merchants,
         "benches": w.benches,
         "camp": world::CAMP,
-        "travel": travel,
         "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y, l.safe]) }).collect::<Vec<_>>(),
         "bases": bases::base_defs().iter().take(bases::BASE_N).map(|b| { let (x, y) = b.pos(); json!([b.id, b.name(), x, y, b.level]) }).collect::<Vec<_>>(),
         "base_half": bases::BASE_HALF * world::TILE,
@@ -114,6 +106,11 @@ pub fn minimap(g: &Game, n: usize, out: &mut [u32]) {
             let tx = px * world::MAP_TILES / n;
             let ty = py * world::MAP_TILES / n;
             if let Some(o) = out.get_mut(py * n + px) {
+                // V15: kareler arası boşluk karanlık
+                if areas::area_exact((tx as f32 + 0.5) * world::TILE, (ty as f32 + 0.5) * world::TILE).is_none() {
+                    *o = 0xFF0C0A12;
+                    continue;
+                }
                 let m = g.world.ground_at(tx, ty);
                 let c = if m >= world::ground::R_MAIN {
                     let a = areas::area_at((tx as f32 + 0.5) * world::TILE, (ty as f32 + 0.5) * world::TILE);

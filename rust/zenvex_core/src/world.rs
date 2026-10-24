@@ -197,41 +197,6 @@ pub struct Static {
     pub sort_off: f32,
 }
 
-pub struct Travel {
-    pub id: &'static str,
-    pub name: &'static str,
-    /// karo koordinatı; (-1,-1) kamp, (-2,-2) şehir doğma noktası
-    pub tile: (f32, f32),
-    pub level: u32,
-    pub cost: u32,
-}
-
-impl Travel {
-    pub fn pos(&self) -> (f32, f32) {
-        match self.tile {
-            (-1.0, _) => camp_spawn(),
-            (-2.0, _) => city_spawn(),
-            (-3.0, _) => (BOSS.0 - 600.0, BOSS.1 + 400.0),
-            (x, y) => (x * TILE, y * TILE),
-        }
-    }
-}
-
-/// Haritadan hızlı seyahat noktaları: hepsi güvenli bir karakola ya da kampa çıkar (karakolların yanına, 2 kare güneye).
-pub const TRAVEL: &[Travel] = &[
-    Travel { id: "camp", name: "Kamp", tile: (-1.0, -1.0), level: 1, cost: 0 },
-    Travel { id: "deep", name: "Derin Orman Karakolu", tile: (300.0, 252.0), level: 5, cost: 25 },
-    Travel { id: "swamp", name: "Bataklık Karakolu", tile: (45.0, 282.0), level: 8, cost: 40 },
-    Travel { id: "city", name: "Şehir Güvenli Bölgesi", tile: (-2.0, -2.0), level: 10, cost: 60 },
-    Travel { id: "burnt", name: "Kül Karakolu", tile: (452.0, 272.0), level: 15, cost: 80 },
-    Travel { id: "downtown", name: "Merkez Sığınağı", tile: (44.0, 70.0), level: 20, cost: 100 },
-    Travel { id: "desert", name: "Çöl Karakolu", tile: (262.0, 472.0), level: 20, cost: 110 },
-    Travel { id: "bswamp", name: "Kara Bataklık Karakolu", tile: (90.0, 472.0), level: 25, cost: 130 },
-    Travel { id: "military", name: "Kuzey Kül Karakolu", tile: (388.0, 132.0), level: 15, cost: 80 },
-    Travel { id: "harbor", name: "Liman Karakolu", tile: (470.0, 422.0), level: 40, cost: 180 },
-    Travel { id: "boss", name: "Arena Kampı", tile: (275.0, 50.0), level: 45, cost: 200 },
-];
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Zone {
     Camp,
@@ -280,26 +245,20 @@ pub const LANDMARKS: &[Landmark] = &[
     Landmark { id: "kennel", name: "Köpek Barınağı", tx: 245.0, ty: 313.0, r: 5.0, safe: true },
     Landmark { id: "gas", name: "Benzin İstasyonu", tx: 192.0, ty: 205.0, r: 6.0, safe: true },
     Landmark { id: "tree", name: "Gizemli Ağaç", tx: 232.0, ty: 262.0, r: 3.0, safe: false },
-    Landmark { id: "spring", name: "Zehirli Kaynak", tx: 58.0, ty: 302.0, r: 7.0, safe: false },
-    // V8 güvenli karakollar (seyahat ve büyücü ışınlanması buralara çıkar)
-    Landmark { id: "deep_post", name: "Derin Orman Karakolu", tx: 300.0, ty: 250.0, r: 5.0, safe: true },
-    Landmark { id: "swamp_post", name: "Bataklık Karakolu", tx: 45.0, ty: 280.0, r: 5.0, safe: true },
-    Landmark { id: "downtown_post", name: "Merkez Sığınağı", tx: 44.0, ty: 68.0, r: 5.0, safe: true },
-    Landmark { id: "arena_post", name: "Arena Kampı", tx: 275.0, ty: 48.0, r: 5.0, safe: true },
-    Landmark { id: "burnt_post", name: "Kül Karakolu", tx: 452.0, ty: 270.0, r: 6.0, safe: true },
-    Landmark { id: "desert_post", name: "Çöl Karakolu", tx: 262.0, ty: 470.0, r: 6.0, safe: true },
-    Landmark { id: "bswamp_post", name: "Kara Bataklık Karakolu", tx: 90.0, ty: 470.0, r: 6.0, safe: true },
-    Landmark { id: "military_post", name: "Kuzey Kül Karakolu", tx: 388.0, ty: 130.0, r: 6.0, safe: true },
-    Landmark { id: "harbor_post", name: "Liman Karakolu", tx: 470.0, ty: 420.0, r: 6.0, safe: true },
-    // V11 Cephe Karargâhı (Cephe Hattı'nın güneydoğu köşesi; Büyücü Aldric buraya ışınlar, geri götürür)
-    Landmark { id: "front_hq", name: "Cephe Karargâhı", tx: 810.0, ty: 810.0, r: 9.0, safe: true },
+    Landmark { id: "spring", name: "Zehirli Kaynak", tx: 96.0, ty: 312.0, r: 7.0, safe: false },
+    // V15: şehir görevinin hedefi (eski arenanın girişi; artık karakol değil)
+    Landmark { id: "arena_post", name: "Eski Arena", tx: 238.0, ty: 52.0, r: 4.0, safe: false },
+    // V15: her bölgenin tek girişi (büyücü, doğuş); eski ara karakollar (derin orman, bataklık, merkez, kuzey kül) kalktı
+    Landmark { id: "burnt_post", name: "Kül Karakolu", tx: 452.0, ty: 258.0, r: 6.0, safe: true },
+    Landmark { id: "desert_post", name: "Çöl Karakolu", tx: 262.0, ty: 532.0, r: 6.0, safe: true },
+    Landmark { id: "bswamp_post", name: "Kara Bataklık Karakolu", tx: 92.0, ty: 532.0, r: 6.0, safe: true },
+    Landmark { id: "harbor_post", name: "Liman Karakolu", tx: 490.0, ty: 582.0, r: 6.0, safe: true },
+    // V11 Cephe Karargâhı (V15: Cephe karesinin güney ortası; Büyücü Aldric buraya ışınlar, geri götürür)
+    Landmark { id: "front_hq", name: "Cephe Karargâhı", tx: 746.0, ty: 280.0, r: 9.0, safe: true },
 ];
 
-/// V8 karakolları (place_posts bunlara çadır, ateş, kum torbası koyar)
-pub const POSTS: &[&str] = &[
-    "deep_post", "swamp_post", "downtown_post", "arena_post", "burnt_post", "desert_post", "bswamp_post", "military_post", "harbor_post",
-    "front_hq",
-];
+/// Bölge girişlerinin karakolları (place_posts bunlara çadır, ateş, kum torbası koyar)
+pub const POSTS: &[&str] = &["burnt_post", "desert_post", "bswamp_post", "harbor_post", "front_hq"];
 
 pub fn landmark(id: &str) -> &'static Landmark {
     LANDMARKS.iter().find(|l| l.id == id).unwrap_or(&LANDMARKS[0])
@@ -409,7 +368,8 @@ pub const SAFE_Y0: usize = 118;
 pub const SAFE_Y1: usize = 146;
 pub const CAMP: (f32, f32) = (180.0 * TILE, 300.0 * TILE);
 pub const CAMP_R: f32 = 11.0 * TILE;
-pub const BOSS: (f32, f32) = (305.0 * TILE, 24.0 * TILE);
+/// eski Titan arenası (V15: şehir karesinin kuzeydoğu köşesi)
+pub const BOSS: (f32, f32) = (253.0 * TILE, 24.0 * TILE);
 
 pub fn city_spawn() -> (f32, f32) {
     (180.0 * TILE, 138.0 * TILE)
@@ -461,9 +421,12 @@ fn region_zone(tx: usize, ty: usize) -> Zone {
     }
 }
 
+const REGION_ROADS: bool = false;
+
 /// Yeni bölgelerin yolları: (yolda mı, dikey orta çizgi, yatay orta çizgi)
 pub fn region_road(tx: usize, ty: usize) -> (bool, bool, bool) {
-    if tx < OLD_TILES && ty < OLD_TILES {
+    // V15: bölgeler arası eski otoyollar kalktı (kare bölgelerin kenarından dışarı giden yol kalmasın)
+    if !REGION_ROADS || (tx < OLD_TILES && ty < OLD_TILES) {
         return (false, false, false);
     }
     let band = |v: usize, at: &[usize]| at.iter().find(|&&a| v >= a && v < a + 4).map(|&a| v - a == 2);
@@ -546,6 +509,10 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
     if in_home_tile(tx, ty) {
         return Zone::Home;
     }
+    // V15: kare bölgelerin dışı boşluk (yürünmez, yaratık doğmaz; zemin "boşluk" dokusu)
+    let Some(area) = crate::areas::area_exact(x, y) else {
+        return Zone::Wall;
+    };
     if tx < OLD_TILES && (WALL_Y..=WALL_Y + 1).contains(&ty) {
         return Zone::Wall;
     }
@@ -556,7 +523,7 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
             return Zone::Outpost;
         }
     }
-    if tx >= WORLD_TILES || ty >= WORLD_TILES {
+    if area == crate::areas::FRONT {
         return Zone::Front;
     }
     if tx >= OLD_TILES || ty >= OLD_TILES {
@@ -566,7 +533,7 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
         if (SAFE_X0..SAFE_X1).contains(&tx) && (SAFE_Y0..SAFE_Y1).contains(&ty) {
             return Zone::SafeCity;
         }
-        if (280..334).contains(&tx) && ty < 44 {
+        if (226..280).contains(&tx) && ty < 44 {
             return Zone::BossArena;
         }
         return if ty >= 90 {
@@ -861,16 +828,11 @@ impl World {
                 }
             }
         };
-        carve(
-            &mut w,
-            180.0,
-            292.0,
-            180.0,
-            153.0,
-            1,
-            ground::GRAVEL,
-            &mut rng,
-        );
+        // V15: kamptan eski şehir kapısına giden patika kalktı (bölgeler ayrı; şehre büyücü götürür). Rastgele sayı
+        // dizisi değişmesin diye patikanın zarları yine atılır.
+        for _ in 0..=((139.0f32 * 1.5) as i32) {
+            rng.range(-0.3, 0.3);
+        }
         carve(&mut w, 173.0, 300.0, 90.0, 290.0, 1, ground::DIRT, &mut rng);
         carve(
             &mut w,
@@ -906,12 +868,15 @@ impl World {
         w.place_city(&mut rng);
         w.place_forest(&mut rng);
         w.place_regions(&mut rng);
+        // V15: buradan önceki nesneler eski dünyanın içeriği (Cephe karesine düşenler kırpılır)
+        let old_content = w.statics.len();
         w.place_posts();
         w.place_home();
         w.place_bases();
         // V11 (sona eklenir: önceki nesnelerin sıra numaraları değişmez)
         w.place_border();
         w.place_front();
+        w.crop_to_squares(old_content);
         w.regionize_ground();
         w.place_region_art();
         // SUV oyundan kaldırıldı: doğduğu yerlerde iki kişilik araba durur (indeks 3 yalnız yer tutucu)
@@ -2143,7 +2108,8 @@ impl World {
                             let outer = ex + ox < 0.5 || ey + oy < 0.5 || ex + ox > n - 0.5 || ey + oy > n - 0.5;
                             let inset = if outer { 4.8 } else { 1.3 };
                             let (px, py) = ((ex - ox * inset) * t, (ey - oy * inset) * t);
-                            let other = outer || areas::area_at((ex + ox * 1.5) * t, (ey + oy * 1.5) * t) != ai;
+                            // kenarın ötesi boşluk ya da başka bölge (V15: kareler arası boşluk da sınır)
+                            let other = outer || areas::area_exact((ex + ox * 1.5) * t, (ey + oy * 1.5) * t) != Some(ai);
                             d += 2.9 + rng.range(0.0, 0.5);
                             if !other || areas::area_at(px, py) != ai || near_hub(px, py) || busy_base(px, py) || !free(&grid, px, py, 0.9 * t) {
                                 continue;
@@ -2189,7 +2155,7 @@ impl World {
             for r in a.rects {
                 area_t += (r.2 - r.0) * (r.3 - r.1);
             }
-            let want = if id == "home" { 8 } else { ((area_t / 700.0) as usize).clamp(40, 220) };
+            let want = if id == "home" { 8 } else { ((area_t / 400.0) as usize).clamp(60, 240) };
             let mut placed = 0;
             while placed < want && tries < want * 12 {
                 tries += 1;
@@ -2209,12 +2175,47 @@ impl World {
         }
     }
 
+    /// V15: kare bölgelerin dışındaki her şey silinir (boşluk); kenarı aşan nesneler (yarım bina olmasın) ve Cephe
+    /// karesine düşen eski dünya içeriği de. Tüccar, tezgâh, nişancı ve araç yerleri de karelerin içinde kalır.
+    fn crop_to_squares(&mut self, old_content: usize) {
+        use crate::areas::{area_exact, FRONT};
+        let t = TILE;
+        let inside = |x: f32, y: f32| area_exact(x, y).is_some();
+        let mut i = 0usize;
+        self.statics.retain(|s| {
+            let k = i;
+            i += 1;
+            let (hw, hh) = match s.shape {
+                Shape::Rect(hw, hh) => (hw, hh),
+                Shape::Circle(r) => (r, r),
+                Shape::None => (0.0, 0.0),
+            };
+            let a = area_exact(s.x, s.y);
+            // binalar kenarı aşmasın (yarım bina kalmasın); sur, çit gibi ince nesneler kenarda kalabilir
+            let whole = !matches!(s.kind, Kind::Building | Kind::Tower)
+                || [(-hw, -hh), (hw, -hh), (-hw, hh), (hw, hh)].iter().all(|&(ox, oy)| area_exact(s.x + ox, s.y + oy) == a);
+            a.is_some() && whole && !(k < old_content && a == Some(FRONT))
+        });
+        self.merchants.retain(|&(x, y)| inside(x, y));
+        self.benches.retain(|&(x, y)| inside(x, y));
+        self.snipers.retain(|&(x, y)| inside(x, y));
+        self.vehicle_spawns.retain(|&(_, x, y, _)| inside(x, y));
+        // boşluğun zemini
+        for ty in 0..MAP_TILES {
+            for tx in 0..MAP_TILES {
+                if !inside((tx as f32 + 0.5) * t, (ty as f32 + 0.5) * t) {
+                    self.ground[ty * MAP_TILES + tx] = ground::R_VOID;
+                }
+            }
+        }
+    }
+
     /// V13: her karonun malzemesi bulunduğu bölgenin kendi dokusuna çevrilir (crate::areas::region_ground)
     fn regionize_ground(&mut self) {
         for ty in 0..MAP_TILES {
             for tx in 0..MAP_TILES {
                 let (x, y) = ((tx as f32 + 0.5) * TILE, (ty as f32 + 0.5) * TILE);
-                let a = crate::areas::area_at(x, y);
+                let Some(a) = crate::areas::area_exact(x, y) else { continue };
                 let n = crate::rng::value_noise(self.seed ^ 0xA17, tx as f32 / 7.0, ty as f32 / 7.0);
                 let i = ty * MAP_TILES + tx;
                 if let Some(c) = self.ground.get_mut(i) {
@@ -2226,7 +2227,6 @@ impl World {
 
     fn place_border(&mut self) {
         let t = TILE;
-        let n = MAP_TILES as f32;
         // şehir surunun batı ucu (kenardan ilk sur parçasına kadar)
         self.push("wall_x", Kind::Prop, 1.0 * t, (WALL_Y as f32 + 1.0) * t, Shape::Rect(1.2 * t, 0.4 * t), 0.0, 0.0);
         // şehrin doğu suru: kuzey kenardan güney sura kadar kesintisiz
@@ -2241,57 +2241,8 @@ impl World {
         for gx in [GATE_X0 as f32 - 1.0, GATE_X1 as f32 + 1.0] {
             self.push("grass0", Kind::Deco, gx * t, (WALL_Y as f32 + 1.0) * t, Shape::Rect(1.0 * t, 0.5 * t), 0.0, 0.0);
         }
-        // karantina duvarı: ana dünyanın çevresi (kenardan 1,5 karo içeride) ve haritanın dış kenarı (Cephe Hattı'nın dışı).
-        // Ana dünya ile Cephe Hattı arasında geçit yok: yalnız Büyücü Aldric ışınlar.
-        let e0 = 1.5f32;
-        let w1 = WORLD_TILES as f32 - 1.5;
-        let e1 = n - 1.5;
-        let mut x = 0.0;
-        while x < n {
-            // V13: beton karantina duvarı (dikenli tel, tehlike şeritleri); dikey kenarlarda eski sur
-            self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, e0 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, e1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            if x < WORLD_TILES as f32 {
-                self.push("quarantine_wall", Kind::Prop, (x + 2.0) * t, w1 * t, Shape::Rect(2.0 * t, 0.4 * t), 0.0, 0.0);
-            }
-            x += 4.0;
-        }
-        let mut y = 0.0;
-        while y < n {
-            self.push("wall_z", Kind::Prop, e0 * t, (y + 2.0) * t, Shape::Rect(0.4 * t, 2.0 * t), 0.0, 0.0);
-            self.push("wall_z", Kind::Prop, e1 * t, (y + 2.0) * t, Shape::Rect(0.4 * t, 2.0 * t), 0.0, 0.0);
-            if y < WORLD_TILES as f32 {
-                self.push("wall_z", Kind::Prop, w1 * t, (y + 2.0) * t, Shape::Rect(0.4 * t, 2.0 * t), 0.0, 0.0);
-            }
-            y += 4.0;
-        }
-        let n = WORLD_TILES as f32;
-        let e1 = w1;
-        // duvarın iç yüzü: her 36 karoda gözetleme kulesi, aralarda lamba, tabela ve barikat (bölgeye göre görsel değişir)
-        let mut k = 0usize;
-        let mut d = 18.0;
-        while d < n - 18.0 {
-            for (px, py) in [(d, e0 + 2.6), (d, e1 - 2.6), (e0 + 2.6, d), (e1 - 2.6, d)] {
-                let (tx, ty) = (px as usize, py as usize);
-                // kişisel üs ve güvenli bölgelerin içine bir şey koyma
-                if in_home_tile(tx, ty) || matches!(zone_at_tile(tx.min(MAP_TILES - 1), ty.min(MAP_TILES - 1)), Zone::Outpost | Zone::SafeCity | Zone::Camp) {
-                    continue;
-                }
-                match k % 3 {
-                    0 => self.push("watchtower", Kind::Tower, px * t, py * t, Shape::Rect(1.2 * t, 1.2 * t), 0.0, 0.0),
-                    1 => {
-                        self.push("border_searchlight", Kind::Lamp, px * t, py * t, Shape::Circle(0.35 * t), 0.0, 0.0);
-                        self.push("quarantine_sign", Kind::Prop, (px + 2.0) * t, py * t, Shape::Circle(0.15 * t), 0.0, 0.0);
-                    }
-                    _ => {
-                        self.push("quarantine_post", Kind::Prop, px * t, py * t, Shape::Rect(0.5 * t, 0.4 * t), 0.0, 0.0);
-                        self.push("border_bones", Kind::Deco, (px - 2.2) * t, py * t, Shape::None, 0.0, 0.0);
-                    }
-                }
-            }
-            k += 1;
-            d += 12.0;
-        }
+        // V15: eski dünyanın çevresindeki karantina duvarı ve kuleleri kalktı (Cephe karesini ortadan bölüyordu);
+        // her kare bölgenin kenarını kendi sınır parçaları kapatır (place_region_art).
     }
 
     /// V11 Cephe Hattı: savaş alanı dekoru (siper, kum torbası, enkaz, kurumuş ağaç, askerî sandık) ve güneydoğudaki
@@ -2299,26 +2250,22 @@ impl World {
     fn place_front(&mut self) {
         let t = TILE;
         let mut rng = Rng::new(self.seed ^ 0xF20_7000);
-        let w0 = WORLD_TILES as f32;
-        let n = MAP_TILES as f32;
+        // V15: Cephe Hattı tek kare
+        let (fx0, fy0, fs) = crate::areas::SQUARES[crate::areas::FRONT];
         let hq = landmark("front_hq");
         let busy = |tx: f32, ty: f32| -> bool {
             base_defs().iter().any(|b| (tx - b.tx).abs() < BASE_HALF + 3.0 && (ty - b.ty).abs() < BASE_HALF + 3.5)
                 || (tx - hq.tx).hypot(ty - hq.ty) < hq.r + 6.0
         };
         let tau = std::f32::consts::TAU;
-        let mut y = 4.0;
-        while y < n - 4.0 {
-            let mut x = 4.0;
-            while x < n - 4.0 {
-                if x < w0 + 1.0 && y < w0 + 1.0 {
-                    x += 3.2;
-                    continue;
-                }
+        let mut y = fy0 + 4.0;
+        while y < fy0 + fs - 4.0 {
+            let mut x = fx0 + 4.0;
+            while x < fx0 + fs - 4.0 {
                 let (px, py) = (x + rng.range(-1.2, 1.2), y + rng.range(-1.2, 1.2));
                 let r = rng.f32();
                 let ph = rng.range(0.0, tau);
-                if busy(px, py) || px < w0 + 2.0 && py < w0 + 2.0 {
+                if busy(px, py) {
                     x += 3.2;
                     continue;
                 }
@@ -2581,7 +2528,9 @@ mod tests {
             *n.entry(STATIC_NAMES[s.sprite as usize]).or_insert(0u32) += 1;
         }
         let first = STATIC_NAMES.iter().position(|s| *s == "snow_pine").unwrap();
-        let missing: Vec<_> = STATIC_NAMES[first..].iter().filter(|k| n.get(*k).copied().unwrap_or(0) == 0).collect();
+        // V15: eski dünya çevresindeki karantina duvarının parçaları artık kullanılmıyor
+        let retired = ["quarantine_wall", "quarantine_post", "quarantine_sign", "border_searchlight", "border_bones"];
+        let missing: Vec<_> = STATIC_NAMES[first..].iter().filter(|k| !retired.contains(*k) && n.get(*k).copied().unwrap_or(0) == 0).collect();
         assert!(missing.is_empty(), "yerleşmeyen: {missing:?}");
         assert_eq!(n.get("tent").copied().unwrap_or(0), 0);
     }
@@ -2591,11 +2540,14 @@ mod tests {
         assert_eq!(zone_at_tile(180, 300), Zone::Camp);
         assert_eq!(zone_at_tile(180, 130), Zone::SafeCity);
         assert_eq!(zone_at_tile(180, 100), Zone::Suburb);
-        assert_eq!(zone_at_tile(50, 60), Zone::Downtown);
-        assert_eq!(zone_at_tile(50, 20), Zone::Industrial);
-        assert_eq!(zone_at_tile(300, 20), Zone::BossArena);
-        assert_eq!(zone_at_tile(50, 300), Zone::Swamp);
+        assert_eq!(zone_at_tile(160, 60), Zone::Downtown);
+        assert_eq!(zone_at_tile(160, 20), Zone::Industrial);
+        assert_eq!(zone_at_tile(250, 20), Zone::BossArena);
+        assert_eq!(zone_at_tile(80, 300), Zone::Swamp);
         assert_eq!(zone_at_tile(180, 150), Zone::Wall);
+        // V15: kareler arası boşluk
+        assert_eq!(zone_at_tile(30, 30), Zone::Wall);
+        assert_eq!(zone_at_tile(700, 150), Zone::Front);
     }
 
     /// Telefonda bellek/süre bütçesi: 4 kat alanda statik sayısı makul kalmalı
@@ -2648,40 +2600,37 @@ mod tests {
         assert!(!moved2);
     }
 
-    /// Şehre yalnız kapıdan girilir: harita kenarından ve doğudaki Askerî Bölge'den yürüyerek (ya da hızlı araçla) geçilemez
+    /// V15: bölgeler kare ve ayrı; ormandan şehre, boşluğa ya da başka bölgeye yürüyerek geçilemez (görünmez sınır)
     #[test]
-    fn city_sealed_from_outside() {
+    fn squares_are_sealed_from_each_other() {
+        use crate::areas::{area_exact, clamp, SQUARES};
+        for (i, &(x0, y0, s)) in SQUARES.iter().enumerate() {
+            let (cx, cy) = ((x0 + s / 2.0) * TILE, (y0 + s / 2.0) * TILE);
+            // merkezden dört yöne kenarın ötesine yürü: hep kendi karesinde kalır
+            for (dx, dy) in [(1.0f32, 0.0f32), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0), (0.7, 0.7)] {
+                let (mut x, mut y) = (cx, cy);
+                for _ in 0..((s * TILE) as usize / 40 + 40) {
+                    let (ox, oy) = (x, y);
+                    x += dx * 40.0;
+                    y += dy * 40.0;
+                    clamp(ox, oy, &mut x, &mut y);
+                }
+                assert_eq!(area_exact(x, y), Some(i), "{i}. kareden ({dx},{dy}) yönünde dışarı çıkıldı");
+            }
+        }
+        // kareler çakışmaz
+        for (i, a) in SQUARES.iter().enumerate() {
+            for b in SQUARES.iter().skip(i + 1) {
+                let apart = a.0 + a.2 <= b.0 || b.0 + b.2 <= a.0 || a.1 + a.2 <= b.1 || b.1 + b.2 <= a.1;
+                assert!(apart, "kareler çakışıyor: {a:?} {b:?}");
+            }
+        }
         let w = World::generate(7);
         let mut s = Vec::new();
-        // dışarıdan şehre doğru yürüyüş (yol boyunca küçük adımlar; büyük adım da tünel açmamalı)
-        let walk = |from: (f32, f32), to: (f32, f32), step: f32, s: &mut Vec<u32>| {
-            let (mut x, mut y) = from;
-            for _ in 0..4000 {
-                let (dx, dy) = (to.0 - x, to.1 - y);
-                let d = dx.hypot(dy);
-                if d < 1.0 {
-                    break;
-                }
-                let k = step.min(d) / d;
-                let (ox, oy) = (x, y);
-                let (mut nx, mut ny) = (x + dx * k, y + dy * k);
-                w.resolve_move(ox, oy, &mut nx, &mut ny, 14.0, false, s);
-                x = nx;
-                y = ny;
-            }
-            (x, y)
-        };
-        let inside = |p: (f32, f32)| p.0 < OLD_TILES as f32 * TILE - TILE && p.1 < WALL_Y as f32 * TILE;
-        // batı kenarı boyunca kuzeye (eski açık: sur kenardan 2 karo içeride başlıyordu)
-        for step in [6.0, 120.0] {
-            let end = walk((1.2 * TILE, (WALL_Y as f32 + 6.0) * TILE), (1.2 * TILE, 100.0 * TILE), step, &mut s);
-            assert!(!inside(end), "batı kenarından şehre girildi {end:?} (adım {step})");
-            let end = walk(((OLD_TILES as f32 + 6.0) * TILE, 100.0 * TILE), (300.0 * TILE, 100.0 * TILE), step, &mut s);
-            assert!(!inside(end), "doğudan şehre girildi {end:?} (adım {step})");
-        }
-        // harita kenarı duvarı: dışarı çıkılamaz, doğma noktaları boş
         let (x, y) = home_spawn();
         assert!(!w.blocked(x, y, 14.0, &mut s));
+        // boşlukta nesne yok
+        assert!(w.statics.iter().all(|st| area_exact(st.x, st.y).is_some()));
     }
 
     /// Sur boyunca her noktadan kuzeye yürüyüş: kapı kapalıyken hiçbir aralıktan şehre geçilemez
@@ -2690,8 +2639,9 @@ mod tests {
         let w = World::generate(7);
         let mut s = Vec::new();
         let mut leaks = Vec::new();
-        let mut tx = 0.6;
-        while tx < OLD_TILES as f32 + 4.0 {
+        // V15: sur, orman ve şehir karelerinin ortak kenarı
+        let mut tx = 131.0;
+        while tx < 273.0 {
             let (mut x, mut y) = (tx * TILE, (WALL_Y as f32 + 5.0) * TILE);
             for _ in 0..400 {
                 let (ox, oy) = (x, y);

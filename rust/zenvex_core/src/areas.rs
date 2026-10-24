@@ -1,3 +1,5 @@
+//! V15: her bölge kare, kendi başına bir harita; aralarındaki boşluk karanlıktır (yürünmez, hiçbir şey yoktur).
+//! Eski yollar, bölgeler arası geçitler ve fazla karakollar kalktı; her bölgenin tek girişi (büyücü + doğuş) var.
 //! V12 bölgeler: dünya ayrı haritalara bölündü. Bölgeler arasında yürünmez (görünmez sınır, ötesi karanlık);
 //! bölgeden bölgeye yalnız Büyücü Aldric ışınlar (her bölgenin giriş karakolunda bir büyücü durur).
 //! Harita ekranı yalnız bulunulan bölgeyi gösterir; büyücünün haritasında bölgeye dokununca yaratıklar, ganimet,
@@ -29,62 +31,79 @@ pub const TITAN_AREAS: &[usize] = &[1, 2, 3, 4, 5];
 /// Titan dilimi (sn)
 pub const TITAN_SLOT: f64 = 900.0;
 
-const W: f32 = world::WORLD_TILES as f32;
-const O: f32 = world::OLD_TILES as f32;
-const N: f32 = world::MAP_TILES as f32;
-/// şehir suru (WALL_Y + 1 karo) iki bölgeyi ayırır
-const WALL: f32 = world::WALL_Y as f32 + 1.0;
+/// V15 kare bölgeler (karo): (x0, y0, kenar). Eski dünyanın içeriği bu karelerin içinde kalır; dışı boşluktur.
+/// Cephe Hattı eski doğu/güney şeridin yerine kuzeydoğuda tek bir karedir (üsler ızgarada, bkz. bases.rs).
+pub const SQUARES: [(f32, f32, f32); 8] = [
+    (66.0, 152.0, 208.0),  // Başlangıç Ormanı (kamp güneyde)
+    (130.0, 0.0, 152.0),   // Yıkık Şehir (güney kenarı şehir suru)
+    (370.0, 60.0, 210.0),  // Yanık Orman
+    (190.0, 380.0, 170.0), // Çöl Otoyolu
+    (8.0, 380.0, 170.0),   // Kara Bataklık
+    (380.0, 380.0, 220.0), // Donmuş Liman
+    (596.0, 0.0, 300.0),   // Cephe Hattı
+    // Kişisel Üs (çevre duvarı kenarın bir karo içinde kalsın)
+    (world::HOME_X0 as f32 - 2.0, world::HOME_Y0 as f32 - 2.0, (world::HOME_X1 - world::HOME_X0) as f32 + 5.0),
+];
+
+const fn sq(i: usize) -> (f32, f32, f32, f32) {
+    let (x, y, s) = SQUARES[i];
+    (x, y, x + s, y + s)
+}
 
 pub const AREAS: &[Area] = &[
-    Area { id: "forest", name: "Başlangıç Ormanı", rects: &[(0.0, WALL, O, O)], level: 1, rec: (1, 15), cost: 0,
+    Area { id: "forest", name: "Başlangıç Ormanı", rects: &[sq(0)], level: 1, rec: (1, 15), cost: 0,
         zones: &[Zone::Camp, Zone::Forest, Zone::DeepForest, Zone::Swamp],
         desc: "Kamp, sahra hastanesi ve köpek barınağı burada. Kampın çevresi sakin; doğuya ve bataklığa gittikçe zombiler sertleşir." },
-    Area { id: "city", name: "Yıkık Şehir", rects: &[(0.0, 0.0, O, WALL)], level: 10, rec: (10, 50), cost: 30,
+    Area { id: "city", name: "Yıkık Şehir", rects: &[sq(1)], level: 10, rec: (10, 50), cost: 30,
         zones: &[Zone::SafeCity, Zone::Suburb, Zone::Downtown, Zone::Industrial, Zone::BossArena],
         desc: "Güvenli bölgeden banliyöye, merkeze ve sanayiye. Elektronik, dişli, pil ve paslı anahtar burada." },
-    Area { id: "burnt", name: "Yanık Orman", rects: &[(O, 0.0, W, O)], level: 15, rec: (15, 25), cost: 45,
+    Area { id: "burnt", name: "Yanık Orman", rects: &[sq(2)], level: 15, rec: (15, 25), cost: 45,
         zones: &[Zone::BurntForest],
         desc: "Yangından geriye kül ve kömürleşmiş ağaçlar kaldı. Koşucular ve karanlık zombiler dumanın içinde avlanır." },
-    Area { id: "desert", name: "Çöl Otoyolu", rects: &[(O / 2.0, O, O, W)], level: 20, rec: (20, 30), cost: 60,
+    Area { id: "desert", name: "Çöl Otoyolu", rects: &[sq(3)], level: 20, rec: (20, 30), cost: 60,
         zones: &[Zone::Desert],
         desc: "Kumla örtülmüş otoyol ve terk edilmiş araçlar. Tank zombiler ve kuduz köpek sürüleri dolaşır." },
-    Area { id: "bswamp", name: "Kara Bataklık", rects: &[(0.0, O, O / 2.0, W)], level: 25, rec: (25, 35), cost: 75,
+    Area { id: "bswamp", name: "Kara Bataklık", rects: &[sq(4)], level: 25, rec: (25, 35), cost: 75,
         zones: &[Zone::BlackSwamp],
         desc: "Zehirli sis ve kara su. Toksik zombilerin yuvası; gizemli maskeliler de görülmüş." },
-    Area { id: "harbor", name: "Donmuş Liman", rects: &[(O, O, W, W)], level: 40, rec: (40, 50), cost: 100,
+    Area { id: "harbor", name: "Donmuş Liman", rects: &[sq(5)], level: 40, rec: (40, 50), cost: 100,
         zones: &[Zone::Harbor],
         desc: "Buzla kaplı rıhtım ve konteynerler. Dünyanın en tehlikeli zombileri burada." },
-    Area { id: "front", name: "Cephe Hattı", rects: &[(W, 0.0, N, N), (0.0, W, N, N)], level: 10, rec: (28, 50), cost: 40,
+    Area { id: "front", name: "Cephe Hattı", rects: &[sq(6)], level: 10, rec: (28, 50), cost: 40,
         zones: &[Zone::Front],
         desc: "Devlet ve klan üslerinin kapıştığı savaş alanı. Zombi yok: üsleri askerler (botlar) korur. Klanınla üs ele geçir." },
-    Area { id: "home", name: "Kişisel Üssüm", rects: &[(world::HOME_X0 as f32, world::HOME_Y0 as f32, world::HOME_X1 as f32 + 1.0, world::HOME_Y1 as f32 + 1.0)],
+    Area { id: "home", name: "Kişisel Üssüm", rects: &[sq(7)],
         level: 1, rec: (1, 50), cost: 0, zones: &[Zone::Home],
         desc: "Yalnız senin görebildiğin, duvarla çevrili güvenli üs. Sandıklarını burada kurarsın." },
 ];
 
-/// Dünya pikselinin bölgesi (AREAS sırası)
-pub fn area_at(x: f32, y: f32) -> usize {
+/// Nokta tam olarak hangi bölgenin karesinde (boşluktaysa None)
+pub fn area_exact(x: f32, y: f32) -> Option<usize> {
     let (tx, ty) = (x / TILE, y / TILE);
-    let inside = |a: &Area| a.rects.iter().any(|&(x0, y0, x1, y1)| tx >= x0 && tx < x1 && ty >= y0 && ty < y1);
-    if inside(&AREAS[HOME]) {
-        return HOME;
-    }
-    if tx >= W || ty >= W {
-        return FRONT;
-    }
-    AREAS[..FRONT].iter().position(inside).unwrap_or(FOREST)
+    AREAS.iter().position(|a| a.rects.iter().any(|&(x0, y0, x1, y1)| tx >= x0 && tx < x1 && ty >= y0 && ty < y1))
 }
 
-/// Bölge sınırı görünmez duvardır: (ox, oy) bölgesinden çıkan hareket eksen eksen geri alınır (sınır boyunca kayılır).
-/// Sınıra takıldıysa true.
+/// Dünya pikselinin bölgesi (AREAS sırası); boşluktaki nokta için en yakın bölge
+pub fn area_at(x: f32, y: f32) -> usize {
+    area_exact(x, y).unwrap_or_else(|| {
+        let (tx, ty) = (x / TILE, y / TILE);
+        let dist = |a: &Area| {
+            a.rects.iter().map(|&(x0, y0, x1, y1)| (tx.clamp(x0, x1) - tx).hypot(ty.clamp(y0, y1) - ty)).fold(f32::MAX, f32::min)
+        };
+        (0..AREAS.len()).min_by(|&a, &b| dist(&AREAS[a]).total_cmp(&dist(&AREAS[b]))).unwrap_or(FOREST)
+    })
+}
+
+/// Bölge sınırı görünmez duvardır: (ox, oy) bölgesinden çıkan hareket (boşluğa ya da başka bölgeye) eksen eksen geri
+/// alınır (sınır boyunca kayılır). Sınıra takıldıysa true.
 pub fn clamp(ox: f32, oy: f32, x: &mut f32, y: &mut f32) -> bool {
-    let a = area_at(ox, oy);
-    if area_at(*x, *y) == a {
+    let a = area_exact(ox, oy);
+    if area_exact(*x, *y) == a {
         return false;
     }
-    if area_at(*x, oy) == a {
+    if area_exact(*x, oy) == a {
         *y = oy;
-    } else if area_at(ox, *y) == a {
+    } else if area_exact(ox, *y) == a {
         *x = ox;
     } else {
         *x = ox;

@@ -580,8 +580,14 @@ impl Game {
                     spots.push((kind, lx + m(ox), ly + m(oy)));
                 }
             } else {
-                for (kind, ox, oy) in [(3u8, -2.6, 1.2), (4, 4.8, 2.8), (5, -4.8, 2.8)] {
-                    spots.push((kind, mx + m(ox), my + m(oy)));
+                // V15 (R10): her NPC güvenli bölgenin kendi köşesinde (doktor batıda, tamirci doğuda, eğitmen kuzeyde);
+                // köşe güvenli değilse yakına çekilir
+                for (kind, far, near) in [(3u8, (-15.0f32, 1.0f32), (-2.6f32, 1.2f32)), (4, (15.0, 1.0), (4.8, 2.8)), (5, (0.0, -9.0), (-4.8, 2.8))] {
+                    let pick = [far, (far.0 * 0.6, far.1 * 0.6), (far.0 * 0.35, far.1 * 0.35), near]
+                        .into_iter()
+                        .find(|&(ox, oy)| world.zone(mx + m(ox), my + m(oy)).safe())
+                        .unwrap_or(near);
+                    spots.push((kind, mx + m(pick.0), my + m(pick.1)));
                 }
             }
             for (kind, mut x, mut y) in spots {
@@ -706,14 +712,15 @@ impl Game {
         if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 || x >= world::MAP_PX || y >= world::MAP_PX {
             return;
         }
-        let area = crate::areas::area_at(x, y);
+        // V15: eski kayıttaki konum kare bölgelerin dışında kaldıysa (boşluk) giriş noktasında başlar
+        let Some(area) = crate::areas::area_exact(x, y) else { return };
         if area != crate::areas::HOME && self.progress.level < crate::areas::AREAS[area].level {
             return;
         }
         let (mut px, mut py) = (x, y);
         let city = self.progress.level >= CITY_LEVEL;
         self.world.resolve(&mut px, &mut py, 14.0, city, &mut self.scratch);
-        if crate::areas::area_at(px, py) != area {
+        if crate::areas::area_exact(px, py) != Some(area) {
             return;
         }
         self.player.x = px;

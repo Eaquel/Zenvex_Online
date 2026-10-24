@@ -98,8 +98,8 @@ class GameShotsTest {
 
     @Test fun g09_harbor() = shot("harbor", { cheat("level 45"); cheat("tp harbor"); cheat("spawn dark 3 3") }, steps = 90)
 
-    /** V12: bölge sınırı (Başlangıç Ormanı'nın doğusu): ötesi karanlık, yürünmez */
-    @Test fun g12_border() = shot("border", { cheat("level 12"); cheat("tp 354 300") }, steps = 90, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
+    /** V15: kare bölgenin kenarı (Başlangıç Ormanı'nın doğusu): ötesi boşluk, yürünmez */
+    @Test fun g12_border() = shot("border", { cheat("level 12"); cheat("tp 268 300") }, steps = 90, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
 
     /** V12.1: tezgâh eşyası kampın dışına kurulur (kalan süre), tezgâh ekranında yalnız tezgâh tarifleri */
     private fun placeBench() {
@@ -118,6 +118,28 @@ class GameShotsTest {
         val slots = GameSession.ui("inventory").optJSONArray("slots")!!
         v.startBuild((0 until slots.length()).first { slots.optJSONObject(it)?.optString("id") == "workbench" })
     })
+
+    /** V15: her bölgenin gerçek haritası (incelemek için app/build/game-shots/region_<id>.png; ekran görüntüsü değil) */
+    @Test fun g30_allRegionMaps() {
+        Assume.assumeTrue("libzenvex.so yok", native())
+        com.zenvex.online.ui.Demo.on = true
+        GameSession.initPreview(paparazzi.context)
+        cheat("level 50")
+        val w = GameSession.world()
+        val areas = com.zenvex.online.ui.mapAreas(w)
+        val names = w.getJSONArray("names")
+        val atlas = Atlas.get(paparazzi.context)
+        val statics = Array(names.length()) { atlas["s/" + names.getString(it)] }
+        val view = GameView(paparazzi.context, ui)
+        val bmp = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val dir = java.io.File("build/game-shots").apply { mkdirs() }
+        for ((ai, a) in areas.withIndex()) {
+            cheat("tp ${(a.rects[0][0] + a.rects[0][2]) / 2 / 64} ${(a.rects[0][1] + a.rects[0][3]) / 2 / 64}")
+            view.previewFrames(Canvas(bmp), 640, 360, 3)
+            val s = RegionMap.buildNow(ai, a, statics) ?: continue
+            java.io.FileOutputStream(java.io.File(dir, "region_${a.id}.png")).use { s.bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
 
     /** V15 gerçek bölge haritası: bölge oyunun kendi dokuları ve görselleriyle küçültülmüş; büyük harita bunu gösterir */
     @Test fun g17_regionMap() {
@@ -176,7 +198,7 @@ class GameShotsTest {
     @Test fun g25_titanLate() = shot("titan_late", { cheat("level 50"); cheat("tp desert"); cheat("god"); cheat("boss") }, steps = 420)
 
     // V13 Cephe botları: üsse girince kalkanlı ve alev makineli askerler
-    @Test fun g26_baseBots() = shot("base_bots", { cheat("level 40"); cheat("god"); cheat("tp base 1"); cheat("tp 744 27") }, steps = 120)
+    @Test fun g26_baseBots() = shot("base_bots", { cheat("level 40"); cheat("god"); cheat("tp base 1") }, steps = 120)
 
     // etkinlik silahları elde (kabza/uç doğrusu katana karelerinden)
     private fun evWeapon(id: String) { cheat("level 20"); cheat("item ev_${id}_weapon 1"); cmd(JSONObject().put("cmd", "cycle_weapon")) }

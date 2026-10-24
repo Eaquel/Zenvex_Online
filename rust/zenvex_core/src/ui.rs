@@ -438,34 +438,6 @@ impl Game {
     }
 
     // ------------------------------------------------------------------ komutlar
-    fn travel(&mut self, to: &str) -> Result<String, String> {
-        let Some(t) = world::TRAVEL.iter().find(|t| t.id == to) else {
-            return Err("Bilinmeyen bölge".into());
-        };
-        if self.player.dead {
-            return Err("Önce yeniden doğ".into());
-        }
-        if self.progress.level < t.level {
-            return Err(format!("{} için seviye {} gerekli", t.name, t.level));
-        }
-        // V12: harita seyahati yalnız bölge içinde; bölgeler arası büyücü
-        let (tx, ty) = t.pos();
-        if crate::areas::area_at(tx, ty) != crate::areas::area_at(self.player.x, self.player.y) {
-            return Err(format!("{} başka bölgede: Büyücü Aldric ışınlar", t.name));
-        }
-        if self.player.combat_t < 5.0 {
-            return Err("Çatışmadayken seyahat edemezsin".into());
-        }
-        if self.progress.gold < t.cost {
-            return Err(format!("{} altın gerekli", t.cost));
-        }
-        self.progress.gold -= t.cost;
-        let (x, y) = t.pos();
-        self.teleport(x, y);
-        self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 700.0 || z.boss);
-        Ok(format!("{} bölgesine seyahat edildi", t.name))
-    }
-
     pub fn command(&mut self, s: &str) -> String {
         let v: Value = serde_json::from_str(s).unwrap_or(Value::Null);
         let cmd = v["cmd"].as_str().unwrap_or("");
@@ -779,7 +751,6 @@ impl Game {
                 self.hardcore = v["hardcore"].as_bool().unwrap_or(false);
                 Ok(String::new())
             }
-            "travel" => self.travel(v["to"].as_str().unwrap_or("")),
             "pickup_bench" => self.pickup_bench(),
             // V15 inşa modu: önizleme yeri uygun mu / seçilen yere kur
             "bench_spot" => self.bench_spot(num("x"), num("y")).map(|_| String::new()),
@@ -1421,14 +1392,15 @@ impl Game {
                     "city" | "sehir" => world::city_spawn(),
                     "camp" | "kamp" => world::camp_spawn(),
                     "boss" | "titan" => (world::BOSS.0 - 600.0, world::BOSS.1 + 400.0),
-                    "swamp" | "bataklik" => (50.0 * world::TILE, 300.0 * world::TILE),
-                    "downtown" | "merkez" => (50.0 * world::TILE, 60.0 * world::TILE),
-                    "deep" | "derin" => (300.0 * world::TILE, 232.0 * world::TILE),
-                    "burnt" | "kul" => (500.0 * world::TILE, 280.0 * world::TILE),
-                    "desert" | "col" => (250.0 * world::TILE, 520.0 * world::TILE),
-                    "bswamp" | "karabataklik" => (90.0 * world::TILE, 520.0 * world::TILE),
-                    "military" | "askeri" => (520.0 * world::TILE, 90.0 * world::TILE),
-                    "harbor" | "liman" => (520.0 * world::TILE, 520.0 * world::TILE),
+                    // V15 kare bölgelerin içindeki noktalar
+                    "swamp" | "bataklik" => (92.0 * world::TILE, 300.0 * world::TILE),
+                    "downtown" | "merkez" => (170.0 * world::TILE, 60.0 * world::TILE),
+                    "deep" | "derin" => (255.0 * world::TILE, 232.0 * world::TILE),
+                    "burnt" | "kul" => (480.0 * world::TILE, 200.0 * world::TILE),
+                    "desert" | "col" => (262.0 * world::TILE, 500.0 * world::TILE),
+                    "bswamp" | "karabataklik" => (90.0 * world::TILE, 500.0 * world::TILE),
+                    "military" | "askeri" => (420.0 * world::TILE, 120.0 * world::TILE),
+                    "harbor" | "liman" => (490.0 * world::TILE, 500.0 * world::TILE),
                     "home" | "us" => world::home_spawn(),
                     "front" | "cephe" => world::front_spawn(),
                     "base" | "uss" => {

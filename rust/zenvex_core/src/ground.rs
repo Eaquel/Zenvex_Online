@@ -134,7 +134,7 @@ pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32,
             let mut m2 = mat_at(wx + nx * warp + 7.0, wy + ny * warp + 5.0);
             // V13: bulunulan bölgenin dışı (sınırın ötesi) bölgenin boşluk dokusu
             if let Some(a) = tex.area {
-                if crate::areas::area_at(wx + nx * warp * 1.4, wy + ny * warp * 1.4) != a {
+                if crate::areas::area_exact(wx + nx * warp * 1.4, wy + ny * warp * 1.4) != Some(a) {
                     m = ground::R_VOID;
                     m2 = ground::R_VOID;
                 }
