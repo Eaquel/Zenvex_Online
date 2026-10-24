@@ -147,6 +147,9 @@ object Online {
         mode = 0
     }
 
+    /** Uygulama öne geldi: kopmuş kanal hemen yeniden bağlansın */
+    fun onForeground() { channel?.reconnectNow() }
+
     fun setIdentity(playerName: String, playerTag: String) { name = playerName; tag = playerTag; trackMe() }
     /** İsim değişti: sonraki konum paketiyle (≤0,2 sn) diğer oyuncularda da yenilenir */
     fun rename(playerName: String) { name = playerName; trackMe() }

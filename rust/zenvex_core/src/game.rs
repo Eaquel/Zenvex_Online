@@ -685,7 +685,35 @@ impl Game {
         };
         // kervanlar ilk karede yerinde olsun (harita ve dükkân hemen doğru konumu görsün)
         g.update_caravans();
+        g.restore_pos();
         g
+    }
+
+    /// Kayda yazılacak konum: ölüyken ya da araçta yolcuyken değil (doğuşa döner)
+    pub fn sync_pos(&mut self) {
+        self.progress.last_pos = if self.player.dead || self.passenger { None } else { Some((self.player.x, self.player.y)) };
+    }
+
+    /// Kayıttaki konumdan devam: bölgeye girme seviyesi yetiyorsa ve nokta dünyanın içindeyse (engel varsa yanına itilir)
+    fn restore_pos(&mut self) {
+        let Some((x, y)) = self.progress.last_pos else { return };
+        if !x.is_finite() || !y.is_finite() || x < 0.0 || y < 0.0 || x >= world::MAP_PX || y >= world::MAP_PX {
+            return;
+        }
+        let area = crate::areas::area_at(x, y);
+        if area != crate::areas::HOME && self.progress.level < crate::areas::AREAS[area].level {
+            return;
+        }
+        let (mut px, mut py) = (x, y);
+        let city = self.progress.level >= CITY_LEVEL;
+        self.world.resolve(&mut px, &mut py, 14.0, city, &mut self.scratch);
+        if crate::areas::area_at(px, py) != area {
+            return;
+        }
+        self.player.x = px;
+        self.player.y = py;
+        self.drone.x = px;
+        self.drone.y = py;
     }
 
     pub fn msg(&mut self, t: impl Into<String>) {
@@ -1697,5 +1725,30 @@ mod tests {
             let (x, y) = dir_vec(d);
             assert_eq!(dir_from_vec(x, y), d);
         }
+    }
+}
+
+#[cfg(test)]
+mod resume_tests {
+    use super::*;
+
+    /// Uygulama kapanıp açılınca (ya da arka plandan sonra yeniden girince) kayıttaki konumdan devam edilir
+    #[test]
+    fn position_survives_save_load() {
+        let mut g = Game::new(5, Progress::default(), 1);
+        let (sx, sy) = world::camp_spawn();
+        g.player.x = sx + 400.0;
+        g.player.y = sy + 300.0;
+        g.sync_pos();
+        let saved = crate::progress_to_json(&g.progress);
+        let p: Progress = serde_json::from_str(&saved).unwrap();
+        let h = Game::new(5, p, 1);
+        assert!((h.player.x - (sx + 400.0)).abs() < 40.0 && (h.player.y - (sy + 300.0)).abs() < 40.0, "kaldığı yerden başlamalı");
+        // girme seviyesi yetmeyen bölgeye kaydedilmiş konum: doğuştan başlar
+        let mut p2: Progress = serde_json::from_str(&saved).unwrap();
+        let (hx, hy) = crate::areas::hub(5);
+        p2.last_pos = Some((hx, hy));
+        let k = Game::new(5, p2, 1);
+        assert!((k.player.x - sx).abs() < 1.0 && (k.player.y - sy).abs() < 1.0);
     }
 }

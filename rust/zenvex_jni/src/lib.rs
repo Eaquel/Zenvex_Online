@@ -209,7 +209,10 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_saveJson<'l>(
     h: jlong,
 ) -> jstring {
     let s = game(h)
-        .map(|g| zenvex_core::progress_to_json(&g.progress))
+        .map(|g| {
+            g.sync_pos();
+            zenvex_core::progress_to_json(&g.progress)
+        })
         .unwrap_or_default();
     jstr(&mut env, &s)
 }

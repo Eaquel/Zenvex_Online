@@ -35,6 +35,35 @@ object Session {
     private val main = Handler(Looper.getMainLooper())
     private var beatThread: Thread? = null
 
+    /** Uygulama arka planda mı: arka plandayken nabız gecikse de oturum atılmaz (Android ağı uyutur) */
+    @Volatile var background = false
+        private set
+    @Volatile private var bgSince = 0L
+    /** Arka planda bu süreden uzun kalındıysa dönüşte lobiye dönülür (kaldığın yerden yine devam edersin) */
+    private const val RESUME_LIMIT_MS = 10 * 60_000L
+
+    /** Uygulama arka plana geçti (MainActivity.onStop): kayıt zaten onPause'da gider */
+    fun onBackground() {
+        background = true
+        bgSince = SystemClock.elapsedRealtime()
+    }
+
+    /**
+     * Uygulama öne geldi: oturum açıksa hemen nabız atılır (sunucu oturumu tazeler, dünya sessizce devam eder).
+     * Çok uzun kalındıysa lobiye dönülür; konum kayıtta olduğu için yeniden girince kaldığın yerden başlarsın.
+     */
+    fun onForeground() {
+        if (!background) return
+        background = false
+        val my = sid
+        if (my.isEmpty() || state.value == State.Off) return
+        if (SystemClock.elapsedRealtime() - bgSince > RESUME_LIMIT_MS) { kick("Uzun süre uzaktaydın. Tekrar gir, kaldığın yerden devam edersin."); return }
+        Supa.bg {
+            val r = runCatching { Supa.rpcSync("zx_heartbeat", Account.authJson().put("p_sid", my).put("p_game_time", simTime)) }
+            main.post { onBeat(my, r) }
+        }
+    }
+
     /** Oyun dursun mu (bağlantı yok ya da oturum kapalı) */
     val blocked: Boolean get() = state.value != State.Live
 
@@ -111,7 +140,7 @@ object Session {
                 else -> {
                     fails++
                     if (fails >= 2) state.value = State.Lost
-                    if (SystemClock.elapsedRealtime() - lastOk > 90_000) kick("Bağlantı koptu, tekrar gir")
+                    if (!background && SystemClock.elapsedRealtime() - lastOk > 90_000) kick("Bağlantı koptu, tekrar gir")
                 }
             }
         }

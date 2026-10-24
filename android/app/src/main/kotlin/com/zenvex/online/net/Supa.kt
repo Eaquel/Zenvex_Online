@@ -142,6 +142,13 @@ object Supa {
             connect()
         }
 
+        /** Uygulama öne gelince: bağlı değilse beklemeden yeniden bağlan */
+        fun reconnectNow() {
+            if (closed || joined) return
+            backoff = 200L
+            ws?.cancel()
+        }
+
         private fun connect() {
             if (closed) return
             onStatus("Bağlanıyor…")

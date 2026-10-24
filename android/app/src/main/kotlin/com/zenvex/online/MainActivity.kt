@@ -96,6 +96,17 @@ class MainActivity : ComponentActivity() {
         Audio.pauseMusic()
     }
 
+    override fun onStop() {
+        super.onStop()
+        com.zenvex.online.game.Session.onBackground()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        com.zenvex.online.game.Session.onForeground()
+        com.zenvex.online.game.Online.onForeground()
+    }
+
     override fun onResume() {
         super.onResume()
         com.zenvex.online.game.Notifier.foreground = true

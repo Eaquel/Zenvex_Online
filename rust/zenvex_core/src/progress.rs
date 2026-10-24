@@ -323,6 +323,9 @@ pub struct Progress {
     pub caravan_bought: Vec<(i64, u8, u16, u32)>,
     /// V9: etkinlik puanı sayaçları (istemci farkları sunucuya yollar)
     pub ev: EventStats,
+    /// V15: son kayıttaki konum (dünya pikseli); oyuna yeniden girince (uygulama kapanıp açılsa da) buradan devam edilir
+    #[serde(default)]
+    pub last_pos: Option<(f32, f32)>,
 }
 
 /// Etkinlik sayaçları: yalnız artar; istemci son gönderilenden farkı sunucuya yazar.
@@ -478,6 +481,7 @@ impl Default for Progress {
             benches: Vec::new(),
             caravan_bought: Vec::new(),
             ev: EventStats::default(),
+            last_pos: None,
         };
         p.inv.add_id("bandage", 3);
         p.inv.add_id("food", 2);
