@@ -36,6 +36,11 @@ SKIP = {
 def translatable(s: str) -> bool:
     if s.strip() in SKIP:
         return False
+    # hile/test komutları ve biçim kalıpları (oyuncuya gösterilmez)
+    if re.match(r"^(spawn|item|tp|vehicle|points|level|dog|shot failed)\b", s.strip()) or s.strip() == "dd.MM HH:mm" or s.startswith("bot {0},"):
+        return False
+    if s.startswith("HTTP/1.1") or "zenvex_server" in s:
+        return False
     core = re.sub(r"\{\d+\}", "", s).strip()
     letters = re.findall(r"[A-Za-zÇĞİÖŞÜçğıöşü]", core)
     if len(letters) < 2:
