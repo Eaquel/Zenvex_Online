@@ -1,47 +1,70 @@
 # Zenvex Online
 
-2.5D pixel art, mobil öncelikli, online hayatta kalma / zombi oyunu.
-(İlham: Zombix Online tarzı üstten 3/4 bakış. Varlıklar, isim ve marka tamamen özgün olacak.)
+**English** · [Türkçe](README.tr.md) · [Español](README.es.md) · [Português (Brasil)](README.pt-BR.md) · [Русский](README.ru.md) · [Deutsch](README.de.md) · [Français](README.fr.md) · [Italiano](README.it.md) · [Bahasa Indonesia](README.id.md) · [العربية](README.ar.md)
 
-> **Durum:** Oynanabilir ilk prototip (MVP). Telefona kurulabilir APK her push'ta otomatik derlenir.
-> 📱 **Kurulum:** GitHub → **Releases** → "Zenvex Online — son derleme" → `.apk` dosyasını indir ve kur.
+A mobile-first, online 2.5D pixel-art zombie survival game. Gather, craft, fight, join a clan and capture bases.
+The game core is written in Rust, the Android app in Kotlin (Jetpack Compose), and online services run on Supabase plus an
+optional Rust game server.
 
-## Ekran Görüntüleri (gerçek Android emülatöründen, CI duman testi)
+> An installable APK is built on every push: GitHub → **Releases** → "Zenvex Online — latest build".
 
-| Lobi | Oyun |
-|------|------|
-| ![Lobi](art/screenshots/lobi.png) | ![Oyun](art/screenshots/oyun.png) |
-| ![Yetenekler](art/screenshots/yetenekler.png) | ![Ayarlar](art/screenshots/ayarlar.png) |
+## Screenshots
 
-## Belgeler
+| Lobby | Game |
+|-------|------|
+| ![Lobby](art/screenshots/lobi.png) | ![Game](art/screenshots/oyun.png) |
+| ![Skills](art/screenshots/yetenekler.png) | ![Settings](art/screenshots/ayarlar.png) |
 
-| # | Belge | İçerik |
-|---|-------|--------|
-| 00 | [Genel Bakış & MVP Kapsamı](docs/00_GENEL_BAKIS.md) | Vizyon, ilk sürümde ne var / ne yok, yol haritası |
-| 01 | [Karakter Tasarımı](docs/01_KARAKTER.md) | İlk karakter, ölçüler, animasyon listesi, palet |
-| 02 | [Arayüz (UI/UX)](docs/02_ARAYUZ.md) | Lobi, tüm ekranlar, tuşlar, HUD, joystickler, ayarlar |
-| 03 | [Dünya & Oynanış](docs/03_DUNYA_OYNANIS.md) | Düz dünya, ağaç/bitki, zombi, yumruk, level & skill |
-| 04 | [Teknik Mimari (Rust + Kotlin)](docs/04_TEKNIK_MIMARI.md) | Motor, katmanlar, klasör yapısı, JNI köprüsü, sunucu |
-| 05 | [Yapay Zeka Görsel Promptları](docs/05_GORSEL_PROMPTLARI.md) | Her görsel için eksiksiz AAA kalite prompt |
-| 06 | [Açık Sorular](docs/06_SORULAR.md) | Karar vermen gereken her şey |
-| 07 | [Kararlar & Güncel Durum](docs/07_KARARLAR_VE_DURUM.md) | **Önce bunu oku:** neler yapıldı, neler çalışıyor, APK kurulumu |
-
-## Teknoloji Özeti
-
-- **Rust** (`rust/`) → oyun çekirdeği: dünya üretimi, oyuncu, zombi yapay zekası, yumruk savaşı, XP/level/yetenek + ileride sunucu
-- **Kotlin** (`android/`) → Android uygulaması: Compose ile lobi/menüler/ayarlar, SurfaceView ile pixel-perfect oyun çizimi, joystickler, HUD
-- Köprü: JNI (`jni` crate) — `libzenvex.so`
-- **Görseller** (`tools/assetgen/`) → Python ile kodla üretilir (3D SDF modelden 8 yönlü pixel art). Yeniden üretmek: `python3 tools/assetgen/build_assets.py`
-- **CI** (`.github/workflows/android.yml`) → Rust testleri + APK derleme + Releases sayfasına yükleme
-
-## Klasörler
+## Repository layout
 
 ```
-android/          Kotlin Android uygulaması (Gradle)
-rust/             zenvex_core (oyun kuralları) + zenvex_jni (Android köprüsü)
-tools/assetgen/   görsel üreticiler (Python + numpy + Pillow)
-tools/ai_gen.py   isteğe bağlı yapay zeka görsel üretici (konsept/arka plan)
-art/concept/      yapay zeka konsept görselleri (lobi/giriş arka planı bunlardan pixel'leştirildi)
-art/preview/      üretilen sprite'ların büyütülmüş önizlemeleri
-docs/             tasarım belgeleri
+android/            Kotlin app (Compose UI, SurfaceView game view, Play Billing, JNI loader)
+rust/zenvex_core    game rules and world: regions, combat, items, quests, economy
+rust/zenvex_jni     JNI bridge (libzenvex.so)
+rust/zenvex_server  optional WebSocket game server (rooms = regions)
+supabase/           SQL migrations and edge functions (accounts, saves, clans, store, support)
+deploy/             one-command server install (systemd + Caddy)
+tools/              asset pipelines (pixel, assetgen) and tools/i18n (translations)
+docs/               design and architecture; docs/archive holds superseded plans
+art/                concept art and screenshots
 ```
+
+## Build
+
+```bash
+# Rust: tests and lints (run from rust/)
+cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings
+
+# Android: needs the Android SDK 37, NDK 27 and cargo-ndk
+cd android && ./gradlew :app:assembleDebug
+
+# UI snapshot tests (JVM, no emulator)
+(cd rust && cargo build -p zenvex_jni --release)
+cd android && ./gradlew :app:recordPaparazziDebug -x cargoBuild
+```
+
+CI (`.github/workflows`) runs the Rust tests, clippy with warnings as errors, the Kotlin build with warnings as errors and
+the snapshot tests, then publishes the APK.
+
+## Languages
+
+The interface ships in Turkish (source), English, Spanish, Portuguese (Brazil), Russian, German, French, Italian,
+Indonesian and Arabic. The Turkish text is the translation key; `tools/i18n/extract.py` rebuilds `catalog.json` from the
+code and `tools/i18n/merge.py` merges translations into `android/app/src/main/assets/i18n/<lang>.json`.
+A unit test fails if any language misses a string or breaks a `{0}` placeholder. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Documents
+
+| Document | Content |
+|----------|---------|
+| [00 Overview](docs/00_GENEL_BAKIS.md) | vision and scope |
+| [04 Architecture](docs/04_TEKNIK_MIMARI.md) | Rust + Kotlin layers, JNI |
+| [09 Supabase](docs/09_SUPABASE.md) | database, functions, security model |
+| [Game server](docs/teknik/OYUN_SUNUCUSU.md) | WebSocket server and deployment |
+| [21 V15 plan](docs/21_BUYUK_PLAN_V15.md) | current roadmap |
+| [22 V15 prompts](docs/22_DEVASA_PROMPT_V15.md) | art prompts still to be produced |
+
+## License and contact
+
+Source code is proprietary unless stated otherwise in a file header; fonts are under the SIL Open Font License
+(`android/app/src/main/assets/licenses`). Report security problems privately, see [SECURITY.md](SECURITY.md).
