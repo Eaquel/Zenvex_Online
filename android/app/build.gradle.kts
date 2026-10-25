@@ -69,7 +69,7 @@ android {
         jniLibs { useLegacyPackaging = false }
     }
     androidResources {
-        noCompress += listOf("png", "json", "wav", "webp", "ogg")
+        noCompress += listOf("png", "wav", "webp", "ogg")
     }
 }
 
