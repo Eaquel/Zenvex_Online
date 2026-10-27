@@ -83,9 +83,9 @@ fun SplashScreen(done: () -> Unit) {
         delay(400)
         done()
     }
-    SceneBackground("bg_lobby", t, dim = 0.35f) {
+    LiveScene(SceneKind.LOBBY, dim = 0.12f) {
         Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            GameLogo(96.dp)
+            CodeLogo(120.dp)
             Spacer(Modifier.height(18.dp))
             PxBar(progress, Px.Green, Modifier.width(320.dp), 14.dp)
             Spacer(Modifier.height(8.dp))
@@ -151,8 +151,8 @@ fun LoadingScreen(back: () -> Unit = {}, done: () -> Unit) {
         delay(200)
         done()
     }
-    SceneBackground("bg_lobby", t, dim = 0.3f) {
-        GameLogo(80.dp, Modifier.align(Alignment.TopCenter).padding(top = 24.dp))
+    LiveScene(SceneKind.LOBBY, dim = 0.1f) {
+        CodeLogo(100.dp, Modifier.align(Alignment.TopCenter).padding(top = 24.dp))
         Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             PT(GameSession.server.value.title, 26.sp, Px.Clan, outline = true)
             Spacer(Modifier.height(10.dp))

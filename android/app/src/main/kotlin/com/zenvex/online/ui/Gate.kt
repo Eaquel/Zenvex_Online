@@ -67,7 +67,7 @@ fun GateHost() {
 fun NoConnectionScreen() {
     val t = rememberTime()
     Box(Modifier.fillMaxSize().background(Color(0xFF0C0E16)).clickable(remember { MutableInteractionSource() }, null) {}) {
-        SceneBackground("bg_lobby", t, dim = 0.6f)
+        LiveScene(SceneKind.LOBBY, dim = 0.45f)
         Column(Modifier.align(Alignment.Center).metalFrame().padding(horizontal = 30.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             Icon("radio", 44.dp, Px.Orange.copy(alpha = 0.5f + 0.5f * kotlin.math.sin(t * 4f)))
@@ -87,7 +87,7 @@ fun MaintenanceScreen(msg: String) {
     val t = rememberTime()
     Box(Modifier.fillMaxSize().background(Color(0xFF0C0E16)).clickable(remember { MutableInteractionSource() }, null) {}) {
         // gece şantiyesi görseli + kaynak kıvılcımı, yanıp sönen ikaz lambaları
-        SceneBackground("bg_maint", null, dim = 0.15f)
+        LiveScene(SceneKind.EMBER, dim = 0.15f)
         Canvas(Modifier.fillMaxSize()) { maintenanceFx(t) }
         Column(Modifier.align(Alignment.Center).padding(top = 40.dp).metalFrame().padding(horizontal = 30.dp, vertical = 26.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {

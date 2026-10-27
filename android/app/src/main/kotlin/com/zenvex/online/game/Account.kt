@@ -38,6 +38,8 @@ object Account {
     val banned = mutableStateOf<String?>(null)
     var key = ""
         private set
+    /** Testler: oturum açmış gibi göster */
+    internal fun previewLogin(id: Long) { this.id.value = id; key = "PREVIEWKEY" }
     private lateinit var prefs: android.content.SharedPreferences
 
     val loggedIn: Boolean get() = id.value >= 0 && key.isNotEmpty()

@@ -99,7 +99,7 @@ internal fun PassView(
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF241A10), Color(0xFF120E0A), Color(0xFF0A0806))))
         .clickable(remember { MutableInteractionSource() }, null) {}) {
         // V10 arka plan: ufuktaki kaleye giden yıkık otoyol (karartılmış); üstünde yükselen korlar
-        SceneBackground("pass_bg", t, dim = 0.5f, ay = 0.35f)
+        LiveScene(SceneKind.VAULT, dim = 0.35f)
         Canvas(Modifier.fillMaxSize()) {
             for (i in 0 until 40) {
                 val sx = ((i * 97) % 100) / 100f * size.width

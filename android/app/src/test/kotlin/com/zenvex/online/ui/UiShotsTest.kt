@@ -341,4 +341,27 @@ class UiShotsTest {
             }
         }
     }
+
+    // ---- V16 kodla çizilen canlı sahneler
+    private fun scene(kind: SceneKind, t: Float) = paparazzi.snapshot {
+        LiveScene(kind, still = t) {
+            androidx.compose.foundation.layout.Column(
+                androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.CenterStart).padding(start = 54.dp),
+            ) { CodeLogo(150.dp) }
+        }
+    }
+    @Test fun liveSceneLobby() = scene(SceneKind.LOBBY, 7.3f)
+    @Test fun liveSceneLobbyLater() = scene(SceneKind.LOBBY, 41.9f)
+    @Test fun liveSceneEmber() = scene(SceneKind.EMBER, 12.1f)
+    @Test fun liveSceneIce() = scene(SceneKind.ICE, 20.5f)
+    @Test fun liveSceneVault() = scene(SceneKind.VAULT, 5.2f)
+
+    /** Gerçek lobi ekranı (canlı sahne + logo + oyuncu kartı) */
+    @Test fun lobbyScreenLive() {
+        org.junit.Assume.assumeTrue("libzenvex.so yok", runCatching { com.zenvex.online.game.Native.hashCode(); true }.getOrDefault(false))
+        com.zenvex.online.ui.Demo.on = true
+        com.zenvex.online.game.GameSession.initPreview(paparazzi.context)
+        com.zenvex.online.game.Account.previewLogin(1234567L)
+        paparazzi.snapshot { LobbyScreen({}, 0) }
+    }
 }

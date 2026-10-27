@@ -139,7 +139,7 @@ private fun CrateBackground(t: Float) {
     // V10 kasa odası (kürsü, zırhlı kapı, kızıl-altın çizgiler); yoksa kodla gradyan
     val ctx = androidx.compose.ui.platform.LocalContext.current
     val vault = remember { UiArt.image(ctx, "crate_vault") } != null
-    if (vault) SceneBackground("crate_vault", t, dim = 0.28f, zoom = 1.02f, drift = 0f)
+    if (vault) LiveScene(SceneKind.VAULT, dim = 0.2f)
     Canvas(Modifier.fillMaxSize()) {
         if (!vault) drawRect(Brush.radialGradient(listOf(Color(0xFF2A2F6A), Color(0xFF14123A), Color(0xFF07060F)), Offset(size.width * 0.38f, size.height * 0.55f), size.width * 0.7f))
         val c = Offset(size.width * 0.38f, size.height * 0.56f)

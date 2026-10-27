@@ -87,37 +87,28 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     val unlocked = ch.optBoolean("unlocked", sel == 0)
     val col = Color(0xFFB277FF)
 
-    // sahne: yıkık şehir ve zombi sürüsü (sahnedeki kahraman kadraj dışında kalır; vitrindeki kahraman öne çıkar)
-    SceneBackground("bg_lobby", t, dim = 0.3f, zoom = 1.75f, ax = 0.97f, ay = 0.55f, drift = 0.03f) {
-        // ---- sol: karakter vitrini (sürükleyerek döndür)
-        Box(
-            Modifier.align(Alignment.CenterStart).fillMaxHeight().fillMaxWidth(0.56f).pointerInput(Unit) {
-                var acc = 0f
-                detectHorizontalDragGestures { _, dx -> acc += dx; if (kotlin.math.abs(acc) > 36f) { dir = (dir + (if (acc > 0) 7 else 1)) % 8; acc = 0f } }
-            },
-        ) {
-            Canvas(Modifier.fillMaxSize()) {
-                // karakter rengiyle ışık huzmesi
-                val c = center.copy(y = size.height * 0.62f)
-                drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color.Transparent), c, size.height * 0.45f), size.height * 0.45f, c)
-            }
-            val weapon = remember(sel) { equippedWeaponModel() }
-            Box(Modifier.align(Alignment.Center).padding(top = 30.dp).size(330.dp, 380.dp)) { HeroSprite(sel, dir, t, unlocked, weapon = weapon) }
-            // tek kahraman: Savaşçı (karakter seviyesi oyunda dolar)
-            Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                PT(ch.optString("name").uppercase(), 28.sp, Color(0xFFB277FF), outline = true)
-                PT(ch.optString("class") + " · Karakter Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 13.sp, Px.Text)
-                PT(ch.optString("ability") + ": " + ch.optString("ability_desc"), 12.sp, Px.Sub)
+    // sahne: kodla çizilen canlı yıkık şehir (gün batımı, yangınlar, kor yağmuru, uzakta sürünen zombi silüetleri, kamp ateşi)
+    LiveScene(SceneKind.LOBBY) {
+        // ---- sol: büyük logo + slogan + kahraman rozeti (karakter vitrini yok: sahne kendisi konuşur)
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 54.dp, top = 76.dp), horizontalAlignment = Alignment.Start) {
+            CodeLogo(150.dp)
+            Spacer(Modifier.height(10.dp))
+            PT("Hayatta Kal. Güçlen. Üssünü Savun.", 17.sp, Color(0xFFFFE2B8), outline = true)
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x99120A14)).border(1.dp, Color(0x66B277FF), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Icon("fist", 20.dp, col)
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    PT(ch.optString("name").uppercase() + " · Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 15.sp, col)
+                    PT(ch.optString("ability") + ": " + ch.optString("ability_desc"), 11.sp, Px.Sub, maxLines = 2)
+                }
             }
         }
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
         val pp = if (Account.loggedIn) Account.profile.value else JSONObject().put("name", prof.optString("name")).put("level", prof.optInt("level", 1))
         ProfileBadge(pp, !Account.loggedIn, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp)) {
             dialog = if (Account.loggedIn) "profile" else "welcome"
-        }
-        // ---- üst orta: logo
-        Row(Modifier.align(Alignment.TopCenter).padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            GameLogo(62.dp)
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
