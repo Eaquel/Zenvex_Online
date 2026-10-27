@@ -1397,6 +1397,25 @@ impl Game {
                 self.zombies.clear();
                 Ok(format!("{n} zombi silindi"))
             }
+            // test: en yakın ağaç/kayanın hemen soluna ışınlan (sağa saldırınca vurur)
+            "tp" | "isinla" if matches!(arg(1), "tree" | "agac" | "rock" | "kaya") => {
+                let want = if matches!(arg(1), "tree" | "agac") { world::Kind::Tree } else { world::Kind::Rock };
+                let (px, py) = (self.player.x, self.player.y);
+                let best = self
+                    .world
+                    .statics
+                    .iter()
+                    .filter(|s| s.kind == want && !s.broken)
+                    .min_by(|a, b| (a.x - px).hypot(a.y - py).total_cmp(&(b.x - px).hypot(b.y - py)))
+                    .map(|s| (s.x, s.y));
+                match best {
+                    Some((x, y)) => {
+                        let (x, y) = self.teleport(x - 78.0, y + 2.0);
+                        Ok(format!("Hedefin yanındasın ({:.0}, {:.0})", x / world::TILE, y / world::TILE))
+                    }
+                    None => Err("Yakında hedef yok".into()),
+                }
+            }
             "tp" | "isinla" => {
                 let (x, y) = match arg(1) {
                     "city" | "sehir" => world::city_spawn(),

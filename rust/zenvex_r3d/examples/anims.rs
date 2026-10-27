@@ -17,13 +17,14 @@ fn load(dir: &Path, name: &str) -> Model {
 
 fn anim_id(s: &str) -> (u8, f32) {
     // (kimlik, önizlenecek süre)
-    match s {
+    match s.trim_end_matches("_e").trim_end_matches("_i") {
         "idle" => (a::IDLE, 3.0),
         "walk" => (a::WALK, 0.9),
         "run" => (a::RUN, 0.7),
         "punch" => (a::PUNCH, 0.58),
-        "melee" => (a::MELEE, 0.7),
-        "melee2" => (a::MELEE, 1.4),
+        "melee" | "m0" => (a::MELEE, 0.7),
+        "melee2" | "m1" => (a::MELEE, 0.7),
+        "m2" => (a::MELEE, 0.7),
         "fire" => (a::FIRE, 0.3),
         "reload" => (a::RELOAD, 1.6),
         "roll" => (a::ROLL, 0.32),
@@ -61,15 +62,21 @@ fn main() {
         let (id, dur) = anim_id(an);
         let mut row = Vec::new();
         for f in 0..nf {
-            let t = dur * f as f32 / nf as f32;
-            let inp = In { anim: id, t, period: if an.starts_with("melee") { 0.7 } else if *an == "fire" { 0.3 } else { 1.6 }, weapon: base_w, style: Style::of(ch), wback: 0.0 };
+            let off = match *an { "m1" => 0.7, "m2" => 1.4, "melee2" => 0.7, _ => 0.0 };
+            let t = off + dur * f as f32 / nf as f32;
+            let inp = In::new(id, t, if an.starts_with("melee") || an.starts_with('m') && an.len() == 2 { 0.7 } else if *an == "fire" { 0.3 } else { 1.6 }, base_w, Style::of(ch));
             let mut inp = inp;
-            let shown_name = anim::key_of(&inp, 1.0).3.model();
+            if an.ends_with("_e") { inp.flags |= anim::F_EMPTY; }
+            if an.ends_with("_i") { inp.flags |= anim::F_IRON; }
+            let shown_name = anim::key_of(&inp, 1.0).shown.model();
             if !shown_name.is_empty() && !cache.contains_key(shown_name) {
                 cache.insert(shown_name.to_string(), load(dir, shown_name));
             }
             if let Some(wm) = cache.get(shown_name) {
                 inp.wback = -wm.meta.back;
+                if let Some(pd) = wm.part("mag") {
+                    inp.pivot = zenvex_r3d::math::V3::from(pd.pivot);
+                }
             }
             let out = anim::evaluate(&sk, &inp);
             let (mut p, mut nn) = (Vec::new(), Vec::new());

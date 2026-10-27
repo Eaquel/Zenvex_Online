@@ -508,7 +508,7 @@ fn put_image(env: &mut JNIEnv, img: &zenvex_r3d::Image, pts: &zenvex_r3d::servic
     n as jint
 }
 
-/// Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa]; dönüş: piksel sayısı (eksi: dizi küçük)
+/// Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa, flags]; dönüş: piksel sayısı (eksi: dizi küçük)
 #[no_mangle]
 pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
     mut env: JNIEnv<'l>,
@@ -521,7 +521,7 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
 ) -> jint {
     let ch = rstr(&mut env, &ch);
     let weapon = rstr(&mut env, &weapon);
-    let mut a = [0f32; 7];
+    let mut a = [0f32; 8];
     if env.get_float_array_region(&p, 0, &mut a).is_err() {
         return 0;
     }
@@ -535,6 +535,7 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
         pitch: a[4],
         scale: a[5],
         ssaa: a[6] > 0.5,
+        flags: a[7] as u32,
     };
     match r3d(|s| s.actor(&req)) {
         Some((img, pts)) => put_image(&mut env, &img, &pts, &out, &info),

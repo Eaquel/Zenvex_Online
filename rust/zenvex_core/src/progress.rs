@@ -770,8 +770,8 @@ impl Progress {
             1.0
         }
     }
-    /// Ağaç (t_axe_) ya da kaya (t_pick_) vuruş gücü: çantadaki en iyi alet, yoksa yumruk 25
-    pub fn tool_power(&self, prefix: &str) -> f32 {
+    /// Çanta ve elde taşınan en iyi alet gücü (taban değer; yumruk 25)
+    fn tool_base(&self, prefix: &str) -> f32 {
         let mut best = 25.0f32;
         for s in self.inv.slots.iter().flatten() {
             let d = &crate::data::ITEMS[s.item as usize];
@@ -779,7 +779,22 @@ impl Progress {
                 best = best.max(d.armor);
             }
         }
+        if let Some(i) = crate::data::item_index(&self.eq.weapon).filter(|_| self.eq.weapon.starts_with(prefix)) {
+            best = best.max(crate::data::ITEMS[i].armor);
+        }
         best
+    }
+
+    /// Ağaç (t_axe_) ya da kaya (t_pick_) vuruş gücü: en iyi alet (yumruk 25); elde tutulan alet 1,6 kat
+    pub fn tool_power(&self, prefix: &str) -> f32 {
+        let held = if self.eq.weapon.starts_with(prefix) { 1.6 } else { 1.0 };
+        self.tool_base(prefix) * held
+    }
+
+    /// Alet kademesi: 0 yok, 1 taş, 2 demir — yumruk animasyonunda hangi aletin görüneceğini belirler
+    pub fn tool_tier(&self, prefix: &str) -> f32 {
+        let b = self.tool_base(prefix);
+        if b >= 100.0 { 2.0 } else if b >= 50.0 { 1.0 } else { 0.0 }
     }
 
     pub fn gather_mult(&self) -> f32 {

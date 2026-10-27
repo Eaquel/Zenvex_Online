@@ -18,7 +18,7 @@ object Native {
     const val D_AREA = 7
 
     // HUD dizisi (rust draw.rs hud())
-    const val HUD_SIZE = 41
+    const val HUD_SIZE = 43
     const val HP = 0; const val MAXHP = 1; const val ST = 2; const val MAXST = 3
     const val XP = 4; const val XPNEXT = 5; const val LEVEL = 6; const val POINTS = 7
     const val GOLD = 8; const val KILLS = 9; const val PX = 10; const val PY = 11
@@ -31,6 +31,8 @@ object Native {
     const val FOOD_T = 38; const val ENERGY_T = 39
     /** PvP bölgesi (üs çevresi, Askerî Bölge, Donmuş Liman) */
     const val PVP = 40
+    /** Alet kademesi: 0 yok, 1 taş, 2 demir (balta, kazma) */
+    const val TOOL_AXE = 41; const val TOOL_PICK = 42
 
     const val REMOTE_STRIDE = 10
 

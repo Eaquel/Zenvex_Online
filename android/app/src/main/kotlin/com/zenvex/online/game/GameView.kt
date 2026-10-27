@@ -629,13 +629,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     // eski kıvılcım sprite'ı ve parçacık patlaması ikinci kez çizilmesin (docs/22 §1.5)
                     val hit3d = kind == 0 && time - me3dT < 0.3f && me3dWeapon in 1..Fx3D.CHAINSAW
                     when (kind) {
-                        1 -> { fx("wood_chips", x, y + 10, 120f, if (Math.random() < 0.5) 0f else 8f); fx("axe_swing", x + 6, y - 30, 130f) }
-                        2 -> fx("rock_chips", x, y + 10, 115f)
+                        1 -> fx3d.chopHit(x, y - 12f, 62.5f, y + 40f, lastAtkX)
+                        2 -> fx3d.mineHit(x, y - 4f, 62.5f, y + 40f, lastAtkX)
                         else -> if (!hit3d) fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
                     }
                     if (hit3d) fx3d.impact(x, y - 55f, me3dWeapon, 62.5f, y)
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
-                    if (!hit3d) burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
+                    if (!hit3d && kind == 0) burst(x, y + 40, 8, 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
                 }
                 "treefall" -> { Audio.play("treefall", near(x, y)); burst(x, y, 24, 0xFF4E8A34.toInt(), 260f, 5f, 0, 1.0f) }
@@ -648,6 +648,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "died" -> { Audio.play("death"); vibrate(300, 255); shake(10f, 0.4f) }
                 "swing" -> {
                     swingT = time
+                    if (time - me3dT < 0.3f && me3dWeapon in 1..Fx3D.CHAINSAW && hud[Native.IN_VEHICLE] < 0.5f)
+                        fx3d.slash(hud[Native.PX], hud[Native.PY], if (lastAtkX == 0f && lastAtkY == 0f) 1f else lastAtkX, lastAtkY, me3dWeapon, me3dStage, 62.5f)
                     Audio.play("swing", 0.6f, 0.9f + Math.random().toFloat() * 0.25f)
                     // kesik izi: saldırı yönüne dönük kızıl yay (katana geniş, bıçak kısa); yumrukta yok
                     val wi = hud[Native.WEAPON].toInt()
@@ -668,6 +670,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         // 3B: alev, duman ve kovan silahın gerçek namlusundan
                         flashes += Light(me3dMx, me3dMy, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
                         fx3d.muzzle(me3dMx, me3dMy, sin(a), cos(a), me3dWeapon, 62.5f, y)
+                        // roketatar: arkadan alev ve duman, ışık
+                        if (me3dWeapon == Fx3D.RPG) {
+                            fx3d.backblast(me3dRx, me3dRy, sin(a), cos(a), 62.5f, y)
+                            flashes += Light(me3dRx, me3dRy, 260f, 0xFFFF9040.toInt(), 0.12f, 0.12f)
+                        }
                     } else {
                         flashes += Light(x + sin(a) * 50, y + cos(a) * 30 - 70, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
                         fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees(-a + PI / 2).toFloat(), dur = 0.07f, frame = (0..2).random())
@@ -1222,6 +1229,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private var me3dWeapon = 0
     private var me3dMx = 0f
     private var me3dMy = 0f
+    /** silahın arka ucu (roketatar arka alevi) ve kombonun vuruş sırası */
+    private var me3dRx = 0f
+    private var me3dRy = 0f
+    private var me3dStage = 0
     private val shadowM = android.graphics.Matrix()
     private val shadowVals = FloatArray(9).also { it[8] = 1f }
     private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = PorterDuffColorFilter(0xFF000000.toInt(), PorterDuff.Mode.SRC_IN) }
@@ -1282,7 +1293,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         val pxPerM = 62.5f * scale
         val weapon = weaponModels.getOrElse(wIdx) { "" }
-        val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d) ?: return false
+        // 3B durum bayrakları (yalnız yerel oyuncu): roketatar boş (ön başlık namluda yok), demir kademe alet
+        var flags = 0
+        if (who == -1f) {
+            if (weapon == "rpg" && hud[Native.MAG] < 0.5f) flags = flags or 1
+            if ((animI == 17 && hud[Native.TOOL_AXE] >= 2f) || (animI == 18 && hud[Native.TOOL_PICK] >= 2f)) flags = flags or 2
+        }
+        val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d, flags) ?: return false
         val k = pxPerM / fr.pxPerM
         val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
         val paint = when {
@@ -1331,7 +1348,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (wk != 0) {
             fx3d.actor(id, wk, ex(0), ey(0), ex(2), ey(2), p[10], y, animI == 4 || animI == 17 || animI == 18, frameDt, 62.5f)
         }
-        if (who == -1f) { me3dT = time; me3dWeapon = wk; me3dMx = ex(4); me3dMy = ey(4) }
+        if (who == -1f) { me3dT = time; me3dWeapon = wk; me3dMx = ex(4); me3dMy = ey(4); me3dRx = ex(13); me3dRy = ey(13); me3dStage = p[15].toInt() }
         return true
     }
 
@@ -1989,12 +2006,34 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 stroke.shader = null
             }
             1, 4 -> {
-                fill.color = 0xFF505A40.toInt()
-                c.save(); c.rotate(-Math.toDegrees(ang.toDouble()).toFloat() + 90f, sx, sy)
-                c.drawRoundRect(sx - 16 * scale, sy - 4 * scale, sx + 16 * scale, sy + 4 * scale, 4f, 4f, fill)
-                fill.color = 0xFFFFC040.toInt(); c.drawCircle(sx - 18 * scale, sy, 6 * scale, fill)
+                // roket / dron füzesi: zeytin gövde, sivri başlık, kuyruk kanatçıkları; arkasında sıcak egzoz alevi ve kalıcı duman izi
+                val big = if (kind == 1) 1f else 0.7f
+                val L = 30f * scale * big
+                val Wd = 6.2f * scale * big
+                val deg = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+                // egzoz alevi (toplamalı, titrek)
+                val fl = FxTex.flames[((time * 40f).toInt() + (x * 0.1f).toInt()) and 3]
+                val flick = 0.85f + 0.3f * Math.random().toFloat()
+                drawTex(c, fl, sx - dx * L * 0.52f, sy - dy * L * 0.52f, Wd * 3.4f * flick, deg + 90f + 180f, texPaint(0xFFFF9A30.toInt(), true), 0.95f, 1.0f, true)
+                drawTex(c, fl, sx - dx * L * 0.52f, sy - dy * L * 0.52f, Wd * 1.9f * flick, deg + 90f + 180f, texPaint(0xFFFFFFFF.toInt(), true), 0.9f, 1.0f, true)
+                c.save(); c.translate(sx, sy); c.rotate(deg)
+                // kuyruk kanatçıkları
+                fill.color = 0xFF3C4430.toInt()
+                path.reset(); path.moveTo(-L * 0.50f, 0f); path.lineTo(-L * 0.62f, -Wd * 1.5f); path.lineTo(-L * 0.28f, -Wd * 0.5f); path.close(); c.drawPath(path, fill)
+                path.reset(); path.moveTo(-L * 0.50f, 0f); path.lineTo(-L * 0.62f, Wd * 1.5f); path.lineTo(-L * 0.28f, Wd * 0.5f); path.close(); c.drawPath(path, fill)
+                // gövde (arkada çelik boru, önde zeytin başlık)
+                fill.color = 0xFF6A6E66.toInt(); c.drawRoundRect(-L * 0.50f, -Wd * 0.42f, -L * 0.12f, Wd * 0.42f, 2f, 2f, fill)
+                fill.color = 0xFF5B6B3A.toInt(); c.drawRoundRect(-L * 0.14f, -Wd * 0.68f, L * 0.22f, Wd * 0.68f, Wd * 0.4f, Wd * 0.4f, fill)
+                path.reset(); path.moveTo(L * 0.18f, -Wd * 0.68f); path.quadTo(L * 0.40f, -Wd * 0.50f, L * 0.58f, 0f); path.quadTo(L * 0.40f, Wd * 0.50f, L * 0.18f, Wd * 0.68f); path.close()
+                fill.color = 0xFF74874A.toInt(); c.drawPath(path, fill)
+                // ışık: üst yüzeyde açık şerit, alt yüzeyde koyu
+                fill.color = 0x55FFFFFF; c.drawRect(-L * 0.12f, -Wd * 0.62f, L * 0.30f, -Wd * 0.30f, fill)
+                fill.color = 0x55000000; c.drawRect(-L * 0.12f, Wd * 0.32f, L * 0.30f, Wd * 0.62f, fill)
+                // sarı başlık bandı
+                fill.color = 0xFFE0B040.toInt(); c.drawRect(L * 0.05f, -Wd * 0.68f, L * 0.09f, Wd * 0.68f, fill)
                 c.restore()
-                if (Settings.current.particles) particles += Particle(x - dx * 20, y - dy * 20, 70f, 0f, 0f, 20f, 0.7f, 0.7f, 0xFF9A9690.toInt(), 8f, 1)
+                if (Settings.current.particles) fx3d.rocketTrail(x - dx * L * 0.45f / scale, y - 70f - dy * L * 0.45f / scale, dx, dy, 62.5f, y)
+                flashes += Light(x, y - 70f, 150f, 0xFFFF9A40.toInt(), 0.05f, 0.05f)
             }
             3 -> {
                 fill.shader = RadialGradient(sx, sy, 14 * scale, 0xFFB0FF50.toInt(), 0x0040A010, Shader.TileMode.CLAMP)

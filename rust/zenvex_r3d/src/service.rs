@@ -47,14 +47,18 @@ pub struct Points {
     pub flash: f32,
     /// silahın türü (Wk sırası) — efekt rengi
     pub weapon: u8,
+    /// silahın arka ucu (roketatarın arka alevi, testere sapı)
+    pub rear: [f32; 2],
+    /// yakın dövüş kombosunun vuruş sırası (0, 1, 2)
+    pub stage: u8,
 }
 
 impl Points {
-    pub const LEN: usize = 13;
+    pub const LEN: usize = 16;
     pub fn write(&self, o: &mut [f32]) {
         let v = [
             self.tip[0], self.tip[1], self.base[0], self.base[1], self.muzzle[0], self.muzzle[1], self.palm[0], self.palm[1], self.head[0],
-            self.head[1], self.trail, self.flash, self.weapon as f32,
+            self.head[1], self.trail, self.flash, self.weapon as f32, self.rear[0], self.rear[1], self.stage as f32,
         ];
         o[..Self::LEN].copy_from_slice(&v);
     }
@@ -70,6 +74,8 @@ pub struct ActorReq<'a> {
     pub pitch: f32,
     pub scale: f32,
     pub ssaa: bool,
+    /// durum bayrakları: anim::F_EMPTY (roketatar boş), anim::F_IRON (demir alet)
+    pub flags: u32,
 }
 
 pub struct VehicleReq<'a> {
@@ -131,11 +137,15 @@ impl Service {
         if wk != Wk::None && !self.models.contains_key(wk.model()) {
             wk = Wk::None;
         }
-        let mut inp = In { anim: r.anim, t: r.t, period: r.period, weapon: wk, style: Style::of(r.ch), wback: 0.0 };
-        let shown = anim::key_of(&inp, sk.height / 1.86).3;
+        let mut inp = In::new(r.anim, r.t, r.period, wk, Style::of(r.ch));
+        inp.flags = r.flags;
+        let shown = anim::key_of(&inp, sk.height / 1.86).shown;
         let wm = if shown != Wk::None { self.models.get(shown.model()) } else { None };
         if let Some(w) = wm {
             inp.wback = -w.meta.back;
+            if let Some(pd) = w.part("mag") {
+                inp.pivot = V3::from(pd.pivot);
+            }
         }
         let out = anim::evaluate(sk, &inp);
         rig::skin(m, &out.world, &mut self.bp, &mut self.bn);
@@ -168,11 +178,13 @@ impl Service {
             pts.base = pp(xf.apply(v3(w.meta.tip * 0.35, 0.0, 0.0)));
             let mz = w.meta.muzzle.map(V3::from).unwrap_or(v3(w.meta.tip, 0.0, 0.0));
             pts.muzzle = pp(xf.apply(mz));
+            pts.rear = pp(xf.apply(v3(w.meta.back, 0.0, 0.0)));
         }
         pts.palm = pp(out.world[HAND_R].apply(sk.palm_r));
         pts.head = pp(out.world[HEAD].apply(sk.head[HEAD] + v3(0.0, 0.0, 0.18 * sk.height / 1.86)));
         pts.trail = out.trail;
         pts.flash = out.muzzle;
+        pts.stage = out.stage;
         Some((img, pts))
     }
 
@@ -210,7 +222,7 @@ impl Service {
         let mut rider_ok = false;
         if !r.rider.is_empty() {
             if let (Some(cm), Some(sk)) = (self.models.get(r.rider), self.skels.get(r.rider)) {
-                let inp = In { anim: anim::a::RIDE, t: r.rider_t, period: 1.0, weapon: Wk::None, style: Style::of(r.rider), wback: 0.0 };
+                let inp = In::new(anim::a::RIDE, r.rider_t, 1.0, Wk::None, Style::of(r.rider));
                 let mut out = anim::evaluate(sk, &inp);
                 // oturma pozundaki kalça eklemi eyerin üstüne (kalça kemiği eyer yüzeyinden ~10 cm yukarıda)
                 let seat = seat_of(m);

@@ -270,6 +270,45 @@ pub struct In {
     pub style: Style,
     /// silahın tutma noktasının gerisinde kalan sap uzunluğu (m; iki elli tutuşta sol elin yeri)
     pub wback: f32,
+    /// durum bayrakları: [`F_EMPTY`], [`F_IRON`]
+    pub flags: u32,
+    /// "mag" parçasının pivotu (silah uzayı): roketatarda başlığın oturduğu yer
+    pub pivot: V3,
+}
+
+/// roketatar boş: ön başlık (roket) namluda yok
+pub const F_EMPTY: u32 = 1;
+/// toplama aleti demir kademesinde (balta → savaş baltası modeli)
+pub const F_IRON: u32 = 2;
+
+impl In {
+    pub fn new(anim: u8, t: f32, period: f32, weapon: Wk, style: Style) -> In {
+        In { anim, t, period, weapon, style, wback: 0.0, flags: 0, pivot: V3::ZERO }
+    }
+}
+
+/// Şarjör / roket değiştirme durumu
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Rl {
+    /// değiştirilen parça sol elde
+    pub hand: bool,
+    /// parça silahta yok (elde, havada ya da henüz takılmadı)
+    pub hide: bool,
+    /// ≥ 0: parça namlu ağzından bu kadar metre dışarıda, sol el onu iter
+    pub slide: f32,
+    /// sol el silahtan ayrık (anahtar karedeki hedefe gider)
+    pub free_left: bool,
+}
+
+/// Bir karenin tüm çıktıları
+pub struct Key {
+    pub k: K,
+    pub trail: f32,
+    pub muzzle: f32,
+    pub shown: Wk,
+    pub rl: Option<Rl>,
+    /// yakın dövüş kombosunun hangi vuruşu (0, 1, 2)
+    pub stage: u8,
 }
 
 /// Çıktı: poz + silah yerleşimi + efekt bilgisi
@@ -283,6 +322,8 @@ pub struct Out {
     pub mag_hidden: bool,
     /// savurma izi gücü (0..1): efektler silah ucunun izini çizer
     pub trail: f32,
+    /// kombonun hangi vuruşu (0, 1, 2)
+    pub stage: u8,
     /// namlu alevi (0..1)
     pub muzzle: f32,
     /// bu animasyonda gösterilecek silah (toplama aletleri silahın yerine geçer)
@@ -387,6 +428,10 @@ fn idle(st: &Style, t: f32, wk: Wk, s: f32) -> K {
         k.shin_l += 8.0;
     }
     ready(&mut k, wk, s);
+    if matches!(wk, Wk::BloodScythe | Wk::IceScythe) {
+        // dik duran tırpan: sap hafifçe sallanır, rüzgârlı bir ağız
+        k.wdir = v(-0.12 + 0.05 * (t * TAU * 0.32).sin(), 0.22, 1.0).norm();
+    }
     if k.ik_r > 0.5 {
         k.hand_r = k.hand_r + v(0.0, 0.0, 0.008 * b);
         k.hand_l = k.hand_l + v(0.0, 0.0, 0.008 * b);
@@ -422,6 +467,12 @@ fn stride(st: &Style, t: f32, run: bool, wk: Wk, s: f32) -> K {
     k.elbow_r = el + 10.0 * (-sn).max(0.0);
     k.elbow_l = el + 10.0 * sn.max(0.0);
     ready(&mut k, wk, s);
+    if matches!(wk, Wk::BloodScythe | Wk::IceScythe) {
+        // hareket halinde tırpan omuza yatar: ağız arkada ve yukarıda, sap gövdeyle sallanır
+        k.hand_r = h(-0.24, -0.20, 1.12, s);
+        k.wdir = v(-0.28 + 0.06 * sn, 0.50, 0.82);
+        k.wup = v(0.0, 0.8, -0.5);
+    }
     if k.ik_r > 0.5 {
         // silahlıyken kol sabit, gövdeyle sallanır
         let bobv = v(0.0, 0.0, -bob * 0.5 * sn.abs());
@@ -463,159 +514,452 @@ fn punch(st: &Style, ph: f32, alt: bool) -> K {
     track(&[(0.0, g), (0.35, hit), (0.55, hit), (1.0, g)], ph)
 }
 
-/// Yakın dövüş saldırısı; faz 0..1, vuruş 0.4
-fn melee(st: &Style, ph: f32, wk: Wk, s: f32, combo: u32) -> (K, f32) {
-    let mut r = rest(st);
-    ready(&mut r, wk, s);
-    let mut k1 = r; // kurma
-    let mut k2 = r; // vuruş
-    let mut k3 = r; // savurma sonu
-    let lunge = |k: &mut K, d: f32| {
-        k.off.y = -d;
-        k.thigh_r.x = 22.0;
-        k.shin_r = 26.0;
-        k.thigh_l.x = -18.0;
-        k.shin_l = 14.0;
-    };
+/// Anahtar kare üretici: `r` üzerine değişiklik uygular
+fn with(r: &K, f: impl FnOnce(&mut K)) -> K {
+    let mut k = *r;
+    f(&mut k);
+    k
+}
+
+/// El hedefi (metre × boy ölçeği)
+fn h(x: f32, y: f32, z: f32, s: f32) -> V3 {
+    v(x * s, y * s, z * s)
+}
+
+/// Öne atılım: kök öne, ön bacak bükük, arka bacak gergin; `crouch` gövdeyi alçaltır
+fn lunge(k: &mut K, d: f32, crouch: f32) {
+    k.off.y = -d;
+    k.off.z -= crouch;
+    k.thigh_r.x = 22.0 + 90.0 * crouch;
+    k.shin_r = 26.0 + 110.0 * crouch;
+    k.thigh_l.x = -18.0 - 20.0 * crouch;
+    k.shin_l = 14.0 + 30.0 * crouch;
+}
+
+/// Dönerek yan adım: ağırlık arka ayakta, dizler bükük (bükülme sırasında)
+fn coil(k: &mut K, crouch: f32) {
+    k.off.z -= crouch;
+    k.thigh_r.x = 28.0 + 80.0 * crouch;
+    k.shin_r = 34.0 + 100.0 * crouch;
+    k.thigh_l.x = 16.0 + 70.0 * crouch;
+    k.shin_l = 30.0 + 90.0 * crouch;
+}
+
+/// Bir vuruşun anahtar kareleri: (faz, poz) dizisi, iz penceresi, kombo sırası
+struct Mel {
+    keys: Vec<(f32, K)>,
+    trail: (f32, f32),
+}
+
+/// Yakın dövüş saldırısı; faz 0..1, vuruş anı 0.40. Her silahın kombosu farklı sayıda vuruştan oluşur.
+fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
+    let r = *r;
     match wk {
+        // ---------------------------------------------------------------- tırpan: üç vuruşluk kombo
+        Wk::BloodScythe | Wk::IceScythe => match stage % 3 {
+            0 => {
+                // geniş biçme: sağ arkadan sol öne, gövde ve kalça ayrı dönerek kırbaç gibi
+                let k1 = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(-0.46, 0.12, 1.05, s);
+                    k.hand_l = h(-0.18, 0.16, 0.95, s);
+                    k.wdir = v(-0.85, 0.50, 0.15);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = 50.0;
+                    k.chest.x = 6.0;
+                    k.hips.z = 18.0;
+                    coil(k, 0.05);
+                });
+                let k2 = with(&k1, |k| {
+                    k.hand_r = h(-0.54, 0.20, 1.00, s);
+                    k.hand_l = h(-0.20, 0.20, 0.92, s);
+                    k.wdir = v(-0.96, 0.26, 0.10);
+                    k.chest.z = 60.0;
+                    k.hips.z = 28.0;
+                    coil(k, 0.09);
+                });
+                let k3 = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(-0.08, -0.62, 1.02, s);
+                    k.hand_l = h(-0.10, -0.36, 0.94, s);
+                    k.wdir = v(0.35, -0.93, 0.05);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = -6.0;
+                    k.hips.z = -4.0;
+                    lunge(k, 0.15, 0.04);
+                });
+                let k4 = with(&k3, |k| {
+                    k.hand_r = h(0.26, -0.28, 1.00, s);
+                    k.hand_l = h(0.10, -0.14, 0.92, s);
+                    k.wdir = v(0.95, -0.15, 0.08);
+                    k.chest.z = -54.0;
+                    k.hips.z = -30.0;
+                    lunge(k, 0.13, 0.04);
+                });
+                let k5 = with(&k4, |k| {
+                    k.hand_r = h(0.34, -0.12, 1.02, s);
+                    k.wdir = v(0.85, 0.30, 0.10);
+                    k.chest.z = -46.0;
+                });
+                Mel { keys: vec![(0.0, r), (0.15, k1), (0.27, k2), (0.40, k3), (0.54, k4), (0.72, k5), (1.0, r)], trail: (0.30, 0.62) }
+            }
+            1 => {
+                // yükselen ters kesik: sol alttan sağ üste, kavisli yukarı çekiş
+                let k1 = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(0.20, -0.40, 0.62, s);
+                    k.hand_l = h(0.04, -0.24, 0.66, s);
+                    k.wdir = v(0.85, -0.45, -0.30);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = -50.0;
+                    k.chest.x = 16.0;
+                    k.hips.z = -22.0;
+                    coil(k, 0.12);
+                });
+                let k2 = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(-0.26, -0.62, 1.24, s);
+                    k.hand_l = h(-0.12, -0.38, 1.08, s);
+                    k.wdir = v(-0.35, -0.92, 0.38);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = 6.0;
+                    k.chest.x = 4.0;
+                    k.hips.z = 4.0;
+                    lunge(k, 0.16, 0.02);
+                });
+                let k3 = with(&k2, |k| {
+                    k.hand_r = h(-0.46, -0.10, 1.52, s);
+                    k.hand_l = h(-0.24, -0.06, 1.38, s);
+                    k.wdir = v(-0.85, -0.20, 0.55);
+                    k.chest.z = 52.0;
+                    k.chest.x = -8.0;
+                    k.hips.z = 26.0;
+                });
+                let k4 = with(&k3, |k| {
+                    k.hand_r = h(-0.50, 0.05, 1.40, s);
+                    k.wdir = v(-0.90, 0.20, 0.35);
+                    k.chest.z = 44.0;
+                });
+                Mel { keys: vec![(0.0, r), (0.17, k1), (0.40, k2), (0.56, k3), (0.76, k4), (1.0, r)], trail: (0.26, 0.60) }
+            }
+            _ => {
+                // fırıldak: yarım çömelip tam bir tur dönerek tırpanı yatay savurur
+                let spin = |a: f32, fl: f32| {
+                    with(&r, move |k| {
+                        k.ik_l = 1.0;
+                        k.hand_r = h(-0.54, -0.18, 1.16, s);
+                        k.hand_l = h(-0.20, -0.14, 1.04, s);
+                        k.wdir = v(-1.0, 0.04, 0.08);
+                        k.wup = v(0.0, 0.0, 1.0);
+                        k.body = v(0.0, 0.0, a);
+                        k.chest.x = 6.0;
+                        k.chest.y = fl;
+                        k.off.z = 0.07 * (fl.abs() / 14.0);
+                        k.thigh_r.x = 18.0;
+                        k.thigh_l.x = -16.0;
+                        k.shin_r = 30.0;
+                        k.shin_l = 40.0;
+                    })
+                };
+                let k0 = with(&spin(-26.0, 0.0), |k| coil(k, 0.10));
+                let kmid = spin(120.0, 12.0);
+                let kmid2 = spin(250.0, 14.0);
+                let kend = with(&spin(360.0, 6.0), |k| {
+                    lunge(k, 0.10, 0.05);
+                    k.hand_r = h(-0.20, -0.58, 1.06, s);
+                    k.hand_l = h(-0.12, -0.34, 0.96, s);
+                    k.wdir = v(0.45, -0.88, 0.05);
+                    k.chest.y = 0.0;
+                });
+                Mel { keys: vec![(0.0, r), (0.16, k0), (0.30, kmid), (0.48, kmid2), (0.66, kend), (0.82, with(&kend, |_| {})), (1.0, r)], trail: (0.18, 0.70) }
+            }
+        },
+        // ---------------------------------------------------------------- balyoz, fırtına baltası, kazma, testere (iki el)
+        Wk::Hammer => {
+            // gövde ağırlığıyla baş üstünden yere çakma; çarpmada gövde sarsılır
+            let up = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.10, 0.12, 1.62, s);
+                k.hand_l = h(0.04, 0.18, 1.40, s);
+                k.wdir = v(-0.05, 0.85, 0.52);
+                k.wup = v(0.0, 0.52, -0.85);
+                k.chest.x = -18.0;
+                k.chest.z = 8.0;
+                k.off.z = 0.02;
+            });
+            let slam = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.04, -0.66, 0.90, s);
+                k.hand_l = h(0.04, -0.50, 0.84, s);
+                k.wdir = v(0.0, -0.90, -0.42);
+                k.wup = v(0.0, -0.42, 0.90);
+                k.chest.x = 34.0;
+                k.chest.z = -4.0;
+                lunge(k, 0.12, 0.10);
+            });
+            let rebound = with(&slam, |k| {
+                k.hand_r = h(-0.05, -0.62, 0.98, s);
+                k.chest.x = 26.0;
+                k.off.z += 0.03;
+            });
+            Mel { keys: vec![(0.0, r), (0.26, up), (0.30, up), (0.40, slam), (0.47, rebound), (0.66, slam), (1.0, r)], trail: (0.30, 0.46) }
+        }
+        Wk::StormAxe => {
+            // çapraz şimşek kesik: sağ omuzdan sol kalçaya
+            let k1 = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.30, 0.04, 1.66, s);
+                k.hand_l = h(-0.08, 0.10, 1.46, s);
+                k.wdir = v(-0.35, 0.50, 0.80);
+                k.wup = v(0.0, 0.8, -0.6);
+                k.chest.x = -10.0;
+                k.chest.z = 28.0;
+                k.hips.z = 14.0;
+                coil(k, 0.05);
+            });
+            let k2 = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.02, -0.60, 1.00, s);
+                k.hand_l = h(0.06, -0.44, 0.92, s);
+                k.wdir = v(0.30, -0.80, -0.52);
+                k.wup = v(0.0, -0.6, 0.8);
+                k.chest.x = 28.0;
+                k.chest.z = -16.0;
+                lunge(k, 0.13, 0.05);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(0.16, -0.40, 0.72, s);
+                k.hand_l = h(0.12, -0.28, 0.70, s);
+                k.wdir = v(0.55, -0.40, -0.72);
+                k.chest.z = -34.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.56, k3), (1.0, r)], trail: (0.28, 0.60) }
+        }
+        Wk::Pickaxe => {
+            // iki elle baş üstünden dik iniş: sivri uç hedefe saplanır, sonra geri çekilir
+            let up = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.12, 0.16, 1.70, s);
+                k.hand_l = h(0.02, 0.22, 1.48, s);
+                k.wdir = v(-0.06, 0.58, 0.82);
+                k.wup = v(0.0, 0.82, -0.58);
+                k.chest.x = -20.0;
+                k.chest.z = 10.0;
+                k.off.z = 0.03;
+            });
+            let hit = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.06, -0.62, 0.92, s);
+                k.hand_l = h(0.03, -0.46, 0.86, s);
+                k.wdir = v(0.0, -0.72, -0.69);
+                k.wup = v(0.0, -0.69, 0.72);
+                k.chest.x = 32.0;
+                k.chest.z = -6.0;
+                lunge(k, 0.11, 0.09);
+            });
+            let pull = with(&hit, |k| {
+                k.hand_r = h(-0.08, -0.52, 1.02, s);
+                k.hand_l = h(0.02, -0.38, 0.96, s);
+                k.chest.x = 22.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.26, up), (0.31, up), (0.40, hit), (0.50, hit), (0.64, pull), (1.0, r)], trail: (0.32, 0.45) }
+        }
+        Wk::Chainsaw => {
+            // testere iki yönlü yatay kesik; motor titremesi anahtar kareler arasında eklenir
+            let a = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.34, -0.46, 1.10, s);
+                k.hand_l = h(-0.06, -0.30, 1.04, s);
+                k.wdir = v(-0.30, -0.95, 0.0);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = 26.0;
+                k.chest.x = 12.0;
+                lunge(k, 0.08, 0.05);
+            });
+            let b = with(&a, |k| {
+                k.hand_r = h(0.10, -0.62, 1.06, s);
+                k.hand_l = h(0.10, -0.44, 1.02, s);
+                k.wdir = v(0.30, -0.95, -0.05);
+                k.chest.z = -22.0;
+                lunge(k, 0.14, 0.05);
+            });
+            let rev = if stage % 2 == 0 { (a, b) } else { (b, a) };
+            let (a, b) = rev;
+            Mel { keys: vec![(0.0, r), (0.18, a), (0.40, a), (0.58, b), (0.80, b), (1.0, r)], trail: (0.26, 0.74) }
+        }
+        // ---------------------------------------------------------------- tek elle: bıçak, balta, tokmak, katana, pençe
         Wk::Knife => {
-            // iki vuruşluk kombo: derin atılımla sapla, ardından ters elden yatay kesik
-            if combo.is_multiple_of(2) {
-                k1.hand_r = v(-0.30, 0.12, 1.20) * s;
-                k1.wdir = v(-0.1, -0.9, 0.35);
-                k1.chest.z = 26.0;
-                k1.off.y = 0.04;
-                k2.hand_r = v(-0.06, -0.74, 1.16) * s;
-                k2.wdir = v(0.05, -1.0, -0.05);
-                k2.wup = v(0.0, 0.0, 1.0);
-                k2.chest.z = -22.0;
-                k2.chest.x = 10.0;
-                lunge(&mut k2, 0.17);
-                k3 = k2;
-                k3.hand_r = v(-0.12, -0.56, 1.10) * s;
+            if stage % 2 == 0 {
+                // derin atılımla sapla, ters elden yatay kesik
+                let k1 = with(&r, |k| {
+                    k.hand_r = h(-0.30, 0.12, 1.20, s);
+                    k.wdir = v(-0.1, -0.9, 0.35);
+                    k.chest.z = 26.0;
+                    k.off.y = 0.04;
+                });
+                let k2 = with(&r, |k| {
+                    k.ik_r = 1.0;
+                    k.hand_r = h(-0.06, -0.74, 1.16, s);
+                    k.wdir = v(0.05, -1.0, -0.05);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = -22.0;
+                    k.chest.x = 10.0;
+                    lunge(k, 0.17, 0.0);
+                });
+                let k3 = with(&k2, |k| k.hand_r = h(-0.12, -0.56, 1.10, s));
+                Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
             } else {
-                k1.hand_r = v(0.12, -0.24, 1.32) * s;
-                k1.wdir = v(0.85, -0.35, 0.35);
-                k1.wup = v(0.0, 0.3, 1.0);
-                k1.chest.z = -26.0;
-                k2.hand_r = v(-0.46, -0.48, 1.06) * s;
-                k2.wdir = v(-0.85, -0.5, -0.1);
-                k2.wup = v(0.0, 0.0, 1.0);
-                k2.chest.z = 28.0;
-                lunge(&mut k2, 0.11);
-                k3 = k2;
-                k3.hand_r = v(-0.50, -0.30, 1.00) * s;
-                k3.wdir = v(-0.7, 0.2, -0.3);
+                let k1 = with(&r, |k| {
+                    k.hand_r = h(0.12, -0.24, 1.32, s);
+                    k.wdir = v(0.85, -0.35, 0.35);
+                    k.wup = v(0.0, 0.3, 1.0);
+                    k.chest.z = -26.0;
+                });
+                let k2 = with(&r, |k| {
+                    k.ik_r = 1.0;
+                    k.hand_r = h(-0.46, -0.48, 1.06, s);
+                    k.wdir = v(-0.85, -0.5, -0.1);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = 28.0;
+                    lunge(k, 0.11, 0.0);
+                });
+                let k3 = with(&k2, |k| {
+                    k.hand_r = h(-0.50, -0.30, 1.00, s);
+                    k.wdir = v(-0.7, 0.2, -0.3);
+                });
+                Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
             }
         }
         Wk::Katana => {
-            // iaido: sağ omuzdan yatay sol alta kesik (kombo sırasıyla yön değişir)
-            let flip = combo % 2 == 1;
+            // iaido: omuzdan yatay kesik, geri dönüşte ters kesik
+            let flip = stage % 2 == 1;
             let sx = if flip { -1.0 } else { 1.0 };
-            k1.hand_r = v(-0.34 * sx, -0.05, 1.30) * s;
-            k1.wdir = v(-0.6 * sx, 0.5, 0.6);
-            k1.wup = v(0.6 * sx, 0.3, 0.4);
-            k1.chest.z = 30.0 * sx;
-            k1.ik_l = 1.0;
-            k1.hand_l = v(-0.18 * sx, -0.10, 1.20) * s;
-            k2.hand_r = v(-0.02 * sx, -0.58, 1.10) * s;
-            k2.wdir = v(0.85 * sx, -0.55, -0.05);
-            k2.wup = v(0.0, 0.2, 1.0);
-            k2.chest.z = -18.0 * sx;
-            lunge(&mut k2, 0.10);
-            k3 = k2;
-            k3.hand_r = v(0.30 * sx, -0.30, 0.92) * s;
-            k3.wdir = v(0.6 * sx, 0.5, -0.45);
-            k3.chest.z = -34.0 * sx;
+            let k1 = with(&r, |k| {
+                k.hand_r = h(-0.34 * sx, -0.05, 1.30, s);
+                k.wdir = v(-0.6 * sx, 0.5, 0.6);
+                k.wup = v(0.6 * sx, 0.3, 0.4);
+                k.chest.z = 30.0 * sx;
+                k.ik_l = 1.0;
+                k.hand_l = h(-0.18 * sx, -0.10, 1.20, s);
+            });
+            let k2 = with(&r, |k| {
+                k.ik_r = 1.0;
+                k.hand_r = h(-0.02 * sx, -0.58, 1.10, s);
+                k.wdir = v(0.85 * sx, -0.55, -0.05);
+                k.wup = v(0.0, 0.2, 1.0);
+                k.chest.z = -18.0 * sx;
+                lunge(k, 0.10, 0.0);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(0.30 * sx, -0.30, 0.92, s);
+                k.wdir = v(0.6 * sx, 0.5, -0.45);
+                k.chest.z = -34.0 * sx;
+            });
+            Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
         }
         Wk::Claw => {
-            // pençe: yukarıdan çapraz yırtma
-            k1.hand_r = v(-0.40, 0.0, 1.45) * s;
-            k1.wdir = v(-0.3, -0.2, 1.0);
-            k1.wup = v(0.0, -1.0, 0.0);
-            k1.chest.z = 22.0;
-            k2.hand_r = v(-0.05, -0.55, 1.05) * s;
-            k2.wdir = v(0.4, -0.9, -0.2);
-            k2.wup = v(0.0, 0.0, 1.0);
-            k2.chest.z = -12.0;
-            lunge(&mut k2, 0.09);
-            k3 = k2;
-            k3.hand_r = v(0.22, -0.30, 0.80) * s;
-            k3.wdir = v(0.6, -0.4, -0.7);
-            k3.chest.z = -26.0;
+            let k1 = with(&r, |k| {
+                k.hand_r = h(-0.40, 0.0, 1.45, s);
+                k.wdir = v(-0.3, -0.2, 1.0);
+                k.wup = v(0.0, -1.0, 0.0);
+                k.chest.z = 22.0;
+            });
+            let k2 = with(&r, |k| {
+                k.ik_r = 1.0;
+                k.hand_r = h(-0.05, -0.55, 1.05, s);
+                k.wdir = v(0.4, -0.9, -0.2);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = -12.0;
+                lunge(k, 0.09, 0.0);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(0.22, -0.30, 0.80, s);
+                k.wdir = v(0.6, -0.4, -0.7);
+                k.chest.z = -26.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
         }
         Wk::Hatchet | Wk::Handaxe | Wk::Club | Wk::Effigy => {
-            // tek el baş üstünden çapraz indirme
-            k1.hand_r = v(-0.30, 0.10, 1.62) * s;
-            k1.wdir = v(-0.2, 0.6, 0.8);
-            k1.wup = v(0.0, 1.0, -0.4);
-            k1.chest.z = 20.0;
-            k1.chest.x = -6.0;
-            k2.hand_r = v(-0.10, -0.60, 1.05) * s;
-            k2.wdir = v(0.15, -0.85, -0.5);
-            k2.wup = v(0.0, -0.5, 0.9);
-            k2.chest.z = -10.0;
-            k2.chest.x = 16.0;
-            lunge(&mut k2, 0.08);
-            k3 = k2;
-            k3.hand_r = v(0.10, -0.40, 0.78) * s;
-            k3.wdir = v(0.3, -0.4, -0.9);
+            // ağır silah daha yüksekten, daha çok gövdeyle; balta iki yönlü hızlı kombo
+            let heavy = if matches!(wk, Wk::Handaxe | Wk::Club | Wk::Effigy) { 1.0 } else { 0.0 };
+            if stage % 2 == 0 {
+                let k1 = with(&r, |k| {
+                    k.hand_r = h(-0.30, 0.10, 1.62 + 0.10 * heavy, s);
+                    k.wdir = v(-0.2, 0.6, 0.8);
+                    k.wup = v(0.0, 1.0, -0.4);
+                    k.chest.z = 20.0 + 6.0 * heavy;
+                    k.chest.x = -6.0 - 6.0 * heavy;
+                    coil(k, 0.03 + 0.03 * heavy);
+                });
+                let k2 = with(&r, |k| {
+                    k.ik_r = 1.0;
+                    k.hand_r = h(-0.10, -0.60, 1.02, s);
+                    k.wdir = v(0.15, -0.85, -0.5);
+                    k.wup = v(0.0, -0.5, 0.9);
+                    k.chest.z = -10.0;
+                    k.chest.x = 16.0 + 6.0 * heavy;
+                    lunge(k, 0.09 + 0.03 * heavy, 0.03);
+                });
+                let k3 = with(&k2, |k| {
+                    k.hand_r = h(0.10, -0.40, 0.78, s);
+                    k.wdir = v(0.3, -0.4, -0.9);
+                });
+                Mel { keys: vec![(0.0, r), (0.22, k1), (0.40, k2), (0.56, k3), (1.0, r)], trail: (0.28, 0.58) }
+            } else {
+                let k1 = with(&r, |k| {
+                    k.hand_r = h(0.22, -0.30, 1.22, s);
+                    k.wdir = v(0.8, -0.4, 0.2);
+                    k.wup = v(0.0, 0.2, 1.0);
+                    k.chest.z = -34.0;
+                    coil(k, 0.03);
+                });
+                let k2 = with(&r, |k| {
+                    k.ik_r = 1.0;
+                    k.hand_r = h(-0.38, -0.52, 1.08, s);
+                    k.wdir = v(-0.85, -0.45, 0.0);
+                    k.wup = v(0.0, 0.0, 1.0);
+                    k.chest.z = 30.0;
+                    lunge(k, 0.09, 0.02);
+                });
+                let k3 = with(&k2, |k| {
+                    k.hand_r = h(-0.52, -0.20, 1.04, s);
+                    k.wdir = v(-0.80, 0.10, 0.1);
+                    k.chest.z = 42.0 + 8.0 * heavy;
+                });
+                Mel { keys: vec![(0.0, r), (0.22, k1), (0.40, k2), (0.56, k3), (1.0, r)], trail: (0.28, 0.58) }
+            }
         }
-        Wk::Hammer | Wk::StormAxe | Wk::Pickaxe | Wk::Chainsaw => {
-            // iki el: geriye kurup önüne çakma (balyoz), savurma sonu yere yakın
-            k1.ik_l = 1.0;
-            k1.hand_r = v(-0.10, 0.10, 1.55) * s;
-            k1.hand_l = v(0.04, 0.16, 1.32) * s;
-            k1.wdir = v(-0.1, 0.75, 0.65);
-            k1.wup = v(0.0, 0.65, -0.75);
-            k1.chest.x = -14.0;
-            k1.chest.z = 10.0;
-            k2.ik_l = 1.0;
-            k2.hand_r = v(-0.04, -0.58, 1.02) * s;
-            k2.hand_l = v(0.04, -0.44, 0.98) * s;
-            k2.wdir = v(0.0, -0.85, -0.52);
-            k2.wup = v(0.0, -0.65, 0.75);
-            k2.chest.x = 26.0;
-            k2.chest.z = -4.0;
-            lunge(&mut k2, 0.10);
-            k2.off.z -= 0.06;
-            k3 = k2;
-            k3.hand_r = v(-0.04, -0.56, 0.92) * s;
-            k3.hand_l = v(0.04, -0.40, 0.88) * s;
-            k3.wdir = v(0.0, -0.72, -0.69);
-        }
-        Wk::BloodScythe | Wk::IceScythe => {
-            // tırpan: sağdan sola geniş yatay biçme
-            k1.ik_l = 1.0;
-            k1.hand_r = v(-0.40, 0.05, 1.18) * s;
-            k1.hand_l = v(-0.20, 0.10, 1.00) * s;
-            k1.wdir = v(-0.8, 0.45, 0.35);
-            k1.wup = v(0.0, 0.0, 1.0);
-            k1.chest.z = 38.0;
-            k2.ik_l = 1.0;
-            k2.hand_r = v(-0.05, -0.55, 1.05) * s;
-            k2.hand_l = v(-0.14, -0.32, 0.92) * s;
-            k2.wdir = v(0.75, -0.65, 0.05);
-            k2.wup = v(0.0, 0.0, 1.0);
-            k2.chest.z = -10.0;
-            lunge(&mut k2, 0.08);
-            k3 = k2;
-            k3.hand_r = v(0.30, -0.22, 1.00) * s;
-            k3.hand_l = v(0.12, -0.12, 0.90) * s;
-            k3.wdir = v(0.75, 0.6, 0.1);
-            k3.chest.z = -40.0;
-        }
-        _ => {}
+        _ => Mel { keys: vec![(0.0, r), (1.0, r)], trail: (0.0, 0.0) },
     }
-    k2.ik_r = 1.0;
-    k3.ik_r = 1.0;
-    let keys = [(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)];
-    let k = track(&keys, ph);
-    let trail = if (0.26..0.62).contains(&ph) { 1.0 - ((ph - 0.42).abs() / 0.2).min(1.0) * 0.7 } else { 0.0 };
-    (k, trail)
 }
 
-/// Ateş: geri tepme (faz 0..1), namlu alevi ilk %20
+/// Yakın dövüşte kombo düzeni: kaç vuruşluk bir tur
+pub fn combo_len(wk: Wk) -> u32 {
+    match wk {
+        Wk::BloodScythe | Wk::IceScythe => 3,
+        _ => 2,
+    }
+}
+
+fn melee(st: &Style, ph: f32, wk: Wk, s: f32, combo: u32) -> (K, f32, u8) {
+    let mut r = rest(st);
+    ready(&mut r, wk, s);
+    let stage = combo % combo_len(wk);
+    let m = melee_keys(&r, wk, s, stage);
+    let mut k = track(&m.keys, ph);
+    let (a, b) = m.trail;
+    let trail = if b > a && ph > a && ph < b { (std::f32::consts::PI * (ph - a) / (b - a)).sin().powf(0.55) } else { 0.0 };
+    if wk == Wk::Chainsaw && ph > 0.12 && ph < 0.86 {
+        // motor titremesi: eller ve gövde ince ince sarsılır
+        let j = (ph * 520.0).sin() * 0.006 * s;
+        k.hand_r = k.hand_r + v(j, -j * 0.6, j * 0.5);
+        k.hand_l = k.hand_l + v(-j, j * 0.5, 0.0);
+        k.chest.x += (ph * 410.0).sin() * 0.7;
+    }
+    (k, trail, stage as u8)
+}
+
+/// Ateş: geri tepme (faz 0..1), namlu alevi ilk %20; roketatarda omuz çöker, boru yukarı fırlar
 fn fire(st: &Style, ph: f32, wk: Wk, s: f32) -> (K, f32) {
     let mut r = rest(st);
     ready(&mut r, wk, s);
@@ -630,7 +974,18 @@ fn fire(st: &Style, ph: f32, wk: Wk, s: f32) -> (K, f32) {
     kick.wdir = (kick.wdir + v(0.0, 0.0, 0.25 * rk)).norm();
     kick.chest.x -= 6.0 * rk;
     kick.off.y = 0.03 * rk;
-    let k = track(&[(0.0, r), (0.12, kick), (0.6, r), (1.0, r)], ph);
+    if wk == Wk::Rpg {
+        // arka alev basıncı: gövde geriye, dizler çöker, boru omuzda yukarı sıçrar
+        kick.hand_r = r.hand_r + v(0.0, 0.14, 0.05) * s;
+        kick.wdir = v(0.0, -0.92, 0.38);
+        kick.chest.x = r.chest.x - 11.0;
+        kick.off.y = 0.07;
+        kick.off.z = -0.05;
+        kick.thigh_r.x += 12.0;
+        kick.shin_r += 14.0;
+        kick.head.x -= 6.0;
+    }
+    let k = track(&[(0.0, r), (0.10, kick), (0.28, kick), (0.7, r), (1.0, r)], ph);
     (k, if ph < 0.2 { 1.0 - ph / 0.2 } else { 0.0 })
 }
 
@@ -654,7 +1009,10 @@ fn aim(k: &mut K, wk: Wk, s: f32) {
 }
 
 /// Şarjör değiştirme: silah yana eğilir, sol el şarjörü çıkarıp yenisini takar (faz 0..1)
-fn reload(st: &Style, ph: f32, wk: Wk, s: f32) -> (K, bool, bool) {
+fn reload(st: &Style, ph: f32, wk: Wk, s: f32) -> (K, Rl) {
+    if wk == Wk::Rpg {
+        return reload_rpg(st, ph, s);
+    }
     let mut r = rest(st);
     ready(&mut r, wk, s);
     let mut tilt = r;
@@ -669,7 +1027,47 @@ fn reload(st: &Style, ph: f32, wk: Wk, s: f32) -> (K, bool, bool) {
     let keys = [(0.0, r), (0.18, tilt), (0.42, out), (0.70, tilt), (0.9, r), (1.0, r)];
     let k = track(&keys, ph);
     // sol el 0.25-0.75 arası şarjörü taşır; silahta şarjör 0.25-0.72 arası yok
-    (k, (0.25..0.75).contains(&ph), (0.25..0.72).contains(&ph))
+    let hand = (0.25..0.75).contains(&ph);
+    (k, Rl { hand, hide: (0.25..0.72).contains(&ph), slide: -1.0, free_left: hand })
+}
+
+/// Roketatar: boru öne-aşağı eğilir, sol el sırttan yeni roketi alır, namlu ağzından içeri iter, boru omuza döner
+fn reload_rpg(st: &Style, ph: f32, s: f32) -> (K, Rl) {
+    let mut r = rest(st);
+    ready(&mut r, Wk::Rpg, s);
+    let low = with(&r, |k| {
+        k.hand_r = h(-0.20, -0.16, 1.14, s);
+        k.wdir = v(0.08, -0.84, -0.22);
+        k.chest.x += 8.0;
+        k.chest.z -= 6.0;
+        k.head.x = 10.0;
+    });
+    let back = with(&low, |k| {
+        k.ik_l = 1.0;
+        k.hand_l = h(0.24, 0.26, 1.36, s);
+        k.chest.z = low.chest.z + 14.0;
+        k.chest.x = low.chest.x - 4.0;
+    });
+    let carry = with(&low, |k| {
+        k.ik_l = 1.0;
+        k.hand_l = h(0.08, -0.52, 0.96, s);
+        k.wdir = v(0.06, -0.92, -0.10);
+        k.chest.z = low.chest.z - 4.0;
+    });
+    let push = with(&carry, |k| {
+        k.hand_l = h(0.04, -0.64, 1.00, s);
+        k.wdir = v(0.04, -0.98, -0.04);
+    });
+    let keys = [(0.0, r), (0.16, low), (0.36, back), (0.44, back), (0.62, carry), (0.80, push), (0.90, low), (1.0, r)];
+    let k = track(&keys, ph);
+    let slide = if (0.66..0.88).contains(&ph) {
+        let u = ((ph - 0.66) / 0.22).clamp(0.0, 1.0);
+        0.26 * (1.0 - smooth01(u))
+    } else {
+        -1.0
+    };
+    let rl = Rl { hand: (0.38..0.66).contains(&ph), hide: ph < 0.88, slide, free_left: (0.16..0.88).contains(&ph) };
+    (k, rl)
 }
 
 /// Takla: öne yuvarlanma (gövde X etrafında 360°), faz 0..1. Gövde top gibi toplanır, dönme merkezi
@@ -776,29 +1174,46 @@ fn ride(st: &Style, t: f32, s: f32) -> K {
     k
 }
 
-fn gather(st: &Style, ph: f32, anim: u8, s: f32) -> (K, f32, Wk) {
+fn gather(st: &Style, ph: f32, anim: u8, s: f32, flags: u32) -> (K, f32, Wk) {
     let mut r = rest(st);
     match anim {
         a::CHOP => {
-            // balta: yandan yatay vuruş (ağaç gövdesine)
-            let wk = Wk::Hatchet;
+            // odun kesme: omuz üstünden çapraz iniş, gövdeye saplanıp sapı hafifçe çevirip çekme
+            let wk = if flags & F_IRON != 0 { Wk::Handaxe } else { Wk::Hatchet };
             ready(&mut r, wk, s);
-            let mut k1 = r;
-            k1.hand_r = v(-0.42, 0.10, 1.25) * s;
-            k1.wdir = v(-0.6, 0.6, 0.5);
-            k1.chest.z = 34.0;
-            let mut k2 = r;
-            k2.hand_r = v(-0.06, -0.56, 1.0) * s;
-            k2.wdir = v(0.4, -0.9, 0.0);
-            k2.wup = v(0.0, 0.0, 1.0);
-            k2.chest.z = -12.0;
-            let k = track(&[(0.0, r), (0.3, k1), (0.45, k2), (0.6, k2), (1.0, r)], ph);
-            (k, if (0.32..0.55).contains(&ph) { 0.6 } else { 0.0 }, wk)
+            let k1 = with(&r, |k| {
+                k.hand_r = h(-0.34, 0.12, 1.70, s);
+                k.wdir = v(-0.2, 0.65, 0.75);
+                k.wup = v(0.0, 1.0, -0.3);
+                k.chest.z = 24.0;
+                k.chest.x = -8.0;
+                coil(k, 0.05);
+            });
+            let k2 = with(&r, |k| {
+                k.hand_r = h(-0.08, -0.64, 0.98, s);
+                k.wdir = v(0.18, -0.85, -0.50);
+                k.wup = v(0.0, -0.5, 0.9);
+                k.chest.z = -10.0;
+                k.chest.x = 20.0;
+                lunge(k, 0.10, 0.04);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(-0.10, -0.60, 0.94, s);
+                k.wdir = v(0.12, -0.86, -0.50);
+                k.chest.x = 22.0;
+            });
+            let k4 = with(&k2, |k| {
+                k.hand_r = h(-0.14, -0.46, 1.08, s);
+                k.wdir = v(0.0, -0.80, -0.20);
+                k.chest.x = 12.0;
+            });
+            let k = track(&[(0.0, r), (0.20, k1), (0.40, k2), (0.50, k3), (0.64, k4), (1.0, r)], ph);
+            (k, if (0.30..0.46).contains(&ph) { 0.5 } else { 0.0 }, wk)
         }
         a::MINE => {
             let wk = Wk::Pickaxe;
-            let (k, tr) = melee(st, ph, wk, s, 0);
-            (k, tr * 0.6, wk)
+            let (k, tr, _) = melee(st, ph, wk, s, 0);
+            (k, tr * 0.5, wk)
         }
         a::PICKUP | a::OPEN => {
             let mut low = r;
@@ -849,49 +1264,50 @@ fn gather(st: &Style, ph: f32, anim: u8, s: f32) -> (K, f32, Wk) {
 }
 
 /// Animasyon durumundan anahtar kareyi üretir
-pub fn key_of(inp: &In, s: f32) -> (K, f32, f32, Wk, Option<(bool, bool)>) {
+pub fn key_of(inp: &In, s: f32) -> Key {
     let st = &inp.style;
     let wk = inp.weapon;
     let t = inp.t;
     let ph_once = |dur: f32| (t / dur).clamp(0.0, 1.0);
+    let plain = |k: K, shown: Wk| Key { k, trail: 0.0, muzzle: 0.0, shown, rl: None, stage: 0 };
     match inp.anim {
-        a::IDLE | a::PISTOL_IDLE | a::RIFLE_IDLE => (idle(st, t, wk, s), 0.0, 0.0, wk, None),
-        a::WALK | a::PISTOL_WALK | a::RIFLE_WALK => (stride(st, t, false, wk, s), 0.0, 0.0, wk, None),
-        a::RUN => (stride(st, t, true, wk, s), 0.0, 0.0, wk, None),
+        a::IDLE | a::PISTOL_IDLE | a::RIFLE_IDLE => plain(idle(st, t, wk, s), wk),
+        a::WALK | a::PISTOL_WALK | a::RIFLE_WALK => plain(stride(st, t, false, wk, s), wk),
+        a::RUN => plain(stride(st, t, true, wk, s), wk),
         a::PUNCH => {
             // çekirdek: 4/14 sn'de bir yumruk, sırayla sol/sağ
             let half = 4.0 / 14.0;
             let n = (t / half) as u32;
-            (punch(st, (t % half) / half, n % 2 == 1), 0.0, 0.0, Wk::None, None)
+            plain(punch(st, (t % half) / half, n % 2 == 1), Wk::None)
         }
         a::MELEE => {
             let per = inp.period.max(0.2);
             let n = (t / per) as u32;
-            let (k, tr) = melee(st, (t % per) / per, wk, s, n);
-            (k, tr, 0.0, wk, None)
+            let (k, trail, stage) = melee(st, (t % per) / per, wk, s, n);
+            Key { k, trail, muzzle: 0.0, shown: wk, rl: None, stage }
         }
         a::FIRE => {
             let per = inp.period.max(0.08);
             let (k, m) = fire(st, (t % per) / per, wk, s);
-            (k, 0.0, m, wk, None)
+            Key { k, trail: 0.0, muzzle: m, shown: wk, rl: None, stage: 0 }
         }
         a::RELOAD => {
-            let (k, hand, hide) = reload(st, (t / inp.period.max(0.3)).fract(), wk, s);
-            (k, 0.0, 0.0, wk, Some((hand, hide)))
+            let (k, rl) = reload(st, (t / inp.period.max(0.3)).fract(), wk, s);
+            Key { k, trail: 0.0, muzzle: 0.0, shown: wk, rl: Some(rl), stage: 0 }
         }
-        a::ROLL => (roll(st, ph_once(0.32)), 0.0, 0.0, Wk::None, None),
-        a::DEATH => (fall(st, ph_once(0.9), true), 0.0, 0.0, Wk::None, None),
-        a::KNOCK => (fall(st, ph_once(0.6), false), 0.0, 0.0, Wk::None, None),
-        a::GETUP => (getup(st, ph_once(0.5)), 0.0, 0.0, Wk::None, None),
-        a::HURT => (hurt(st, ph_once(0.18), wk, s), 0.0, 0.0, wk, None),
-        a::RIDE => (ride(st, t, s), 0.0, 0.0, Wk::None, None),
+        a::ROLL => plain(roll(st, ph_once(0.32)), Wk::None),
+        a::DEATH => plain(fall(st, ph_once(0.9), true), Wk::None),
+        a::KNOCK => plain(fall(st, ph_once(0.6), false), Wk::None),
+        a::GETUP => plain(getup(st, ph_once(0.5)), Wk::None),
+        a::HURT => plain(hurt(st, ph_once(0.18), wk, s), wk),
+        a::RIDE => plain(ride(st, t, s), Wk::None),
         a::CHOP | a::MINE => {
-            let (k, tr, w) = gather(st, (t / 0.9).fract(), inp.anim, s);
-            (k, tr, 0.0, w, None)
+            let (k, trail, w) = gather(st, (t / 0.9).fract(), inp.anim, s, inp.flags);
+            Key { k, trail, muzzle: 0.0, shown: w, rl: None, stage: 0 }
         }
         x => {
-            let (k, tr, w) = gather(st, ph_once(1.0), x, s);
-            (k, tr, 0.0, w, None)
+            let (k, trail, w) = gather(st, ph_once(1.0), x, s, inp.flags);
+            Key { k, trail, muzzle: 0.0, shown: w, rl: None, stage: 0 }
         }
     }
 }
@@ -899,7 +1315,7 @@ pub fn key_of(inp: &In, s: f32) -> (K, f32, f32, Wk, Option<(bool, bool)>) {
 /// Anahtar kareyi iskelet pozuna çevirir, kolları IK ile çözer, silahı yerleştirir
 pub fn evaluate(sk: &Skeleton, inp: &In) -> Out {
     let s = sk.height / 1.86;
-    let (k, trail, muzzle, shown, reload) = key_of(inp, s);
+    let Key { k, trail, muzzle, shown, rl, stage } = key_of(inp, s);
     let mut pose = Pose::default();
     let lr = |d: V3| M3::xyz(d.x, d.y, d.z);
     pose.local[PELVIS] = M3::rz(k.hips.z) * M3::ry(k.hips.y) * M3::rx(k.hips.x);
@@ -928,9 +1344,23 @@ pub fn evaluate(sk: &Skeleton, inp: &In) -> Out {
         sk.solve_arm(&mut pose, UPPER_R, FORE_R, sk.palm_r, tr, chest.r.apply(pole_r));
     }
     let wb = chest.r * M3::basis(k.wdir, k.wup);
-    // iki elli tutuşlarda sol el silahın sapında/namlusunda (şarjör elde değilken)
-    let mag_in_hand = reload.map(|r| r.0).unwrap_or(false);
-    let on_weapon = shown != Wk::None && k.ik_r >= 0.5 && matches!(grip, Grip::Two | Grip::Rifle | Grip::Pistol | Grip::Shoulder) && !mag_in_hand;
+    // iki elli tutuşlarda sol el silahın sapında/namlusunda; değiştirilen parça elde ya da sol el serbestken anahtar kareyi izler
+    let free_left = rl.map(|r| r.free_left).unwrap_or(false);
+    let on_weapon = shown != Wk::None && k.ik_r >= 0.5 && matches!(grip, Grip::Two | Grip::Rifle | Grip::Pistol | Grip::Shoulder) && !free_left;
+    // silahın dünya yerleşimi (sağ avuç + yön): parçanın kayması bunun üzerinden
+    let wxf = if shown != Wk::None {
+        let pr = if k.ik_r >= 0.5 {
+            let xf1 = sk.world(&pose);
+            xf1[HAND_R].apply(sk.palm_r)
+        } else {
+            sk.world(&pose)[HAND_R].apply(sk.palm_r)
+        };
+        let b = if k.ik_r >= 0.5 { wb } else { sk.world(&pose)[HAND_R].r * M3::basis(k.wdir, k.wup) };
+        Some(Xf::new(b, pr))
+    } else {
+        None
+    };
+    let sliding = rl.filter(|r| r.slide >= 0.0 && wxf.is_some());
     if on_weapon {
         let xf1 = sk.world(&pose);
         let pr = xf1[HAND_R].apply(sk.palm_r);
@@ -944,6 +1374,10 @@ pub fn evaluate(sk: &Skeleton, inp: &In) -> Out {
             _ => pr + fwd * (0.04 * s) - up * 0.06,
         };
         sk.solve_arm(&mut pose, UPPER_L, FORE_L, sk.palm_l, tl, chest.r.apply(pole_l));
+    } else if let (Some(sl), Some(wx)) = (sliding, wxf) {
+        // yeni roketi namlu ağzından iten el: roketin gövdesinde, ağırlık merkezinin biraz gerisinde
+        let tl = wx.apply(inp.pivot + v3(sl.slide - 0.06, 0.0, 0.05));
+        sk.solve_arm(&mut pose, UPPER_L, FORE_L, sk.palm_l, tl, chest.r.apply(pole_l));
     } else if k.ik_l >= 0.5 {
         let tl = chest.apply(k.hand_l);
         sk.solve_arm(&mut pose, UPPER_L, FORE_L, sk.palm_l, tl, chest.r.apply(pole_l));
@@ -955,14 +1389,23 @@ pub fn evaluate(sk: &Skeleton, inp: &In) -> Out {
     if shown != Wk::None {
         let pr = world[HAND_R].apply(sk.palm_r);
         let b = if k.ik_r >= 0.5 { wb } else { world[HAND_R].r * M3::basis(k.wdir, k.wup) };
-        weapon = Some(Xf::new(b, pr));
-        if let Some((in_hand, hide)) = reload {
-            mag_hidden = hide;
-            if in_hand {
+        let wx = Xf::new(b, pr);
+        weapon = Some(wx);
+        // roketatar boşken başlık namluda yok (atıştan yeniden doldurmanın sonuna dek)
+        mag_hidden = match rl {
+            Some(r) => r.hide,
+            None => shown == Wk::Rpg && inp.flags & F_EMPTY != 0,
+        };
+        if let Some(r) = rl {
+            if r.hand {
                 let pl = world[HAND_L].apply(sk.palm_l);
-                mag = Some(Xf::new(world[HAND_L].r * M3::basis(v3(0.0, -0.3, 1.0), v3(0.0, -1.0, -0.3)), pl));
+                // roket namlu eksenine paralel taşınır; şarjör elin yönünde
+                let m = if shown == Wk::Rpg { wx.r } else { world[HAND_L].r * M3::basis(v3(0.0, -0.3, 1.0), v3(0.0, -1.0, -0.3)) };
+                mag = Some(Xf::new(m, pl));
+            } else if r.slide >= 0.0 {
+                mag = Some(Xf::new(wx.r, wx.apply(inp.pivot + v3(r.slide, 0.0, 0.0))));
             }
         }
     }
-    Out { pose, world, weapon, mag, mag_hidden, trail, muzzle, shown }
+    Out { pose, world, weapon, mag, mag_hidden, trail, stage, muzzle, shown }
 }

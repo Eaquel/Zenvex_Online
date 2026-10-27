@@ -216,8 +216,9 @@ class GameShotsTest {
         cmd(JSONObject().put("cmd", "equip").put("slot", k))
     }
 
+    private var heroLevel = 30
     private fun hero3d(ch: Int, item: String?, vararg zombies: String) {
-        cheat("level 30"); cheat("god"); cheat("hero $ch"); cheat("tp deep"); cheat("killall")
+        cheat("level $heroLevel"); cheat("god"); cheat("hero $ch"); cheat("tp deep"); cheat("killall")
         if (item != null) equip(item)
         for (z in zombies) cheat("spawn $z 3 6")
     }
@@ -244,12 +245,12 @@ class GameShotsTest {
     @Test fun h09_car() = shot("h3d_car", { hero3d(2, null); cheat("vehicle car") }, steps = 8,
         input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 0.8f, -0.6f) })
     /** Saldırı kare dizisi (incelemek için build/game-shots/seq_<ad>.png): oyuncu çevresi, 2 karede bir */
-    private fun sequence(name: String, ch: Int, item: String?, input: FloatArray, frames: Int = 12, warm: Int = 20) {
+    private fun sequence(name: String, ch: Int, item: String?, input: FloatArray, frames: Int = 12, warm: Int = 20, stepPer: Int = 2, zoom: Float = 1.7f, setup: (() -> Unit)? = null) {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
         Model3D.initSync(paparazzi.context)
-        hero3d(ch, item, "walker", "walker")
+        if (setup != null) setup() else hero3d(ch, item, "walker", "walker")
         val view = GameView(paparazzi.context, ui)
         val w = 2340; val h = 1080
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
@@ -258,8 +259,9 @@ class GameShotsTest {
         val sheet = Bitmap.createBitmap(cw * 6, chh * ((frames + 5) / 6), Bitmap.Config.ARGB_8888)
         val sc = Canvas(sheet)
         for (i in 0 until frames) {
-            view.previewFrames(Canvas(bmp), w, h, 2, input = input)
-            val src = android.graphics.Rect(w / 2 - cw / 2, h / 2 - chh / 2 - 60, w / 2 + cw / 2, h / 2 + chh / 2 - 60)
+            view.previewFrames(Canvas(bmp), w, h, stepPer, input = input)
+            val hw = (cw / zoom / 2).toInt(); val hh = (chh / zoom / 2).toInt()
+            val src = android.graphics.Rect(w / 2 - hw, h / 2 - hh - 40, w / 2 + hw, h / 2 + hh - 40)
             sc.drawBitmap(bmp, src, android.graphics.Rect((i % 6) * cw, (i / 6) * chh, (i % 6 + 1) * cw, (i / 6 + 1) * chh), null)
         }
         val dir = java.io.File("build/game-shots").apply { mkdirs() }
@@ -272,6 +274,16 @@ class GameShotsTest {
     @Test fun s04_storm() = sequence("storm", 2, "ev_base_weapon", attackRight)
     @Test fun s05_ak() = sequence("ak", 1, "w_ak47", attackRight, 18, warm = 75)
     @Test fun s06_chainsaw() = sequence("chainsaw", 3, "ev_scrap_weapon", attackRight)
+    @Test fun s07_scythe() { heroLevel = 8; sequence("scythe", 0, "ev_blood_weapon", attackRight, 24, warm = 10, stepPer = 3) }
+    @Test fun s08_rpg() { heroLevel = 8; sequence("rpg", 1, "w_rpg", attackRight, 24, warm = 40, stepPer = 7) }
+    private fun node(kind: String, ch: Int, item: String?) {
+        cheat("level $heroLevel"); cheat("god"); cheat("hero $ch"); cheat("tp deep"); cheat("killall")
+        if (item != null) equip(item)
+        cheat("tp $kind")
+    }
+    @Test fun s09_chopStone() { heroLevel = 8; sequence("chop", 0, null, attackRight, 12, warm = 6, stepPer = 3, setup = { cheat("item t_axe_stone 1"); node("tree", 0, null) }) }
+    @Test fun s10_chopIronHeld() { heroLevel = 8; sequence("chop_iron", 2, null, attackRight, 12, warm = 6, stepPer = 3, setup = { node("tree", 2, "t_axe_iron") }) }
+    @Test fun s11_mineIron() { heroLevel = 8; sequence("mine", 1, null, attackRight, 12, warm = 6, stepPer = 3, setup = { cheat("item t_pick_iron 1"); node("rock", 1, null) }) }
     // ------------------------------------------------------------------ V16 efekt motoru v2
     private fun fxShot(name: String, setup: () -> Unit, steps: Int, input: FloatArray? = null, frames: Int = 6, after: ((GameView) -> Unit)? = null) {
         Assume.assumeTrue("libzenvex.so yok", native())

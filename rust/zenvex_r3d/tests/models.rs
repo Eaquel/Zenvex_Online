@@ -35,7 +35,7 @@ fn every_character_weapon_and_animation_renders() {
         for w in WEAPONS {
             for &anim in &anims {
                 for t in [0.0, 0.37, 0.81] {
-                    let r = ActorReq { ch, weapon: w, anim, t, period: 1.0, yaw: 135.0, pitch: 22.0, scale: 60.0, ssaa: false };
+                    let r = ActorReq { ch, weapon: w, anim, t, period: 1.0, yaw: 135.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
                     let (img, p) = s.actor(&r).unwrap_or_else(|| panic!("{ch} {w} {anim}"));
                     assert!(img.w > 10 && img.h > 10 && img.w < 400 && img.h < 400, "{ch} {w} {anim} {t}: {}x{}", img.w, img.h);
                     assert!(img.ax.is_finite() && img.ay.is_finite() && p.tip[0].is_finite() && p.muzzle[1].is_finite());
@@ -51,12 +51,12 @@ fn melee_trail_and_muzzle_flash_are_reported() {
     let Some(mut s) = service() else { return };
     let trail = (0..16)
         .map(|i| {
-            let r = ActorReq { ch: "kael", weapon: "katana", anim: a::MELEE, t: i as f32 / 16.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false };
+            let r = ActorReq { ch: "kael", weapon: "katana", anim: a::MELEE, t: i as f32 / 16.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
             s.actor(&r).unwrap().1.trail
         })
         .fold(0f32, f32::max);
     assert!(trail > 0.5, "katana savuruşunda iz yok: {trail}");
-    let r = ActorReq { ch: "lyra", weapon: "ak47", anim: a::FIRE, t: 0.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false };
+    let r = ActorReq { ch: "lyra", weapon: "ak47", anim: a::FIRE, t: 0.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
     let (_, p) = s.actor(&r).unwrap();
     assert!(p.flash > 0.9 && p.weapon == 16, "namlu alevi: {} silah {}", p.flash, p.weapon);
 }

@@ -160,9 +160,12 @@ impl Game {
         if let Some((i, _)) = best {
             // yumrukla ağaç/taş: elle çizilmiş balta ve kazma pozu (vuruş zamanlaması aynı anim_t'den)
             if matches!(self.player.anim, A_PUNCH | A_CHOP | A_MINE) {
+                // alet yoksa yumrukla vurur (elde görünmez balta yok); varsa çantadaki en iyi alet elde görünür
+                let has_axe = self.progress.tool_tier("t_axe_") > 0.0;
+                let has_pick = self.progress.tool_tier("t_pick_") > 0.0;
                 self.player.anim = match self.world.statics[i].kind {
-                    Kind::Tree => A_CHOP,
-                    Kind::Rock => A_MINE,
+                    Kind::Tree if has_axe => A_CHOP,
+                    Kind::Rock if has_pick => A_MINE,
                     _ => A_PUNCH,
                 };
             }

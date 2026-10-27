@@ -32,6 +32,7 @@ object Model3D {
         "w_bat" to "club", "w_baton" to "club", "w_glock" to "pistol", "w_m4" to "ak47",
         "ev_blood_weapon" to "blood_scythe", "ev_titan_weapon" to "magma_hammer", "ev_base_weapon" to "storm_axe",
         "ev_scrap_weapon" to "chainsaw", "ev_pack_weapon" to "void_claw", "ev_breath_weapon" to "ice_scythe",
+        "t_axe_stone" to "hatchet", "t_axe_iron" to "handaxe", "t_pick_stone" to "pickaxe", "t_pick_iron" to "pickaxe",
     )
 
     class Frame(val bmp: Bitmap, val ax: Float, val ay: Float, val pxPerM: Float, val pts: FloatArray)
@@ -120,7 +121,7 @@ object Model3D {
             val w = info[0].toInt(); val h = info[1].toInt()
             val bmp = Bitmap.createBitmap(out, 0, w, w, h, Bitmap.Config.ARGB_8888)
             val scale = if (r.vehicle) r.p[2] else r.p[5]
-            val fr = Frame(bmp, info[2], info[3], scale, info.copyOfRange(4, 4 + 13))
+            val fr = Frame(bmp, info[2], info[3], scale, info.copyOfRange(4, 4 + 16))
             synchronized(cache) {
                 cache.put(r.key, fr)?.let { bytes -= it.bmp.byteCount }
                 bytes += bmp.byteCount
@@ -195,7 +196,7 @@ object Model3D {
      * Animasyon saatini önbelleğe uygun nicele: döngülerde faz, tek seferlerde kare.
      * anim: çekirdek A_* (yakın dövüşte t döngü sayısıdır)
      */
-    fun quantize(anim: Int, t: Float, ch: String): Float {
+    fun quantize(anim: Int, t: Float, ch: String, stages: Int = 2): Float {
         val (cycle, steps) = loopOf(anim, ch)
         if (cycle > 0f) {
             val ph = (t / cycle) - kotlin.math.floor(t / cycle)
@@ -203,7 +204,7 @@ object Model3D {
         }
         return when (anim) {
             // yakın dövüş: saat döngü sayısı; sol/sağ sırası (çift/tek) + 16 basamak
-            4 -> { val n = kotlin.math.floor(t); (n.toInt() % 2) + ((t - n) * 16).roundToInt().coerceAtMost(15) / 16f }
+            4 -> { val n = kotlin.math.floor(t); (n.toInt() % stages) + ((t - n) * 16).roundToInt().coerceAtMost(15) / 16f }
             // ateş / şarjör: saat faz (0..1)
             40 -> ((t * 8f).toInt().coerceAtMost(7)) / 8f
             41 -> ((t * 24f).toInt().coerceAtMost(23)) / 24f
@@ -228,19 +229,21 @@ object Model3D {
     }
 
     /** Karakter karesi (actor: aktörün kimliği — yerel "me", uzak oyuncu kimliği) */
-    fun actor(actor: String, ch: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int): Frame? {
+    fun actor(actor: String, ch: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int, flags: Int = 0): Frame? {
         if (!ready || ch !in names) return null
-        val tq = quantize(anim, t, ch)
+        // tırpan kombosu üç vuruşlu (zenvex_r3d anim::combo_len); diğer silahlar iki
+        val stages = if (weapon.endsWith("scythe")) 3 else 2
+        val tq = quantize(anim, t, ch, stages)
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)
         val ssaa = quality >= 2
-        fun key(tt: Float) = "a|$ch|$weapon|$anim|$tt|$yb|$sc|$ssaa"
-        fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, if (ssaa) 1f else 0f)
+        fun key(tt: Float) = "a|$ch|$weapon|$anim|$tt|$yb|$sc|$ssaa|$flags"
+        fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, if (ssaa) 1f else 0f, flags.toFloat())
         val fr = request(key(tq), actor, false, ch, weapon, params(tq))
         // döngüde sıradaki iki kare (yürürken/koşarken ilk turda takılma olmasın)
         val (cycle, steps) = loopOf(anim, ch)
         if (cycle > 0f) for (i in 1..2) {
-            val tn = quantize(anim, tq + i * cycle / steps, ch)
+            val tn = quantize(anim, tq + i * cycle / steps, ch, stages)
             prefetch(key(tn), false, ch, weapon, params(tn))
         }
         return fr
