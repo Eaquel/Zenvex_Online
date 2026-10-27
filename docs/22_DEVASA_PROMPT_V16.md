@@ -29,9 +29,9 @@ Referans görseller: `docs/denetim/` (`ref_yaratik/`, `ref_npc/`, atlas sayfalar
 **Kod kalite kuralı:** düz yarı saydam daire yok; dokulu parçacık, çok katmanlı ışık, siluet gölge, bir olayda en çok 3 efekt
 katmanı (ışık · gövde · iz). Yazı hiçbir görselin içinde olmaz; kod koyar (10 dil).
 
-**Silinecekler (onayını bekliyor, ~3,5 MB):** `h/kaan/*`, `l/*`, eski `v/*` arabalar, `x8/moto`, `x8/car`, `page_23` (eski efekt
+**Silindi (V16, kullanılmayan efekt ve görseller):** `h/kaan/*`, `l/*`, eski `v/*` arabalar, `x8/moto`, `x8/car`, `page_23` (eski efekt
 sayfası), kullanılmayan `tracer`/`heli_dust`/`magma_ball`, `w/ev_*`, `ui/btn_drive2.png`, `ui/lb_gold.png`, `i/chest`.
-Yaratıklar 3B'ye geçince `z/*` (~21,7 MB) de gider. Depodaki `art/` (37 MB) APK'ya girmiyor, depoyu şişiriyor.
+Yaratıklar 3B'ye geçince `z/*` (~21,7 MB) de gider. Depodaki `art/` konsept klasörleri de silindi (yalnız `art/promo/` tanıtım çıktısı kalır).
 
 ---
 
