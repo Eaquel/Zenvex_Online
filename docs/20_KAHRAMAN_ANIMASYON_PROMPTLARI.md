@@ -1,5 +1,8 @@
 # Ana Karakter Animasyonları ve Etkinlik Eşyaları — Prompt Belgesi (V14)
 
+> **V16 notu:** B bölümü (kahraman animasyonları, 8 yön piksel kareler) **iptal**: kahramanlar artık 3B model ve her animasyon kodla üretiliyor.
+> A bölümü (18 etkinlik eşyası) tamamlandı. Güncel üretim belgesi: `docs/22_DEVASA_PROMPT_V16.md`.
+
 Bu belge **iki büyük paketi** kapsar:
 
 - **A · Etkinlik eşyaları (18 adet):** 6 etkinliğin yüzüğü, kolyesi ve silahı. Gönderdiğin Kan Ayı görselleri

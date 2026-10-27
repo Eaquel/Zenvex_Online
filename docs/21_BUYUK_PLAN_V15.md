@@ -2,7 +2,7 @@
 
 Bu belge son mesajındaki **47 isteğin tamamını** tek tek ele alır: kökte ne bozuk, nasıl çözülecek, hangi dosyalara
 dokunulacak, ne zaman "bitti" sayılacak. Görsel gereken her şeyin istemi ayrı belgede:
-**`docs/22_DEVASA_PROMPT_V15.md`**. Görselleri üretip zip olarak verdiğinde zip'i inceleyip bu planı aşağıdaki
+**`docs/archive/22_DEVASA_PROMPT_V15.md` (yerine `docs/22_DEVASA_PROMPT_V16.md`)**. Görselleri üretip zip olarak verdiğinde zip'i inceleyip bu planı aşağıdaki
 sırayla adım adım işleyeceğim.
 
 İşaretler: ⚙ yalnız kod · 🎨 zip'ten görsel bekler · 🗄 sunucu/veritabanı · ❓ senin kararını bekler

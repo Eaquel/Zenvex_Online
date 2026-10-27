@@ -62,7 +62,7 @@ A unit test fails if any language misses a string or breaks a `{0}` placeholder.
 | [09 Supabase](docs/09_SUPABASE.md) | database, functions, security model |
 | [Game server](docs/teknik/OYUN_SUNUCUSU.md) | WebSocket server and deployment |
 | [21 V15 plan](docs/21_BUYUK_PLAN_V15.md) | current roadmap |
-| [22 V15 prompts](docs/22_DEVASA_PROMPT_V15.md) | art prompts still to be produced |
+| [22 V16 asset and prompt document](docs/22_DEVASA_PROMPT_V16.md) | asset audit, production methods (3D / image / code) and prompts |
 
 ## License and contact
 

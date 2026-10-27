@@ -137,6 +137,26 @@ class Fx3D {
 
     var enabled = true
 
+    // doku çizimi (FxTex): renk çarpımlı boya önbelleği
+    private val texPaints = HashMap<Long, Paint>()
+    private fun tex(color: Int, additive: Boolean): Paint = texPaints.getOrPut((color.toLong() and 0xFFFFFFL) or (if (additive) 1L shl 40 else 0L)) {
+        Paint().apply {
+            isFilterBitmap = false; isAntiAlias = false
+            colorFilter = LightingColorFilter(color or 0xFF000000.toInt(), 0)
+            if (additive) xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD)
+        }
+    }
+
+    private fun drawTex(c: Canvas, b: Bitmap, x: Float, y: Float, w: Float, rot: Float, p: Paint, a: Float, squash: Float = 1f, bottom: Boolean = false) {
+        if (a <= 0.01f || w < 1f) return
+        p.alpha = (a * 255f).toInt().coerceIn(0, 255)
+        val h = w * b.height / b.width * squash
+        c.save(); c.translate(x, y); if (rot != 0f) c.rotate(rot)
+        if (bottom) rect.set(-w / 2f, -h, w / 2f, 0f) else rect.set(-w / 2f, -h / 2f, w / 2f, h / 2f)
+        c.drawBitmap(b, null, rect, p)
+        c.restore()
+    }
+
     // ------------------------------------------------------------------ girişler
     /**
      * Bir aktörün bu karedeki silah durumu. tip/base: silah ucu ve gövdesi (ekran dünyası), ground: aktörün zemin y'si,
@@ -313,10 +333,8 @@ class Fx3D {
             if (p.kind != K.SPLAT) continue
             val sx = (p.x - camX) * scale + sw / 2f; val sy = (p.y - camY) * scale + sh / 2f
             val k = (p.life / p.max).coerceIn(0f, 1f)
-            norm.color = withAlpha(p.color, min(1f, k * 2f) * 0.8f)
-            val r = p.size * scale
-            rect.set(sx - r, sy - r * 0.45f, sx + r, sy + r * 0.45f)
-            c.drawOval(rect, norm)
+            val sd = ((p.x * 3.7f + p.y * 1.9f).toInt() and 0x7FFF) % 5
+            drawTex(c, FxTex.splats[sd], sx, sy, p.size * scale * 3.6f, (sd * 70).toFloat(), tex(p.color, false), min(1f, k * 2f) * 0.9f, 0.55f)
         }
     }
 
@@ -343,8 +361,8 @@ class Fx3D {
                     }
                 }
                 K.MIST -> {
-                    norm.color = withAlpha(p.color, k * 0.32f)
-                    c.drawCircle(sx, sy, r * (1.8f - k), norm)
+                    val sd = ((p.x * 7.3f + p.y * 3.1f).toInt() and 0x7FFF) % 8
+                    drawTex(c, FxTex.puffs[sd], sx, sy, r * (3.4f - k * 1.2f), p.x * 9f + (1f - k) * 35f, tex(p.color, false), min(1f, (1f - k) * 6f) * k * 0.8f, 0.85f)
                 }
                 K.FLAKE -> {
                     line.color = withAlpha(p.color, min(1f, k * 2f)); line.strokeWidth = r * 0.35f
@@ -360,9 +378,11 @@ class Fx3D {
                     c.drawOval(rect, norm)
                 }
                 K.WISP -> {
-                    c.drawBitmap(glowBmp, null, rect.apply { set(sx - r * 1.6f, sy - r * 1.6f, sx + r * 1.6f, sy + r * 1.6f) }, glowPaint(p.color, k * 0.6f))
-                    norm.color = withAlpha(p.color, k * 0.45f)
-                    c.drawCircle(sx + sin(p.rot) * r * 0.4f, sy, r * (0.5f + 0.5f * k), norm)
+                    // ruh/boşluk alevi: tabandan doğan, kıvrılan alev dili (toplamalı) + koyu duman izi
+                    val fl = FxTex.flames[((p.x * 5.1f).toInt() and 0x7FFF) % 6]
+                    val grow = sin(PI.toFloat() * (1f - k)).coerceAtLeast(0.05f)
+                    drawTex(c, fl, sx + sin(p.rot) * r * 0.4f, sy, r * (1.2f + 1.5f * grow), 0f, tex(p.color, true), k * 0.9f, 1f, true)
+                    drawTex(c, fl, sx + sin(p.rot) * r * 0.4f, sy, r * (0.7f + 0.9f * grow), 0f, tex(0xFFFFFFFF.toInt(), true), k * 0.6f, 0.9f, true)
                 }
                 K.SPARK -> {
                     addLine.color = withAlpha(p.color, min(1f, k * 2f)); addLine.strokeWidth = r * 1.2f
@@ -382,10 +402,8 @@ class Fx3D {
                     c.restore()
                 }
                 K.RING -> {
-                    addLine.color = withAlpha(p.color, k * 0.8f); addLine.strokeWidth = r * 0.12f * k + 1f
-                    val rr = r * (1.4f - k)
-                    rect.set(sx - rr, sy - rr * 0.55f, sx + rr, sy + rr * 0.55f)
-                    c.drawOval(rect, addLine)
+                    // şok halkası: dithered kalın halka, genişledikçe incelip söner; yere yatık
+                    drawTex(c, FxTex.ring, sx, sy, r * 2f * (1.4f - k) * 1.1f, 0f, tex(p.color, true), k * 0.9f, 0.55f)
                 }
             }
         }

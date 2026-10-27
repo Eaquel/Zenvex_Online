@@ -220,9 +220,14 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     // ------------------------------------------------------------------ efektler
     private class Floater(var x: Float, var y: Float, val text: String, val color: Int, val size: Float, var life: Float = 1.2f, val max: Float = 1.2f)
+    /**
+     * Parçacık türleri (hepsi FxTex dokusuyla çizilir): 0 kırık parça (yerçekimi, döner) · 1 toz/duman bulutu (büyür, söner) ·
+     * 3 parıltı (dört köşeli yıldız, toplamalı) · 4 piksel kıvılcım · 6 alev dili (toplamalı, yükselir, savrulur)
+     */
     private class Particle(
         var x: Float, var y: Float, var z: Float, var vx: Float, var vy: Float, var vz: Float,
         var life: Float, val max: Float, val color: Int, val size: Float, val kind: Int,
+        val seed: Float = Math.random().toFloat(),
     )
     private class Light(val x: Float, val y: Float, val r: Float, val color: Int, var life: Float, val max: Float)
     private class Tracer(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val color: Int, var life: Float, val width: Float)
@@ -420,8 +425,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val p = pit.next()
             p.life -= dt
             p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt
-            if (p.kind == 0) { p.vz -= 900f * dt; if (p.z < 0) { p.z = 0f; p.vz *= -0.3f; p.vx *= 0.6f; p.vy *= 0.6f } }
-            else { p.vx *= 0.97f; p.vy *= 0.97f }
+            when (p.kind) {
+                0 -> { p.vz -= 900f * dt; if (p.z < 0) { p.z = 0f; p.vz *= -0.3f; p.vx *= 0.6f; p.vy *= 0.6f } }
+                1 -> { val d = 1f - 2.2f * dt; p.vx *= d; p.vy *= d; p.vz *= 1f - 3.0f * dt }          // toz: hızla yavaşlar, süzülür
+                6 -> { p.vx += sin(time * 7f + p.seed * 9f) * 90f * dt; p.vz *= 1f - 0.8f * dt }       // alev: yalpalar
+                else -> { p.vx *= 0.97f; p.vy *= 0.97f }
+            }
             if (p.life <= 0) pit.remove()
         }
         flashes.removeAll { it.life -= dt; it.life <= 0 }
@@ -616,22 +625,23 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "hit" -> {
                     val kind = e.getInt("kind")
                     // V13: ağaçta odun kıymıkları + balta izi, kayada taş kırıkları ve kıvılcım
+                    // 3B silahla vuruşta tek kaynak: silahın elementine göre patlama (magma, buz, kan, yıldırım, kıvılcım);
+                    // eski kıvılcım sprite'ı ve parçacık patlaması ikinci kez çizilmesin (docs/22 §1.5)
+                    val hit3d = kind == 0 && time - me3dT < 0.3f && me3dWeapon in 1..Fx3D.CHAINSAW
                     when (kind) {
                         1 -> { fx("wood_chips", x, y + 10, 120f, if (Math.random() < 0.5) 0f else 8f); fx("axe_swing", x + 6, y - 30, 130f) }
                         2 -> fx("rock_chips", x, y + 10, 115f)
-                        else -> fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
+                        else -> if (!hit3d) fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
                     }
-                    // 3B silahın elementine göre vuruş patlaması (magma, buz, kan, yıldırım...)
-                    if (kind == 0 && time - me3dT < 0.3f) fx3d.impact(x, y - 55f, me3dWeapon, 62.5f, y)
+                    if (hit3d) fx3d.impact(x, y - 55f, me3dWeapon, 62.5f, y)
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
-                    burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
+                    if (!hit3d) burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
                 }
                 "treefall" -> { Audio.play("treefall", near(x, y)); burst(x, y, 24, 0xFF4E8A34.toInt(), 260f, 5f, 0, 1.0f) }
                 "kill" -> {
                     fx("blood", x, y - 40, 150f)
                     if (Settings.current.particles) { if (pools.size > 30) pools.removeAt(0); pools += Pool(x, y, 95f) }
-                    fx("dust", x, y - 12, 140f)
                     Audio.play("zdeath", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
                     burst(x, y, 16, 0xFF6A1410.toInt(), 220f, 5f)
                 }
@@ -1069,7 +1079,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 500) return
         if (ch >= 4 && drawNpc6(c, ch, x, y, sx, if (who <= -3f) sy - 235f * scale else sy, dir, t)) return
         // aura karakterin altında, zeminde
-        if (who == -1f && hud[Native.CHAR_LEVEL] >= 10 && hud[Native.DEAD] < 0.5f) drawAura(c, sx, sy)
+        if (who == -1f && hud[Native.DEAD] < 0.5f) {
+            val tier = AuraFx.tierOf(hud[Native.LEVEL].toInt(), hud[Native.CHAR_LEVEL].toInt())
+            if (tier >= 0) drawAura(c, sx, sy, tier)
+        }
         val prefix: String
         var anim: String
         var actor: String
@@ -1209,16 +1222,30 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private var me3dWeapon = 0
     private var me3dMx = 0f
     private var me3dMy = 0f
-    private val shadow3d: android.graphics.Bitmap by lazy {
-        android.graphics.Bitmap.createBitmap(96, 40, android.graphics.Bitmap.Config.ARGB_8888).also { b ->
-            val cv = Canvas(b)
-            val p = Paint(Paint.ANTI_ALIAS_FLAG)
-            p.shader = android.graphics.RadialGradient(48f, 20f, 48f, intArrayOf(0x8C000000.toInt(), 0x50000000, 0x00000000),
-                floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
-            cv.save(); cv.scale(1f, 20f / 48f, 48f, 20f); cv.drawCircle(48f, 20f, 48f, p); cv.restore()
+    private val shadowM = android.graphics.Matrix()
+    private val shadowVals = FloatArray(9).also { it[8] = 1f }
+    private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = PorterDuffColorFilter(0xFF000000.toInt(), PorterDuff.Mode.SRC_IN) }
+
+    /**
+     * Gerçek siluet gölgesi: karenin kendisi zemine yatırılır (ayak çizgisi etrafında ters çevrilip ezilir, ışık sol üstten
+     * olduğu için sağ alta savrulur); bu yüzden gölge duruşa, silaha, takla ve düşmeye aynen uyar. İki geçiş: koyu çekirdek + yumuşak yarı gölge.
+     * [contact]: ayak altındaki küçük koyu temas lekesinin genişliği (px).
+     */
+    private fun drawShadow3d(c: Canvas, fr: Model3D.Frame, sx: Float, sy: Float, k: Float, contact: Float, strength: Float = 1f) {
+        for ((flat, skew, alpha) in arrayOf(Triple(0.30f, 0.55f, 0.30f), Triple(0.38f, 0.68f, 0.16f))) {
+            shadowVals[0] = k; shadowVals[1] = -k * skew; shadowVals[2] = sx - fr.ax * k + fr.ay * k * skew
+            shadowVals[3] = 0f; shadowVals[4] = -k * flat; shadowVals[5] = sy + fr.ay * k * flat
+            shadowM.setValues(shadowVals)
+            shadowPaint.alpha = (alpha * strength * 255f).toInt().coerceIn(0, 255)
+            c.drawBitmap(fr.bmp, shadowM, shadowPaint)
         }
+        // temas lekesi: ayakların hemen altı (ortam tıkanması), ince ve koyu
+        fill.color = alphaC(0xFF000000.toInt(), 0.34f * strength)
+        c.drawOval(sx - contact / 2f, sy - contact * 0.12f, sx + contact / 2f, sy + contact * 0.12f, fill)
     }
-    private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    /** Ayak tozu zamanlayıcıları (aktör başına) */
+    private val footT = HashMap<String, Float>()
 
     /**
      * 3B kahraman: kare arka planda (Model3D) çizilir ve önbellekten gelir; ilk kez istenen kare hazır olana dek aktörün
@@ -1269,11 +1296,23 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (tc != 0 && Math.random() < 0.18) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 50f, y, 20f + Math.random().toFloat() * 90f,
                 (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
         }
-        // yumuşak zemin gölgesi (yerde yatarken/taklada geniş)
-        val lying = animI == 11 || animI == 14 || animI == 13
-        val shW = pxPerM * (if (lying) 1.25f else 0.78f); val shH = shW * 0.36f
-        dst3d.set(sx - shW / 2, sy - shH / 2, sx + shW / 2, sy + shH / 2)
-        c.drawBitmap(shadow3d, null, dst3d, shadowPaint)
+        drawShadow3d(c, fr, sx, sy, k, pxPerM * 0.40f)
+        // koşarken / yürürken ayak tozu: adımda iki küçük bulut, yüzeyin renginde (asfaltta çok ince)
+        if (Settings.current.particles && (animI == 1 || animI == 2 || animI == 6 || animI == 8)) {
+            if (footT.size > 60) footT.clear()
+            val left = (footT[id] ?: 0f) - frameDt
+            if (left <= 0f) {
+                val run = animI == 2
+                footT[id] = if (run) 0.14f else 0.30f
+                val dv = Math.toRadians(dir * 45.0)
+                val fdx = sin(dv).toFloat(); val fdy = cos(dv).toFloat()
+                repeat(if (run) 2 else 1) {
+                    val sd = Math.random().toFloat() - 0.5f
+                    particles += Particle(x + sd * 12f - fdx * 8f, y + 4f - fdy * 4f, 1f, -fdx * (16f + Math.random().toFloat() * 26f) + sd * 24f, -fdy * 8f,
+                        12f + Math.random().toFloat() * 14f, 0.5f + Math.random().toFloat() * 0.25f, 0.75f, dustColor(surface()), if (run) 4.4f else 2.8f, 1)
+                }
+            } else footT[id] = left
+        }
         if (who == -1f) {
             // takla: her 35 ms'de bir art görüntü bırak, eskileri sönerek çiz
             if (animI == 13 && time - ghostT > 0.035f) { ghosts += Ghost(x, y, "", false, 0.32f, fr); ghostT = time }
@@ -1747,17 +1786,27 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     /** Savaşçı Sv10 karanlık aura: zeminde dönen mor halka + yükselen kıvılcımlar */
-    private fun drawAura(c: Canvas, sx: Float, sy: Float) {
-        val r = 190f * scale
-        val pulse = 0.75f + 0.25f * sin(time * 3f)
-        fill.shader = RadialGradient(sx, sy, r, intArrayOf(0x00000000, alphaC(0xFF6A2AC0.toInt(), 0.28f * pulse), 0x00000000), floatArrayOf(0.2f, 0.85f, 1f), Shader.TileMode.CLAMP)
-        c.save(); c.scale(1f, 0.55f, sx, sy); c.drawCircle(sx, sy, r, fill); c.restore(); fill.shader = null
-        stroke.color = alphaC(0xFFB070FF.toInt(), 0.5f * pulse); stroke.strokeWidth = 2f * density
-        c.save(); c.scale(1f, 0.55f, sx, sy)
-        for (k in 0 until 3) { val a = time * 70f + k * 120f; c.drawArc(sx - r * 0.9f, sy - r * 0.9f, sx + r * 0.9f, sy + r * 0.9f, a, 60f, false, stroke) }
-        c.restore()
-        if (Settings.current.particles && Math.random() < 0.35)
-            particles += Particle(hud[Native.PX] + ((Math.random() - 0.5) * 300).toFloat(), hud[Native.PY] + ((Math.random() - 0.5) * 160).toFloat(), 10f, 0f, 0f, 70f, 0.9f, 0.9f, 0xFFB070FF.toInt(), 4f, 3)
+    private fun drawAura(c: Canvas, sx: Float, sy: Float, tier: Int) {
+        val pal = AuraFx.PALETTES[tier.coerceIn(0, 3)]
+        val rx = (150f + 22f * tier) * scale
+        AuraFx.draw(c, sx, sy, rx, time, pal, density, 0.80f + 0.07f * tier)
+        if (!Settings.current.particles) return
+        val px = hud[Native.PX]; val py = hud[Native.PY]
+        val world = rx / scale
+        // alev dilleri mührün çevresinden yükselir (kademe arttıkça daha çok), kor parıltıları arada
+        val flames = 0.14f + 0.06f * tier
+        if (Math.random() < flames) {
+            val (ox, oy) = AuraFx.ringPoint(world * 1.1f)
+            particles += Particle(px + ox, py + oy, 0f, 0f, 0f, 42f + 18f * tier + Math.random().toFloat() * 20f, 0.8f, 0.8f, pal.main, 4.6f + 1.2f * tier, 6)
+        }
+        if (Math.random() < 0.30f) {
+            val (ox, oy) = AuraFx.ringPoint(world)
+            particles += Particle(px + ox, py + oy, 4f, (Math.random().toFloat() - 0.5f) * 14f, 0f, 55f + Math.random().toFloat() * 70f, 1.1f, 1.1f, pal.hot, 3.2f, 3)
+        }
+        if (tier >= 2 && Math.random() < 0.20f) {
+            val (ox, oy) = AuraFx.ringPoint(world * 0.8f)
+            particles += Particle(px + ox, py + oy, 6f, (Math.random().toFloat() - 0.5f) * 40f, 0f, 90f + Math.random().toFloat() * 80f, 0.8f, 0.8f, 0xFFFFE07A.toInt(), 2.4f, 4)
+        }
     }
 
     // yakın dövüş karesi: vuruş anı (swing olayı) 2. ve 3. kare arasına oturur, sonrası olaydan sayılır
@@ -2004,10 +2053,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (driver >= 0) drawSeated(c, driver, kind, right, sx, sy + vib)
                 c.restore()
                 if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
-                if (driver >= 0 && speed > 20 && !wreck) {
-                    surfaceFx(x, y, fxDir, speed, kind)
-                    wheelSpray(x, y, kind, sgn, speed)
-                }
+                if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, fxDir, speed, kind)
             } else {
                 // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
                 val rider = driver >= 0 && kind <= 1
@@ -2019,14 +2065,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
             }
         }
-        if (driver >= 0 && speed > 30 && !wreck) {
-            val bx = -sin(fxDir * PI.toFloat() / 4); val by = -cos(fxDir * PI.toFloat() / 4)
-            val back = if (kind >= 2) 120f else 55f
-            // egzoz yalnız arkadaki borudan, seyrek (eskisi sürekli bulut gibi birleşiyordu)
-            if (kind >= 1 && Math.random() < 0.18) fx("exhaust", x + bx * back, y + by * back * 0.7f - (if (kind >= 2) 22f else 18f), 40f + speed * 0.04f)
-            if (speed > 160 && Math.random() < 0.45) {
-                val side = if (Math.random() < 0.5) -1 else 1
-                fx("dust", x + bx * back * 0.8f + by * side * 30, y + by * back * 0.55f - bx * side * 20, 70f + speed * 0.1f)
+        // Araç arkası: tek efekt kaynağı. Tekerlek tozu + iz = surfaceFx (gövde + iz); egzoz yalnız ivmelenirken (ayrı iş);
+        // far ışığı ayrı katman. Eski `road_*`, `dust` ve `exhaust` sprite'ları aynı işi ikinci kez yapıyordu (docs/22 §3.2).
+        if (driver >= 0 && speed > 30 && !wreck && kind >= 1 && Settings.current.particles) {
+            val acc = vehState["v" + drawBuf[o + 10].toInt()]?.acc ?: 0f
+            if (acc > 110f && Math.random() < 0.4) {
+                val bx = -sin(fxDir * PI.toFloat() / 4); val by = -cos(fxDir * PI.toFloat() / 4)
+                val back = if (kind >= 2) 120f else 55f
+                particles += Particle(x + bx * back, y + by * back * 0.7f, if (kind >= 2) 22f else 18f, bx * 55f, by * 30f, 36f, 0.55f, 0.55f,
+                    0xFF9AA2AA.toInt(), 4.2f, 1)
             }
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
@@ -2034,7 +2081,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     // ------------------------------------------------------------------ 3B araçlar
-    private class VehState(var wheel: Float = 0f, var lastSpeed: Float = 0f, var tilt: Float = 0f)
+    private class VehState(var wheel: Float = 0f, var lastSpeed: Float = 0f, var tilt: Float = 0f, var acc: Float = 0f)
     private val vehState = HashMap<String, VehState>()
 
     /**
@@ -2051,6 +2098,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val r = if (kind == 1) 0.33f else 0.41f
         if (!wreck) st.wheel = (st.wheel + Math.toDegrees((speed / 62.5f / r * dt).toDouble()).toFloat()) % 360f
         val acc = (speed - st.lastSpeed) / dt
+        st.acc = acc
         st.lastSpeed = speed
         // ivme (dünya birimi/sn²) → gövde eğimi: hızlanınca arka çöker (−), frende arka kalkar (+)
         st.tilt += ((-acc / 62.5f * 0.5f).coerceIn(-4f, 4f) - st.tilt) * min(1f, dt * 6f)
@@ -2059,15 +2107,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val pxPerM = 62.5f * scale
         val fr = Model3D.vehicle(id, name, rider, angle, st.wheel, bounce, st.tilt, 0f, pxPerM, Settings.current.model3d) ?: return false
         val k = pxPerM / fr.pxPerM
-        // gölge: aracın boyuna yönünde uzun, yumuşak
+        // gölge: kare siluetinin kendisi (şasi, tekerlek, sürücü); altında aracın boyuna yönünde koyu temas lekesi
         val L = if (kind == 1) 2.3f else 4.4f; val W = if (kind == 1) 0.8f else 2.1f
         val a = Math.toRadians(angle.toDouble()).toFloat()
         val fx = sin(a); val fy = cos(a) * 0.375f
         val flen = hypot(fx, fy); val plen = hypot(cos(a), sin(a) * 0.375f)
+        drawShadow3d(c, fr, sx, sy, k, 0f, 1f)
         c.save(); c.translate(sx, sy); c.rotate(Math.toDegrees(atan2(fy, fx).toDouble()).toFloat())
-        val hl = L * pxPerM * flen * 0.58f; val hw = W * pxPerM * plen * 0.62f + 4f * scale
-        dst3d.set(-hl, -hw, hl, hw)
-        c.drawBitmap(shadow3d, null, dst3d, shadowPaint)
+        val hl = L * pxPerM * flen * 0.46f; val hw = W * pxPerM * plen * 0.40f + 3f * scale
+        fill.color = alphaC(0xFF000000.toInt(), 0.30f)
+        rect.set(-hl, -hw, hl, hw); c.drawRoundRect(rect, hw, hw, fill)
         c.restore()
         val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
         val paint = when {
@@ -2128,22 +2177,41 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (tracks.size > 600) tracks.subList(0, tracks.size - 600).clear()
         }
         if (!Settings.current.particles) return
-        val (pc, n, lift) = when (surf) {
-            2 -> Triple(0xFFD8B878.toInt(), 3, 70f)   // kum tozu
-            3 -> Triple(0xFFF2F8FF.toInt(), 3, 90f)   // kar savrulması
-            4 -> Triple(0xFF4A5230.toInt(), 2, 110f)  // çamur sıçraması
-            5 -> Triple(0xFF3A3432.toInt(), 2, 60f)   // kül
-            1 -> Triple(0xFF7A6A44.toInt(), 1, 50f)   // toprak
-            else -> Triple(0xFF9A9AA0.toInt(), if (speed > 300) 1 else 0, 40f) // asfalt: yalnız hızlıyken lastik dumanı
-        }
-        for (i in 0 until n) {
-            if (Math.random() > 0.55 * k) continue
+        // Tekerlek tozu: tek yayıcı. Yüzeye göre renk ve miktar; hız arttıkça sıklaşır. Bulutlar dokulu, kırık parçalar yerçekimli.
+        val dust = dustColor(surf)
+        val rate = when {
+            surf == 0 -> if (speed > 300f) 0.6f else 0f
+            else -> (0.8f + speed / 260f).coerceAtMost(3.2f)
+        } * (if (kind >= 2) 1f else 0.8f)
+        dustAcc += rate * frameDt * 30f
+        while (dustAcc >= 1f) {
+            dustAcc -= 1f
             val side = if (Math.random() < 0.5) -1f else 1f
             val ox = x + bx * back + by * side * wide * 0.7f
             val oy = y + by * back * 0.7f - bx * side * wide * 0.5f
-            particles += Particle(ox, oy, 6f, bx * 60f + (Math.random().toFloat() - 0.5f) * 90f, by * 40f + (Math.random().toFloat() - 0.5f) * 40f,
-                lift * (0.5f + Math.random().toFloat()) * k, 0.7f, 0.7f, pc, if (surf == 4) 4.5f else 5.5f, 3)
+            val r1 = Math.random().toFloat(); val r2 = Math.random().toFloat() - 0.5f; val r3 = Math.random().toFloat() - 0.5f
+            particles += Particle(ox + r3 * 14f, oy + r2 * 8f, 3f + r1 * 8f,
+                bx * (45f + 70f * r1) + by * r2 * 120f, by * (28f + 40f * r1) * 0.7f - bx * r2 * 70f, 24f + 38f * r1,
+                0.8f + 0.45f * r1, 1.2f, dust, (if (kind >= 2) 7.5f else 6f) * (0.7f + 0.6f * r1), 1)
+            // yumuşak zeminde fırlayan parçalar (kum tanesi, çamur topağı, taş kırığı, kar topağı)
+            if (surf != 0 && Math.random() < 0.55) {
+                val shade = if (surf == 3) 0xFFD8E4F4.toInt() else dust
+                particles += Particle(ox, oy, 5f, bx * (30f + 90f * r1) + by * r3 * 160f, by * (20f + 40f * r1) - bx * r3 * 90f, 90f + 120f * r1,
+                    0.5f + 0.3f * r1, 0.8f, shade, 2.4f + 1.4f * r1, 0)
+            }
         }
+    }
+
+    private var dustAcc = 0f
+
+    /** Yüzeyin toz rengi: kum, kar, çamur, kül, toprak; asfaltta soluk gri */
+    private fun dustColor(surf: Int): Int = when (surf) {
+        2 -> 0xFFD8B878.toInt()
+        3 -> 0xFFEAF2FF.toInt()
+        4 -> 0xFF5A6038.toInt()
+        5 -> 0xFF54504C.toInt()
+        1 -> 0xFF8A6A44.toInt()
+        else -> 0xFFB8BCC4.toInt()
     }
 
     private val ZONE_HARBOR = 15  // world::ZONES_ALL sırası
@@ -2171,10 +2239,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (t.life <= 0f) { it.remove(); continue }
             val sx = wx(t.x); val sy = wy(t.y)
             if (sx < -50 || sx > sw + 50 || sy < -50 || sy > sh + 50) continue
-            fill.color = alphaC(t.color, (t.life / t.max).coerceIn(0f, 1f))
-            val l = 10f * scale; val w = t.w * scale * 0.5f
+            val k = (t.life / t.max).coerceIn(0f, 1f)
+            val l = 11f * scale; val w = t.w * scale * 0.5f
             c.save(); c.rotate(-Math.toDegrees(t.a.toDouble()).toFloat(), sx, sy)
-            c.drawRect(sx - w, sy - l, sx + w, sy + l, fill)
+            // iz: koyu çukur + iki yanda çıkıntı (sıkışmış zemin) + ortada tırtıl çentikleri
+            fill.color = alphaC(t.color, k)
+            rect.set(sx - w, sy - l, sx + w, sy + l); c.drawRoundRect(rect, w, w, fill)
+            fill.color = alphaC(0xFFFFFFFF.toInt(), k * 0.10f)
+            c.drawRect(sx - w, sy - l, sx - w * 0.55f, sy + l, fill)          // yan çıkıntıda ışık
+            fill.color = alphaC(0xFF000000.toInt(), k * 0.20f)
+            var yy = sy - l + 2f * scale
+            while (yy < sy + l - scale) { c.drawRect(sx - w * 0.7f, yy, sx + w * 0.7f, yy + scale, fill); yy += 3.4f * scale }
             c.restore()
         }
     }
@@ -2224,22 +2299,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
             c.restore()
         } else atlas.draw(c, hs, ax, ay, scale, pixelPaint, flip)
-    }
-
-    private var sprayT = 0f
-
-    /** Arka teker sıçraması (V8 piksel efektleri): kum, kar, çamur, toprak/kül */
-    private fun wheelSpray(x: Float, y: Float, kind: Int, sgn: Float, speed: Float) {
-        if (!Settings.current.particles) return
-        val name = when (surface()) { 2 -> "road_sand"; 3 -> "road_snow"; 4 -> "road_swamp"; 1, 5 -> "road_dirt"; else -> return }
-        sprayT += 1f / 60f
-        val every = if (speed > 250) 0.07f else 0.12f
-        if (sprayT < every) return
-        sprayT = 0f
-        // arka teker: motorda resmin solu (−46), cipte resmin sağı (+86); ileri yön sgn
-        val back = if (kind >= 2) 86f else 46f
-        val wheel = if (kind >= 2) 50f else 34f
-        fx(name, x - sgn * back, y + 2f, wheel * 2.1f)
     }
 
     private fun drawDrone(c: Canvas, o: Int) {
@@ -2397,25 +2456,74 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    // ------------------------------------------------------------------ doku parçacıkları
+    private val texPaints = HashMap<Long, Paint>()
+    private val texRect = RectF()
+
+    /** Renk çarpımlı doku boyası (renk başına bir kez; alpha çizimde ayarlanır) */
+    private fun texPaint(color: Int, additive: Boolean): Paint {
+        val key = (color.toLong() and 0xFFFFFFL) or (if (additive) 1L shl 40 else 0L)
+        return texPaints.getOrPut(key) {
+            Paint().apply {
+                isFilterBitmap = false; isAntiAlias = false
+                colorFilter = android.graphics.LightingColorFilter(color or 0xFF000000.toInt(), 0)
+                if (additive) xfermode = addMode
+            }
+        }
+    }
+
+    /** Dokuyu (sx, sy) merkezli [w] px genişlikte çiz; [squash] dikey ezme (yere yatık bulutlar), [anchorBottom] tabanı sabitle (alev) */
+    private fun drawTex(c: Canvas, bmp: Bitmap, sx: Float, sy: Float, w: Float, rot: Float, paint: Paint, alpha: Float,
+                        squash: Float = 1f, anchorBottom: Boolean = false) {
+        if (alpha <= 0.01f || w < 1f) return
+        paint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
+        val h = w * bmp.height / bmp.width * squash
+        c.save()
+        c.translate(sx, sy)
+        if (rot != 0f) c.rotate(rot)
+        if (anchorBottom) texRect.set(-w / 2f, -h, w / 2f, 0f) else texRect.set(-w / 2f, -h / 2f, w / 2f, h / 2f)
+        c.drawBitmap(bmp, null, texRect, paint)
+        c.restore()
+    }
+
     private fun drawParticles(c: Canvas) {
+        val u = scale * density
         for (p in particles) {
             val k = (p.life / p.max).coerceIn(0f, 1f)
             val sx = wx(p.x); val sy = wy(p.y) - p.z * scale
+            if (sx < -120 || sx > sw + 120 || sy < -160 || sy > sh + 120) continue
+            val sd = p.seed
             when (p.kind) {
-                0 -> { fill.color = alphaC(p.color, min(1f, k * 2f)); c.drawCircle(sx, sy, p.size * scale * density * 0.6f, fill) }
-                1 -> { // duman/kıvılcım: büyüyerek söner
-                    fill.color = alphaC(p.color, k * 0.7f)
-                    c.drawCircle(sx, sy, p.size * scale * density * (1.6f - k), fill)
+                0 -> { // kırık parça: yerçekimiyle döner, sonda söner
+                    val spin = (p.max - p.life) * (sd - 0.5f) * 900f
+                    drawTex(c, FxTex.chunks[(sd * 5f).toInt() % 5], sx, sy, p.size * u * 1.9f, spin, texPaint(p.color, false), min(1f, k * 3f))
                 }
-                3 -> { fill.color = alphaC(p.color, k); c.drawCircle(sx, sy, p.size * scale * density * 0.5f, fill) }
+                1 -> { // toz / duman bulutu: çabuk belirir, büyüyerek ve dönerek söner; yere yatık (perspektif)
+                    val a = min(1f, (1f - k) * 7f) * Math.pow(k.toDouble(), 0.8).toFloat() * 0.85f
+                    val w = p.size * u * (1.6f + 2.4f * (1f - k))
+                    drawTex(c, FxTex.puffs[(sd * 8f).toInt() % 8], sx, sy, w, sd * 360f + (1f - k) * 40f * (if (sd > 0.5f) 1f else -1f),
+                        texPaint(p.color, false), a, 0.84f)
+                }
+                3 -> { // parıltı: dört köşeli yıldız, titreşir, toplamalı
+                    val tw = 0.55f + 0.45f * sin(p.life * 17f + sd * 6.3f)
+                    drawTex(c, FxTex.sparkle, sx, sy, p.size * u * 3.4f, 0f, texPaint(p.color, true), k * tw)
+                }
                 4 -> { // piksel kıvılcım: kare, hafif yalpalar, yer yer söner; sarı → turuncu → kor kırmızı
                     if (sin(p.life * 37f + p.x) > -0.55f) {
                         val col = when { k > 0.66f -> 0xFFFFE07A.toInt(); k > 0.33f -> 0xFFFF9A2E.toInt(); else -> 0xFFC8401E.toInt() }
                         fill.color = alphaC(col, min(1f, k * 1.6f))
-                        val h = p.size * scale * density * 0.6f
+                        val h = p.size * u * 0.6f
                         val dx = sin(p.life * 5f + p.y * 0.05f) * 3f * scale
                         c.drawRect(sx + dx - h, sy - h, sx + dx + h, sy + h, fill)
                     }
+                }
+                6 -> { // alev dili: tabandan doğar, yükselirken incelir ve söner (toplamalı, iki katman: renk + sıcak öz)
+                    val grow = Math.sin(Math.PI * (1.0 - k)).toFloat().coerceAtLeast(0.05f)
+                    val w = p.size * u * (0.5f + 0.9f * grow)
+                    val fl = FxTex.flames[(sd * 6f).toInt() % 6]
+                    val a = Math.pow(k.toDouble(), 0.6).toFloat() * min(1f, (1f - k) * 6f)
+                    drawTex(c, fl, sx, sy, w, 0f, texPaint(p.color, true), a, 1f, true)
+                    drawTex(c, fl, sx, sy, w * 0.62f, 0f, texPaint(0xFFFFFFFF.toInt(), true), a * 0.8f, 0.85f, true)
                 }
             }
         }

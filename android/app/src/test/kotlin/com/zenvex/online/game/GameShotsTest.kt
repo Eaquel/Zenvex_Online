@@ -272,4 +272,36 @@ class GameShotsTest {
     @Test fun s04_storm() = sequence("storm", 2, "ev_base_weapon", attackRight)
     @Test fun s05_ak() = sequence("ak", 1, "w_ak47", attackRight, 18, warm = 75)
     @Test fun s06_chainsaw() = sequence("chainsaw", 3, "ev_scrap_weapon", attackRight)
+    // ------------------------------------------------------------------ V16 efekt motoru v2
+    private fun fxShot(name: String, setup: () -> Unit, steps: Int, input: FloatArray? = null, frames: Int = 6, after: ((GameView) -> Unit)? = null) {
+        Assume.assumeTrue("libzenvex.so yok", native())
+        com.zenvex.online.ui.Demo.on = true
+        GameSession.initPreview(paparazzi.context)
+        Model3D.initSync(paparazzi.context)
+        setup()
+        val view = GameView(paparazzi.context, ui)
+        val w = 2340; val h = 1080
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        view.previewFrames(Canvas(bmp), w, h, steps, input = input)
+        after?.invoke(view)
+        val cw = 600; val ch = 420
+        val sheet = Bitmap.createBitmap(cw * 3, ch * ((frames + 2) / 3), Bitmap.Config.ARGB_8888)
+        val sc = Canvas(sheet)
+        for (i in 0 until frames) {
+            view.previewFrames(Canvas(bmp), w, h, 4, input = input)
+            val src = android.graphics.Rect(w / 2 - cw / 2, h / 2 - ch / 2 - 40, w / 2 + cw / 2, h / 2 + ch / 2 - 40)
+            sc.drawBitmap(bmp, src, android.graphics.Rect((i % 3) * cw, (i / 3) * ch, (i % 3 + 1) * cw, (i / 3 + 1) * ch), null)
+        }
+        val dir = java.io.File("build/game-shots").apply { mkdirs() }
+        java.io.FileOutputStream(java.io.File(dir, "fx_$name.png")).use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun f01_aura50() = fxShot("aura50", { cheat("level 50"); cheat("god"); cheat("hero 0"); cheat("tp camp"); cheat("night") }, steps = 40)
+    @Test fun f02_aura25() = fxShot("aura25", { cheat("level 25"); cheat("god"); cheat("hero 1"); cheat("tp camp") }, steps = 40)
+    @Test fun f03_aura10() = fxShot("aura10", { cheat("level 8"); cheat("god"); cheat("hero 0"); cheat("charlevel 10"); cheat("tp camp"); cheat("night") }, steps = 40)
+    @Test fun f04_runDust() = fxShot("rundust", { cheat("level 12"); cheat("god"); cheat("hero 2"); cheat("tp desert") }, steps = 30, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
+    @Test fun f05_motoDesert() = fxShot("motodesert", { cheat("level 25"); cheat("god"); cheat("hero 0"); cheat("tp desert"); cheat("vehicle moto") }, steps = 8,
+        input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 1f, 0.2f) })
+    @Test fun f06_carForest() = fxShot("carforest", { cheat("level 25"); cheat("god"); cheat("hero 2"); cheat("tp deep"); cheat("vehicle car") }, steps = 8,
+        input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 1f, 0.1f) })
 }
