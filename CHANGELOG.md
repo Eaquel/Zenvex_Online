@@ -2,6 +2,14 @@
 
 ## Unreleased (V16 — 3D)
 
+- NPCs are 3D models (Marco, Silas, Elena, Viktor, Jack, Aldric, Diana, soldier, sniper): they breathe, turn to face the
+  player and switch to a talking animation when you come close; new NPC animations (talk, aim, shoot) in the renderer
+- Wings: four 3D wing cosmetics worn on the back that flap with the hero's movement (Ember Wings VIP 3, Dragon Wings VIP 6,
+  Titan Wings VIP 9, Season 1 Wings pass tier 30); equipped from the character screen
+- New art: city buildings, shops, houses, gas station, watchtower, car wrecks, barrier, rubble wall, fence, tent, sandbags,
+  barrel, cone, tyres, log and billboard; all 16 armor pieces, necklaces and rings (rings renamed Bone, Rune and Dark Ring)
+- Lobby: title reads "Zenvex Online"; the character purchase shortcut is gone from the lobby (heroes are bought in game)
+
 - Heroes, weapons and vehicles are real 3D models (`rust/zenvex_r3d`): software renderer with cel lighting and outline,
   13-bone auto-rig, two-bone arm IK, code-driven animation for every state (idle, walk, run, roll, melee combos per weapon
   family, shouldered aim, recoil, magazine swap, gathering, riding, death, get-up); frames are cached per pose and direction

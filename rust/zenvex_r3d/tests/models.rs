@@ -10,13 +10,16 @@ const WEAPONS: [&str; 19] = [
     "pickaxe", "chainsaw", "pistol", "uzi", "ak47", "sniper", "rpg",
 ];
 
+const NPCS: [&str; 9] = ["npc_marco", "npc_silas", "npc_elena", "npc_viktor", "npc_jack", "npc_aldric", "npc_diana", "npc_soldier", "npc_sniper"];
+const WINGS: [&str; 4] = ["wings_ash", "wings_dragon", "wings_titan", "wings_s1"];
+
 fn service() -> Option<Service> {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../android/app/src/main/assets/m3d");
     if !dir.exists() {
         return None;
     }
     let mut s = Service::new();
-    for name in CHARS.iter().chain(WEAPONS.iter().skip(1)).chain(["hellhound", "nightstalker"].iter()) {
+    for name in CHARS.iter().chain(WEAPONS.iter().skip(1)).chain(["hellhound", "nightstalker"].iter()).chain(NPCS.iter()).chain(WINGS.iter()) {
         let zxm = std::fs::read(dir.join(format!("{name}.zxm"))).unwrap();
         let im = image::open(dir.join(format!("{name}.webp"))).unwrap().to_rgba8();
         s.load(name, &zxm, im.width() as usize, im.height() as usize, im.as_raw()).unwrap();
@@ -71,6 +74,30 @@ fn vehicles_render_with_rider_and_spinning_wheels() {
                 let (img, _) = s.vehicle(&r).unwrap();
                 assert!(img.w > 20 && img.h > 20 && img.w < 400 && img.h < 400, "{name} {yaw}: {}x{}", img.w, img.h);
             }
+        }
+    }
+}
+
+#[test]
+fn npcs_animate_and_wings_attach() {
+    let Some(mut s) = service() else { return };
+    for ch in NPCS {
+        for anim in [a::IDLE, a::WALK, a::TALK, a::AIM, a::SHOOT, a::DEATH, a::HURT] {
+            for t in [0.0, 0.4, 1.3] {
+                let r = ActorReq { ch, weapon: "", anim, t, period: 0.4, yaw: 200.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+                let (img, _) = s.actor(&r).unwrap_or_else(|| panic!("{ch} {anim}"));
+                assert!(img.w > 10 && img.h > 10 && img.w < 400 && img.h < 400, "{ch} {anim}: {}x{}", img.w, img.h);
+            }
+        }
+    }
+    for w in WINGS {
+        let plain = ActorReq { ch: "kael", weapon: "", anim: a::IDLE, t: 0.0, period: 1.0, yaw: 180.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+        let n0 = s.actor(&plain).unwrap().0.rgba.iter().filter(|c| c[3] > 0).count();
+        let ch = format!("kael+{w}");
+        for anim in [a::IDLE, a::RUN, a::MELEE] {
+            let r = ActorReq { ch: &ch, anim, ..plain };
+            let n = s.actor(&r).unwrap().0.rgba.iter().filter(|c| c[3] > 0).count();
+            assert!(n > n0 + 300, "{w} {anim}: kanat görünmüyor ({n} / {n0})");
         }
     }
 }

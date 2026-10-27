@@ -13,6 +13,8 @@ object Skins {
     /** giyili kaplamalar (GameView her karede okur) */
     @Volatile var char = ""
     @Volatile var vehicle = ""
+    /** sırttaki 3B kanat (kozmetik kimliği = model adı) */
+    @Volatile var wings = ""
     @Volatile var pity = 50
 
     /** 4×5 renk matrisi (Android ColorMatrix sırası). Karakter: alfa korunur, renk kaydırılır. */
@@ -54,7 +56,7 @@ object Skins {
     /** Oyun açılınca ve kaplama değişince Rust profilinden okunur */
     fun refresh() {
         val p = GameSession.ui("profile")
-        char = p.optString("skin_char"); vehicle = p.optString("skin_vehicle")
+        char = p.optString("skin_char"); vehicle = p.optString("skin_vehicle"); wings = p.optString("wings")
     }
 
     /** Oturum başında sunucudaki sahiplik listesi uygulanır */

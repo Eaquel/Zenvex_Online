@@ -1363,7 +1363,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (weapon == "rpg" && hud[Native.MAG] < 0.5f) flags = flags or 1
             if ((animI == 17 && hud[Native.TOOL_AXE] >= 2f) || (animI == 18 && hud[Native.TOOL_PICK] >= 2f)) flags = flags or 2
         }
-        val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d, flags) ?: return false
+        val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d, flags,
+            if (who == -1f) Skins.wings else "") ?: return false
         val k = pxPerM / fr.pxPerM
         val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
         val paint = when {
@@ -1513,7 +1514,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             atlas["n/marco/idle_${d5}_$f"]?.let { it to fl }
         } else null
         val w: Float; val top: Float
-        if (marco != null) {
+        val px0 = hud[Native.PX]; val py0 = hud[Native.PY]
+        val near = ch >= 5 && kotlin.math.hypot(px0 - x, py0 - y) < 170f
+        val f3 = drawNpc3D(c, ch, x, y, sx, sy, dir, t, near)
+        if (f3 != null) {
+            w = f3[0]; top = f3[1]
+        } else if (marco != null) {
             val (msp, fl) = marco
             val k = msp.k * scale
             w = msp.w * k; top = sy - msp.ay * k
@@ -1562,6 +1568,31 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             drawText(c, m, sx, by + 6 * density, 17 * density, 0xFF15140F.toInt(), true, fontBold)
         }
         return true
+    }
+
+    /**
+     * 3B NPC: oyuncu yaklaşınca ona döner ve konuşma animasyonuna geçer (baş sallama, gövde jesti), uzakta nefes alır.
+     * Döndürür: [genişlik, üst] (isim plakası ve dokunma kutusu için) ya da model yoksa null (piksel NPC çizilir).
+     */
+    private fun drawNpc3D(c: Canvas, ch: Int, x: Float, y: Float, sx: Float, sy: Float, dir: Int, t: Float, near: Boolean): FloatArray? {
+        if (!Model3D.ready || Settings.current.model3d < 0) return null
+        val model = Model3D.NPCS.getOrNull(ch - 4) ?: return null
+        val id = "n$ch@${x.toInt()},${y.toInt()}"
+        val target = if (near) Math.toDegrees(kotlin.math.atan2((hud[Native.PX] - x).toDouble(), (hud[Native.PY] - y).toDouble())).toFloat() else dir * 45f
+        val prev = yaw3d[id]
+        val yaw = if (prev == null) target else {
+            val d = ((target - prev) % 360f + 540f) % 360f - 180f
+            prev + d.coerceIn(-240f * frameDt, 240f * frameDt)
+        }
+        if (yaw3d.size > 80) yaw3d.clear()
+        yaw3d[id] = (yaw % 360f + 360f) % 360f
+        val pxPerM = 62.5f * scale
+        val anim = if (near) Model3D.A_TALK else 0
+        val fr = Model3D.actor(id, model, "", anim, t + ch * 0.9f, yaw, pxPerM, Settings.current.model3d) ?: return null
+        val k = pxPerM / fr.pxPerM
+        drawShadow3d(c, fr, sx, sy, k, pxPerM * 0.40f)
+        drawFrame3d(c, fr, sx, sy, k, bmpPaint)
+        return floatArrayOf(fr.bmp.width * k * 0.8f, sy - fr.ay * k)
     }
 
     // ------------------------------------------------------------------ V8 devlet üsleri

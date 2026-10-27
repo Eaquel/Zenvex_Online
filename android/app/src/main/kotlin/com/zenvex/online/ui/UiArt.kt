@@ -75,7 +75,7 @@ fun ArtImage(name: String, modifier: Modifier, silhouette: Boolean = false) {
 }
 
 /**
- * Oyun logosu: "ZENVEX / ONLINE". assets/ui/logo_wordmark varsa o görsel (istemi: docs/22 Bölüm 1), yoksa yazıyla.
+ * Oyun logosu: "Zenvex Online". assets/ui/logo_wordmark varsa o görsel (istemi: docs/22 Bölüm 1), yoksa yazıyla.
  * [height]: logonun yüksekliği.
  */
 @Composable
@@ -83,10 +83,7 @@ fun GameLogo(height: Dp, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
     val art = remember { UiArt.image(ctx, "logo_wordmark") }
     if (art != null) { ArtImage("logo_wordmark", modifier.height(height).aspectRatio(art.width.toFloat() / art.height)); return }
-    androidx.compose.foundation.layout.Column(modifier, horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally) {
-        PT("ZENVEX", (height.value * 0.62f).sp, Px.Orange, outline = true)
-        PT("O N L I N E", (height.value * 0.24f).sp, Px.Clan, outline = true)
-    }
+    PT("Zenvex Online", (height.value * 0.5f).sp, Px.Orange, modifier, outline = true)
 }
 
 /**

@@ -224,7 +224,7 @@ impl Game {
                     "char_level": g.char_level[c], "frame": g.frame, "tag": g.tag,
                     "xp_total": (1..g.level).map(|l| progress::xp_to_next(l) as u64).sum::<u64>() + g.xp as u64,
                     "tag_name": COSMETICS.iter().find(|x| x.id == g.tag).map_or("", |x| x.name),
-                    "costume": g.costume[c], "skin_char": g.skin_char, "skin_vehicle": g.skin_vehicle, "pass_tier": g.pass_tier(), "pass_normal": g.pass.normal, "pass_elite": g.pass.elite,
+                    "costume": g.costume[c], "skin_char": g.skin_char, "skin_vehicle": g.skin_vehicle, "wings": g.wings, "pass_tier": g.pass_tier(), "pass_normal": g.pass.normal, "pass_elite": g.pass.elite,
                     "city": g.level >= progress::CITY_LEVEL, "zone": world::ZONES_ALL[self.player.zone as usize].name(),
                     "stats": { "kills": g.kills, "deaths": g.deaths, "trees": g.trees, "crates": g.crates, "crafted": g.crafted,
                                "boss": g.boss_kills, "gold_earned": g.gold_earned, "time": g.play_time as u64 },
@@ -418,7 +418,7 @@ impl Game {
                     .iter()
                     .map(|c| {
                         let owned = g.cosmetics.iter().any(|o| o == c.id);
-                        let equipped = g.frame == c.id || g.tag == c.id || g.costume.iter().any(|x| x == c.id)
+                        let equipped = g.frame == c.id || g.tag == c.id || g.wings == c.id || g.costume.iter().any(|x| x == c.id)
                             || g.skins.iter().any(|(_, s)| s == c.id);
                         json!({ "id": c.id, "name": c.name, "kind": c.kind, "owned": owned, "equipped": equipped })
                     })
@@ -586,6 +586,11 @@ impl Game {
             // V15: VIP seviyesi (Mağaza durumundan); çanta yuvaları hemen yeniden dizilir
             "vip_set" => {
                 self.progress.vip = (v["level"].as_u64().unwrap_or(0) as u8).min(11);
+                for &(lv, w) in data::VIP_WINGS {
+                    if self.progress.vip >= lv && !self.progress.cosmetics.iter().any(|c| c == w) {
+                        self.progress.cosmetics.push(w.to_string());
+                    }
+                }
                 self.progress.relayout_inv();
                 Ok(String::new())
             }
@@ -1175,6 +1180,7 @@ impl Game {
         let on = match c.kind {
             "frame" => toggle(&mut p.frame),
             "tag" => toggle(&mut p.tag),
+            "wings" => toggle(&mut p.wings),
             "costume" => {
                 let ci = CHARACTERS
                     .iter()

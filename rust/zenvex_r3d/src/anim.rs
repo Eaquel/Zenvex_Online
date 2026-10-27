@@ -34,6 +34,10 @@ pub mod a {
     pub const DRINK: u8 = 20;
     pub const CHEER: u8 = 21;
     pub const POINT: u8 = 22;
+    /// NPC: konuşma (baş sallama, gövde jesti), nişan (çömelik, öne eğik), ateş (nişan + geri tepme)
+    pub const TALK: u8 = 23;
+    pub const AIM: u8 = 24;
+    pub const SHOOT: u8 = 25;
     /// yalnız 3B: ateşli silah ateşi ve şarjör değiştirme
     pub const FIRE: u8 = 40;
     pub const RELOAD: u8 = 41;
@@ -1263,6 +1267,33 @@ fn gather(st: &Style, ph: f32, anim: u8, s: f32, flags: u32) -> (K, f32, Wk) {
     }
 }
 
+/// NPC konuşması: 3.125 sn'lik döngü (nefesin katı; önbellekte dikişsiz)
+fn talk(st: &Style, t: f32) -> K {
+    let mut k = rest(st);
+    let w = t * TAU * 0.32;
+    k.head.x = -3.0 + 5.0 * (w * 3.0).sin().max(0.0);
+    k.head.z = 7.0 * (w * 1.0).sin();
+    k.chest.z = 4.0 * (w * 2.0).sin();
+    k.chest.x += 2.0 * (w * 2.0).cos();
+    k.hips.z = 2.0 * (w * 1.0).sin();
+    k.off.z = -0.004 * (1.0 + (w * 2.0).sin());
+    k
+}
+
+/// NPC nişan duruşu (dizler kırık, gövde öne eğik); `kick` geri tepme (0..1)
+fn aim_pose(st: &Style, kick: f32) -> K {
+    let mut k = rest(st);
+    k.thigh_r = v(14.0, 8.0, 0.0);
+    k.thigh_l = v(-4.0, 10.0, 0.0);
+    k.shin_r = 22.0;
+    k.shin_l = 14.0;
+    k.off.z = -0.05;
+    k.chest.x = 9.0 - 9.0 * kick;
+    k.head.x = -6.0 + 3.0 * kick;
+    k.hips.x = 4.0;
+    k
+}
+
 /// Animasyon durumundan anahtar kareyi üretir
 pub fn key_of(inp: &In, s: f32) -> Key {
     let st = &inp.style;
@@ -1301,6 +1332,12 @@ pub fn key_of(inp: &In, s: f32) -> Key {
         a::GETUP => plain(getup(st, ph_once(0.5)), Wk::None),
         a::HURT => plain(hurt(st, ph_once(0.18), wk, s), wk),
         a::RIDE => plain(ride(st, t, s), Wk::None),
+        a::TALK => plain(talk(st, t), Wk::None),
+        a::AIM => plain(aim_pose(st, 0.0), Wk::None),
+        a::SHOOT => {
+            let ph = (t / inp.period.max(0.1)).fract();
+            plain(aim_pose(st, (1.0 - ph / 0.35).max(0.0).powi(2)), Wk::None)
+        }
         a::CHOP | a::MINE => {
             let (k, trail, w) = gather(st, (t / 0.9).fract(), inp.anim, s, inp.flags);
             Key { k, trail, muzzle: 0.0, shown: w, rl: None, stage: 0 }

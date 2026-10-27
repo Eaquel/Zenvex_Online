@@ -25,7 +25,17 @@ object Model3D {
         "knife", "hatchet", "handaxe", "club", "effigy", "katana", "void_claw", "blood_scythe", "ice_scythe", "magma_hammer",
         "storm_axe", "pickaxe", "chainsaw", "pistol", "uzi", "ak47", "sniper", "rpg",
         "hellhound", "nightstalker",
+        "npc_marco", "npc_silas", "npc_elena", "npc_viktor", "npc_jack", "npc_aldric", "npc_diana", "npc_soldier", "npc_sniper",
+        "wings_ash", "wings_dragon", "wings_titan", "wings_s1",
     )
+
+    /** NPC karakter kodu (çekirdek draw.rs: 4 kule askeri, 5 tüccar … 12 komutan) → 3B model */
+    val NPCS = arrayOf("npc_soldier", "npc_marco", "npc_silas", "npc_elena", "npc_viktor", "npc_jack", "npc_soldier", "npc_aldric", "npc_diana")
+
+    /** NPC animasyonları (zenvex_r3d anim::a) */
+    const val A_TALK = 23
+    const val A_AIM = 24
+    const val A_SHOOT = 25
 
     /** silah eşyası → 3B model (listede yoksa "w_" sonrası ad) */
     private val ITEM_MODEL = mapOf(
@@ -224,16 +234,23 @@ object Model3D {
             3 -> 8f / 14f to 8
             12 -> 0.698f to 10
             17, 18 -> 0.9f to 14
+            A_TALK -> 3.125f to 30
+            A_SHOOT -> 0.4f to 8
             else -> 0f to 0
         }
     }
 
-    /** Karakter karesi (actor: aktörün kimliği — yerel "me", uzak oyuncu kimliği) */
-    fun actor(actor: String, ch: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int, flags: Int = 0): Frame? {
-        if (!ready || ch !in names) return null
+    /**
+     * Karakter karesi (actor: aktörün kimliği — yerel "me", uzak oyuncu kimliği). wings: sırttaki kanat modeli ("" yok;
+     * yüklenmemişse kanatsız çizilir).
+     */
+    fun actor(actor: String, ch0: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int, flags: Int = 0,
+              wings: String = ""): Frame? {
+        if (!ready || ch0 !in names) return null
+        val ch = if (wings.isNotEmpty() && wings in names) "$ch0+$wings" else ch0
         // tırpan kombosu üç vuruşlu (zenvex_r3d anim::combo_len); diğer silahlar iki
         val stages = if (weapon.endsWith("scythe")) 3 else 2
-        val tq = quantize(anim, t, ch, stages)
+        val tq = quantize(anim, t, ch0, stages)
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)
         val ssaa = quality >= 2
@@ -241,9 +258,9 @@ object Model3D {
         fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, if (ssaa) 1f else 0f, flags.toFloat())
         val fr = request(key(tq), actor, false, ch, weapon, params(tq))
         // döngüde sıradaki iki kare (yürürken/koşarken ilk turda takılma olmasın)
-        val (cycle, steps) = loopOf(anim, ch)
+        val (cycle, steps) = loopOf(anim, ch0)
         if (cycle > 0f) for (i in 1..2) {
-            val tn = quantize(anim, tq + i * cycle / steps, ch, stages)
+            val tn = quantize(anim, tq + i * cycle / steps, ch0, stages)
             prefetch(key(tn), false, ch, weapon, params(tn))
         }
         return fr

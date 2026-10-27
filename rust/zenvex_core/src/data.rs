@@ -96,7 +96,7 @@ pub const ITEMS: &[ItemDef] = &[
     item!("tooth", "Zombi Dişi", Material, Common, 50, 3, "Zombilerden düşer."),
     item!("toxic", "Toksik Öz", Material, Rare, 50, 12, "Toksik zombilerden düşer. Panzehir yapımında kullanılır."),
     item!("dark_crystal", "Karanlık Kristal", Material, Epic, 50, 40, "Karanlık zombilerden nadiren düşer. Katana, Titan zırhı ve Karanlık Kolye yapımında kullanılır."),
-    item!("titan_shard", "Titan Parçası", Material, Legendary, 50, 120, "Yalnız Titan'dan düşer. Titan zırhı ve Titan Yüzüğü yapımında kullanılır."),
+    item!("titan_shard", "Titan Parçası", Material, Legendary, 50, 120, "Yalnız Titan'dan düşer. Titan zırhı ve Karanlık Yüzük yapımında kullanılır."),
     item!("fuel", "Benzin", Material, Common, 10, 10, "Araçların yakıtı; aracın yanında kullanınca depoyu doldurur. Motor yapımında da kullanılır."),
     // tüketilebilir (15-19)  bonus = can
     item!("bandage", "Bandaj", Consumable, Common, 10, 8, "Kullanınca hemen 25 can verir.", 0.0, 25.0),
@@ -156,13 +156,13 @@ pub const ITEMS: &[ItemDef] = &[
     item!("plastic", "Plastik", Material, Common, 50, 3, "Şehir çöplerinden."),
     item!("gear", "Dişli", Material, Rare, 50, 10, "Yıkık Şehir'de düşer. Demir aletler, Polis Kaskı ve araç parçaları yapımında kullanılır."),
     item!("spring", "Yay", Material, Rare, 50, 9, "Eski mobilya ve araçlardan."),
-    item!("bone", "Kemik", Material, Common, 50, 3, "Zombilerden ve köpeklerden düşer. Bakır Yüzük ve kolye yapımında kullanılır."),
+    item!("bone", "Kemik", Material, Common, 50, 3, "Zombilerden ve köpeklerden düşer. Kemik Yüzük ve kolye yapımında kullanılır."),
     item!("w_knife", "Bıçak", Weapon, Rare, 1, 60, "Hızlı ve sessiz. Kısa menzil, yüksek saldırı hızı."),
     item!("w_katana", "Katana", Weapon, Epic, 1, 900, "Geniş yay çizen ağır kesik. Önündeki birden çok düşmana vurur."),
     // V8 yüzükler (armor = hasar %, bonus = kritik şansı), kolyeler (armor = düz can, bonus = can yenilenmesi %), sandıklar (armor = kapasite)
-    item!("ring_copper", "Bakır Yüzük", Ring, Common, 1, 60, "+%4 hasar.", 0.04, 0.0),
-    item!("ring_hunter", "Avcı Yüzüğü", Ring, Rare, 1, 220, "+%3 hasar, +%4 kritik şansı.", 0.03, 0.04),
-    item!("ring_titan", "Titan Yüzüğü", Ring, Legendary, 1, 2200, "+%8 hasar, +%6 kritik şansı.", 0.08, 0.06),
+    item!("ring_copper", "Kemik Yüzük", Ring, Common, 1, 60, "+%4 hasar.", 0.04, 0.0),
+    item!("ring_hunter", "Rün Yüzüğü", Ring, Rare, 1, 220, "+%3 hasar, +%4 kritik şansı.", 0.03, 0.04),
+    item!("ring_titan", "Karanlık Yüzük", Ring, Legendary, 1, 2200, "+%8 hasar, +%6 kritik şansı.", 0.08, 0.06),
     item!("neck_bone", "Kemik Kolye", Necklace, Common, 1, 50, "+15 can.", 15.0, 0.0),
     item!("neck_amulet", "Koruyucu Muska", Necklace, Rare, 1, 240, "+30 can, +%10 can yenilenmesi.", 30.0, 0.10),
     item!("neck_dark", "Karanlık Kolye", Necklace, Epic, 1, 700, "+50 can, +%20 can yenilenmesi.", 50.0, 0.20),
@@ -200,10 +200,10 @@ pub const ITEMS: &[ItemDef] = &[
     item!("scorpion_venom", "Akrep Zehri", Material, Rare, 20, 70, "Çöl Otoyolu'ndan. Hız İksiri yapımında kullanılır."),
     item!("dried_hide", "Kurutulmuş Deri", Material, Common, 30, 35, "Çöl Otoyolu'ndan. İlk Yardım Kiti yapımında kullanılır."),
     item!("swamp_moss", "Bataklık Yosunu", Material, Common, 30, 30, "Kara Bataklık'tan. İlk Yardım Kiti ve Koruyucu Muska yapımında kullanılır."),
-    item!("bog_iron", "Bataklık Demiri", Material, Rare, 30, 65, "Kara Bataklık'tan. Katana, Avcı Yüzüğü, askerî zırh, demir sandık ve araba gövdesi yapımında kullanılır."),
+    item!("bog_iron", "Bataklık Demiri", Material, Rare, 30, 65, "Kara Bataklık'tan. Katana, Rün Yüzüğü, askerî zırh, demir sandık ve araba gövdesi yapımında kullanılır."),
     item!("circuit_board", "Askerî Devre Kartı", Material, Epic, 20, 120, "Cephe Hattı'ndaki askerlerden. Askerî takım ve sandık yapımında kullanılır."),
     item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Cephe Hattı'ndaki askerlerden. Güç İksiri yapımında kullanılır."),
-    item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Avcı Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
+    item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Rün Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
     item!("rusty_key", "Paslı Anahtar", Material, Rare, 10, 90, "Eski şehirden. Askerî Sandık yapımında kullanılır."),
     // V11 aletler: balta/kazma çantada dururken de işe yarar (en iyisi), elde tutulunca 1,6 kat güçlü vurur ve gerçek alet olarak görünür
     // (armor = ağaç/kaya başına vuruş gücü; yumruk 25)
@@ -300,6 +300,9 @@ pub fn vip_bag_slots(vip: u8) -> usize {
         _ => 0,
     }
 }
+
+/// VIP kanatları: V3 Kor, V6 Ejder, V9 Titan (seviyeye ulaşınca koleksiyona girer; sırta takılan 3B kanat)
+pub const VIP_WINGS: &[(u8, &str)] = &[(3, "wings_ash"), (6, "wings_dragon"), (9, "wings_titan")];
 
 /// V15 VIP: tüccara satışta ek pay (V3 +%3, V6 +%5)
 pub fn vip_sell_bonus(vip: u8) -> f32 {
@@ -1602,6 +1605,9 @@ pub const COSMETICS: &[Cosmetic] = &[
     Cosmetic { id: "skin_w_bloodmoon", name: "Kanlı Ay Kılıcı", kind: "weapon_skin" },
     Cosmetic { id: "camo_s1", name: "Sezon 1 Kamuflajı", kind: "camo" },
     Cosmetic { id: "wings_s1", name: "Sezon 1 Kanatları", kind: "wings" },
+    Cosmetic { id: "wings_ash", name: "Kor Kanatları", kind: "wings" },
+    Cosmetic { id: "wings_dragon", name: "Ejder Kanatları", kind: "wings" },
+    Cosmetic { id: "wings_titan", name: "Titan Kanatları", kind: "wings" },
 ];
 
 #[cfg(test)]

@@ -32,8 +32,8 @@ SCENES = [
     dict(clip="ice", start=10, n=130, cap="DONMUŞ LİMAN", sub="Buz, bıçak ve nefes", vo="Soğuk, seni durdurmaz.", sfx="slash"),
     dict(clip="aura", start=0, n=110, cap="GÜÇLEN", sub="Rün mühürlü aura", vo="Güçlen. Klanını topla.", sfx="levelup"),
 ]
-INTRO = dict(dur=3.2, vo="Dünya çöktü.", title="ZENVEX", sub="O N L I N E", tag="Hayatta kal. Güçlen. Üssünü savun.")
-OUTRO = dict(dur=4.6, vo="Zenvex Online. Hayatta kal. Güçlen. Üssünü savun.", title="ZENVEX", sub="O N L I N E", tag="Şimdi test sürümünde")
+INTRO = dict(dur=3.2, vo="Dünya çöktü.", title="Zenvex Online", sub="", tag="Hayatta kal. Güçlen. Üssünü savun.")
+OUTRO = dict(dur=4.6, vo="Zenvex Online. Hayatta kal. Güçlen. Üssünü savun.", title="Zenvex Online", sub="", tag="Şimdi test sürümünde")
 XF = 0.35  # sahne geçişi (sn)
 
 

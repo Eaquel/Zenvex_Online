@@ -64,13 +64,34 @@ WEAPONS = {
     "void_claw": ("Weapons/Meshy_AI_Voidclaw_Gauntlet_1026165937_texture.glb", dict(axis="Z_CLAW", grip=(0.0, 0.08, -0.15), len=0.78)),
 }
 
+# NPC'ler: kolları doğal duruşta (elinde asa, anahtar, tüfek); kollar gövdeye bağlı, bacak/gövde/baş canlanır
+NPCS = {
+    "npc_marco": ("Npcs/Meshy_AI_The_Weathered_Wayfare_1027201037_texture.glb", dict(height=1.84)),
+    "npc_silas": ("Npcs/Meshy_AI_The_Ragged_Wanderer_1027201155_texture.glb", dict(height=1.78)),
+    "npc_elena": ("Npcs/Meshy_AI_Battlefield_Medic_1027201020_texture.glb", dict(height=1.72)),
+    "npc_viktor": ("Npcs/Meshy_AI_Wasteland_Enforcer_1027201008_texture.glb", dict(height=1.92)),
+    "npc_jack": ("Npcs/Meshy_AI_Wasteland_Veteran_1027200923_texture.glb", dict(height=1.82)),
+    "npc_aldric": ("Npcs/Meshy_AI_Twilight_Wanderer_1027201122_texture.glb", dict(height=1.86)),
+    "npc_diana": ("Npcs/Meshy_AI_Armored_Soldier_1027201144_texture.glb", dict(height=1.76)),
+    "npc_soldier": ("Npcs/Meshy_AI_Sentinel_in_the_Shado_1027201051_texture.glb", dict(height=1.84)),
+    "npc_sniper": ("Npcs/Meshy_AI_Wasteland_Sentinel_1027201132_texture.glb", dict(height=1.84)),
+}
+
+# VIP kanatları: sırta takılır; omuz ortası orijin, açıklık metre cinsinden
+WINGS = {
+    "wings_ash": ("Wings/Meshy_AI_Emberwings_1027201234_texture.glb", dict(span=1.9)),
+    "wings_dragon": ("Wings/Meshy_AI_Crimson_Dragon_Wings_1027201244_texture.glb", dict(span=2.0)),
+    "wings_titan": ("Wings/Meshy_AI_Emberwing_Ruin_1027201304_texture.glb", dict(span=2.0)),
+    "wings_s1": ("Wings/Meshy_AI_Midnight_Valkyrie_Win_1027201332_texture.glb", dict(span=1.8)),
+}
+
 CARS = {
     "hellhound": ("Cars/Meshy_AI_Wasteland_Interceptor_1026170510_texture.glb", dict(length=4.4, wheels="car")),
     "nightstalker": ("Cars/Meshy_AI_Wasteland_Marauder_1026170417_texture.glb", dict(length=2.3, wheels="moto")),
 }
 
-TARGET = {"char": 11000, "weapon": 2000, "car": 9000}
-BAKE = {"char": (2048, 1024), "weapon": (512, 256), "car": (2048, 1024)}
+TARGET = {"char": 11000, "npc": 7000, "wing": 3000, "weapon": 2000, "car": 9000}
+BAKE = {"char": (2048, 1024), "npc": (1024, 512), "wing": (1024, 512), "weapon": (512, 256), "car": (2048, 1024)}
 
 
 # ----------------------------------------------------------------------------- GLB
@@ -154,6 +175,22 @@ def orient_weapon(pos, opt):
         z = p[:, 1] * math.sin(a) + p[:, 2] * math.cos(a)
         vp = np.stack([z, p[:, 0], y], axis=1)
     return vp * (opt["len"] / 1.25)
+
+
+def orient_wing(pos, opt):
+    """Kanat: açıklık X, kalınlık Y (sırttan dışa +Y), yukarı Z; iki kanadın birleştiği kök orijinde."""
+    v = np.stack([pos[:, 0], -pos[:, 2], pos[:, 1]], axis=1)
+    if opt.get("flip"):
+        v[:, 0] *= -1
+        v[:, 1] *= -1
+    v *= opt["span"] / (v[:, 0].max() - v[:, 0].min())
+    v[:, 0] -= (v[:, 0].max() + v[:, 0].min()) / 2
+    root = np.abs(v[:, 0]) < 0.06 * opt["span"]
+    if root.sum() < 20:
+        root = np.abs(v[:, 0]) < np.percentile(np.abs(v[:, 0]), 3)
+    v[:, 1] -= v[root, 1].min()
+    v[:, 2] -= np.median(v[root, 2])
+    return v
 
 
 def orient_car(pos, opt):
@@ -285,8 +322,12 @@ BONES = ["pelvis", "spine", "head", "upper_r", "fore_r", "hand_r", "upper_l", "f
 PARENT = [-1, 0, 1, 1, 3, 4, 1, 6, 7, 0, 9, 0, 11]
 
 
-def auto_rig(v, t, th, name):
-    """Kaynaştırılmış düşük poligonlu modelde kemik ağırlıkları + eklem dinlenme konumları; kolları doğal duruşa indirir."""
+def auto_rig(v, t, th, name, arms=True):
+    """Kaynaştırılmış düşük poligonlu modelde kemik ağırlıkları + eklem dinlenme konumları; kolları doğal duruşa indirir.
+
+    arms=False (NPC'ler): kollar zaten aşağıda ve elde asa/anahtar/tüfek var; kol kemikleri ağırlıksız, kollar ve eldeki
+    eşya göğüsle (spine) birlikte hareket eder. Bacak, gövde ve baş kahramanlardaki gibi canlanır.
+    """
     n = len(v)
     adj = [[] for _ in range(n)]
     for a, b, c in t:
@@ -297,7 +338,14 @@ def auto_rig(v, t, th, name):
     W = np.zeros((n, len(BONES)))
     joints = {}
     arm_total = np.zeros(n)
+    s186 = th / 1.86
     for side, sgn in (("r", -1.0), ("l", 1.0)):
+        if not arms:
+            joints["upper_" + side] = np.array([sgn * 0.19 * s186, 0.0, 0.80 * th])
+            joints["fore_" + side] = np.array([sgn * 0.24 * s186, 0.0, 0.63 * th])
+            joints["hand_" + side] = np.array([sgn * 0.26 * s186, -0.02, 0.50 * th])
+            joints["palm_" + side] = np.array([sgn * 0.26 * s186, -0.03, 0.46 * th])
+            continue
         ax = v[:, 0] * sgn
         seed = np.where((ax > max_x * 0.80) & (v[:, 2] > 0.36 * th) & (v[:, 2] < 0.80 * th))[0]
         palm = v[seed].mean(axis=0)
@@ -372,6 +420,11 @@ def auto_rig(v, t, th, name):
         W[:, BONES.index("thigh_" + side)] += lg - sn
         W[:, BONES.index("shin_" + side)] += sn
     rest = np.clip(1 - W.sum(axis=1), 0, 1)
+    if not arms:
+        # gövdenin yanındaki kollar ve eldeki eşya (asa, anahtar) göğüsle; diz altına inen asa ucu kalçayla
+        side_w = smoothstep(0.17 * s186, 0.24 * s186, np.abs(v[:, 0])) * smoothstep(0.30 * th, 0.40 * th, v[:, 2]) * rest
+        W[:, BONES.index("spine")] += side_w
+        rest = rest - side_w
     head = smoothstep(0.78 * th, 0.85 * th, v[:, 2]) * rest
     spine = smoothstep(0.48 * th, 0.62 * th, v[:, 2]) * rest - head
     W[:, BONES.index("head")] += head
@@ -390,7 +443,7 @@ def auto_rig(v, t, th, name):
     jp = np.array([joints[b] for b in BONES])
     # A-pozu → doğal duruş: kolları omuzdan aşağı indir (karakterin geometrisi bu pozla kaydedilir)
     v = v.copy()
-    for side, sgn in (("r", -1.0), ("l", 1.0)):
+    for side, sgn in (("r", -1.0), ("l", 1.0)) if arms else ():
         u = BONES.index("upper_" + side)
         sh = jp[u]
         palm = joints["hand_" + side]
@@ -451,8 +504,10 @@ def save_tex(path, img, size):
 def build(src, name, kind, opt):
     t0 = time.time()
     pos, uv, tris, tex = load_glb(src)
-    if kind == "char":
+    if kind in ("char", "npc"):
         v = orient_char(pos, opt)
+    elif kind == "wing":
+        v = orient_wing(pos, opt)
     elif kind == "weapon":
         v = orient_weapon(pos, opt)
     else:
@@ -465,12 +520,22 @@ def build(src, name, kind, opt):
     meta = {"name": name, "kind": kind}
     b0 = b1 = w0 = None
     parts = []
-    if kind == "char":
+    if kind in ("char", "npc"):
         th = opt["height"]
-        lv, b0, b1, w0, jp, palms = auto_rig(lv, lt, th, name)
+        lv, b0, b1, w0, jp, palms = auto_rig(lv, lt, th, name, arms=kind == "char")
         meta["palm_r"], meta["palm_l"] = palms["r"], palms["l"]
         meta["bones"] = [{"name": b, "parent": p, "head": [float(x) for x in jp[i]]} for i, (b, p) in enumerate(zip(BONES, PARENT))]
         meta["height"] = th
+    elif kind == "wing":
+        # iki kanat ayrı parça (kökte çırpılır): sağ kanat −X, sol +X
+        c = lv[lt].mean(axis=1)
+        right = c[:, 0] < 0
+        lt = np.concatenate([lt[right], lt[~right]])
+        nr = int(right.sum())
+        rootz = float(np.median(lv[np.abs(lv[:, 0]) < 0.08 * opt["span"], 2])) if (np.abs(lv[:, 0]) < 0.08 * opt["span"]).sum() else 0.0
+        parts = [{"name": "wing_r", "start": 0, "count": nr, "pivot": [-0.04, 0.0, rootz]},
+                 {"name": "wing_l", "start": nr, "count": int(len(lt) - nr), "pivot": [0.04, 0.0, rootz]}]
+        meta["length"] = opt["span"]
     elif kind == "weapon":
         meta["tip"] = float(lv[:, 0].max())
         meta["back"] = float(lv[:, 0].min())
@@ -570,7 +635,7 @@ def from_weapon_space(lv, opt):
 if __name__ == "__main__":
     base = sys.argv[1]
     only = sys.argv[2].split(",") if len(sys.argv) > 2 else None
-    for kind, table in (("char", CHARS), ("weapon", WEAPONS), ("car", CARS)):
+    for kind, table in (("char", CHARS), ("npc", NPCS), ("wing", WINGS), ("weapon", WEAPONS), ("car", CARS)):
         for name, (rel, opt) in table.items():
             if only and name not in only:
                 continue

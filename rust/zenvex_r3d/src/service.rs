@@ -5,7 +5,7 @@ use crate::anim::{self, In, Style, Wk};
 use crate::math::{v3, Xf, M3, V3};
 use crate::model::{Model, Texture};
 use crate::raster::Light;
-use crate::rig::{self, Skeleton, HAND_R, HEAD};
+use crate::rig::{self, Skeleton, HAND_R, HEAD, SPINE};
 use crate::{render, transform_model, Image, Item, Settings};
 use std::collections::HashMap;
 
@@ -65,6 +65,7 @@ impl Points {
 }
 
 pub struct ActorReq<'a> {
+    /// karakter modeli; "+kanat" eki sırta kanat takar (ör. "kael+wings_s1")
     pub ch: &'a str,
     pub weapon: &'a str,
     pub anim: u8,
@@ -105,7 +106,37 @@ pub struct Service {
     wn: Vec<V3>,
     mp: Vec<V3>,
     mn: Vec<V3>,
+    gp: Vec<V3>,
+    gn: Vec<V3>,
+    /// karakter başına sırt noktası (dinlenme pozu): kanatların takıldığı yer
+    backs: HashMap<String, V3>,
     light: Option<Light>,
+}
+
+/// Kanat çırpma frekansı (Hz): animasyon döngüsüyle aynı turda kapanır (önbellekteki kare döngüsü dikişsiz)
+fn flap_hz(anim: u8, heavy: f32) -> f32 {
+    match anim {
+        anim::a::WALK | anim::a::PISTOL_WALK | anim::a::RIFLE_WALK => 1.12 * (1.0 - 0.15 * heavy),
+        anim::a::RUN => 1.45 * (1.0 - 0.15 * heavy),
+        anim::a::ROLL => 0.0,
+        _ => 0.32,
+    }
+}
+
+/// Sırt noktası: omuz küreği yüksekliğinde gövde ortasının arka yüzeyi
+fn back_of(m: &Model) -> V3 {
+    let h = if m.meta.height > 0.0 { m.meta.height } else { 1.8 };
+    let s = h / 1.86;
+    let mut y = f32::MIN;
+    for v in &m.verts {
+        if v.p.x.abs() < 0.10 * s && v.p.z > 0.66 * h && v.p.z < 0.76 * h {
+            y = y.max(v.p.y);
+        }
+    }
+    if y == f32::MIN {
+        y = 0.12 * s;
+    }
+    v3(0.0, y - 0.02 * s, 0.71 * h)
 }
 
 impl Service {
@@ -131,13 +162,15 @@ impl Service {
 
     /// Karakter karesi
     pub fn actor(&mut self, r: &ActorReq) -> Option<(Image, Points)> {
-        let m = self.models.get(r.ch)?;
-        let sk = self.skels.get(r.ch)?;
+        let (ch, wings) = r.ch.split_once('+').unwrap_or((r.ch, ""));
+        let m = self.models.get(ch)?;
+        let sk = self.skels.get(ch)?;
         let mut wk = Wk::from_model(r.weapon);
         if wk != Wk::None && !self.models.contains_key(wk.model()) {
             wk = Wk::None;
         }
-        let mut inp = In::new(r.anim, r.t, r.period, wk, Style::of(r.ch));
+        let style = Style::of(ch);
+        let mut inp = In::new(r.anim, r.t, r.period, wk, style);
         inp.flags = r.flags;
         let shown = anim::key_of(&inp, sk.height / 1.86).shown;
         let wm = if shown != Wk::None { self.models.get(shown.model()) } else { None };
@@ -149,7 +182,47 @@ impl Service {
         }
         let out = anim::evaluate(sk, &inp);
         rig::skin(m, &out.world, &mut self.bp, &mut self.bn);
+        // kanatlar: sırta (göğüs kemiğiyle), iki kanat kökünden çırpılır
+        let gm = if wings.is_empty() { None } else { self.models.get(wings) };
+        if let Some(g) = gm {
+            if !self.backs.contains_key(ch) {
+                self.backs.insert(ch.to_string(), back_of(m));
+            }
+            let back = self.backs[ch];
+            let s = sk.height / 1.86;
+            let hz = flap_hz(r.anim, style.heavy);
+            let w = (r.t * std::f32::consts::TAU * hz).sin();
+            // açık durur, yavaşça çırpar; koşarken daha geniş; arkaya 12° yatık
+            let amp = if hz > 1.0 { 14.0 } else { 7.0 };
+            let open = -8.0 + amp * w;
+            let place = Xf::new(M3::rx(-12.0), back).then(&out.world[SPINE]);
+            let scale = s;
+            self.gp.clear();
+            self.gn.clear();
+            let mut owner = vec![0u8; g.verts.len()];
+            if let Some(pl) = g.part("wing_l") {
+                for t in &g.tris[pl.start as usize..(pl.start + pl.count) as usize] {
+                    for &i in t {
+                        owner[i as usize] = 1;
+                    }
+                }
+            }
+            let pr = g.part("wing_r").map(|p| V3::from(p.pivot)).unwrap_or(V3::ZERO);
+            let pl = g.part("wing_l").map(|p| V3::from(p.pivot)).unwrap_or(V3::ZERO);
+            // sağ kanat (−X) Y ekseni etrafında: + açı ucu yukarı; sol kanat ters
+            let rr = M3::ry(-open) * M3::rz(-6.0);
+            let rl = M3::ry(open) * M3::rz(6.0);
+            for (i, v) in g.verts.iter().enumerate() {
+                let (rot, piv) = if owner[i] == 1 { (rl, pl) } else { (rr, pr) };
+                let p = piv + rot.apply(v.p - piv);
+                self.gp.push(place.apply(p * scale));
+                self.gn.push(place.r.apply(rot.apply(v.n)));
+            }
+        }
         let mut items = vec![Item { model: m, pos: &self.bp, nrm: &self.bn, range: None, id: 1, glow: 0.0 }];
+        if let Some(g) = gm {
+            items.push(Item { model: g, pos: &self.gp, nrm: &self.gn, range: None, id: 4, glow: 0.0 });
+        }
         let mut pts = Points { weapon: Wk::ALL.iter().position(|w| *w == shown).unwrap_or(0) as u8, ..Default::default() };
         let mut wxf = None;
         if let (Some(xf), Some(w)) = (out.weapon, wm) {

@@ -361,7 +361,7 @@ private fun DrawScope.drawForeground(k: SceneKind, t: Float, W: Float, H: Float,
     drawRect(rg(listOf(c(k.fire, 0.20f * flick), Color.Transparent), Offset(fx0, fy0), H * 0.7f), Offset(0f, groundTop), Size(W, H - groundTop), blendMode = BlendMode.Plus)
 }
 
-/** Kodla çizilen oyun logosu: metalik "ZENVEX", altında kor çizgisi ve geniş aralıklı "ONLINE" (görsel dosyası gerekmez). */
+/** Kodla çizilen oyun logosu: tek satır metalik "Zenvex Online", altında nabız gibi atan kor çizgisi (görsel dosyası gerekmez). */
 @Composable
 fun CodeLogo(height: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
     val ts = rememberTimeState()
@@ -376,32 +376,30 @@ fun CodeLogo(height: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier)
             val p = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             p.typeface = face ?: android.graphics.Typeface.DEFAULT_BOLD
             p.textAlign = android.graphics.Paint.Align.CENTER
-            p.textSize = H * 0.66f
-            p.letterSpacing = 0.04f
-            val tx = W / 2f; val ty = H * 0.62f
+            p.letterSpacing = 0.02f
+            val text = "Zenvex Online"
+            // genişliğe sığacak boy (en çok yüksekliğin %52'si)
+            p.textSize = H * 0.52f
+            val tw = p.measureText(text)
+            if (tw > W * 0.96f) p.textSize *= W * 0.96f / tw
+            val tx = W / 2f; val ty = H * 0.60f
             // sıcak yayılan parıltı
-            p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = H * 0.10f; p.color = 0x40FF7A2A.toInt()
-            p.maskFilter = android.graphics.BlurMaskFilter(H * 0.09f, android.graphics.BlurMaskFilter.Blur.NORMAL)
-            n.drawText("ZENVEX", tx, ty, p)
+            p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = H * 0.08f; p.color = 0x40FF7A2A.toInt()
+            p.maskFilter = android.graphics.BlurMaskFilter(H * 0.08f, android.graphics.BlurMaskFilter.Blur.NORMAL)
+            n.drawText(text, tx, ty, p)
             p.maskFilter = null
             // koyu dış hat
-            p.strokeWidth = H * 0.065f; p.color = 0xFF150A06.toInt(); p.strokeJoin = android.graphics.Paint.Join.ROUND
-            n.drawText("ZENVEX", tx, ty + H * 0.015f, p)
+            p.strokeWidth = H * 0.05f; p.color = 0xFF150A06.toInt(); p.strokeJoin = android.graphics.Paint.Join.ROUND
+            n.drawText(text, tx, ty + H * 0.012f, p)
             // metalik dolgu: üst parlak → alt paslı
             p.style = android.graphics.Paint.Style.FILL
-            p.shader = android.graphics.LinearGradient(0f, ty - H * 0.5f, 0f, ty, intArrayOf(0xFFFFF4DC.toInt(), 0xFFD8D2C4.toInt(), 0xFF8A7F74.toInt(), 0xFFB05A28.toInt()), floatArrayOf(0f, 0.38f, 0.7f, 1f), android.graphics.Shader.TileMode.CLAMP)
-            n.drawText("ZENVEX", tx, ty, p)
+            p.shader = android.graphics.LinearGradient(0f, ty - p.textSize * 0.8f, 0f, ty, intArrayOf(0xFFFFF4DC.toInt(), 0xFFD8D2C4.toInt(), 0xFF8A7F74.toInt(), 0xFFB05A28.toInt()), floatArrayOf(0f, 0.38f, 0.7f, 1f), android.graphics.Shader.TileMode.CLAMP)
+            n.drawText(text, tx, ty, p)
             p.shader = null
             // kor çizgisi (nabız atar)
             val pulse = 0.65f + 0.35f * sin(t * 2.2f)
             p.color = android.graphics.Color.argb((255 * pulse).toInt(), 255, 110, 40); p.strokeWidth = H * 0.018f; p.style = android.graphics.Paint.Style.STROKE
-            n.drawLine(W * 0.10f, ty + H * 0.07f, W * 0.90f, ty + H * 0.07f, p)
-            // ONLINE
-            p.style = android.graphics.Paint.Style.FILL; p.textSize = H * 0.19f; p.letterSpacing = 0.55f
-            p.color = 0xFF150A06.toInt(); p.style = android.graphics.Paint.Style.STROKE; p.strokeWidth = H * 0.04f
-            n.drawText("ONLINE", tx, H * 0.94f, p)
-            p.style = android.graphics.Paint.Style.FILL; p.color = 0xFFE8C8A0.toInt()
-            n.drawText("ONLINE", tx, H * 0.94f, p)
+            n.drawLine(W * 0.12f, ty + H * 0.12f, W * 0.88f, ty + H * 0.12f, p)
         }
     }
 }

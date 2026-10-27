@@ -82,7 +82,7 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
 
     // sahne: kodla çizilen canlı yıkık şehir (gün batımı, yangınlar, kor yağmuru, uzakta sürünen zombi silüetleri, kamp ateşi)
     LiveScene(SceneKind.LOBBY) {
-        // ---- sol: büyük logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi sağ üstteki profil simgesinde)
+        // ---- sol: büyük logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi ve satın alma oyunun içinde)
         Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 70.dp), horizontalAlignment = Alignment.Start) {
             CodeLogo(150.dp)
             Spacer(Modifier.height(10.dp))
@@ -96,7 +96,6 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         }
         // ---- sağ üst: kısayollar
         Row(Modifier.align(Alignment.TopEnd).padding(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            PxIcon("profile", size = 48.dp, tint = Color(0xFFB277FF)) { dialog = "chars" }
             PxIcon("trophy", size = 48.dp, tint = Px.Clan) { dialog = "top" }
             PxIcon("info", size = 48.dp) { dialog = "news" }
             PxIcon("gear", size = 48.dp, color = Px.Blue) { go(Screen.Settings) }
@@ -137,7 +136,6 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         when (dialog) {
             "welcome" -> AccountDialog(first = true) { dialog = if (Account.loggedIn) "" else "welcome"; tick++ }
             "top" -> TopDialog { dialog = "" }
-            "chars" -> CharactersScreen { dialog = ""; tick++ }
             "news" -> NewsDialog { dialog = "" }
             "dev" -> DevMenu(onClose = { dialog = ""; tick++ })
             "profile" -> ProfileEditor({ dialog = "" }) { dialog = "rename" }

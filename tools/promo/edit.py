@@ -40,7 +40,7 @@ TALL = [
     dict(clip="titan", dur=3.0, big="TİTAN UYANDI", sub="Klanınla çık karşısına"),
     dict(clip="frost", dur=2.6, big="SEN DE KATIL", sub="Ücretsiz test sürümü"),
 ]
-CTA = dict(dur=2.8, big="ZENVEX", sub="O N L I N E", tag="Test sürümü açık")
+CTA = dict(dur=2.8, big="Zenvex Online", sub="", tag="Test sürümü açık")
 VO_SCRIPT = {
     "wide": ["Tek roket. Bütün sürü.", "Tırpanla biç.", "Çölde tam gaz.", "Titan uyandı.", "Soğukta bile durma.", "Zenvex Online. Şimdi test sürümünde."],
     "tall": ["Tek roket. Bütün sürü.", "Tırpanla biç.", "Tam gaz.", "Titan uyandı. Klanını topla.", "Sen de katıl.", "Zenvex Online. Şimdi test sürümünde."],
@@ -128,7 +128,7 @@ def caption_layer(fmt, big, sub):
         d.text((60, 1080 - 26), big, font=f1, fill=(255, 240, 220, 255), anchor="ls", stroke_width=2, stroke_fill=(110, 40, 10, 255))
         bw = d.textlength(big, font=f1)
         d.text((60 + bw + 26, 1080 - 28), sub, font=f2, fill=(255, 176, 96, 255), anchor="ls")
-        d.text((W - 60, 66), "ZENVEX ONLINE", font=f3, fill=(255, 232, 200, 255), anchor="rs")
+        d.text((W - 60, 66), "Zenvex Online", font=f3, fill=(255, 232, 200, 255), anchor="rs")
         return lay
     W, H = 1080, 1920
     lay = Image.new("RGBA", (W, H), (0, 0, 0, 0))

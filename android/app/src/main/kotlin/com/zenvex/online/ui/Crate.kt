@@ -69,7 +69,7 @@ private val RARE = Color(0xFF6AB8FF)
 
 /** Sandıkta çıkabilecekler (supabase zx_crate_open ile aynı oranlar) */
 private val ODDS = listOf(
-    "Efsanevi Kaplama (6 Çeşit)" to "%1,5", "Destansı Kaplama (4 Çeşit)" to "%4", "Titan Yüzüğü" to "%1",
+    "Efsanevi Kaplama (6 Çeşit)" to "%1,5", "Destansı Kaplama (4 Çeşit)" to "%4", "Karanlık Yüzük" to "%1",
     "Titan Parçası ×2" to "%5", "Karanlık Kolye" to "%3,5", "Karanlık Kristal ×2" to "%9", "Güç İksiri ×3" to "%11",
     "Askerî Sandık" to "%11", "İlk Yardım Kiti ×5" to "%15", "Can İksiri ×3" to "%17", "1.000 Altın" to "%22",
 )
@@ -499,7 +499,7 @@ private fun RevealCard(code: String, skin: JSONObject?, flip: Float, t: Float) {
 }
 
 private fun itemName(id: String): String = when (id) {
-    "gold" -> "Altın"; "ring_titan" -> "Titan Yüzüğü"; "titan_shard" -> "Titan Parçası"; "neck_dark" -> "Karanlık Kolye"
+    "gold" -> "Altın"; "ring_titan" -> "Karanlık Yüzük"; "titan_shard" -> "Titan Parçası"; "neck_dark" -> "Karanlık Kolye"
     "dark_crystal" -> "Karanlık Kristal"; "potion_power" -> "Güç İksiri"; "chest_military" -> "Askerî Sandık"; "medkit" -> "İlk Yardım Kiti"
     "potion_heal" -> "Can İksiri"; else -> id
 }
