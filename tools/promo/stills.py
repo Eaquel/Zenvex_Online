@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Lobi galerisi için oyun karelerinden kırpılmış küçük görseller: assets/ui/shot_<ad>.webp (780x360).
-Kaynak: android/app/build/promo/<klip>/f%04d.png (bkz. trailer.py). Çalıştırma: python3 tools/promo/stills.py"""
+Kaynak: android/app/build/promo_hud/<klip>/f%04d.png (gerçek oyun arayüzüyle; bkz. docs/23_TANITIM.md). Çalıştırma: python3 tools/promo/stills.py"""
 import os
 from PIL import Image, ImageEnhance
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-PROMO = os.path.join(ROOT, "android/app/build/promo")
+PROMO = os.path.join(ROOT, "android/app/build/promo_hud")
 OUT = os.path.join(ROOT, "android/app/src/main/assets/ui")
 # ad: (klip, kare, merkez kaydırma x/y piksel, yakınlaştırma, parlaklık)
 PICKS = {
-    "scythe": ("scythe", 110, (0, 0), 1.7, 1.0),
-    "rpg": ("rpg", 145, (0, 0), 1.6, 1.0),
-    "moto": ("moto", 60, (0, 0), 1.7, 1.0),
-    "chop": ("chop", 40, (0, 0), 1.8, 1.6),
-    "magma": ("magma", 110, (0, 0), 1.6, 1.0),
-    "ice": ("ice", 110, (0, 0), 1.7, 1.0),
-    "aura": ("aura", 70, (0, 0), 1.5, 1.2),
+    "scythe": ("horde", 120, (0, 0), 1.7, 1.0),
+    "rpg": ("rocket", 100, (0, 0), 1.6, 1.0),
+    "moto": ("chase", 150, (0, 0), 1.7, 1.0),
+    "magma": ("titan", 110, (0, 0), 1.6, 1.0),
+    "ice": ("frost", 185, (0, 0), 1.7, 1.0),
+    "rune": ("titan", 20, (0, 0), 1.5, 1.0),
 }
 
 

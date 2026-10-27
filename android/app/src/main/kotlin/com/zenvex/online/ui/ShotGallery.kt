@@ -37,10 +37,9 @@ private val SHOTS = listOf(
     "shot_scythe" to "Tırpan Kombosu",
     "shot_rpg" to "Roketatar",
     "shot_moto" to "Araçlar",
-    "shot_chop" to "Balta Ve Kazma",
     "shot_magma" to "Titan",
     "shot_ice" to "Donmuş Liman",
-    "shot_aura" to "Rün Mührü",
+    "shot_rune" to "Rün Mührü",
 )
 
 @Composable
