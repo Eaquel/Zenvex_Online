@@ -13,6 +13,17 @@
   sparks, spirit flames), muzzle flash with smoke and ejected shells, elemental impact bursts, vehicle nitro
 - Hellhound (car) and Nightstalker (motorcycle) with spinning wheels, body tilt, rider on the seat; remote players' vehicles too
 - New setting: 3D character quality (low / medium / high); tree fade fixed for high-density sprites
+- Effect engine v2: procedural pixel-art textures, rune-seal hero aura (levels 10/25/40/50), silhouette shadows for heroes,
+  vehicles, NPCs, creatures and chests, textured dust/tire tracks; explosions, level-up, poison, teleport, lightning, fire,
+  rage, frost, blood and hit sparks are all code (the old sprite effect sheets are no longer used)
+- Scythe: three-stroke combo (wide sweep, rising backhand, full whirlwind) with crescent shock waves; axe, hatchet, pickaxe
+  and hammer combos reworked; axes and pickaxes can now be held (1.6x gather power) and show as real tools while chopping
+  and mining, with bark, splinter, leaf, rock and spark effects
+- RPG-7: the grenade leaves the launcher when fired, the new grenade is taken from the back and pushed in at the muzzle;
+  back-blast, smoke trail and a textured rocket projectile
+- Settings audit: shadows, run threshold, effect quality and render resolution now really work; graphics presets cut draw
+  calls and render size (test `p01_presetCost`); colour-blind field removed
+- Lobby: no hero showcase; code-drawn animated ruined-city scene, fires, embers, distant zombie silhouettes, code logo
 
 ## Unreleased (V15)
 

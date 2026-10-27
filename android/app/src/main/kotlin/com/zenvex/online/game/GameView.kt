@@ -494,6 +494,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         ghosts.removeAll { it.life -= dt; it.life <= 0 }
         fx3d.enabled = Settings.current.particles
         fx3d.density = Settings.current.fxScale.coerceAtMost(1f)
+        fx3d.followX = hud[Native.PX]; fx3d.followY = hud[Native.PY] - 30f
         fx3d.update(dt, 62.5f)
         whiteFlash = max(0f, whiteFlash - dt * 3f)
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
@@ -638,11 +639,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "invfull" -> ui.onToast("Çanta dolu!")
                 "lvl" -> {
-                    fx("levelup", 0f, 0f, 120f, follow = true)
-                    fx("level_ring", hud[Native.PX], hud[Native.PY] + 8, 230f)
+                    fx3d.levelUp(hud[Native.PX], hud[Native.PY], 62.5f)
                     setBanner("SEVİYE ${e.getInt("level")}", "+5 Can · +1 Yumruk Hasarı", 0xFFFFD34A.toInt())
                     Audio.play("levelup"); vibrate(120, 200)
-                    burst(hud[Native.PX], hud[Native.PY], 40, 0xFFFFE070.toInt(), 300f, 5f, 1, 1.2f)
                 }
                 "clvl" -> {
                     val lv = e.getInt("level")
@@ -715,15 +714,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "noammo" -> { Audio.play("empty", 0.8f); ui.onToast("Mermi yok!") }
                 "explode" -> {
                     val r = e.getDouble("r").toFloat()
-                    // büyük patlama (hava bombası): mantar bulutlu ayrı efekt
-                    if (r >= 300f) fx("bomb_blast", x, y, r * 1.9f) else fx("explosion", x, y - r * 0.4f, r * 2.8f)
-                    fx("shockwave", x, y, r * 3.2f)
-                    fx("fire", x, y + 10, r * 1.1f, dur = 2.6f)
-                    fx("smoke", x, y, r * 1.5f)
+                    // V16: tek tarif — ışık · ateş topu/halka/kıvılcım/enkaz · yanık leke ve duman sütunu (eski 4 sprite + 2 parçacık patlaması kalktı)
+                    fx3d.explode(x, y - r * 0.3f, r, r >= 300f)
                     Audio.play("explosion", max(0.35f, near(x, y)))
                     flashes += Light(x, y - 40, r * 3f, 0xFFFFA040.toInt(), 0.5f, 0.5f)
-                    burst(x, y, 30, 0xFFFF8A20.toInt(), r * 2.4f, 7f, 1, 0.7f)
-                    burst(x, y, 24, 0xFF3A3632.toInt(), r * 1.4f, 14f, 1, 1.6f)
                     shake(14f * near(x, y) + 3f, 0.4f); vibrate(120, 220)
                 }
                 "groan" -> if (Math.random() < 0.6) Audio.play("groan" + (0..2).random(), near(x, y) * 0.7f, 0.85f + Math.random().toFloat() * 0.3f)
@@ -2494,7 +2488,24 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val addPixPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.ADD) }
     private val fxPixPaint = Paint()
 
+    /** Testler: efekti oyuncunun yanında tetikler */
+    internal fun previewEffect(name: String, dx: Float = 130f, dy: Float = -20f) {
+        val x = hud[Native.PX] + dx; val y = hud[Native.PY] + dy
+        when (name) {
+            "explode" -> fx3d.explode(x, y - 30f, 130f, false)
+            "bomb" -> fx3d.explode(x, y - 40f, 320f, true)
+            "levelup" -> fx3d.levelUp(hud[Native.PX], hud[Native.PY], 62.5f)
+            else -> fx(name, x, y, if (name == "toxic" || name == "fire") 110f else 140f, 25f, false, -1f)
+        }
+    }
+
     private fun fx(name: String, x: Float, y: Float, size: Float, rot: Float = 0f, follow: Boolean = false, dur: Float = -1f, frame: Int = -1) {
+        // V16: efektler kodla (dokulu parçacık, hilal/halka dalgaları, ateş topu); atlas efekt sprite'ları yalnız bilinmeyen adlar için
+        val st = Settings.current
+        if (!st.particles && name !in setOf("levelup", "teleport", "bolt")) return
+        val ex = if (follow) hud[Native.PX] else x
+        val ey = if (follow) hud[Native.PY] - (if (name == "levelup") 0f else 30f) else y
+        if (fx3d.named(name, ex, ey, size, rot, dur, follow)) return
         if (!Settings.current.particles && name in setOf("dust", "exhaust", "blood", "spark")) return
         if (fxs.size > 120) fxs.removeAt(0)
         fxs += Fx(name, x, y, size, rot, follow, dur, frame)

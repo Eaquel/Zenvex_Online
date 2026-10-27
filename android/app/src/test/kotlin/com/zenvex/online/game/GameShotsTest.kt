@@ -365,4 +365,14 @@ class GameShotsTest {
         println("PRESET_COST çağrı/kare düşük=${calls[0]} orta=${calls[1]} yüksek=${calls[2]} ultra=${calls[3]} · ms/kare ${cost.toList()}")
         org.junit.Assert.assertTrue("çizim çağrısı düşük < orta < yüksek olmalı: ${calls.toList()}", calls[0] < calls[1] && calls[1] < calls[2])
     }
+
+    private fun fxCalm(name: String): () -> Unit = { cheat("level 8"); cheat("god"); cheat("hero 0"); cheat("tp deep"); cheat("killall"); Unit }
+    @Test fun f07_explosion() = fxShot("explode", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("explode") })
+    @Test fun f08_bomb() = fxShot("bomb", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("bomb", 200f, -40f) })
+    @Test fun f09_levelup() = fxShot("levelup", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("levelup") })
+    @Test fun f10_toxic() = fxShot("toxic", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("toxic", 90f, 20f) })
+    @Test fun f11_teleport() = fxShot("teleport", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("teleport", 0f, 30f) })
+    @Test fun f12_bolt() = fxShot("bolt", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("bolt", 90f, 30f) })
+    @Test fun f13_fireRage() = fxShot("firerage", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("fire", 100f, 30f); it.previewEffect("rage", 0f, 0f) })
+    @Test fun f14_hitFx() = fxShot("hitfx", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("crit", 60f, -40f); it.previewEffect("blood", 110f, -10f); it.previewEffect("frost", -70f, 10f); it.previewEffect("spark", 160f, -30f) })
 }

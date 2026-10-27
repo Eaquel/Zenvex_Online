@@ -18,6 +18,7 @@ import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
+import kotlin.math.sqrt
 import kotlin.random.Random
 
 /**
@@ -109,6 +110,9 @@ class Fx3D {
         const val LEAF = 12      // yaprak: sallanarak düşer
         const val SPLINTER = 13  // kıymık: ince çizgi, yerçekimi
         const val BLAST = 14     // arka alev: sıcak gaz dili, hızla söner
+        const val STAR = 15      // dört köşeli parıltı: titrer, yavaşça yükselir
+        const val BUBBLE = 16    // zehir kabarcığı: yükselir, büyür, patlar
+        const val FIRE = 17      // ateş topu parçası: beyaz-sarı → turuncu → kızıl → koyu duman
     }
 
     private class Arc(val x1: Float, val y1: Float, val x2: Float, val y2: Float, var life: Float, val max: Float, val color: Int, val seed: Int)
@@ -365,6 +369,221 @@ class Fx3D {
         if (rnd.nextFloat() < 0.8f) ps += P(x, y, -dx * unit * 3f, -dy * unit * 3f + (rnd.nextFloat() - 0.5f) * 30f, 0.12f, 0.2f, 0xFFFFC060.toInt(), unit * 0.03f, K.SPARK, ground + unit * 2f)
     }
 
+    // ------------------------------------------------------------------ efekt kitaplığı (eski sprite efektlerinin kodla karşılığı)
+    /** Süreli yayıcı: x, y dünya (follow ise oyuncuya göre), kind: fire, toxic, rage, breath */
+    private class Emit(val kind: String, var x: Float, var y: Float, val size: Float, val rot: Float, var life: Float, val max: Float, val follow: Boolean, var acc: Float = 0f)
+    private val emits = ArrayList<Emit>()
+    var followX = 0f
+    var followY = 0f
+
+    private fun puffColor(a: Int, b: Int, k: Float): Int {
+        val r = ((a shr 16 and 255) * (1 - k) + (b shr 16 and 255) * k).toInt()
+        val g = ((a shr 8 and 255) * (1 - k) + (b shr 8 and 255) * k).toInt()
+        val bl = ((a and 255) * (1 - k) + (b and 255) * k).toInt()
+        return 0xFF000000.toInt() or (r shl 16) or (g shl 8) or bl
+    }
+
+    /**
+     * Ada göre efekt üretir (GameView.fx çağrılarının kodla karşılığı). size: sprite çapı (dünya pikseli), rot: derece.
+     * Dönüş: bilinen bir efekt muydu.
+     */
+    fun named(name: String, x: Float, y: Float, size: Float, rot: Float, dur: Float, follow: Boolean): Boolean {
+        val g = y + size * 0.28f
+        val u = size
+        when (name) {
+            "dust" -> dust(x, y, size, g)
+            "smoke" -> repeat(6) { ps += P(x + (rnd.nextFloat() - 0.5f) * u * 0.4f, y, (rnd.nextFloat() - 0.5f) * 14f, -u * (0.25f + rnd.nextFloat() * 0.3f), 1.4f + rnd.nextFloat() * 1.2f, 2.4f, 0xFF4A4642.toInt(), u * (0.14f + rnd.nextFloat() * 0.1f), K.MIST, g) }
+            "sparkle" -> repeat(6) { ps += P(x + (rnd.nextFloat() - 0.5f) * u * 0.7f, y + (rnd.nextFloat() - 0.5f) * u * 0.5f, (rnd.nextFloat() - 0.5f) * 20f, -u * 0.25f, 0.8f + rnd.nextFloat() * 0.7f, 1.5f, 0xFFFFE27A.toInt(), u * (0.05f + rnd.nextFloat() * 0.04f), K.STAR, g, rnd.nextFloat() * 6f) }
+            "spark" -> {
+                flashes += Flash(x, y, 0f, 0f, u * 0.5f, 0.07f, 0.07f, 0xFFFFE0A0.toInt(), rnd.nextInt())
+                repeat(9) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (2f + rnd.nextFloat() * 3.5f)
+                    ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.7f - u, 0.14f + rnd.nextFloat() * 0.16f, 0.3f, if (rnd.nextFloat() < 0.4f) 0xFFFFFFFF.toInt() else 0xFFFFC060.toInt(), 62.5f * 0.03f, K.SPARK, g) }
+            }
+            "crit" -> {
+                flashes += Flash(x, y, 0f, 0f, u * 0.9f, 0.14f, 0.14f, 0xFFFFD34A.toInt(), rnd.nextInt())
+                repeat(12) { i -> val a = i * 2f * PI.toFloat() / 12f + rnd.nextFloat() * 0.2f; val sp = u * (4f + rnd.nextFloat() * 4f)
+                    ps += P(x, y, cos(a) * sp, sin(a) * sp, 0.18f + rnd.nextFloat() * 0.1f, 0.28f, 0xFFFFD34A.toInt(), 62.5f * 0.028f, K.SPARK, 1e9f) }
+                repeat(3) { ps += P(x + (rnd.nextFloat() - 0.5f) * u * 0.5f, y - rnd.nextFloat() * u * 0.3f, 0f, -u * 0.5f, 0.5f, 0.5f, 0xFFFFF0B0.toInt(), u * 0.12f, K.STAR, g, rnd.nextFloat() * 6f) }
+            }
+            "blood" -> {
+                repeat(11) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (1.5f + rnd.nextFloat() * 3.2f)
+                    ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.6f - u * 1.4f, 0.9f, 0.9f, 0xFFA8101C.toInt(), 62.5f * (0.03f + rnd.nextFloat() * 0.02f), K.DROP, g + rnd.nextFloat() * u * 0.2f) }
+                ps += P(x, g, 0f, 0f, 0.5f, 0.5f, 0xFF8A0C16.toInt(), u * 0.2f, K.MIST, g)
+            }
+            "frost" -> {
+                ps += P(x, g, 0f, 0f, 0.4f, 0.4f, 0xFFB8F0FF.toInt(), u * 0.8f, K.RING, g)
+                repeat(8) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (1.5f + rnd.nextFloat() * 2.5f)
+                    ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.6f - u, 0.6f, 0.7f, 0xFFDDF8FF.toInt(), u * 0.07f, K.SHARD, g, rnd.nextFloat() * 6f) }
+                repeat(4) { ps += P(x + (rnd.nextFloat() - 0.5f) * u * 0.6f, y, 0f, -u * 0.2f, 0.8f, 0.8f, 0xFFE8FBFF.toInt(), u * 0.06f, K.STAR, g, rnd.nextFloat() * 6f) }
+            }
+            "shockwave" -> waves += Wave(x, g, 0f, 0f, 2, 0xFFFFE0B0.toInt(), 0xFFFFFFFF.toInt(), u * 0.5f, 0.5f, 0.5f, 0f, g)
+            "slash" -> {
+                val a = Math.toRadians(rot.toDouble()); waves += Wave(x - cos(a).toFloat() * u * 0.2f, y, cos(a).toFloat(), sin(a).toFloat(), 0, 0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), u * 0.8f, 0.16f, 0.16f, 0.8f, g)
+            }
+            "muzzle" -> {
+                val a = Math.toRadians(rot.toDouble()); muzzle(x, y, cos(a).toFloat(), sin(a).toFloat(), AK, 62.5f, g)
+            }
+            "levelup" -> levelUp(x, y, u * 0.6f)
+            "level_ring" -> {}
+            "teleport" -> teleport(x, y, u)
+            "bolt" -> bolt(x, y, u)
+            "magma_claw" -> {
+                val a = Math.toRadians(rot.toDouble()); val dx = cos(a).toFloat(); val dy = sin(a).toFloat()
+                repeat(3) { i -> waves += Wave(x, y + (i - 1) * u * 0.07f, dx, dy, 0, 0xFFFF6A12.toInt(), 0xFFFFE27A.toInt(), u * 0.7f, 0.26f, 0.26f, 0.55f, g) }
+                repeat(10) { ps += P(x + dx * u * 0.3f, y + dy * u * 0.2f, dx * u * 2f + (rnd.nextFloat() - 0.5f) * 80f, (rnd.nextFloat() - 0.5f) * 80f - u * 0.5f, 0.5f + rnd.nextFloat() * 0.4f, 0.9f, 0xFFFF8A20.toInt(), u * 0.03f, K.EMBER, g) }
+            }
+            "magma_slam" -> {
+                waves += Wave(x, g, 0f, 0f, 2, 0xFFFF6A12.toInt(), 0xFFFFE27A.toInt(), u * 0.5f, 0.7f, 0.7f, 0f, g)
+                waves += Wave(x, g, 0f, 0f, 2, 0xFFFFB040.toInt(), 0xFFFFFFFF.toInt(), u * 0.32f, 0.5f, 0.5f, 0f, g)
+                repeat(14) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (1.2f + rnd.nextFloat() * 2.2f)
+                    ps += P(x, g - u * 0.05f, cos(a) * sp, sin(a) * sp * 0.4f - u * (2f + rnd.nextFloat() * 2f), 1.2f, 1.2f, 0xFF3A2A24.toInt(), u * (0.03f + rnd.nextFloat() * 0.03f), K.CHUNK, g, rnd.nextFloat() * 6f) }
+                repeat(24) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (0.8f + rnd.nextFloat() * 2f)
+                    ps += P(x, g, cos(a) * sp, sin(a) * sp * 0.4f - u * 1.5f, 0.8f + rnd.nextFloat() * 0.7f, 1.5f, 0xFFFF8A20.toInt(), u * 0.012f, K.EMBER, g) }
+                repeat(10) { val a = it * 2f * PI.toFloat() / 10f; ps += P(x + cos(a) * u * 0.2f, g, cos(a) * u * 0.6f, sin(a) * u * 0.25f, 0.9f, 0.9f, 0xFFFF7A1A.toInt(), u * 0.06f, K.FIRE, g) }
+            }
+            "magma_breath" -> emits += Emit("breath", x, y, u, rot, if (dur > 0) dur else 0.9f, if (dur > 0) dur else 0.9f, false)
+            "fire" -> emits += Emit("fire", x, y, u, rot, if (dur > 0) dur else 2.6f, if (dur > 0) dur else 2.6f, follow)
+            "toxic" -> {
+                emits += Emit("toxic", x, y, u, rot, if (dur > 0) dur else 5f, if (dur > 0) dur else 5f, follow)
+                waves += Wave(x, g, 0f, 0f, 2, 0xFF7CFF30.toInt(), 0xFFD8FF90.toInt(), u * 0.5f, 0.6f, 0.6f, 0f, g)
+            }
+            "rage" -> emits += Emit("rage", x, y, u, rot, if (dur > 0) dur else 5f, if (dur > 0) dur else 5f, true)
+            else -> return false
+        }
+        return true
+    }
+
+    private fun dust(x: Float, y: Float, u: Float, g: Float) {
+        repeat(5) { ps += P(x + (rnd.nextFloat() - 0.5f) * u * 0.5f, y + u * 0.05f, (rnd.nextFloat() - 0.5f) * u * 0.8f, -u * (0.05f + rnd.nextFloat() * 0.15f), 0.7f + rnd.nextFloat() * 0.5f, 1.2f, 0xFFB8A484.toInt(), u * (0.10f + rnd.nextFloat() * 0.08f), K.MIST, g) }
+        repeat(3) { ps += P(x, y, (rnd.nextFloat() - 0.5f) * u * 2f, -u * (0.6f + rnd.nextFloat()), 0.7f, 0.9f, 0xFF8E7C62.toInt(), u * 0.035f, K.CHUNK, g, rnd.nextFloat() * 6f) }
+    }
+
+    /** Patlama: ışık · gövde (ateş topu, halka, kıvılcım, enkaz) · iz (yanık leke, duman sütunu, yerde alev). r: patlama yarıçapı (dünya) */
+    fun explode(x: Float, y: Float, r: Float, big: Boolean) {
+        val g = y + r * 0.25f
+        // ışık
+        flashes += Flash(x, y - r * 0.2f, 0f, 0f, r * (if (big) 2.2f else 1.5f), 0.14f, 0.14f, 0xFFFFD890.toInt(), rnd.nextInt())
+        if (!enabled) return
+        // duman ve enkaz önce eklenir: ateş topu (toplamalı) üstlerine biner
+        repeat(if (big) 14 else 9) { ps += P(x + (rnd.nextFloat() - 0.5f) * r * 0.8f, y - r * 0.1f, (rnd.nextFloat() - 0.5f) * 30f, -r * (0.5f + rnd.nextFloat() * 0.7f), 1.6f + rnd.nextFloat() * 1.8f, 3.4f, 0xFF3C3834.toInt(), r * (0.22f + rnd.nextFloat() * 0.14f), K.MIST, g) }
+        repeat(if (big) 16 else 9) {
+            val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = r * (1.2f + rnd.nextFloat() * 2f)
+            ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.5f - r * (1.6f + rnd.nextFloat() * 1.4f), 1.2f, 1.2f, 0xFF3A322C.toInt(), r * (0.05f + rnd.nextFloat() * 0.05f), K.CHUNK, g, rnd.nextFloat() * 6f)
+        }
+        // gövde: ateş topu parçaları dışa doğru yayılır, yükselir ve soğur
+        val n = if (big) 22 else 13
+        repeat(n) {
+            val a = rnd.nextFloat() * 2f * PI.toFloat(); val rr = rnd.nextFloat()
+            val sp = r * (0.5f + rr * 1.6f)
+            ps += P(x + cos(a) * r * 0.15f * rr, y - r * 0.1f + sin(a) * r * 0.08f * rr, cos(a) * sp, sin(a) * sp * 0.55f - r * 0.5f, 0.55f + rnd.nextFloat() * 0.45f, 1.0f, 0xFFFFE090.toInt(), r * (0.28f + rnd.nextFloat() * 0.22f), K.FIRE, g)
+        }
+        waves += Wave(x, g, 0f, 0f, 2, 0xFFFFC070.toInt(), 0xFFFFFFFF.toInt(), r * (if (big) 3.4f else 2.6f), 0.5f, 0.5f, 0f, g)
+        repeat(if (big) 36 else 22) {
+            val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = r * (2f + rnd.nextFloat() * 3f)
+            ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.6f - r * 1.2f, 0.4f + rnd.nextFloat() * 0.5f, 0.9f, if (rnd.nextFloat() < 0.5f) 0xFFFFD060.toInt() else 0xFFFF7A20.toInt(), 62.5f * 0.02f, K.SPARK, g)
+        }
+        // iz: yanık leke (yere kalıcı) ve kısa süre yanan zemin
+        ps += P(x, g, 0f, 0f, 9f, 9f, 0xFF16120E.toInt(), r * 0.55f, K.SPLAT, g)
+        emits += Emit("fire", x, g - r * 0.1f, r * 0.5f, 0f, 1.6f, 1.6f, false)
+    }
+
+    /** Seviye atlama: yerden yükselen halka, ışık sütunu ve spiral yıldızlar. (x, y): oyuncu ayağı */
+    fun levelUp(x: Float, y: Float, u: Float) {
+        val g = y
+        waves += Wave(x, g, 0f, 0f, 2, 0xFFFFD34A.toInt(), 0xFFFFFFFF.toInt(), u * 1.6f, 0.9f, 0.9f, 0f, g)
+        waves += Wave(x, g, 0f, 0f, 2, 0xFFFFF0B0.toInt(), 0xFFFFFFFF.toInt(), u * 1.0f, 0.7f, 0.7f, 0f, g)
+        waves += Wave(x, g, 0f, 0f, 4, 0xFFFFD34A.toInt(), 0xFFFFFFFF.toInt(), u * 0.7f, 1.0f, 1.0f, 0f, g)
+        flashes += Flash(x, g - u * 0.6f, 0f, 0f, u * 1.4f, 0.16f, 0.16f, 0xFFFFE890.toInt(), rnd.nextInt())
+        emits += Emit("levelup", x, g, u, 0f, 1.1f, 1.1f, true)
+    }
+
+    /** Işınlanma: mor rün halkası, ışık sütunu ve kıvılcımlar */
+    fun teleport(x: Float, y: Float, u: Float) {
+        val g = y + u * 0.3f
+        waves += Wave(x, g, 0f, 0f, 2, 0xFFB070FF.toInt(), 0xFFF0E0FF.toInt(), u * 0.9f, 0.7f, 0.7f, 0f, g)
+        waves += Wave(x, g, 0f, 0f, 2, 0xFFD8B0FF.toInt(), 0xFFFFFFFF.toInt(), u * 0.55f, 0.5f, 0.5f, 0f, g)
+        waves += Wave(x, g, 0f, 0f, 4, 0xFFB070FF.toInt(), 0xFFFFFFFF.toInt(), u * 0.42f, 0.8f, 0.8f, 0f, g)
+        flashes += Flash(x, y, 0f, 0f, u * 0.9f, 0.14f, 0.14f, 0xFFD8B0FF.toInt(), rnd.nextInt())
+        repeat(16) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val rr = u * (0.15f + rnd.nextFloat() * 0.25f)
+            ps += P(x + cos(a) * rr, g + sin(a) * rr * 0.4f, 0f, -u * (0.8f + rnd.nextFloat() * 1.4f), 0.8f + rnd.nextFloat() * 0.5f, 1.2f, if (rnd.nextFloat() < 0.5f) 0xFFD8B0FF.toInt() else 0xFFFFFFFF.toInt(), u * 0.045f, K.STAR, g, rnd.nextFloat() * 6f) }
+    }
+
+    /** Gökten yıldırım: çatallı iki çizgi, çarpma ışığı, halka ve kıvılcım. (x, y): düştüğü nokta */
+    fun bolt(x: Float, y: Float, u: Float) {
+        val top = y - u * 3.4f
+        var px = x + (rnd.nextFloat() - 0.5f) * u * 0.8f; var py = top
+        val segs = 6
+        for (i in 1..segs) {
+            val nx = if (i == segs) x else x + (rnd.nextFloat() - 0.5f) * u * 0.7f * (1f - i / segs.toFloat() * 0.8f)
+            val ny = top + (y - top) * i / segs
+            arcs += Arc(px, py, nx, ny, 0.32f, 0.32f, 0xFFB8D8FF.toInt(), rnd.nextInt())
+            if (i == 3) arcs += Arc(nx, ny, nx + (rnd.nextFloat() - 0.5f) * u * 1.2f, ny + u * 0.9f, 0.16f, 0.16f, 0xFF8CC4FF.toInt(), rnd.nextInt())
+            px = nx; py = ny
+        }
+        flashes += Flash(x, y, 0f, 0f, u * 1.6f, 0.2f, 0.2f, 0xFFD8EAFF.toInt(), rnd.nextInt())
+        waves += Wave(x, y + u * 0.1f, 0f, 0f, 2, 0xFF8CC4FF.toInt(), 0xFFFFFFFF.toInt(), u * 0.9f, 0.4f, 0.4f, 0f, y + u * 0.1f)
+        repeat(14) { val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = u * (2f + rnd.nextFloat() * 3.5f)
+            ps += P(x, y, cos(a) * sp, sin(a) * sp * 0.5f - u, 0.25f + rnd.nextFloat() * 0.25f, 0.5f, 0xFFDDEEFF.toInt(), u * 0.03f, K.SPARK, y + u * 0.15f) }
+    }
+
+    private fun updateEmits(dt: Float) {
+        val it = emits.iterator()
+        while (it.hasNext()) {
+            val e = it.next()
+            e.life -= dt
+            if (e.life <= 0f) { it.remove(); continue }
+            if (e.follow) { e.x = followX; e.y = followY }
+            val k = e.life / e.max
+            val g = e.y + e.size * 0.28f
+            when (e.kind) {
+                "fire" -> {
+                    e.acc += dt * 26f * min(1f, k * 2f)
+                    while (e.acc >= 1f) { e.acc -= 1f
+                        ps += P(e.x + (rnd.nextFloat() - 0.5f) * e.size * 0.7f, e.y + e.size * 0.1f, 0f, -e.size * (0.7f + rnd.nextFloat() * 0.9f), 0.45f + rnd.nextFloat() * 0.35f, 0.8f, 0xFFFF8A2A.toInt(), e.size * (0.12f + rnd.nextFloat() * 0.1f), K.WISP, g, rnd.nextFloat() * 6f)
+                        if (rnd.nextFloat() < 0.15f) ps += P(e.x + (rnd.nextFloat() - 0.5f) * e.size * 0.5f, e.y, (rnd.nextFloat() - 0.5f) * 30f, -e.size * 1.2f, 0.7f, 0.9f, 0xFFFF9A30.toInt(), e.size * 0.018f, K.EMBER, g)
+                        if (rnd.nextFloat() < 0.12f) ps += P(e.x, e.y - e.size * 0.3f, 0f, -e.size * 0.5f, 1.2f, 1.4f, 0xFF4A4440.toInt(), e.size * 0.16f, K.MIST, g)
+                    }
+                }
+                "toxic" -> {
+                    e.acc += dt * 12f * min(1f, k * 3f)
+                    while (e.acc >= 1f) { e.acc -= 1f
+                        val a = rnd.nextFloat() * 2f * PI.toFloat(); val rr = e.size * 0.42f * sqrt(rnd.nextFloat())
+                        ps += P(e.x + cos(a) * rr, e.y + sin(a) * rr * 0.4f, 0f, -e.size * (0.12f + rnd.nextFloat() * 0.2f), 0.9f + rnd.nextFloat() * 0.8f, 1.5f, 0xFF9AFF40.toInt(), e.size * (0.03f + rnd.nextFloat() * 0.04f), K.BUBBLE, g, rnd.nextFloat() * 6f)
+                        if (rnd.nextFloat() < 0.35f) ps += P(e.x + cos(a) * rr, e.y + sin(a) * rr * 0.4f, 0f, -e.size * 0.1f, 1.4f, 1.6f, 0xFF6CC030.toInt(), e.size * 0.2f, K.MIST, g)
+                    }
+                }
+                "rage" -> {
+                    e.acc += dt * 22f
+                    while (e.acc >= 1f) { e.acc -= 1f
+                        val a = rnd.nextFloat() * 2f * PI.toFloat(); val rr = e.size * 0.16f
+                        ps += P(e.x + cos(a) * rr, e.y + sin(a) * rr * 0.4f + e.size * 0.12f, 0f, -e.size * (0.55f + rnd.nextFloat() * 0.5f), 0.5f + rnd.nextFloat() * 0.3f, 0.8f, 0xFFFF3A20.toInt(), e.size * (0.06f + rnd.nextFloat() * 0.04f), K.WISP, g, rnd.nextFloat() * 6f)
+                    }
+                    if ((e.max - e.life) % 0.9f < dt) waves += Wave(e.x, g, 0f, 0f, 2, 0xFFFF3A20.toInt(), 0xFFFFB090.toInt(), e.size * 0.5f, 0.45f, 0.45f, 0f, g)
+                }
+                "breath" -> {
+                    val a = Math.toRadians(e.rot.toDouble()); val dx = cos(a).toFloat(); val dy = sin(a).toFloat()
+                    e.acc += dt * 70f
+                    while (e.acc >= 1f) { e.acc -= 1f
+                        val sp = e.size * (0.9f + rnd.nextFloat() * 1.3f); val spread = (rnd.nextFloat() - 0.5f) * 0.55f
+                        val c2 = cos(spread); val s2 = sin(spread)
+                        val vx = (dx * c2 - dy * s2) * sp; val vy = (dx * s2 + dy * c2) * sp * 0.6f
+                        ps += P(e.x, e.y, vx, vy - e.size * 0.1f, 0.35f + rnd.nextFloat() * 0.25f, 0.6f, 0xFFFF8A2A.toInt(), e.size * (0.06f + rnd.nextFloat() * 0.06f), K.FIRE, g)
+                        if (rnd.nextFloat() < 0.3f) ps += P(e.x, e.y, vx * 1.3f, vy * 1.3f - e.size * 0.2f, 0.5f, 0.6f, 0xFFFFD060.toInt(), e.size * 0.012f, K.EMBER, g)
+                    }
+                }
+                "levelup" -> {
+                    // spiral: yukarı akan iki kol yıldız
+                    e.acc += dt * 40f
+                    while (e.acc >= 1f) { e.acc -= 1f
+                        val ph = (e.max - e.life) * 7f + (if (rnd.nextBoolean()) PI.toFloat() else 0f)
+                        val rr = e.size * 0.7f * (0.5f + 0.5f * k)
+                        ps += P(e.x + cos(ph) * rr, e.y - e.size * 0.1f + sin(ph) * rr * 0.4f, 0f, -e.size * (1.4f + rnd.nextFloat() * 0.8f), 0.6f + rnd.nextFloat() * 0.4f, 0.9f, if (rnd.nextFloat() < 0.5f) 0xFFFFE27A.toInt() else 0xFFFFFFFF.toInt(), e.size * (0.04f + rnd.nextFloat() * 0.035f), K.STAR, g, rnd.nextFloat() * 6f)
+                    }
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ sürekli element efektleri
     private fun ambient(id: String, w: Int, tx: Float, ty: Float, bx: Float, by: Float, ground: Float, attacking: Boolean,
                         strength: Float, dt: Float, unit: Float) {
@@ -446,6 +665,9 @@ class Fx3D {
                 }
                 K.LEAF -> { p.vx = sin(p.life * 3.2f + p.rot) * unit * 0.9f; p.vy = unit * (0.9f + 0.3f * sin(p.life * 5f + p.rot)); p.rot += dt * 4f }
                 K.BLAST -> { p.vx *= 1f - 4f * dt; p.vy *= 1f - 4f * dt }
+                K.STAR -> { p.vy -= unit * 0.15f * dt; p.vx *= 1f - 1.2f * dt; p.vy *= 1f - 0.8f * dt; p.rot += dt * 2f }
+                K.BUBBLE -> { p.vx = sin(p.life * 5f + p.rot) * unit * 0.25f; p.vy -= unit * 0.35f * dt }
+                K.FIRE -> { p.vx *= 1f - 2.4f * dt; p.vy = p.vy * (1f - 2.2f * dt) - unit * 0.9f * dt }
             }
             p.x += p.vx * dt; p.y += p.vy * dt
             if (p.y >= p.ground && p.vy > 0f) {
@@ -459,12 +681,13 @@ class Fx3D {
             }
         }
         ps += splats
+        updateEmits(dt)
         arcs.removeAll { it.life -= dt; it.life <= 0f }
         waves.removeAll { it.life -= dt; it.life <= 0f }
         flashes.removeAll { it.life -= dt; it.life <= 0f }
     }
 
-    fun clear() { trails.clear(); ps.clear(); arcs.clear(); flashes.clear(); emit.clear(); waves.clear() }
+    fun clear() { trails.clear(); ps.clear(); arcs.clear(); flashes.clear(); emit.clear(); waves.clear(); emits.clear() }
 
     // ------------------------------------------------------------------ çizim
     /** Zemindeki izler (kan lekesi): aktörlerden önce */
@@ -542,6 +765,28 @@ class Fx3D {
                     norm.color = withAlpha(p.color, min(1f, k * 2f)); c.drawPath(path, norm)
                     c.restore()
                 }
+                K.STAR -> {
+                    val tw = 0.55f + 0.45f * sin(p.life * 18f + p.rot * 3f)
+                    drawTex(c, FxTex.sparkle, sx, sy, r * 2.6f, 0f, tex(p.color, true), min(1f, k * 2.2f) * tw, 1f)
+                }
+                K.BUBBLE -> {
+                    // kabarcık: ince halka + iç parıltı; ömrünün sonunda şişip patlar
+                    val grow = 1f + (1f - k) * 0.5f
+                    val rr = r * grow
+                    norm.style = Paint.Style.STROKE; norm.strokeWidth = max(1.3f, rr * 0.16f); norm.color = withAlpha(p.color, min(1f, k * 3f) * 0.9f)
+                    c.drawCircle(sx, sy, rr, norm)
+                    norm.style = Paint.Style.FILL; norm.color = withAlpha(p.color, min(1f, k * 3f) * 0.18f); c.drawCircle(sx, sy, rr, norm)
+                    norm.color = withAlpha(0xFFFFFFFF.toInt(), min(1f, k * 3f) * 0.8f); c.drawCircle(sx - rr * 0.35f, sy - rr * 0.35f, max(1f, rr * 0.18f), norm)
+                }
+                K.FIRE -> {
+                    val t0 = 1f - k
+                    val grow = 0.6f + 0.9f * sqrt(t0)
+                    val col = when { k > 0.72f -> 0xFFFFF0B0.toInt(); k > 0.48f -> 0xFFFFB040.toInt(); k > 0.28f -> 0xFFE0541A.toInt(); else -> 0xFF4A2418.toInt() }
+                    val sd = ((p.x * 2.7f + p.y * 1.3f).toInt() and 0x7FFF) % 8
+                    val additive = k > 0.3f
+                    drawTex(c, FxTex.puffs[sd], sx, sy, r * 2.6f * grow, p.x * 5f + t0 * 40f, tex(col, additive), if (additive) min(1f, k * 1.6f) else k * 2.2f, 0.9f)
+                    if (k > 0.5f) drawTex(c, FxTex.puffs[(sd + 3) % 8], sx, sy, r * 1.5f * grow, -p.y * 4f, tex(0xFFFFFFFF.toInt(), true), (k - 0.5f) * 1.2f, 0.9f)
+                }
                 K.CHUNK -> {
                     val sd = ((p.x * 3.1f + p.y).toInt() and 0x7FFF) % 5
                     drawTex(c, FxTex.chunks[sd], sx, sy, r * 2.4f, Math.toDegrees(p.rot.toDouble()).toFloat(), tex(p.color, false), min(1f, k * 3f), 1f)
@@ -578,6 +823,18 @@ class Fx3D {
     private fun drawWave(c: Canvas, w: Wave, X: (Float) -> Float, Y: (Float) -> Float, scale: Float) {
         val k = (w.life / w.max).coerceIn(0f, 1f)
         val age = 1f - k
+        if (w.kind == 4) {
+            // ışık sütunu: yerden yükselen dar gradyan şerit (alt parlak, üst söner), yanlarda sızan parıltı
+            val bx = X(w.x); val by = Y(w.ground)
+            val hh = w.size * scale * 5.5f * min(1f, age * 4f + 0.15f); val ww = w.size * scale * (0.8f - 0.45f * age)
+            val a = if (age < 0.15f) age / 0.15f else k * k
+            for ((wk, ak) in arrayOf(1.0f to 0.14f, 0.7f to 0.22f, 0.45f to 0.34f, 0.2f to 0.6f)) {
+                add.shader = android.graphics.LinearGradient(0f, by - hh, 0f, by, intArrayOf(withAlpha(w.color, 0f), withAlpha(w.color, ak * a), withAlpha(w.core, ak * 1.4f * a)), floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
+                c.drawRect(bx - ww * wk, by - hh, bx + ww * wk, by, add)
+            }
+            add.shader = null
+            return
+        }
         if (w.kind == 2) {
             drawTex(c, FxTex.ring, X(w.x), Y(w.ground), w.size * scale * (0.5f + 1.4f * age) * 2f * 0.5f, 0f, tex(w.color, true), k * 0.85f, 0.55f)
             drawTex(c, FxTex.ring, X(w.x), Y(w.ground), w.size * scale * (0.35f + 1.0f * age) * 2f * 0.5f, 0f, tex(w.core, true), k * 0.5f, 0.55f)
