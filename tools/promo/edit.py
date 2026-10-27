@@ -27,11 +27,11 @@ BUILD = os.path.join(T.ROOT, "android/app/build")
 
 # sahne: klip, süre (sn), yazı, alt yazı. Başlangıç karesi seste/olayda otomatik seçilir (en yoğun an).
 WIDE = [
-    dict(clip="rocket", dur=4.2, hook="explosion", big="TEK ROKET", sub="Bütün sürü gitti"),
-    dict(clip="horde", dur=4.4, big="TIRPAN", sub="Sürünün ortasında dön, biç"),
-    dict(clip="chase", dur=3.6, big="ARAÇLAR", sub="Çölde motosikletle kaç", start=70),
-    dict(clip="titan", dur=5.0, big="TİTAN", sub="Her çeyrek saatte bir uyanır"),
-    dict(clip="frost", dur=4.2, big="DONMUŞ LİMAN", sub="Buz tırpanıyla sürüyü biç"),
+    dict(clip="rocket", dur=5.6, hook="explosion", big="TEK ROKET", sub="Bütün sürü gitti"),
+    dict(clip="horde", dur=5.6, big="TIRPAN", sub="Sürünün ortasında dön, biç"),
+    dict(clip="chase", dur=4.8, big="ARAÇLAR", sub="Çölde motosikletle kaç", start=70),
+    dict(clip="titan", dur=6.6, big="TİTAN", sub="Her çeyrek saatte bir uyanır"),
+    dict(clip="frost", dur=5.6, big="DONMUŞ LİMAN", sub="Buz tırpanıyla sürüyü biç"),
 ]
 TALL = [
     dict(clip="rocket", dur=3.0, hook="explosion", big="TEK ROKET.", sub="BÜTÜN SÜRÜ."),
@@ -124,10 +124,10 @@ def caption_layer(fmt, big, sub):
         W, H = 1920, 1080
         lay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(lay)
-        f1, f2, f3 = font(T.FONT, 74), font(T.FONT2, 34), font(T.FONT, 36)
-        d.text((60, 1080 - 92), big, font=f1, fill=(255, 240, 220, 255), anchor="ls", stroke_width=2, stroke_fill=(110, 40, 10, 255))
+        f1, f2, f3 = font(T.FONT, 58), font(T.FONT2, 30), font(T.FONT, 36)
+        d.text((60, 1080 - 26), big, font=f1, fill=(255, 240, 220, 255), anchor="ls", stroke_width=2, stroke_fill=(110, 40, 10, 255))
         bw = d.textlength(big, font=f1)
-        d.text((60 + bw + 28, 1080 - 94), sub, font=f2, fill=(255, 176, 96, 255), anchor="ls")
+        d.text((60 + bw + 26, 1080 - 28), sub, font=f2, fill=(255, 176, 96, 255), anchor="ls")
         d.text((W - 60, 66), "ZENVEX ONLINE", font=f3, fill=(255, 232, 200, 255), anchor="rs")
         return lay
     W, H = 1080, 1920
