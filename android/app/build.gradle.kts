@@ -19,7 +19,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (System.getenv("VERSION_CODE") ?: "1").toInt()
-        versionName = System.getenv("VERSION_NAME") ?: "0.3.0-beta"
+        versionName = System.getenv("VERSION_NAME") ?: "0.4.0-beta"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         // Supabase: ortam değişkeni / supabase.properties ile değiştirilebilir. Yayınlanabilir anahtar herkese açıktır;
         // veritabanı yalnızca zx_* fonksiyonlarına izin verir (supabase/migrations).
@@ -41,6 +41,16 @@ android {
             keyAlias = "zenvex"
             keyPassword = "zenvexdev"
         }
+        // Mağaza anahtarı: ZENVEX_STORE_FILE / _PASSWORD / _ALIAS / _KEY_PASSWORD ortam değişkenleri verilmişse yayın bununla imzalanır
+        // (anahtar depoda tutulmaz; GitHub Secrets → docs/teknik/YAYIN.md). Verilmezse ortak geliştirme anahtarı kullanılır.
+        System.getenv("ZENVEX_STORE_FILE")?.takeIf { it.isNotBlank() }?.let { f ->
+            create("store") {
+                storeFile = file(f)
+                storePassword = System.getenv("ZENVEX_STORE_PASSWORD")
+                keyAlias = System.getenv("ZENVEX_KEY_ALIAS")
+                keyPassword = System.getenv("ZENVEX_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -52,7 +62,7 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("shared")
+            signingConfig = signingConfigs.findByName("store") ?: signingConfigs.getByName("shared")
         }
     }
 

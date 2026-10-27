@@ -23,7 +23,15 @@
   back-blast, smoke trail and a textured rocket projectile
 - Settings audit: shadows, run threshold, effect quality and render resolution now really work; graphics presets cut draw
   calls and render size (test `p01_presetCost`); colour-blind field removed
-- Lobby: no hero showcase; code-drawn animated ruined-city scene, fires, embers, distant zombie silhouettes, code logo
+- Lobby: no hero showcase; code-drawn animated ruined-city scene, fires, embers, distant zombie silhouettes, code logo;
+  rotating gallery of real in-engine gameplay shots (`assets/ui/shot_*`, made by `tools/promo/stills.py`)
+- First launch opens a language screen with the device language preselected, then goes straight to sign-in and the lobby
+- Quests refreshed: tutorial rewritten (axe, pickaxe, first weapon), main quest chain up to level 40 (outposts, region
+  hunts, Titan), daily "break 12 rocks"; new strings translated into all nine languages
+- Unused effect sprites, old hero/vehicle frames, old backgrounds and concept art folders removed (smaller APK)
+- Release: version 0.4, optional store signing key from GitHub secrets, AAB output (`docs/teknik/YAYIN.md`)
+- Promo kit: image prompts and a trailer pipeline built from real engine gameplay with game sounds and Turkish voice-over
+  (`docs/23_TANITIM.md`, `tools/promo/trailer.py`)
 
 ## Unreleased (V15)
 

@@ -783,13 +783,13 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
                 k.chest.z = -22.0;
                 lunge(k, 0.14, 0.05);
             });
-            let rev = if stage % 2 == 0 { (a, b) } else { (b, a) };
+            let rev = if stage.is_multiple_of(2) { (a, b) } else { (b, a) };
             let (a, b) = rev;
             Mel { keys: vec![(0.0, r), (0.18, a), (0.40, a), (0.58, b), (0.80, b), (1.0, r)], trail: (0.26, 0.74) }
         }
         // ---------------------------------------------------------------- tek elle: bıçak, balta, tokmak, katana, pençe
         Wk::Knife => {
-            if stage % 2 == 0 {
+            if stage.is_multiple_of(2) {
                 // derin atılımla sapla, ters elden yatay kesik
                 let k1 = with(&r, |k| {
                     k.hand_r = h(-0.30, 0.12, 1.20, s);
@@ -882,7 +882,7 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
         Wk::Hatchet | Wk::Handaxe | Wk::Club | Wk::Effigy => {
             // ağır silah daha yüksekten, daha çok gövdeyle; balta iki yönlü hızlı kombo
             let heavy = if matches!(wk, Wk::Handaxe | Wk::Club | Wk::Effigy) { 1.0 } else { 0.0 };
-            if stage % 2 == 0 {
+            if stage.is_multiple_of(2) {
                 let k1 = with(&r, |k| {
                     k.hand_r = h(-0.30, 0.10, 1.62 + 0.10 * heavy, s);
                     k.wdir = v(-0.2, 0.6, 0.8);

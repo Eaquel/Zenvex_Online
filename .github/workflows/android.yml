@@ -46,26 +46,40 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v6
 
+      # Mağaza anahtarı (isteğe bağlı): STORE_KEYSTORE_B64 secret'ı varsa yayın sürümü onunla imzalanır
+      - name: Mağaza anahtarını hazırla
+        env:
+          STORE_KEYSTORE_B64: ${{ secrets.STORE_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$STORE_KEYSTORE_B64" ]; then
+            echo "$STORE_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/store.jks"
+            echo "ZENVEX_STORE_FILE=$RUNNER_TEMP/store.jks" >> "$GITHUB_ENV"
+          fi
+
       - name: APK derle
         working-directory: android
         env:
+          ZENVEX_STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          ZENVEX_KEY_ALIAS: ${{ secrets.STORE_KEY_ALIAS }}
+          ZENVEX_KEY_PASSWORD: ${{ secrets.STORE_KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
-          VERSION_NAME: 0.3.${{ github.run_number }}-beta
+          VERSION_NAME: 0.4.${{ github.run_number }}-beta
           # Supabase (isteğe bağlı): başka bir projeye geçmek için Secrets'a SB_URL / SB_KEY eklenebilir
           SB_URL: ${{ secrets.SB_URL }}
           SB_KEY: ${{ secrets.SB_KEY }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
-          ./gradlew assembleRelease assembleDebug --console=plain
+          ./gradlew assembleRelease assembleDebug bundleRelease --console=plain
           mkdir -p ../dist ../dist-debug
-          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.3.${{ github.run_number }}-beta.apk
+          cp app/build/outputs/apk/release/app-release.apk ../dist/ZenvexOnline-0.4.${{ github.run_number }}-beta.apk
+          cp app/build/outputs/bundle/release/app-release.aab ../dist/ZenvexOnline-0.4.${{ github.run_number }}-beta.aab
           # emülatör testi: otomatik gösterim yalnız hata ayıklama sürümünde çalışır (yayın sürümü çevrimdışı oynatmaz)
           cp app/build/outputs/apk/debug/app-debug.apk ../dist-debug/ZenvexOnline-debug.apk
 
       - uses: actions/upload-artifact@v7
         with:
           name: ZenvexOnline-apk
-          path: dist/*.apk
+          path: dist/*
 
       - uses: actions/upload-artifact@v7
         with:
@@ -81,9 +95,9 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: latest
-          name: "Zenvex Online — son derleme (0.2.${{ github.run_number }})"
+          name: "Zenvex Online — son derleme (0.4.${{ github.run_number }})"
           body: |
-            Telefonuna kurmak için aşağıdaki **ZenvexOnline-0.2.${{ github.run_number }}.apk** dosyasına dokun.
+            Telefonuna kurmak için aşağıdaki **ZenvexOnline-0.4.${{ github.run_number }}.apk** dosyasına dokun.
             İlk kurulumda "Bilinmeyen kaynaklardan yüklemeye izin ver" demen gerekebilir.
             Dal: `${{ github.ref_name }}` · Commit: `${{ github.sha }}`
           artifacts: dist/*.apk

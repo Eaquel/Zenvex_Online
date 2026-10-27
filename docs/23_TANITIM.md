@@ -69,7 +69,7 @@ orange horizon. No text.
 pip install piper-tts numpy scipy pillow
 curl -L -o tr.onnx      https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx
 curl -L -o tr.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx.json
-python3 tools/promo/trailer.py --voice tr.onnx      # → art/promo/zenvex_tanitim.mp4 + seslendirme.srt
+python3 tools/promo/trailer.py --voice tr.onnx      # → art/promo/zenvex_tanitim.mp4 (≈25 MB, depoya girmez) + seslendirme.srt
 ```
 
 ### Akış (≈ 37 sn, 1080p, 30 kare/sn)

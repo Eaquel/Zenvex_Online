@@ -63,6 +63,9 @@ A unit test fails if any language misses a string or breaks a `{0}` placeholder.
 | [Game server](docs/teknik/OYUN_SUNUCUSU.md) | WebSocket server and deployment |
 | [21 V15 plan](docs/21_BUYUK_PLAN_V15.md) | current roadmap |
 | [22 V16 asset and prompt document](docs/22_DEVASA_PROMPT_V16.md) | asset audit, production methods (3D / image / code) and prompts |
+| [23 Promo kit](docs/23_TANITIM.md) | key-art prompts and the gameplay trailer pipeline |
+| [Release guide](docs/teknik/YAYIN.md) | versions, store signing, server, Supabase, store checklist |
+| [Tester notes](docs/TEST_NOTLARI.md) | what changed in this test build |
 
 ## License and contact
 
