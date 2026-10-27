@@ -55,66 +55,50 @@ orange horizon. No text.
 
 ---
 
-## 2. Tanıtım videosu (oyun motorundan, gerçek oynanış)
+## 2. Tanıtım videoları (yatay fragman ve dikey Reels): gerçek oynanış, gerçek oyun sesleri
 
-**Bu video yapay zekâ ile üretilmedi.** Kareler oyunun kendi Rust/Kotlin çizim motorundan alınır (`GameShotsTest.promoClip`, temiz mod: arayüz yok); sesler `assets/sfx` ve `assets/music` içindeki oyun sesleridir; seslendirme yerel bir metin-okuma modeliyle (Piper, Türkçe) üretilir.
+**Yapay zekâ video yok.** Kareler oyunun kendi çizicisinden (Rust + Kotlin, cihazsız) alınır; kahraman bir oyuncu gibi oynar: koşar, sürüyü
+toplar, takla atar, roket ve tırpanla kırar, motosiklete biner, Titan'la dövüşür. Kareler **gerçek oyun arayüzüyle** (can çubuğu, mini harita, joystick,
+takla tuşu, hasar sayıları, öfke bildirimi) çizilir: izleyen bunun oynayacağı oyun olduğunu görür.
+
+**Ses de gerçek oyunun sesidir:** kare üretilirken oyunun çaldığı her ses (`Audio.play`) ve karesi kaydedilir (`sfx.json`); kurgu aracı bu sesleri
+olayın anına birebir yerleştirir (vuruş, patlama, takla, roket, seviye atlama…). Üstüne oyunun müziği, her kesimde "vuuş" ve kancada yükselen ses girer.
+
+**Seslendirme isteğe bağlıdır ve varsayılan KAPALIdır.** Yerel metin-okuma (Piper) yapay duyulduğu için kullanılmıyor; reklamların çoğu zaten yazı + ses efektiyle çalışır.
+Gerçek bir insan sesi istersen: `art/promo/seslendirme_metni.md` metnini kaydet ve videoya ekle (aşağıda).
 
 ### Üretim
 ```bash
-# 1) oyun karelerini al (yaklaşık 20 dk, bilgisayarda cihazsız)
+# 1) oyunun kendi motorundan kareler (cihazsız, bilgisayarda; yatay sonra dikey)
 (cd rust && cargo build -p zenvex_jni --release)
-(cd android && ./gradlew :app:recordPaparazziDebug -x cargoBuild --tests '*GameShotsTest.z0*')
+cd android
+PROMO=1 PROMO_HUD=1                    ./gradlew :app:recordPaparazziDebug -x cargoBuild --tests '*GameShotsTest.y0*'   # 2340×1080 → build/promo_hud/<klip>
+PROMO=1 PROMO_HUD=1 PROMO_PORTRAIT=1   ./gradlew :app:recordPaparazziDebug -x cargoBuild --tests '*GameShotsTest.y0*'   # 1080×1920 → build/promo_v/<klip>
+cd ..
 
-# 2) sesi indir ve videoyu birleştir
-pip install piper-tts numpy scipy pillow
-curl -L -o tr.onnx      https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx
-curl -L -o tr.onnx.json https://huggingface.co/rhasspy/piper-voices/resolve/main/tr/tr_TR/dfki/medium/tr_TR-dfki-medium.onnx.json
-python3 tools/promo/trailer.py --voice tr.onnx      # → art/promo/zenvex_tanitim.mp4 (≈25 MB, depoya girmez) + seslendirme.srt
+# 2) kurgu (numpy, pillow, ffmpeg gerekir)
+python3 tools/promo/edit.py --format wide     # → art/promo/zenvex_tanitim.mp4 (1080p, yatay: mağaza/YouTube)
+python3 tools/promo/edit.py --format tall     # → art/promo/zenvex_reel.mp4    (1080×1920: Reels/TikTok/Shorts)
 ```
+Klipler: `rocket` (RPG ile sürü ve tank), `horde` (tırpan, gece kampı), `chase` (çölde motosiklet), `titan` (Titan boss dövüşü, takla), `frost` (buz tırpanı).
+Sahneler, süreler, yazılar ve kancanın seçimi `tools/promo/edit.py` başındaki `WIDE` ve `TALL` listelerindedir; başlangıç kareleri en yoğun an (en çok ses) olarak otomatik seçilir.
 
-### Akış (≈ 37 sn, 1080p, 30 kare/sn)
-| Süre | Sahne | Seslendirme |
-|---|---|---|
-| 0:00 | ZENVEX ONLINE açılış kartı, gök gürültüsü | "Dünya çöktü." |
-| 0:03 | **Tırpan:** üç vuruşluk kombo, hilal şok dalgası | "Elinde bir tırpan var. Önünde ise bir sürü." |
-| 0:07 | **Roketatar:** roket çıkar, patlama, yeni roket takılır | "Roketle yık." |
-| 0:12 | **Araçlar:** çölde motosiklet, toz izi | "Çölü motorunla uçarak geç." |
-| 0:16 | **Üret:** balta ve kazma, kıymık ve kıvılcım | "Kes. Kır. Üret." |
-| 0:19 | **Titan:** dev düşman, çok yüksek seviye silah | "Titan uyandı." |
-| 0:24 | **Donmuş Liman:** buz silahı | "Soğuk, seni durdurmaz." |
-| 0:28 | **Güçlen:** rün mühürlü aura | "Güçlen. Klanını topla." |
-| 0:32 | Kapanış kartı | "Zenvex Online. Hayatta kal. Güçlen. Üssünü savun." |
+### Reklam kurgusu (Instagram/TikTok kalıbı)
+1. **Kanca (ilk saniye):** roket patlaması, yavaş çekim, beyaz parlama. Logo girişi yok.
+2. **Mekanik gösterimi (3–12 sn):** her sahne tek bir fiil: biç, kaç, dövüş, donmuş limanı temizle. Yazılar kısa, ekranın okunur yerinde (dikeyde oyun arayüzünün üstünde).
+3. **Çağrı kartı (son 3 sn):** ZENVEX ONLINE + "Test sürümü açık" düğmesi.
+4. **Ses:** müzik + oyunun kendi vuruş/patlama sesleri + kesim "vuuş"ları; son kartta seviye atlama sesi.
 
-Sahne listesi, süreler ve cümleler `tools/promo/trailer.py` başındaki `SCENES`, `INTRO`, `OUTRO` değişkenlerinde; değiştirip yeniden çalıştırman yeter. Ses efektleri karelerdeki hareket yoğunluğuna göre (vuruş, patlama) otomatik yerleştirilir.
+### Gerçek insan seslendirmesi (isteğe bağlı)
+Kısa, tek nefeste cümleler (yatay): "Tek roket. Bütün sürü." · "Tırpanla biç." · "Çölde tam gaz." · "Titan uyandı." · "Soğukta bile durma." · "Zenvex Online. Şimdi test sürümünde."
+Sesi kaydet (telefon yeter, sessiz oda), `tools/promo/edit.py` çıktısındaki `.srt` zamanlamasına göre bir düzenleyicide (CapCut, DaVinci) hizala.
+Metin okuma kullanmak istersen: `pip install piper-tts` + Türkçe model + `--voice tr.onnx` (yapay duyulur; yalnız taslak içindir).
 
-### Kendi sesinle / başka seslendirmeyle
-`art/promo/seslendirme.srt` dosyası metin ve zamanlamayı içerir. Kendi sesini kaydedersen `--voice` vermeden çalıştır (yalnız müzik ve efekt), sonra kaydını bir video düzenleyicide altyazıya göre hizala. Piper sesi robotsu bulursan daha doğal bir Türkçe ses için ElevenLabs/Azure gibi bir hizmetten aynı cümleleri üretip `vo*.wav` olarak betiğin `tmp` klasörüne koyabilir veya düzenleyicide birleştirebilirsin.
-
-### Mağaza için ek
-- Video süresi 30 sn ile 2 dk arası olmalı (Google Play); bu video uygun.
-- Play Console'a bir YouTube bağlantısı olarak yüklenir; "listeli değil" yayınlayabilirsin.
-- İlk 3 sn'de logo ve ilk oynanış vurgusu var; sessiz izleyenler için altyazı dosyası hazır.
-
----
-
-## 3. Reels / TikTok / Shorts reklam videosu (9:16, ≈14 sn)
-
-Instagram'daki oyun reklamları aynı formülle çalışır: **ilk saniyede en güçlü an (kanca)** → hızlı mekanik gösterimi → sonda çağrı kartı. Logo girişi, yavaş açılış yok. Bizim hattımız bunu yapay zekâ video olmadan, gerçek oynanışla yapar:
-
-```bash
-PIPER_PY=<piper python> python3 tools/promo/reel.py --voice tr.onnx     # → art/promo/zenvex_reel.mp4 (1080×1920) + .srt
-```
-
-| Süre | Sahne | Yazı | Ses |
-|---|---|---|---|
-| 0:00 | **Kanca:** roket, patlama, sürü | TEK ROKET. BÜTÜN SÜRÜ. | patlama + "Tek roket. Bütün sürü." |
-| 0:02 | Tırpan kombosu | TIRPAN | vuruş sesleri |
-| 0:05 | Motosiklet | TAM GAZ | motor |
-| 0:07 | Titan | TİTAN UYANDI | Titan sesi |
-| 0:10 | Buz silahı | SEN DE KATIL | |
-| 0:11 | Çağrı kartı | ZENVEX ONLINE · Test sürümü açık | |
-
-Her kesimde ekran sarsıntısı, hızlı beyaz parlama ve "vuuş" sesi var; yazılar ekranın üst üçte birinde ve büyük (telefonda okunur). Ek öneriler: yayınlarken ilk karede başlık yaz ("Tek roket, bütün sürü"), altyazıyı `.srt` ile ekle, kaydırma sonunda kısa bir soru sor ("Hangi silahla başlarsın?"). Sahne listesi `reel.py` başındaki `SCENES` içinde.
+### Mağaza için
+- Google Play video: 30 sn–2 dk, YouTube bağlantısıyla (listeli değil olabilir); yatay sürüm uygundur.
+- Dikey sürümü Instagram Reels, TikTok ve YouTube Shorts'a yükle; ilk karede kısa başlık, kaydırma sonunda soru ("Hangi silahla başlarsın?") ve `.srt` altyazı.
+- Videolar ≈ 20–30 MB olduğu için depoya girmez (`.gitignore`); Releases'a ya da bulut sürücüye yükle.
 
 ### Yapay zekâ video araçları ne zaman?
-Gerçek oynanış yetmeyen yerde (sinematik karakter tanıtımı, hikâye sahnesi) Higgsfield/Kling/Runway gibi araçlarla 3–5 sn'lik görselden-videoya klipler üretip aynı kurguya ekleyebilirsin; ancak bunlar **oyunun gerçek görünümü değildir**: mağaza kurallarına ve oyuncu beklentisine uygun olarak "gerçek oynanış" kliplerini mutlaka yanında kullan. İstersen `docs/23_TANITIM.md` Bölüm 1'deki görsel komutlarını bu araçlara referans olarak verirsin.
+Gerçek oynanışın yetmediği yerde (hikâye sahnesi, sinematik karakter tanıtımı) Higgsfield, Kling, Runway gibi araçlarla 3–5 sn'lik klipler üretip kurguya eklenebilir.
+Bunlar **oyunun gerçek görünümü değildir**; mağaza kuralları ve oyuncu beklentisi için yanlarında mutlaka gerçek oynanış klipleri bulunmalıdır.

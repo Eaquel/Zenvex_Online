@@ -30,8 +30,9 @@
   hunts, Titan), daily "break 12 rocks"; new strings translated into all nine languages
 - Unused effect sprites, old hero/vehicle frames, old backgrounds and concept art folders removed (smaller APK)
 - Release: version 0.4, optional store signing key from GitHub secrets, AAB output (`docs/teknik/YAYIN.md`)
-- Promo kit: image prompts and a trailer pipeline built from real engine gameplay with game sounds and Turkish voice-over
-  (`docs/23_TANITIM.md`, `tools/promo/trailer.py`)
+- Promo kit: image prompts and a trailer/Reels pipeline built from real engine gameplay with the real game HUD, the game's own
+  sounds (captured per event) and optional voice-over (`docs/23_TANITIM.md`, `tools/promo/edit.py`)
+- Item icon prompts for armor sets, necklaces, rings, bags, ammo and chests (`docs/24_ESYA_PROMPTLARI.md`)
 
 ## Unreleased (V15)
 

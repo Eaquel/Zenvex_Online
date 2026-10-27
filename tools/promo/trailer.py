@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-"""Tanıtım videosu: oyunun kendi motorundan alınmış gerçek oynanış karelerinden (yapay zekâ video YOK).
+"""Tanıtım kurgusu için ortak yardımcılar (ses karıştırma, yazı kartı, ses yükleme, Piper çağrısı).
 
-Hat:
-  1) Kareler:  cd android && ./gradlew :app:recordPaparazziDebug -x cargoBuild --tests '*GameShotsTest.z0*'
-               → android/app/build/promo/<klip>/f0000.png … (GameShotsTest.promoClip, temiz mod: arayüz yok)
-  2) Bu betik: kareleri 1080p'ye kırpar, renk/vinyet/yazı ekler, sahneleri birleştirir;
-               müziği (assets/music), oyunun kendi ses efektlerini (assets/sfx) ve Türkçe seslendirmeyi (Piper) karıştırır.
-Çalıştırma:    python3 tools/promo/trailer.py [--voice <model.onnx>] [--out art/promo/zenvex_tanitim.mp4]
-Seslendirme:   pip install piper-tts (başka bir ortamdaysa PIPER_PY=<o ortamın python yolu>); Türkçe ses: huggingface.co/rhasspy/piper-voices/tr/tr_TR/dfki/medium
-               (model yoksa seslendirme atlanır; metin art/promo/seslendirme.srt olarak yine yazılır).
-Gereken:       ffmpeg, python3 (numpy, scipy, pillow).
+Güncel kurgu aracı: tools/promo/edit.py (yatay fragman ve dikey Reels; kareler oyunun kendi motorundan, sesler oyunun kendi sesleri).
+Ayrıntı: docs/23_TANITIM.md. Bu dosyanın kendi komut satırı (eski, arayüzsüz kareli yatay fragman) yalnız geriye uyumluluk içindir.
+Gereken: ffmpeg, python3 (numpy, scipy, pillow).
 """
 import argparse
 import json
