@@ -1039,15 +1039,15 @@ mod tests {
     fn retired_gear_becomes_gold() {
         let mut p = Progress::default();
         p.relayout_inv();
-        p.inv.add_id("w_ak47", 1);
+        p.inv.add_id("w_m4", 1);
         p.inv.add_id("ammo_9mm", 30);
         p.eq.helmet = "ev_blood_helm".into();
         p.inv.add_id("scrap", 2);
         let g0 = p.gold;
         let paid = p.sell_off_retired();
-        assert_eq!(paid, crate::data::retired_refund("w_ak47") + 30 * crate::data::retired_refund("ammo_9mm") + crate::data::retired_refund("ev_blood_helm"));
+        assert_eq!(paid, crate::data::retired_refund("w_m4") + 30 * crate::data::retired_refund("ammo_9mm") + crate::data::retired_refund("ev_blood_helm"));
         assert_eq!(p.gold, g0 + paid);
-        assert_eq!(p.inv.count_id("w_ak47") + p.inv.count_id("ammo_9mm"), 0);
+        assert_eq!(p.inv.count_id("w_m4") + p.inv.count_id("ammo_9mm"), 0);
         assert!(p.eq.helmet.is_empty());
         assert_eq!(p.inv.count_id("scrap"), 2);
         assert_eq!(p.sell_off_retired(), 0);

@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased (V16 — 3D)
+
+- Heroes, weapons and vehicles are real 3D models (`rust/zenvex_r3d`): software renderer with cel lighting and outline,
+  13-bone auto-rig, two-bone arm IK, code-driven animation for every state (idle, walk, run, roll, melee combos per weapon
+  family, shouldered aim, recoil, magazine swap, gathering, riding, death, get-up); frames are cached per pose and direction
+- Heroes renamed to Kael, Lyra, Vex and Morvath; character screen, lobby and bag show the live 3D hero with the equipped weapon
+- All 18 weapon models in game: pistol, AK-47, sniper rifle and RPG-7 return (magazine only, no spare ammo item), new Uzi,
+  hatchet, battle axe and cursed stone mallet; event weapons use the blood scythe, magma hammer, storm axe, chainsaw sword,
+  void claw and ice scythe models; weapon and character card icons rendered from the models
+- Code effects: weapon swing trails, element effects (embers, frost and snow, blood drops, void wisps, lightning, chainsaw
+  sparks, spirit flames), muzzle flash with smoke and ejected shells, elemental impact bursts, vehicle nitro
+- Hellhound (car) and Nightstalker (motorcycle) with spinning wheels, body tilt, rider on the seat; remote players' vehicles too
+- New setting: 3D character quality (low / medium / high); tree fade fixed for high-density sprites
+
 ## Unreleased (V15)
 
 - Nine interface languages besides Turkish, language picker in Settings, device language by default

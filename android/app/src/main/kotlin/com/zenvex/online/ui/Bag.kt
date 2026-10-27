@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.zenvex.online.game.Audio
 import com.zenvex.online.game.GameSession
+import com.zenvex.online.game.Model3D
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import kotlin.math.roundToInt
@@ -321,7 +322,10 @@ internal fun BagView(
                                 for ((k, label) in EQ_LEFT) EqBox(eq, k, label, selEq == k, dragMod(EQ + EQ_LEFT.indexOfFirst { it.first == k }, eq.optJSONObject(k))) { selEq = k; sel = null; selChest = null }
                             }
                             Box(Modifier.width(54.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
-                                SpriteImage("l/${HERO_IDS.getOrElse(hero) { "kaan" }}/0_0", Modifier.fillMaxWidth().height(120.dp))
+                                // 3B karakter elindeki silahla (kuşanınca hemen değişir)
+                                val bt = rememberTime()
+                                val wm = Model3D.itemModel(eq.optJSONObject("weapon")?.optString("id").orEmpty())
+                                Box(Modifier.fillMaxWidth().height(150.dp)) { HeroSprite(hero, 0, bt, true, actor = "bag", weapon = wm) }
                             }
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 for ((k, label) in EQ_RIGHT) EqBox(eq, k, label, selEq == k, dragMod(EQ + 4 + EQ_RIGHT.indexOfFirst { it.first == k }, eq.optJSONObject(k))) { selEq = k; sel = null; selChest = null }

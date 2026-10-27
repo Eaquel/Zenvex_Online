@@ -50,6 +50,7 @@ class GameShotsTest {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
+        Model3D.initSync(paparazzi.context)
         setup()
         val view = GameView(paparazzi.context, ui)
         view.localName = "Oyuncu"
@@ -207,4 +208,68 @@ class GameShotsTest {
     @Test fun g29_evPackAttack() = shot("ev_pack_attack", { evWeapon("pack"); cheat("spawn walker 2 2") }, steps = 50, input = floatArrayOf(0f, 0f, 1f, 0f, 0f))
 
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
+    // ------------------------------------------------------------------ V16 3B kahramanlar, silahlar, araçlar
+    private fun equip(item: String) {
+        cheat("item $item 1")
+        val slots = GameSession.ui("inventory").optJSONArray("slots") ?: return
+        val k = (0 until slots.length()).firstOrNull { slots.optJSONObject(it)?.optString("id") == item } ?: return
+        cmd(JSONObject().put("cmd", "equip").put("slot", k))
+    }
+
+    private fun hero3d(ch: Int, item: String?, vararg zombies: String) {
+        cheat("level 30"); cheat("god"); cheat("hero $ch"); cheat("tp deep"); cheat("killall")
+        if (item != null) equip(item)
+        for (z in zombies) cheat("spawn $z 3 6")
+    }
+
+    /** sağa doğru saldırı (atak çubuğu basılı) */
+    private val attackRight = floatArrayOf(0f, 0f, 1f, 0.15f, 1f)
+
+    @Test fun h01_kaelKatana() = shot("h3d_kael_katana", { hero3d(0, "w_katana", "walker") }, steps = 47, input = attackRight)
+    @Test fun h02_lyraAk() = shot("h3d_lyra_ak47", { hero3d(1, "w_ak47", "walker") }, steps = 40, input = attackRight)
+    @Test fun h03_vexMagma() = shot("h3d_vex_magma", { hero3d(2, "ev_titan_weapon", "walker") }, steps = 50, input = attackRight)
+    @Test fun h04_morvathIce() = shot("h3d_morvath_ice", { hero3d(3, "ev_breath_weapon", "walker") }, steps = 44, input = attackRight)
+    @Test fun h05_bloodScythe() = shot("h3d_blood", { hero3d(0, "ev_blood_weapon", "walker") }, steps = 44, input = attackRight)
+    @Test fun h06_stormAxe() = shot("h3d_storm", { hero3d(2, "ev_base_weapon", "walker") }, steps = 50, input = attackRight)
+    @Test fun h07_walk() = shot("h3d_walk", { hero3d(1, "w_uzi") }, steps = 40, input = floatArrayOf(-0.7f, 0.7f, 0f, 0f, 0f))
+    /** araca yürü, bin, sür (sürüş kareleri ayrı tuvale; son kareler ekran görüntüsü) */
+    private fun drive(v: GameView, mx: Float, my: Float) {
+        val tmp = Bitmap.createBitmap(2340, 1080, Bitmap.Config.ARGB_8888)
+        cmd(JSONObject().put("cmd", "vehicle"))
+        v.previewFrames(Canvas(tmp), 2340, 1080, 45, input = floatArrayOf(mx, my, 0f, 0f, 0f))
+    }
+
+    @Test fun h08_moto() = shot("h3d_moto", { hero3d(0, null); cheat("vehicle moto") }, steps = 8,
+        input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 1f, 0.3f) })
+    @Test fun h09_car() = shot("h3d_car", { hero3d(2, null); cheat("vehicle car") }, steps = 8,
+        input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 0.8f, -0.6f) })
+    /** Saldırı kare dizisi (incelemek için build/game-shots/seq_<ad>.png): oyuncu çevresi, 2 karede bir */
+    private fun sequence(name: String, ch: Int, item: String?, input: FloatArray, frames: Int = 12, warm: Int = 20) {
+        Assume.assumeTrue("libzenvex.so yok", native())
+        com.zenvex.online.ui.Demo.on = true
+        GameSession.initPreview(paparazzi.context)
+        Model3D.initSync(paparazzi.context)
+        hero3d(ch, item, "walker", "walker")
+        val view = GameView(paparazzi.context, ui)
+        val w = 2340; val h = 1080
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        view.previewFrames(Canvas(bmp), w, h, warm, input = input)
+        val cw = 520; val chh = 520
+        val sheet = Bitmap.createBitmap(cw * 6, chh * ((frames + 5) / 6), Bitmap.Config.ARGB_8888)
+        val sc = Canvas(sheet)
+        for (i in 0 until frames) {
+            view.previewFrames(Canvas(bmp), w, h, 2, input = input)
+            val src = android.graphics.Rect(w / 2 - cw / 2, h / 2 - chh / 2 - 60, w / 2 + cw / 2, h / 2 + chh / 2 - 60)
+            sc.drawBitmap(bmp, src, android.graphics.Rect((i % 6) * cw, (i / 6) * chh, (i % 6 + 1) * cw, (i / 6 + 1) * chh), null)
+        }
+        val dir = java.io.File("build/game-shots").apply { mkdirs() }
+        java.io.FileOutputStream(java.io.File(dir, "seq_$name.png")).use { sheet.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test fun s01_katana() = sequence("katana", 0, "w_katana", attackRight)
+    @Test fun s02_magma() = sequence("magma", 2, "ev_titan_weapon", attackRight)
+    @Test fun s03_ice() = sequence("ice", 3, "ev_breath_weapon", attackRight)
+    @Test fun s04_storm() = sequence("storm", 2, "ev_base_weapon", attackRight)
+    @Test fun s05_ak() = sequence("ak", 1, "w_ak47", attackRight, 18, warm = 75)
+    @Test fun s06_chainsaw() = sequence("chainsaw", 3, "ev_scrap_weapon", attackRight)
 }

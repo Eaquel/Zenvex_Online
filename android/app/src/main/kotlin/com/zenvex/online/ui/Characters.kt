@@ -107,7 +107,7 @@ internal fun CharactersView(data: JSONObject, changed: () -> Unit, close: () -> 
             // sol: dört karakter kartı (kilitliler silüet)
             Column(Modifier.width(430.dp).fillMaxHeight()) {
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    chars.forEachIndexed { i, c -> CharCard(c, i == sel, t, Modifier.weight(1f).fillMaxHeight()) { sel = i } }
+                    chars.forEachIndexed { i, c -> CharCard(c, i, i == sel, t, Modifier.weight(1f).fillMaxHeight()) { sel = i } }
                 }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -139,7 +139,7 @@ internal fun CharactersView(data: JSONObject, changed: () -> Unit, close: () -> 
 
 /** Kart: karakter görseli (char_<id>_card) ya da kahraman silüeti; kilitliyse karanlık + kilit; nadirlik renginde kenar */
 @Composable
-private fun CharCard(c: JSONObject, selected: Boolean, t: Float, modifier: Modifier, onClick: () -> Unit) {
+private fun CharCard(c: JSONObject, index: Int, selected: Boolean, t: Float, modifier: Modifier, onClick: () -> Unit) {
     val r = c.optInt("rarity").coerceIn(0, 3)
     val col = RARITY_COL[r]
     val locked = !c.optBoolean("unlocked")
@@ -148,7 +148,7 @@ private fun CharCard(c: JSONObject, selected: Boolean, t: Float, modifier: Modif
         .clickable { onClick() }) {
         val art = "char_${c.optString("id")}_card"
         if (UiArt.has(LocalContext.current, art)) ArtImage(art, Modifier.fillMaxSize().padding(4.dp), silhouette = locked)
-        else Box(Modifier.fillMaxSize().padding(top = 18.dp, bottom = 40.dp)) { HeroSprite(0, 0, t + r, !locked) }
+        else Box(Modifier.fillMaxSize().padding(top = 18.dp, bottom = 40.dp)) { HeroSprite(index, 0, t + r, !locked, actor = "card$index") }
         if (locked) Icon("lock", 30.dp, Color(0xCCFFFFFF), Modifier.align(Alignment.Center))
         Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xC0000000)).padding(4.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
@@ -255,7 +255,7 @@ private fun CardReveal(results: List<Int>, gems: Int, data: JSONObject, close: (
                         .border(2.dp, RARITY_COL[r], RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
                         val art = "char_${c.optString("id")}_card"
                         if (UiArt.has(LocalContext.current, art)) ArtImage(art, Modifier.fillMaxSize().padding(4.dp))
-                        else Box(Modifier.fillMaxSize().padding(bottom = 26.dp)) { HeroSprite(0, 0, t, true) }
+                        else Box(Modifier.fillMaxSize().padding(bottom = 26.dp)) { HeroSprite(r, 0, t, true, actor = "pull$k") }
                         PT(c.optString("name"), 12.sp, RARITY_COL[r], Modifier.align(Alignment.BottomCenter).padding(4.dp))
                     }
                 }

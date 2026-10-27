@@ -9,6 +9,8 @@ data class Settings(
     val fpsLimit: Int = 60,
     val zoom: Int = 1, // 0 Yakın, 1 Normal, 2 Uzak
     val vegetation: Int = 2, // 0 düşük, 1 orta, 2 yüksek
+    /** 3B karakter kalitesi: 0 düşük (küçük ölçek), 1 orta, 2 yüksek (kenar yumuşatma) */
+    val model3d: Int = 2,
     val wind: Boolean = true,
     val shadows: Boolean = true,
     val particles: Boolean = true,
@@ -49,10 +51,10 @@ data class Settings(
     val virtualHeight: Int get() = when (zoom) { 0 -> 230; 1 -> 290; else -> 360 }
 
     fun withPreset(p: Int): Settings = when (p) {
-        0 -> copy(preset = 0, vegetation = 0, wind = false, shadows = false, particles = false, fpsLimit = 30)
-        1 -> copy(preset = 1, vegetation = 1, wind = true, shadows = true, particles = false, fpsLimit = 60)
-        2 -> copy(preset = 2, vegetation = 2, wind = true, shadows = true, particles = true, fpsLimit = 60)
-        3 -> copy(preset = 3, vegetation = 2, wind = true, shadows = true, particles = true, fpsLimit = 120)
+        0 -> copy(preset = 0, vegetation = 0, model3d = 0, wind = false, shadows = false, particles = false, fpsLimit = 30)
+        1 -> copy(preset = 1, vegetation = 1, model3d = 1, wind = true, shadows = true, particles = false, fpsLimit = 60)
+        2 -> copy(preset = 2, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fpsLimit = 60)
+        3 -> copy(preset = 3, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fpsLimit = 120)
         else -> copy(preset = 4)
     }
 
@@ -68,6 +70,7 @@ data class Settings(
                 fpsLimit = p.getInt("fpsLimit", d.fpsLimit),
                 zoom = p.getInt("zoom", d.zoom),
                 vegetation = p.getInt("vegetation", d.vegetation),
+                model3d = p.getInt("model3d", d.model3d),
                 wind = p.getBoolean("wind", d.wind),
                 shadows = p.getBoolean("shadows", d.shadows),
                 particles = p.getBoolean("particles", d.particles),
@@ -105,7 +108,7 @@ data class Settings(
             current = s
             ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit()
                 .putInt("preset", s.preset).putInt("fpsLimit", s.fpsLimit).putInt("zoom", s.zoom)
-                .putInt("vegetation", s.vegetation).putBoolean("wind", s.wind)
+                .putInt("vegetation", s.vegetation).putInt("model3d", s.model3d).putBoolean("wind", s.wind)
                 .putBoolean("shadows", s.shadows).putBoolean("particles", s.particles)
                 .putBoolean("treeFade", s.treeFade).putFloat("screenShake", s.screenShake)
                 .putBoolean("damageNumbers", s.damageNumbers).putBoolean("showFps", s.showFps).putBoolean("showPing", s.showPing).putBoolean("hideTitles", s.hideTitles).putBoolean("uiTransparent", s.uiTransparent)

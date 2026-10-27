@@ -101,7 +101,8 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
                 val c = center.copy(y = size.height * 0.62f)
                 drawCircle(Brush.radialGradient(listOf(col.copy(alpha = 0.35f), Color.Transparent), c, size.height * 0.45f), size.height * 0.45f, c)
             }
-            Box(Modifier.align(Alignment.Center).padding(top = 30.dp).size(330.dp, 380.dp)) { HeroSprite(sel, dir, t, unlocked) }
+            val weapon = remember(sel) { equippedWeaponModel() }
+            Box(Modifier.align(Alignment.Center).padding(top = 30.dp).size(330.dp, 380.dp)) { HeroSprite(sel, dir, t, unlocked, weapon = weapon) }
             // tek kahraman: Savaşçı (karakter seviyesi oyunda dolar)
             Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 PT(ch.optString("name").uppercase(), 28.sp, Color(0xFFB277FF), outline = true)
@@ -172,7 +173,19 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
 
 
 @Composable
-internal fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
+internal fun HeroSprite(sel: Int, dir: Int, t: Float, unlocked: Boolean, actor: String = "lobby", weapon: String = "") {
+    // 3B vitrin (modeller yüklendiyse); kilit simgesi üstte
+    Box(Modifier.fillMaxSize()) {
+        if (Hero3DView(actor, sel, dir, t, unlocked, weapon, Modifier.fillMaxSize().padding(bottom = 26.dp))) {
+            if (!unlocked) Icon("lock", 44.dp, Color.White.copy(alpha = 0.85f), Modifier.align(Alignment.Center))
+            return@Box
+        }
+        HeroSpritePixel(sel, dir, t, unlocked)
+    }
+}
+
+@Composable
+private fun HeroSpritePixel(sel: Int, dir: Int, t: Float, unlocked: Boolean) {
     val ctx = LocalContext.current
     val frame = ((t * 6f).toInt()) % 6
     val key = "l/${HERO_IDS[sel]}/0_$frame"  // tek görünüm; sağa bakış aynalanır

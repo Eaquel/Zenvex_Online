@@ -74,6 +74,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             }
                             Choice("Kamera Uzaklığı", listOf("Yakın", "Normal", "Uzak"), s.zoom) { set(s.copy(zoom = it)) }
                             Choice("Bitki Yoğunluğu", listOf("Düşük", "Orta", "Yüksek"), s.vegetation) { custom(s.copy(vegetation = it)) }
+                            Choice("3B Karakter Kalitesi", listOf("Düşük", "Orta", "Yüksek"), s.model3d) { custom(s.copy(model3d = it)) }
                             Toggle("Rüzgâr Animasyonu", s.wind) { custom(s.copy(wind = it)) }
                             Toggle("Gölgeler", s.shadows) { custom(s.copy(shadows = it)) }
                             Toggle("Parçacık Efektleri", s.particles) { custom(s.copy(particles = it)) }

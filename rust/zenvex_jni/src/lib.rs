@@ -2,7 +2,7 @@
 //! Oyun nesnesi `Box<Game>` olarak tutulur, Kotlin'e `Long` tutamaç olarak verilir.
 #![allow(non_snake_case)]
 
-use jni::objects::{JClass, JFloatArray, JIntArray, JString};
+use jni::objects::{JByteArray, JClass, JFloatArray, JIntArray, JString};
 use jni::sys::{jfloat, jint, jlong, jstring};
 use jni::JNIEnv;
 use std::cell::RefCell;
@@ -357,12 +357,13 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_localState<'l>(
     let p = &g.player;
     let eq = g.equip_codes();
     let veh = p.vehicle.map_or(-1.0, |i| g.vehicles[i].kind as f32);
+    let (anim, clock) = g.anim_state();
     let rec: [f32; LOCAL_STRIDE] = [
         p.x,
         p.y,
         p.dir as f32,
-        p.anim as f32,
-        p.anim_t,
+        anim as f32,
+        clock,
         g.progress.character as f32,
         eq[0],
         eq[1],
@@ -447,4 +448,131 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_regionStatics<'l>(
     }
     let _ = env.set_float_array_region(&out, 0, &v);
     (v.len() / 4) as jint
+}
+
+// ============================================================================ 3B çizici
+// Kotlin `Model3D` yalnız kendi iş parçacığından çağırır; yine de kilitle korunur.
+static R3D: std::sync::Mutex<Option<zenvex_r3d::service::Service>> = std::sync::Mutex::new(None);
+
+fn r3d<T>(f: impl FnOnce(&mut zenvex_r3d::service::Service) -> T) -> T {
+    let mut g = R3D.lock().unwrap_or_else(|e| e.into_inner());
+    f(g.get_or_insert_with(zenvex_r3d::service::Service::new))
+}
+
+/// Model yükler: .zxm baytları + doku (ARGB tamsayı, Bitmap.getPixels düzeni)
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_r3dLoad<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    name: JString<'l>,
+    zxm: JByteArray<'l>,
+    tw: jint,
+    th: jint,
+    argb: JIntArray<'l>,
+) -> jint {
+    let name = rstr(&mut env, &name);
+    let bytes = env.convert_byte_array(&zxm).unwrap_or_default();
+    let n = (tw.max(0) * th.max(0)) as usize;
+    let mut px = vec![0i32; n];
+    if n > 0 && env.get_int_array_region(&argb, 0, &mut px).is_err() {
+        return 0;
+    }
+    let mut rgba = Vec::with_capacity(n * 4);
+    for p in px {
+        let p = p as u32;
+        rgba.extend_from_slice(&[(p >> 16) as u8, (p >> 8) as u8, p as u8, (p >> 24) as u8]);
+    }
+    match r3d(|s| s.load(&name, &bytes, tw as usize, th as usize, &rgba)) {
+        Ok(()) => 1,
+        Err(_) => 0,
+    }
+}
+
+fn put_image(env: &mut JNIEnv, img: &zenvex_r3d::Image, pts: &zenvex_r3d::service::Points, out: &JIntArray, info: &JFloatArray) -> jint {
+    let cap = env.get_array_length(out).unwrap_or(0) as usize;
+    let n = img.w * img.h;
+    if n > cap {
+        // çağıran daha büyük dizi ayırsın: gereken boyutu bildir
+        let _ = env.set_float_array_region(info, 0, &[img.w as f32, img.h as f32]);
+        return -(n as jint);
+    }
+    let px: Vec<i32> = img.rgba.iter().map(|c| ((c[3] as u32) << 24 | (c[0] as u32) << 16 | (c[1] as u32) << 8 | c[2] as u32) as i32).collect();
+    let _ = env.set_int_array_region(out, 0, &px);
+    let mut inf = [0f32; 4 + zenvex_r3d::service::Points::LEN];
+    inf[0] = img.w as f32;
+    inf[1] = img.h as f32;
+    inf[2] = img.ax;
+    inf[3] = img.ay;
+    pts.write(&mut inf[4..]);
+    let _ = env.set_float_array_region(info, 0, &inf);
+    n as jint
+}
+
+/// Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa]; dönüş: piksel sayısı (eksi: dizi küçük)
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    ch: JString<'l>,
+    weapon: JString<'l>,
+    p: JFloatArray<'l>,
+    out: JIntArray<'l>,
+    info: JFloatArray<'l>,
+) -> jint {
+    let ch = rstr(&mut env, &ch);
+    let weapon = rstr(&mut env, &weapon);
+    let mut a = [0f32; 7];
+    if env.get_float_array_region(&p, 0, &mut a).is_err() {
+        return 0;
+    }
+    let req = zenvex_r3d::service::ActorReq {
+        ch: &ch,
+        weapon: &weapon,
+        anim: a[0] as u8,
+        t: a[1],
+        period: a[2],
+        yaw: a[3],
+        pitch: a[4],
+        scale: a[5],
+        ssaa: a[6] > 0.5,
+    };
+    match r3d(|s| s.actor(&req)) {
+        Some((img, pts)) => put_image(&mut env, &img, &pts, &out, &info),
+        None => 0,
+    }
+}
+
+/// Araç karesi. p: [yaw, pitch, scale, wheel, bounce, tilt, rider_t, ssaa]
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_r3dVehicle<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    name: JString<'l>,
+    rider: JString<'l>,
+    p: JFloatArray<'l>,
+    out: JIntArray<'l>,
+    info: JFloatArray<'l>,
+) -> jint {
+    let name = rstr(&mut env, &name);
+    let rider = rstr(&mut env, &rider);
+    let mut a = [0f32; 8];
+    if env.get_float_array_region(&p, 0, &mut a).is_err() {
+        return 0;
+    }
+    let req = zenvex_r3d::service::VehicleReq {
+        name: &name,
+        yaw: a[0],
+        pitch: a[1],
+        scale: a[2],
+        wheel: a[3],
+        bounce: a[4],
+        tilt: a[5],
+        rider: &rider,
+        rider_t: a[6],
+        ssaa: a[7] > 0.5,
+    };
+    match r3d(|s| s.vehicle(&req)) {
+        Some((img, pts)) => put_image(&mut env, &img, &pts, &out, &info),
+        None => 0,
+    }
 }

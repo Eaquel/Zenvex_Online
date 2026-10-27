@@ -7,6 +7,8 @@ use crate::world::{Kind, Shape, STATIC_NAMES};
 pub const HUD_N: usize = 41;
 
 /// Ekipman kodları (Kotlin ile ortak): 0 yok, 1 basit, 2 polis, 3 askerî, 4 titan
+pub const EQ_CLOAK: f32 = 32.0;
+
 pub fn tier_code(id: &str) -> f32 {
     if id.is_empty() {
         0.0
@@ -25,6 +27,7 @@ pub fn tier_code(id: &str) -> f32 {
 
 impl Game {
     /// Yerel oyuncunun ekipman paketleri [kask*8+ceket, bot*8+çanta, silah+pelerin*16]
+    /// Ekipman kodunda pelerin çarpanı: silah dizini bunun altında kalır (V16: 16 → 32, silah sayısı 16'yı geçti)
     pub fn equip_codes(&self) -> [f32; 3] {
         let e = &self.progress.eq;
         let w = data::weapon_for(&e.weapon) as f32;
@@ -32,7 +35,7 @@ impl Game {
         [
             tier_code(&e.helmet) * 8.0 + tier_code(&e.jacket),
             tier_code(&e.boots) * 8.0 + tier_code(&e.bag),
-            w + cloak * 16.0,
+            w + cloak * EQ_CLOAK,
         ]
     }
 
@@ -234,7 +237,8 @@ impl Game {
                     v.x,
                     v.y,
                     Game::vehicle_dir(v.angle) as f32,
-                    0.0,
+                    // 3B araç: sürekli açı (derece; yön kuralı dir ile aynı)
+                    v.angle.to_degrees(),
                     v.speed,
                     driver,
                     hp,
@@ -251,7 +255,7 @@ impl Game {
             }
             self.draw_tmp.push((
                 c.y,
-                [D_VEHICLE, crate::caravan::TRUCK as f32, c.x, c.y, Game::vehicle_dir(c.angle) as f32, 0.0, c.speed, -1.0, 1.0, 0.0, -1.0, 0.0],
+                [D_VEHICLE, crate::caravan::TRUCK as f32, c.x, c.y, Game::vehicle_dir(c.angle) as f32, c.angle.to_degrees(), c.speed, -1.0, 1.0, 0.0, -1.0, 0.0],
             ));
         }
         for n in &self.npcs {
@@ -316,6 +320,7 @@ impl Game {
                 0.0
             };
             let eq = self.equip_codes();
+            let (anim, clock) = self.anim_state();
             self.draw_tmp.push((
                 p.y,
                 [
@@ -324,8 +329,8 @@ impl Game {
                     p.x,
                     p.y,
                     p.dir as f32,
-                    p.anim as f32,
-                    p.anim_t,
+                    anim as f32,
+                    clock,
                     flash,
                     eq[0],
                     eq[1],
@@ -354,8 +359,11 @@ impl Game {
         let g = &self.progress;
         let w = self.weapon();
         let mag = g.mag(w.item) as f32;
-        let ammo = if w.ammo.is_empty() {
+        let ammo = if w.mag == 0 {
             -1.0
+        } else if w.ammo.is_empty() {
+            // sınırsız yedek (yalnız şarjör)
+            999.0
         } else {
             g.inv.count_id(w.ammo) as f32
         };

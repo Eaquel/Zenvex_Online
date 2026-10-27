@@ -682,7 +682,7 @@ impl Game {
             "cycle_weapon" => self.cycle_weapon(),
             "reload" => {
                 let w = self.weapon();
-                if w.ammo.is_empty() {
+                if w.mag == 0 {
                     Err("Bu silah dolmaz".into())
                 } else {
                     self.start_reload(w);
@@ -1306,6 +1306,16 @@ impl Game {
                 self.progress.char_xp[c] = 0;
                 Ok(format!("Karakter seviyesi {}", self.progress.char_level[c]))
             }
+            // V16: karakteri aç ve seç (3B görünüm denemeleri)
+            "hero" | "kahraman" => {
+                let i = num(1, 0.0) as usize;
+                if i >= CHARACTERS.len() {
+                    return Err(format!("0-{} arası", CHARACTERS.len() - 1));
+                }
+                self.progress.unlocked[i] = true;
+                self.progress.character = i;
+                Ok(format!("{} seçildi", CHARACTERS[i].name))
+            }
             "god" | "olumsuz" => {
                 self.player.god = !self.player.god;
                 Ok(format!("Ölümsüzlük {}", if self.player.god { "AÇIK" } else { "KAPALI" }))
@@ -1820,7 +1830,7 @@ mod v4_tests {
         g.cheat("vehicle bike").unwrap();
         assert_ne!(g.vehicles.last().unwrap().kind, crate::data::REMOVED_VEHICLE);
         let c: serde_json::Value = serde_json::from_str(&g.ui_json("cheat")).unwrap();
-        assert!(c["items"].as_array().unwrap().iter().all(|i| i[0] != "w_sniper" && !i[0].as_str().unwrap().starts_with("ammo_")));
+        assert!(c["items"].as_array().unwrap().iter().all(|i| i[0] != "w_m4" && !i[0].as_str().unwrap().starts_with("ammo_")));
     }
 }
 

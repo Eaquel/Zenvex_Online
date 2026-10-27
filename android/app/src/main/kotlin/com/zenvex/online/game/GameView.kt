@@ -87,6 +87,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val zombieColor: IntArray
     private val vehicleIds: Array<String>
     private val weaponSprites: Array<String>
+    /** silah dizini → 3B model ("" yumruk) */
+    private val weaponModels: Array<String>
     /** etkinlik silahları (ev_<etkinlik>_weapon): elde w/ev_<etkinlik> çizilir, animasyon katana / bıçak karelerinden */
     private val evWeapons: Array<String?>
     private val itemIds: Array<String>
@@ -115,6 +117,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         vehicleIds = Array(v.length()) { v.getJSONArray(it).getString(0) }
         val wp = w.getJSONArray("weapons")
         weaponSprites = Array(wp.length()) { wp.getJSONArray(it).getString(1) }
+        weaponModels = Array(wp.length()) { Model3D.itemModel(wp.getJSONArray(it).getString(0)) }
         evWeapons = Array(wp.length()) { i -> wp.getJSONArray(i).getString(0).takeIf { it.startsWith("ev_") }?.removePrefix("ev_")?.removeSuffix("_weapon") }
         val it2 = w.getJSONArray("items")
         itemIds = Array(it2.length()) { it2.getJSONArray(it).getString(0) }
@@ -234,7 +237,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private class Bomb(val x: Float, val y: Float, val dur: Float) { var t = 0f }
     private val bombs = ArrayList<Bomb>()
     /** takla art görüntüsü: kahramanın son karelerinden mor, sönen kopyalar */
-    private class Ghost(val x: Float, val y: Float, val key: String, val flip: Boolean, var life: Float)
+    private class Ghost(val x: Float, val y: Float, val key: String, val flip: Boolean, var life: Float, val fr: Model3D.Frame? = null)
     private val ghosts = ArrayList<Ghost>()
     private var ghostT = 0f
     private val ghostPaint = Paint().apply { colorFilter = PorterDuffColorFilter(0xFFB09AFF.toInt(), PorterDuff.Mode.SRC_ATOP) }
@@ -349,7 +352,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 atkStick.vx = input.getOrElse(2) { 0f }; atkStick.vy = input.getOrElse(3) { 0f }
             }
             update(dt)
-            if (i == steps - 1) render(c, dt)
+            // son birkaç kare çizilir: 3B silah izi ve efektler kare kare birikir
+            if (i >= steps - 6) render(c, dt)
         }
     }
 
@@ -451,6 +455,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         spears.removeAll { s -> s.t += dt; if (s.t >= s.dur) { burst(s.x2, s.y2 + 50, 6, 0xFF9A8A70.toInt(), 120f, 4f); Audio.play("hit", near(s.x2, s.y2) * 0.7f, 0.8f) }; s.t >= s.dur }
         bolts.removeAll { it.life -= dt; it.life <= 0 }
         ghosts.removeAll { it.life -= dt; it.life <= 0 }
+        fx3d.enabled = Settings.current.particles
+        fx3d.update(dt, 62.5f)
         whiteFlash = max(0f, whiteFlash - dt * 3f)
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
         for (b in buttons) b.flash = max(0f, b.flash - dt * 3)
@@ -615,6 +621,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         2 -> fx("rock_chips", x, y + 10, 115f)
                         else -> fx("spark", x, y, 70f, (Math.random() * 4).toInt() * 90f)
                     }
+                    // 3B silahın elementine göre vuruş patlaması (magma, buz, kan, yıldırım...)
+                    if (kind == 0 && time - me3dT < 0.3f) fx3d.impact(x, y - 55f, me3dWeapon, 62.5f, y)
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
                     burst(x, y + 40, 8, if (kind == 1) 0xFF8A6440.toInt() else if (kind == 2) 0xFF9A968E.toInt() else 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
@@ -633,7 +641,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     Audio.play("swing", 0.6f, 0.9f + Math.random().toFloat() * 0.25f)
                     // kesik izi: saldırı yönüne dönük kızıl yay (katana geniş, bıçak kısa); yumrukta yok
                     val wi = hud[Native.WEAPON].toInt()
-                    if (wi > 0 && hud[Native.IN_VEHICLE] < 0.5f) {
+                    if (wi > 0 && hud[Native.IN_VEHICLE] < 0.5f && time - me3dT > 0.3f) {
                         val big = weaponSprites.getOrElse(wi) { "" }.contains("katana")
                         val ax = if (lastAtkX == 0f && lastAtkY == 0f) 1f else lastAtkX
                         val ay = lastAtkY
@@ -646,10 +654,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val w = e.getInt("w")
                     val a = e.getDouble("a").toFloat()
                     Audio.play(when (w) { 3 -> "shot_pistol"; 6 -> "shot_sniper"; 7 -> "rocket"; else -> "shot_rifle" }, near(x, y), 0.95f + Math.random().toFloat() * 0.1f)
-                    flashes += Light(x + sin(a) * 50, y + cos(a) * 30 - 70, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
-                    fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees(-a + PI / 2).toFloat(), dur = 0.07f, frame = (0..2).random())
+                    if (time - me3dT < 0.3f && me3dWeapon >= Fx3D.PISTOL) {
+                        // 3B: alev, duman ve kovan silahın gerçek namlusundan
+                        flashes += Light(me3dMx, me3dMy, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
+                        fx3d.muzzle(me3dMx, me3dMy, sin(a), cos(a), me3dWeapon, 62.5f, y)
+                    } else {
+                        flashes += Light(x + sin(a) * 50, y + cos(a) * 30 - 70, 220f, 0xFFFFC870.toInt(), 0.06f, 0.06f)
+                        fx("muzzle", x + sin(a) * 58, y + cos(a) * 36 - 78, if (w >= 6) 110f else 75f, Math.toDegrees(-a + PI / 2).toFloat(), dur = 0.07f, frame = (0..2).random())
+                        burst(x + sin(a) * 40, y + cos(a) * 25, 2, 0xFFD8B060.toInt(), 120f, 2.5f, 0, 0.8f, 200f)
+                    }
                     shake(if (w == 6 || w == 7) 6f else 2.5f, 0.07f)
-                    burst(x + sin(a) * 40, y + cos(a) * 25, 2, 0xFFD8B060.toInt(), 120f, 2.5f, 0, 0.8f, 200f)
                 }
                 "reload" -> Audio.play("reload", 0.8f)
                 "noammo" -> { Audio.play("empty", 0.8f); ui.onToast("Mermi yok!") }
@@ -775,6 +789,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     private fun render(c: Canvas, dt: Float) {
         val s = Settings.current
+        frameDt = dt
         c.drawColor(0xFF203018.toInt())
         c.save()
         if (shakeT > 0) {
@@ -785,6 +800,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawTracks(c, dt)
         drawPools(c, dt)
         drawChests(c)
+        fx3d.drawGround(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
         npcBoxes.clear(); benchBoxes.clear(); synchronized(playerBoxes) { playerBoxes.clear() }
@@ -808,6 +824,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         drawFx(c)
         drawParticles(c)
+        fx3d.draw(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
         drawTracers(c)
         drawSpears(c)
         drawBombs(c)
@@ -926,9 +943,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         var paint: Paint = if (sp.k != 1f) pixelPaint else bmpPaint  // V6 piksel kamp nesneleri keskin çizilir
         // ağaç / bina arkasında kalan oyuncuyu göstermek için saydamlaştır
         if (Settings.current.treeFade && (kind == 0 || kind == 4 || kind == 11) && py < y - 10) {
-            val l = x - sp.ax; val r = x - sp.ax + sp.w
-            val t = y - sp.ay
-            if (px > l + sp.w * 0.12f && px < r - sp.w * 0.12f && py > t + 20 && py < y) {
+            // görsel ölçüsü kaynak pikselinde: dünya birimine sp.k ile
+            val sw0 = sp.w * sp.k
+            val l = x - sp.ax * sp.k; val r = l + sw0
+            val t = y - sp.ay * sp.k
+            if (px > l + sw0 * 0.12f && px < r - sw0 * 0.12f && py > t + 20 && py < y) {
                 alphaPaint.alpha = 115; paint = alphaPaint
             }
         }
@@ -1063,86 +1082,92 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
         if (who <= -3f) sy -= 235f * scale  // kule platformu (4.6 m × cos35°)
-        val wIdx = drawBuf[o + 10].toInt() % 16
-        val f = when {
-            anim == "melee" && who == -1f -> meleeFrame(t, wIdx)
-            (anim == "walk" || anim == "run") && who == -1f -> strideFrame(x, y, anim, atlas.anims(prefix, atlas.heroAnims)[anim]?.get(0) ?: 8)
-            else -> frameOf(atlas.anims(prefix, atlas.heroAnims), anim, t)
-        }
-        // piksel kahraman: ön / yan / sırt görünümü bakış yönüne göre (kare yoksa ön), sağa bakanlar aynalanır
-        val pix = ch in 0..3
-        val kdir = if (pix) viewDir(prefix, anim, dir, f) else dir
-        val flip = pix && viewFlip
-        var key = spriteKey(prefix, anim, kdir, f)
-        // elde gerçek silahla render edilmiş kare varsa onu kullan
-        val evw = if (wIdx > 0) evWeapons.getOrNull(wIdx) else null
-        val wKey = if (evw != null) null else if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
-        var weaponBaked = false
-        var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
-        if (sp == null) sp = atlas[key]
-        if (sp == null) { key = spriteKey(prefix, "idle", kdir, 0); sp = atlas[key] }
-        if (sp == null) { placeholder(c, sx, sy, 0xFF4A7AB0.toInt()); return }
-        // Elmas Sandığı kaplaması: kendi kahramanın ve diğer oyuncuların
-        val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
-        val paint = when {
-            flash == 1f -> flashPaint
-            flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
-            skin.isNotEmpty() -> skinPaint(skin, prefix.startsWith("h/"))
-            prefix.startsWith("h/") -> pixelPaint
-            else -> bmpPaint
-        }
-        if (skin.isNotEmpty() && Settings.current.particles) {
-            val tc = Skins.trail(skin)
-            if (tc != 0 && Math.random() < 0.18) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 50f, y, 20f + Math.random().toFloat() * 90f,
-                (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
-        }
-        // ekipman kodları
-        val e0 = drawBuf[o + 8].toInt(); val e1 = drawBuf[o + 9].toInt(); val e2 = drawBuf[o + 10].toInt()
-        val helmet = tiers.getOrElse(e0 / 8) { "" }; val jacket = tiers.getOrElse(e0 % 8) { "" }
-        val boots = tiers.getOrElse(e1 / 8) { "" }; val bag = tiers.getOrElse(e1 % 8) { "" }
-        val weapon = e2 % 16; val cloak = e2 / 16 > 0
-        val back = dir in 3..5
-        val akey = key
-        fun att(point: String): FloatArray? = atlas.attach(actor, akey, point)?.also { if (flip) it[0] = -it[0] }
-        fun gear(name: String, point: String) {
-            val p = att(point) ?: return
-            val g = atlas["e/$name/$dir"] ?: return
-            atlas.draw(c, g, sx + p[0] * scale, sy + p[1] * scale, scale, paint)
-        }
-        val isHero = ch in 0..3
-        if (isHero && !back) {
-            if (cloak) gear("cloak", "neck")
-            if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
-        }
-        if (who == -1f) {
-            // takla: her 35 ms'de bir art görüntü bırak, eskileri sönerek çiz
-            if (anim == "roll" && time - ghostT > 0.035f) { ghosts += Ghost(x, y, key, flip, 0.32f); ghostT = time }
-            for (g in ghosts) {
-                val gs = atlas[g.key] ?: continue
-                ghostPaint.alpha = (g.life / 0.32f * 150).toInt().coerceIn(0, 255)
-                atlas.draw(c, gs, wx(g.x), wy(g.y), scale, ghostPaint, g.flip)
+        // ekipman kodu: silah + 32 × pelerin (draw.rs EQ_CLOAK)
+        val wIdx = drawBuf[o + 10].toInt() % 32
+        // 3B kahraman (kare hazırsa); değilse piksel karakter. İsim, kalkan, zehir ortak.
+        val drew3d = ch in 0..3 && drawHero3D(c, ch, x, y, sx, sy, dir, animI, t, flash, who, wIdx)
+        if (!drew3d) {
+            val f = when {
+                anim == "melee" && who == -1f -> meleeFrame(t, wIdx)
+                (anim == "walk" || anim == "run") && who == -1f -> strideFrame(x, y, anim, atlas.anims(prefix, atlas.heroAnims)[anim]?.get(0) ?: 8)
+                else -> frameOf(atlas.anims(prefix, atlas.heroAnims), anim, t)
             }
-        }
-        atlas.draw(c, sp, sx, sy, scale, paint, flip)
-        if (evw != null && isHero) drawEvWeapon(c, prefix, key, evw, weaponSprites.getOrElse(wIdx) { "katana" }, sx, sy, scale * sp.k, flip)
-        if (isHero) {
-            if (sp.k == 1f) { // eski (düşük yoğunluklu) karakterlerde ceket/bot katmanı
-                if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }
-                if (jacket.isNotEmpty()) gear("jacket_$jacket", "chest")
+            // piksel kahraman: ön / yan / sırt görünümü bakış yönüne göre (kare yoksa ön), sağa bakanlar aynalanır
+            val pix = ch in 0..3
+            val kdir = if (pix) viewDir(prefix, anim, dir, f) else dir
+            val flip = pix && viewFlip
+            var key = spriteKey(prefix, anim, kdir, f)
+            // elde gerçek silahla render edilmiş kare varsa onu kullan
+            val evw = if (wIdx > 0) evWeapons.getOrNull(wIdx) else null
+            val wKey = if (evw != null) null else if (wIdx > 0) "$key@" + weaponSprites.getOrElse(wIdx) { "" } else if (ch == 4) "$key@m4" else null
+            var weaponBaked = false
+            var sp = if (wKey != null) atlas[wKey]?.also { weaponBaked = true } else null
+            if (sp == null) sp = atlas[key]
+            if (sp == null) { key = spriteKey(prefix, "idle", kdir, 0); sp = atlas[key] }
+            if (sp == null) { placeholder(c, sx, sy, 0xFF4A7AB0.toInt()); return }
+            // Elmas Sandığı kaplaması: kendi kahramanın ve diğer oyuncuların
+            val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
+            val paint = when {
+                flash == 1f -> flashPaint
+                flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+                skin.isNotEmpty() -> skinPaint(skin, prefix.startsWith("h/"))
+                prefix.startsWith("h/") -> pixelPaint
+                else -> bmpPaint
             }
-            if (helmet.isNotEmpty()) gear("helm_$helmet", "head")
-            if (back) {
-                if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
+            if (skin.isNotEmpty() && Settings.current.particles) {
+                val tc = Skins.trail(skin)
+                if (tc != 0 && Math.random() < 0.18) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 50f, y, 20f + Math.random().toFloat() * 90f,
+                    (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
+            }
+            // ekipman kodları
+            val e0 = drawBuf[o + 8].toInt(); val e1 = drawBuf[o + 9].toInt(); val e2 = drawBuf[o + 10].toInt()
+            val helmet = tiers.getOrElse(e0 / 8) { "" }; val jacket = tiers.getOrElse(e0 % 8) { "" }
+            val boots = tiers.getOrElse(e1 / 8) { "" }; val bag = tiers.getOrElse(e1 % 8) { "" }
+            val weapon = e2 % 32; val cloak = e2 / 32 > 0
+            val back = dir in 3..5
+            val akey = key
+            fun att(point: String): FloatArray? = atlas.attach(actor, akey, point)?.also { if (flip) it[0] = -it[0] }
+            fun gear(name: String, point: String) {
+                val p = att(point) ?: return
+                val g = atlas["e/$name/$dir"] ?: return
+                atlas.draw(c, g, sx + p[0] * scale, sy + p[1] * scale, scale, paint)
+            }
+            val isHero = ch in 0..3
+            if (isHero && !back) {
                 if (cloak) gear("cloak", "neck")
+                if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
             }
-            // silah: gövde ile kollar arasında
-            if (weapon > 0 && !weaponBaked) {
-                val p = att("rhand")
-                val ws = atlas["w/" + weaponSprites.getOrElse(weapon) { "" } + "/" + dir]
-                if (p != null && ws != null) {
-                    val arms = atlas[spriteKey(prefix, anim, dir, f, "_a")]
-                    atlas.draw(c, ws, sx + p[0] * scale, sy + p[1] * scale, scale, paint)
-                    if (arms != null && !back) atlas.draw(c, arms, sx, sy, scale, paint)
+            if (who == -1f) {
+                // takla: her 35 ms'de bir art görüntü bırak, eskileri sönerek çiz
+                if (anim == "roll" && time - ghostT > 0.035f) { ghosts += Ghost(x, y, key, flip, 0.32f); ghostT = time }
+                for (g in ghosts) {
+                    if (g.fr != null) continue
+                    val gs = atlas[g.key] ?: continue
+                    ghostPaint.alpha = (g.life / 0.32f * 150).toInt().coerceIn(0, 255)
+                    atlas.draw(c, gs, wx(g.x), wy(g.y), scale, ghostPaint, g.flip)
+                }
+            }
+            atlas.draw(c, sp, sx, sy, scale, paint, flip)
+            if (evw != null && isHero) drawEvWeapon(c, prefix, key, evw, weaponSprites.getOrElse(wIdx) { "katana" }, sx, sy, scale * sp.k, flip)
+            if (isHero) {
+                if (sp.k == 1f) { // eski (düşük yoğunluklu) karakterlerde ceket/bot katmanı
+                    if (boots.isNotEmpty()) { gear("boots_$boots", "lfoot"); gear("boots_$boots", "rfoot") }
+                    if (jacket.isNotEmpty()) gear("jacket_$jacket", "chest")
+                }
+                if (helmet.isNotEmpty()) gear("helm_$helmet", "head")
+                if (back) {
+                    if (bag.isNotEmpty() && bag != "titan") gear("bag_$bag", "back")
+                    if (cloak) gear("cloak", "neck")
+                }
+                // silah: gövde ile kollar arasında
+                if (weapon > 0 && !weaponBaked) {
+                    val p = att("rhand")
+                    val ws = atlas["w/" + weaponSprites.getOrElse(weapon) { "" } + "/" + dir]
+                    if (p != null && ws != null) {
+                        val arms = atlas[spriteKey(prefix, anim, dir, f, "_a")]
+                        atlas.draw(c, ws, sx + p[0] * scale, sy + p[1] * scale, scale, paint)
+                        if (arms != null && !back) atlas.draw(c, arms, sx, sy, scale, paint)
+                    }
                 }
             }
         }
@@ -1168,6 +1193,117 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 Online.lastIds.getOrNull(who.toInt())?.let { u -> synchronized(playerBoxes) { playerBoxes += PlayerBox(sx - 34 * density, top - 10 * density, sx + 34 * density, sy + 6 * density, u, n) } }
             }
             who <= -2f && ch == 5 -> plates += Plate(sx, top - 4 * density, "Tüccar", 0xFFFFD34A.toInt(), -1f, false, "Alışveriş")
+        }
+    }
+
+    // ------------------------------------------------------------------ 3B kahramanlar (rust/zenvex_r3d)
+    private val fx3d = Fx3D()
+    private var frameDt = 0.016f
+    /** aktör başına yumuşatılmış bakış yönü (derece) */
+    private val yaw3d = HashMap<String, Float>()
+    /** uzak sürücülerin son konumu ve yumuşatılmış hızı (tekerlek dönüşü için) */
+    private val riderVel = HashMap<String, FloatArray>()
+    private val dst3d = RectF()
+    /** yerel kahramanın son 3B karesi: zaman, silah (Wk), namlu ucu (ekran dünyası) — ateş/vuruş efektleri buradan çıkar */
+    private var me3dT = -9f
+    private var me3dWeapon = 0
+    private var me3dMx = 0f
+    private var me3dMy = 0f
+    private val shadow3d: android.graphics.Bitmap by lazy {
+        android.graphics.Bitmap.createBitmap(96, 40, android.graphics.Bitmap.Config.ARGB_8888).also { b ->
+            val cv = Canvas(b)
+            val p = Paint(Paint.ANTI_ALIAS_FLAG)
+            p.shader = android.graphics.RadialGradient(48f, 20f, 48f, intArrayOf(0x8C000000.toInt(), 0x50000000, 0x00000000),
+                floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP)
+            cv.save(); cv.scale(1f, 20f / 48f, 48f, 20f); cv.drawCircle(48f, 20f, 48f, p); cv.restore()
+        }
+    }
+    private val shadowPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+
+    /**
+     * 3B kahraman: kare arka planda (Model3D) çizilir ve önbellekten gelir; ilk kez istenen kare hazır olana dek aktörün
+     * son karesi gösterilir. Kare hiç yoksa false (piksel karakter çizilir).
+     */
+    private fun drawHero3D(c: Canvas, ch: Int, x: Float, y: Float, sx: Float, sy: Float, dir: Int, animI: Int, t: Float, flash: Float,
+                           who: Float, wIdx: Int): Boolean {
+        if (!Model3D.ready) return false
+        val id = when {
+            who == -1f -> "me"
+            who >= 0f -> "r" + (Online.lastIds.getOrNull(who.toInt()) ?: who.toInt().toString())
+            else -> return false
+        }
+        // bakış: çekirdeğin 8 yönüne en kısa yoldan yumuşak dönüş; saldırı, ateş ve takla anında döner
+        val target = dir * 45f
+        val prev = yaw3d[id]
+        val yaw = if (prev == null || animI == 3 || animI == 4 || animI == 13 || animI == 40) target else {
+            val d = ((target - prev) % 360f + 540f) % 360f - 180f
+            val step = 900f * frameDt
+            prev + d.coerceIn(-step, step)
+        }
+        if (yaw3d.size > 80) yaw3d.clear()
+        yaw3d[id] = (yaw % 360f + 360f) % 360f
+        // uzak oyuncu araçta: aracıyla birlikte (sürüş pozu yerine motosiklet / araba + sürücü)
+        if (animI == 12 && who >= 0f) {
+            val vk = Online.lastIds.getOrNull(who.toInt())?.let { Online.position(it) }?.getOrNull(9)?.toInt() ?: -1
+            if (vk == 1 || vk == 2) {
+                if (riderVel.size > 60) riderVel.clear()
+                val rv = riderVel.getOrPut(id) { floatArrayOf(x, y, 0f) }
+                val sp = hypot(x - rv[0], y - rv[1]) / frameDt.coerceAtLeast(1e-3f)
+                rv[0] = x; rv[1] = y; rv[2] += (sp.coerceAtMost(1500f) - rv[2]) * min(1f, frameDt * 5f)
+                if (drawVehicle3D(c, vk, "r$id", x, y, sx, sy, yaw, rv[2], ch, 1f, false, dir)) return true
+            }
+        }
+        val pxPerM = 62.5f * scale
+        val weapon = weaponModels.getOrElse(wIdx) { "" }
+        val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d) ?: return false
+        val k = pxPerM / fr.pxPerM
+        val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
+        val paint = when {
+            flash == 1f -> flashPaint
+            flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            skin.isNotEmpty() -> skinPaint(skin, false)
+            else -> bmpPaint
+        }
+        if (skin.isNotEmpty() && Settings.current.particles) {
+            val tc = Skins.trail(skin)
+            if (tc != 0 && Math.random() < 0.18) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 50f, y, 20f + Math.random().toFloat() * 90f,
+                (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
+        }
+        // yumuşak zemin gölgesi (yerde yatarken/taklada geniş)
+        val lying = animI == 11 || animI == 14 || animI == 13
+        val shW = pxPerM * (if (lying) 1.25f else 0.78f); val shH = shW * 0.36f
+        dst3d.set(sx - shW / 2, sy - shH / 2, sx + shW / 2, sy + shH / 2)
+        c.drawBitmap(shadow3d, null, dst3d, shadowPaint)
+        if (who == -1f) {
+            // takla: her 35 ms'de bir art görüntü bırak, eskileri sönerek çiz
+            if (animI == 13 && time - ghostT > 0.035f) { ghosts += Ghost(x, y, "", false, 0.32f, fr); ghostT = time }
+            for (g in ghosts) {
+                val gf = g.fr ?: continue
+                ghostPaint.alpha = (g.life / 0.32f * 150).toInt().coerceIn(0, 255)
+                drawFrame3d(c, gf, wx(g.x), wy(g.y), 62.5f * scale / gf.pxPerM, ghostPaint)
+            }
+        }
+        drawFrame3d(c, fr, sx, sy, k, paint)
+        // efekt noktaları (kare koordinatı → ekran dünyası)
+        val p = fr.pts
+        fun ex(i: Int) = camX + (sx + (p[i] - fr.ax) * k - sw / 2f) / scale
+        fun ey(i: Int) = camY + (sy + (p[i + 1] - fr.ay) * k - sh / 2f) / scale
+        val wk = p[12].toInt()
+        if (wk != 0) {
+            fx3d.actor(id, wk, ex(0), ey(0), ex(2), ey(2), p[10], y, animI == 4 || animI == 17 || animI == 18, frameDt, 62.5f)
+        }
+        if (who == -1f) { me3dT = time; me3dWeapon = wk; me3dMx = ex(4); me3dMy = ey(4) }
+        return true
+    }
+
+    private fun drawFrame3d(c: Canvas, fr: Model3D.Frame, sx: Float, sy: Float, k: Float, paint: Paint) {
+        val l = sx - fr.ax * k; val tp = sy - fr.ay * k
+        if (abs(k - 1f) < 0.01f) {
+            // ölçek 1: tam piksele oturt (bulanıklık yok)
+            c.drawBitmap(fr.bmp, kotlin.math.round(l), kotlin.math.round(tp), paint)
+        } else {
+            dst3d.set(l, tp, l + fr.bmp.width * k, tp + fr.bmp.height * k)
+            c.drawBitmap(fr.bmp, null, dst3d, paint)
         }
     }
 
@@ -1832,52 +1968,56 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // V8: yandan çizilmiş motor ve açık cip (yön: sağa/sola çevrilir, dikey giderken son yön korunur)
         // V11: 8 yönlü çizim varsa (x8/moto/0..7, x8/car/0..7; docs/15 istemleri) araç gittiği yöne döner, yan görünüş kullanılmaz
         // V12.2: gezgin tüccarın kamyoneti (suv) için ayrı 8 yön (x8/truck, docs/19) varsa o
-        val d8 = (if (kind == 3) atlas["x8/truck/$dir"] else null) ?: if (kind >= 1) atlas["x8/${if (kind == 1) "moto" else "car"}/$dir"] else null
-        val v8 = if (d8 != null) null else if (kind == 1) atlas["x/moto"] else if (kind >= 2) atlas["x/car"] else null
-        val sp = d8 ?: v8 ?: atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
-        if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
-        // kendi aracın: Elmas Sandığı araç kaplaması
-        val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
-        val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
-            else if (mine) skinPaint(Skins.vehicle, false) else bmpPaint
-        if (mine && speed > 40 && Settings.current.particles) {
-            val tc = Skins.trail(Skins.vehicle)
-            if (tc != 0 && Math.random() < 0.5) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 60f, y, 10f, (Math.random().toFloat() - 0.5f) * 40f, 0f,
-                20f, 0.6f, 0.6f, tc, 3f, 3)
-        }
-        val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
-        // efektlerin (egzoz, toz, iz, far) yönü: yan görünüşlü araçta görselin baktığı yan (doğu/batı)
         var fxDir = dir
-        if (v8 != null) {
-            // motorun resmi sağa, cipin resmi sola bakar
-            val right = when (dir) { in 1..3 -> true; in 5..7 -> false; else -> vehFace[driver] ?: (dir == 0) }
-            fxDir = if (right) 2 else 6
-            if (driver >= 0) vehFace[driver] = right
-            val flip = if (kind == 1) !right else right
-            val sgn = if (right) 1f else -1f
-            fill.color = 0x50000000
-            val shw = sp.w * sp.k * scale * 0.46f
-            c.drawOval(sx - shw, sy - 9 * scale, sx + shw, sy + 7 * scale, fill)
-            // hafif öne eğilme (hızlanırken) ve yol sarsıntısı
-            val tilt = if (wreck) 0f else (speed / 600f).coerceIn(0f, 1f) * 1.5f * sgn
-            c.save(); if (tilt != 0f) c.rotate(tilt, sx, sy)
-            atlas.draw(c, sp, sx, sy + vib, scale, paint, flip)
-            if (driver >= 0) drawSeated(c, driver, kind, right, sx, sy + vib)
-            c.restore()
-            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
-            if (driver >= 0 && speed > 20 && !wreck) {
-                surfaceFx(x, y, fxDir, speed, kind)
-                wheelSpray(x, y, kind, sgn, speed)
+        // 3B araç (motosiklet: Nightstalker + sürücü, araba: Hellhound); kare yoksa çizim
+        val d3 = (kind == 1 || kind == 2) && drawVehicle3D(c, kind, "v" + drawBuf[o + 10].toInt(), x, y, sx, sy, drawBuf[o + 5], speed, driver, hp, wreck, dir)
+        if (!d3) {
+            val d8 = (if (kind == 3) atlas["x8/truck/$dir"] else null) ?: if (kind >= 1) atlas["x8/${if (kind == 1) "moto" else "car"}/$dir"] else null
+            val v8 = if (d8 != null) null else if (kind == 1) atlas["x/moto"] else if (kind >= 2) atlas["x/car"] else null
+            val sp = d8 ?: v8 ?: atlas["v/$id/$dir"] ?: atlas["s/wreck0"]
+            if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
+            // kendi aracın: Elmas Sandığı araç kaplaması
+            val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
+            val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
+                else if (mine) skinPaint(Skins.vehicle, false) else bmpPaint
+            if (mine && speed > 40 && Settings.current.particles) {
+                val tc = Skins.trail(Skins.vehicle)
+                if (tc != 0 && Math.random() < 0.5) particles += Particle(x + (Math.random().toFloat() - 0.5f) * 60f, y, 10f, (Math.random().toFloat() - 0.5f) * 40f, 0f,
+                    20f, 0.6f, 0.6f, tc, 3f, 3)
             }
-        } else {
-            // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
-            val rider = driver >= 0 && kind <= 1
-            val riderFront = rider && (dir == 0 || dir == 4)
-            if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
-            if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
-            if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
-            if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
-            if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
+            val vib = if (speed > 5 && !wreck) sin(time * 50f) * 0.6f * density else 0f
+            // efektlerin (egzoz, toz, iz, far) yönü: yan görünüşlü araçta görselin baktığı yan (doğu/batı)
+            if (v8 != null) {
+                // motorun resmi sağa, cipin resmi sola bakar
+                val right = when (dir) { in 1..3 -> true; in 5..7 -> false; else -> vehFace[driver] ?: (dir == 0) }
+                fxDir = if (right) 2 else 6
+                if (driver >= 0) vehFace[driver] = right
+                val flip = if (kind == 1) !right else right
+                val sgn = if (right) 1f else -1f
+                fill.color = 0x50000000
+                val shw = sp.w * sp.k * scale * 0.46f
+                c.drawOval(sx - shw, sy - 9 * scale, sx + shw, sy + 7 * scale, fill)
+                // hafif öne eğilme (hızlanırken) ve yol sarsıntısı
+                val tilt = if (wreck) 0f else (speed / 600f).coerceIn(0f, 1f) * 1.5f * sgn
+                c.save(); if (tilt != 0f) c.rotate(tilt, sx, sy)
+                atlas.draw(c, sp, sx, sy + vib, scale, paint, flip)
+                if (driver >= 0) drawSeated(c, driver, kind, right, sx, sy + vib)
+                c.restore()
+                if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+                if (driver >= 0 && speed > 20 && !wreck) {
+                    surfaceFx(x, y, fxDir, speed, kind)
+                    wheelSpray(x, y, kind, sgn, speed)
+                }
+            } else {
+                // binicili iki tekerlekliler: kahraman eyerde oturur, hızla pedal çevirir; önden/arkadan bakışta araç önde
+                val rider = driver >= 0 && kind <= 1
+                val riderFront = rider && (dir == 0 || dir == 4)
+                if (!riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
+                if (rider) drawRider(c, driver, kind, dir, sx, sy + vib, speed)
+                if (riderFront) atlas.draw(c, sp, sx, sy + vib, scale, paint)
+                if (hp < 0.999f && !wreck) bar(c, sx, sy - sp.ay * sp.k * scale - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+                if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
+            }
         }
         if (driver >= 0 && speed > 30 && !wreck) {
             val bx = -sin(fxDir * PI.toFloat() / 4); val by = -cos(fxDir * PI.toFloat() / 4)
@@ -1891,6 +2031,61 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
             lightSources += floatArrayOf(x + sin(fxDir * PI.toFloat() / 4) * 160, y + cos(fxDir * PI.toFloat() / 4) * 120 - 30, 380f, 1f)
+    }
+
+    // ------------------------------------------------------------------ 3B araçlar
+    private class VehState(var wheel: Float = 0f, var lastSpeed: Float = 0f, var tilt: Float = 0f)
+    private val vehState = HashMap<String, VehState>()
+
+    /**
+     * 3B araç: tekerlekler hızla döner, hızlanırken arka çöker / frende burun iner, yolda hafif sarsılır; motosiklette
+     * sürücü eyerde. Kare yoksa false (çizim araç görseline düşer).
+     */
+    private fun drawVehicle3D(c: Canvas, kind: Int, id: String, x: Float, y: Float, sx: Float, sy: Float, angle: Float, speed: Float,
+                              driver: Int, hp: Float, wreck: Boolean, dir: Int): Boolean {
+        if (!Model3D.ready) return false
+        val name = if (kind == 1) "nightstalker" else "hellhound"
+        if (vehState.size > 40) vehState.clear()
+        val st = vehState.getOrPut(id) { VehState(lastSpeed = speed) }
+        val dt = frameDt.coerceAtLeast(1e-3f)
+        val r = if (kind == 1) 0.33f else 0.41f
+        if (!wreck) st.wheel = (st.wheel + Math.toDegrees((speed / 62.5f / r * dt).toDouble()).toFloat()) % 360f
+        val acc = (speed - st.lastSpeed) / dt
+        st.lastSpeed = speed
+        // ivme (dünya birimi/sn²) → gövde eğimi: hızlanınca arka çöker (−), frende arka kalkar (+)
+        st.tilt += ((-acc / 62.5f * 0.5f).coerceIn(-4f, 4f) - st.tilt) * min(1f, dt * 6f)
+        val bounce = if (wreck || speed < 5f) 0f else sin(time * 23f + x * 0.01f) * 0.012f * (speed / 500f).coerceIn(0f, 1f)
+        val rider = if (kind == 1 && driver >= 0) Model3D.CHARS.getOrElse(driver) { "" } else ""
+        val pxPerM = 62.5f * scale
+        val fr = Model3D.vehicle(id, name, rider, angle, st.wheel, bounce, st.tilt, 0f, pxPerM, Settings.current.model3d) ?: return false
+        val k = pxPerM / fr.pxPerM
+        // gölge: aracın boyuna yönünde uzun, yumuşak
+        val L = if (kind == 1) 2.3f else 4.4f; val W = if (kind == 1) 0.8f else 2.1f
+        val a = Math.toRadians(angle.toDouble()).toFloat()
+        val fx = sin(a); val fy = cos(a) * 0.375f
+        val flen = hypot(fx, fy); val plen = hypot(cos(a), sin(a) * 0.375f)
+        c.save(); c.translate(sx, sy); c.rotate(Math.toDegrees(atan2(fy, fx).toDouble()).toFloat())
+        val hl = L * pxPerM * flen * 0.58f; val hw = W * pxPerM * plen * 0.62f + 4f * scale
+        dst3d.set(-hl, -hw, hl, hw)
+        c.drawBitmap(shadow3d, null, dst3d, shadowPaint)
+        c.restore()
+        val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
+        val paint = when {
+            wreck -> { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
+            mine -> skinPaint(Skins.vehicle, false)
+            else -> bmpPaint
+        }
+        drawFrame3d(c, fr, sx, sy, k, paint)
+        if (hp < 0.999f && !wreck) bar(c, sx, sy - fr.ay * k - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
+        if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
+        // Hellhound sert hızlanınca egzozdan nitro alevi
+        if (kind == 2 && driver >= 0 && acc > 250f && speed > 60f && Math.random() < 0.6) {
+            val p = fr.pts
+            val ex = camX + (sx + (p[4] - fr.ax) * k - sw / 2f) / scale
+            val ey = camY + (sy + (p[5] - fr.ay) * k - sh / 2f) / scale
+            fx3d.muzzle(ex, ey, -fx / flen, -fy / flen, Fx3D.RPG, 62.5f, y)
+        }
+        return true
     }
 
     // ------------------------------------------------------------------ yüzeye göre araç izi ve tozu

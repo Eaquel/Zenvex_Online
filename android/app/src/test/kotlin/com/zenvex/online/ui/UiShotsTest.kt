@@ -30,6 +30,13 @@ class UiShotsTest {
 
     private fun sample(name: String) = JSONObject(javaClass.getResource("/ui/$name.json")!!.readText())
 
+    /** 3B karakter vitrini (lobi, karakterler, çanta): yerel kütüphane varsa modeller anında çizilir */
+    @org.junit.Before
+    fun models() {
+        if (runCatching { com.zenvex.online.game.Native.hashCode(); true }.getOrDefault(false))
+            com.zenvex.online.game.Model3D.initSync(paparazzi.context)
+    }
+
     @Test
     fun buttonsAndToasts() {
         paparazzi.snapshot {

@@ -11,4 +11,5 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 zenvex_core = { path = "../zenvex_core" }
+zenvex_r3d = { path = "../zenvex_r3d" }
 jni = "0.21"

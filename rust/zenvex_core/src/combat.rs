@@ -302,7 +302,7 @@ impl Game {
     pub fn fire(&mut self, w: &'static data::WeaponDef, aim: (f32, f32)) {
         let mag = self.progress.mag(w.item);
         if mag == 0 {
-            if self.progress.inv.count_id(w.ammo) > 0 {
+            if w.ammo.is_empty() || self.progress.inv.count_id(w.ammo) > 0 {
                 self.start_reload(w);
             } else if self.player.noammo_t <= 0.0 {
                 self.player.noammo_t = 2.0;
@@ -315,6 +315,7 @@ impl Game {
         let mag = if keep { mag + 1 } else { mag };
         self.progress.set_mag(w.item, mag - 1);
         self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.atk_speed + if self.player.oath_t > 0.0 { 0.3 } else { 0.0 }));
+        self.player.atk_period = self.player.atk_cd;
         self.player.combat_t = 0.0;
         let (px, py) = (self.player.x, self.player.y);
         let spread = w.spread * self.rng.range(-1.0, 1.0);
@@ -360,7 +361,7 @@ impl Game {
             a,
             w: data::weapon_for(w.item) as u8,
         });
-        if mag - 1 == 0 && self.progress.inv.count_id(w.ammo) > 0 {
+        if mag - 1 == 0 && (w.ammo.is_empty() || self.progress.inv.count_id(w.ammo) > 0) {
             self.start_reload(w);
         }
     }
@@ -375,14 +376,17 @@ impl Game {
 
     pub fn finish_reload(&mut self) {
         let w = self.weapon();
-        if w.ammo.is_empty() {
+        if w.mag == 0 {
             return;
         }
-        let have = self.progress.inv.count_id(w.ammo);
         let cur = self.progress.mag(w.item) as u32;
+        // V16: mermi eşyası olmayan silahın yedeği sınırsız, yalnız şarjör değişir
+        let have = if w.ammo.is_empty() { u32::MAX } else { self.progress.inv.count_id(w.ammo) };
         let need = (w.mag as u32).saturating_sub(cur).min(have);
         if need > 0 {
-            self.progress.inv.remove_id(w.ammo, need);
+            if !w.ammo.is_empty() {
+                self.progress.inv.remove_id(w.ammo, need);
+            }
             self.progress.set_mag(w.item, (cur + need) as u16);
         }
     }

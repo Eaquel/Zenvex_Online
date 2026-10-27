@@ -51,6 +51,8 @@ class MainActivity : ComponentActivity() {
         Account.init(this)
         if (Account.loggedIn) runCatching { com.zenvex.online.game.Notifier.schedule(this) }
         GameSession.init(this)
+        // 3B karakter/silah/araç modelleri arka planda yüklenir (oyuna girene dek hazır)
+        com.zenvex.online.game.Model3D.init(this)
         Audio.init(this)
         // otomatik gösterim yalnız hata ayıklama sürümünde (yayın sürümünde çevrimdışı oynamaya kapı açmasın)
         com.zenvex.online.ui.Demo.on = BuildConfig.DEBUG && intent?.getBooleanExtra("demo", false) == true

@@ -32,6 +32,9 @@ pub const A_OPEN: u8 = 19;
 pub const A_DRINK: u8 = 20;
 pub const A_CHEER: u8 = 21;
 pub const A_POINT: u8 = 22;
+/// yalnız çizim/ağ (3B): ayakta ateş (geri tepme) ve şarjör değiştirme; saat faz (0..1)
+pub const A_FIRE: u8 = 40;
+pub const A_RELOAD: u8 = 41;
 // zombi animasyonları
 pub const Z_IDLE: u8 = 0;
 pub const Z_WALK: u8 = 1;
@@ -276,6 +279,8 @@ pub struct Player {
     pub speed_cheat: f32,
     // V4
     pub roll_t: f32,
+    /// yakın dövüş döngü süresi (sn); çizim/ağ için animasyon süresi döngü sayısına çevrilir
+    pub atk_period: f32,
     pub roll_dx: f32,
     pub roll_dy: f32,
     /// takladan sonra hasar almama
@@ -1158,6 +1163,7 @@ impl Game {
         let tired = if self.player.stamina < ST_SWING { 1.6 } else { 1.0 };
         let p = &mut self.player;
         let period = tired / (w.rate * (1.0 + b.atk_speed + if p.oath_t > 0.0 { 0.3 } else { 0.0 }));
+        p.atk_period = period;
         if wants && !p.atk_active {
             p.atk_active = true;
             p.hit_done = false;
@@ -1186,6 +1192,26 @@ impl Game {
                 p.anim = A_IDLE;
             }
         }
+    }
+
+    /// Çizim ve ağ için animasyon ve saati: yakın dövüşte döngü sayısı (3B saldırı hareketi vuruş anına oturur);
+    /// ateşli silahla ayaktayken ateş ve şarjör değiştirme ayrı animasyon, saat faz (0..1)
+    pub fn anim_state(&self) -> (u8, f32) {
+        let p = &self.player;
+        if p.anim == A_MELEE && p.atk_period > 0.01 {
+            return (A_MELEE, p.anim_t / p.atk_period);
+        }
+        let aiming = matches!(p.anim, A_PISTOL_IDLE | A_RIFLE_IDLE | A_PISTOL_WALK | A_RIFLE_WALK);
+        if aiming && !p.moving && !p.dead && p.vehicle.is_none() {
+            let w = self.weapon();
+            if p.reload_t > 0.0 && w.reload > 0.0 {
+                return (A_RELOAD, (1.0 - p.reload_t / w.reload).clamp(0.0, 0.999));
+            }
+            if p.atk_cd > 0.0 && p.atk_period > 0.01 {
+                return (A_FIRE, (1.0 - p.atk_cd / p.atk_period).clamp(0.0, 0.999));
+            }
+        }
+        (p.anim, p.anim_t)
     }
 
     pub fn damage_mult(&self) -> f32 {

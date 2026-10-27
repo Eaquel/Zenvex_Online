@@ -1,0 +1,262 @@
+package com.zenvex.online.game
+
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Log
+import java.util.concurrent.LinkedBlockingDeque
+import kotlin.math.roundToInt
+
+/**
+ * 3B karakter, silah ve araç kareleri (rust/zenvex_r3d). Modeller assets/m3d'den bir kez yüklenir; kareler arka plan
+ * iş parçacığında çizilip önbelleğe alınır. Oyun bir kare ister: önbellekte varsa hemen verilir, yoksa çizim kuyruğa
+ * girer ve o aktörün son karesi gösterilir (bir kare gecikme görünmez).
+ *
+ * Önbellek anahtarı nicelenmiş durumdur (animasyon fazı, 32 yön, ölçek basamağı): döngüsel hareketler bir turdan sonra
+ * yeniden çizilmez.
+ */
+object Model3D {
+    /** oyundaki kahraman sırası (data.rs CHARACTERS) → 3B model */
+    val CHARS = arrayOf("kael", "lyra", "vex", "morvath")
+
+    /** assets/m3d altındaki tüm modeller (tools/model3d/build.py çıktısı) */
+    val MODELS = arrayOf(
+        "kael", "lyra", "vex", "morvath",
+        "knife", "hatchet", "handaxe", "club", "effigy", "katana", "void_claw", "blood_scythe", "ice_scythe", "magma_hammer",
+        "storm_axe", "pickaxe", "chainsaw", "pistol", "uzi", "ak47", "sniper", "rpg",
+        "hellhound", "nightstalker",
+    )
+
+    /** silah eşyası → 3B model (listede yoksa "w_" sonrası ad) */
+    private val ITEM_MODEL = mapOf(
+        "w_bat" to "club", "w_baton" to "club", "w_glock" to "pistol", "w_m4" to "ak47",
+        "ev_blood_weapon" to "blood_scythe", "ev_titan_weapon" to "magma_hammer", "ev_base_weapon" to "storm_axe",
+        "ev_scrap_weapon" to "chainsaw", "ev_pack_weapon" to "void_claw", "ev_breath_weapon" to "ice_scythe",
+    )
+
+    class Frame(val bmp: Bitmap, val ax: Float, val ay: Float, val pxPerM: Float, val pts: FloatArray)
+
+    @Volatile var ready = false
+        private set
+    private val names = HashSet<String>()
+
+    private class Req(val key: String, val actor: String, val vehicle: Boolean, val a: String, val b: String, val p: FloatArray)
+
+    private val queue = LinkedBlockingDeque<Req>()
+    private val pending = HashSet<String>()
+    /** önbellek bellek bütçesi (bayt): dolunca en uzun süredir kullanılmayan kare atılır */
+    private var budget = 40L shl 20
+    private var bytes = 0L
+    private val cache = LinkedHashMap<String, Frame>(512, 0.75f, true)
+    /** aktör başına son kare (yeni kare hazır olana dek bu çizilir) */
+    private val last = HashMap<String, Frame>()
+    private var thread: Thread? = null
+
+    /** son yükleme hatası (tanı) */
+    @Volatile var lastError: Throwable? = null
+        private set
+
+    /** yüklenen modeller (tanı ve testler) */
+    fun loaded(): Set<String> = synchronized(names) { names.toSet() }
+
+    /** Silah eşyasının 3B modeli ("" yumruk) */
+    fun itemModel(item: String): String = when {
+        item.isEmpty() -> ""
+        else -> ITEM_MODEL[item] ?: item.removePrefix("w_")
+    }
+
+    fun init(ctx: Context) {
+        if (thread != null) return
+        val app = ctx.applicationContext
+        // düşük bellekli cihazda daha küçük önbellek
+        val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        budget = if (am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192) 20L shl 20 else 40L shl 20
+        thread = Thread({ loop(app) }, "zx-3d").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
+    }
+
+    private fun loop(ctx: Context) {
+        if (!loadAll(ctx)) return
+        while (true) {
+            val r = try { queue.takeFirst() } catch (_: InterruptedException) { return }
+            render(r)
+        }
+    }
+
+    private fun loadAll(ctx: Context): Boolean {
+        try {
+            val am = ctx.assets
+            // sabit liste (assets.list bazı ortamlarda boş döner; açmak her yerde çalışır)
+            val files = MODELS.map { "$it.zxm" }
+            val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inScaled = false }
+            for (f in files) {
+                val name = f.removeSuffix(".zxm")
+                val zxm = runCatching { am.open("m3d/$f").use { it.readBytes() } }.getOrNull() ?: continue
+                val tex = runCatching { am.open("m3d/$name.webp").use { BitmapFactory.decodeStream(it, null, opts) } }.getOrNull()
+                val px = IntArray((tex?.width ?: 0) * (tex?.height ?: 0))
+                tex?.getPixels(px, 0, tex.width, 0, 0, tex.width, tex.height)
+                if (Native.r3dLoad(name, zxm, tex?.width ?: 0, tex?.height ?: 0, px) == 1) synchronized(names) { names += name }
+                tex?.recycle()
+            }
+            ready = true
+            return true
+        } catch (e: Throwable) {
+            Log.w("zenvex", "3B modeller yüklenemedi", e)
+            lastError = e
+            return false
+        }
+    }
+
+    private var out = IntArray(256 * 320)
+    private val info = FloatArray(32)
+
+    /** Bir isteği çiz ve önbelleğe koy (çizim iş parçacığında; testlerde çağıranın iş parçacığında) */
+    private fun render(r: Req) {
+        var n = if (r.vehicle) Native.r3dVehicle(r.a, r.b, r.p, out, info) else Native.r3dActor(r.a, r.b, r.p, out, info)
+        if (n < 0) {
+            out = IntArray(-n + 1024)
+            n = if (r.vehicle) Native.r3dVehicle(r.a, r.b, r.p, out, info) else Native.r3dActor(r.a, r.b, r.p, out, info)
+        }
+        if (n > 0) {
+            val w = info[0].toInt(); val h = info[1].toInt()
+            val bmp = Bitmap.createBitmap(out, 0, w, w, h, Bitmap.Config.ARGB_8888)
+            val scale = if (r.vehicle) r.p[2] else r.p[5]
+            val fr = Frame(bmp, info[2], info[3], scale, info.copyOfRange(4, 4 + 13))
+            synchronized(cache) {
+                cache.put(r.key, fr)?.let { bytes -= it.bmp.byteCount }
+                bytes += bmp.byteCount
+                val it = cache.entries.iterator()
+                while (bytes > budget && it.hasNext()) {
+                    val e = it.next()
+                    if (e.key == r.key) continue
+                    bytes -= e.value.bmp.byteCount
+                    it.remove()
+                }
+                if (r.actor.isNotEmpty()) last[r.actor] = fr
+                pending -= r.key
+            }
+        } else synchronized(cache) { pending -= r.key }
+    }
+
+    /** Testler (emülatörsüz ekran görüntüsü): modelleri hemen yükle, kareleri istendiği anda çiz */
+    @Volatile var sync = false
+        private set
+
+    @Synchronized fun initSync(ctx: Context) {
+        sync = true
+        if (!ready) loadAll(ctx.applicationContext)
+    }
+
+    private fun request(key: String, actor: String, vehicle: Boolean, a: String, b: String, p: FloatArray): Frame? {
+        synchronized(cache) {
+            if (last.size > 48) last.keys.retainAll { it == "me" }
+            cache[key]?.let { last[actor] = it; return it }
+            if (sync) {
+                render(Req(key, actor, vehicle, a, b, p))
+                return cache[key] ?: last[actor]
+            }
+            if (key !in pending) {
+                pending += key
+                // en yeni istek önce (eski, artık gösterilmeyecek istekler kuyrukta beklemesin)
+                queue.addFirst(Req(key, actor, vehicle, a, b, p))
+                trim()
+            }
+            return last[actor]
+        }
+    }
+
+    /** Önceden çizim: döngünün sıradaki kareleri boşta kalan zamanda (kuyruğun sonuna) */
+    private fun prefetch(key: String, vehicle: Boolean, a: String, b: String, p: FloatArray) {
+        if (sync) return
+        synchronized(cache) {
+            if (key in cache || key in pending) return
+            pending += key
+            queue.addLast(Req(key, "", vehicle, a, b, p))
+            trim()
+        }
+    }
+
+    private fun trim() {
+        while (queue.size > 32) queue.pollLast()?.let { pending -= it.key }
+    }
+
+    /** Aktör artık görünmüyor (uzak oyuncu ayrıldı): son karesini bırak */
+    fun forget(actor: String) = synchronized(cache) { last.remove(actor) }
+
+    /** Yön (derece) 32 basamağa */
+    fun yawBucket(deg: Float): Int = ((deg / 11.25f).roundToInt() % 32 + 32) % 32
+
+    /** Ekran ölçeği (metre başına piksel) basamağa; çok büyük yakınlaştırmada üst sınır (hız) */
+    fun scaleBucket(pxPerM: Float, quality: Int): Float {
+        val cap = when (quality) { 0 -> 90f; 1 -> 120f; 2 -> 160f; else -> 230f }
+        return ((pxPerM.coerceIn(30f, cap) / 6f).roundToInt() * 6f)
+    }
+
+    /**
+     * Animasyon saatini önbelleğe uygun nicele: döngülerde faz, tek seferlerde kare.
+     * anim: çekirdek A_* (yakın dövüşte t döngü sayısıdır)
+     */
+    fun quantize(anim: Int, t: Float, ch: String): Float {
+        val (cycle, steps) = loopOf(anim, ch)
+        if (cycle > 0f) {
+            val ph = (t / cycle) - kotlin.math.floor(t / cycle)
+            return ((ph * steps).roundToInt() % steps) * cycle / steps
+        }
+        return when (anim) {
+            // yakın dövüş: saat döngü sayısı; sol/sağ sırası (çift/tek) + 16 basamak
+            4 -> { val n = kotlin.math.floor(t); (n.toInt() % 2) + ((t - n) * 16).roundToInt().coerceAtMost(15) / 16f }
+            // ateş / şarjör: saat faz (0..1)
+            40 -> ((t * 8f).toInt().coerceAtMost(7)) / 8f
+            41 -> ((t * 24f).toInt().coerceAtMost(23)) / 24f
+            13, 10 -> (t * 30f).roundToInt() / 30f
+            else -> (t * 15f).roundToInt() / 15f
+        }
+    }
+
+    /** Döngüsel animasyonun süresi ve basamak sayısı (döngü değilse 0) */
+    private fun loopOf(anim: Int, ch: String): Pair<Float, Int> {
+        val heavy = if (ch == "vex") 0.15f else 0f
+        return when (anim) {
+            // boşta: nefes 0.32 Hz + kalça 0.16 Hz → 6.25 sn'de dikişsiz döner
+            0, 5, 7 -> 6.25f to 60
+            1, 6, 8 -> 1f / (1.12f * (1f - heavy)) to 16
+            2 -> 1f / (1.45f * (1f - heavy)) to 14
+            3 -> 8f / 14f to 8
+            12 -> 0.698f to 10
+            17, 18 -> 0.9f to 14
+            else -> 0f to 0
+        }
+    }
+
+    /** Karakter karesi (actor: aktörün kimliği — yerel "me", uzak oyuncu kimliği) */
+    fun actor(actor: String, ch: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int): Frame? {
+        if (!ready || ch !in names) return null
+        val tq = quantize(anim, t, ch)
+        val yb = yawBucket(yaw)
+        val sc = scaleBucket(pxPerM, quality)
+        val ssaa = quality >= 2
+        fun key(tt: Float) = "a|$ch|$weapon|$anim|$tt|$yb|$sc|$ssaa"
+        fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, if (ssaa) 1f else 0f)
+        val fr = request(key(tq), actor, false, ch, weapon, params(tq))
+        // döngüde sıradaki iki kare (yürürken/koşarken ilk turda takılma olmasın)
+        val (cycle, steps) = loopOf(anim, ch)
+        if (cycle > 0f) for (i in 1..2) {
+            val tn = quantize(anim, tq + i * cycle / steps, ch)
+            prefetch(key(tn), false, ch, weapon, params(tn))
+        }
+        return fr
+    }
+
+    /** Araç karesi */
+    fun vehicle(actor: String, name: String, rider: String, yaw: Float, wheel: Float, bounce: Float, tilt: Float, riderT: Float, pxPerM: Float, quality: Int): Frame? {
+        if (!ready || name !in names) return null
+        val yb = yawBucket(yaw)
+        val sc = scaleBucket(pxPerM, quality)
+        // tekerlek 45° (jant simetrisiyle akıcı görünür), sarsıntı 3, eğim 2° basamak: araç başına sınırlı kare
+        val wq = ((wheel / 45f).roundToInt() % 8) * 45f
+        val bq = (bounce / 0.012f).roundToInt().coerceIn(-1, 1) * 0.012f
+        val tq = (tilt / 2f).roundToInt().coerceIn(-2, 2) * 2f
+        val ssaa = quality >= 2
+        val key = "v|$name|$rider|$yb|$sc|$wq|$bq|$tq|$ssaa"
+        return request(key, actor, true, name, rider, floatArrayOf(yb * 11.25f, 22f, sc, wq, bq, tq, 0f, if (ssaa) 1f else 0f))
+    }
+}
