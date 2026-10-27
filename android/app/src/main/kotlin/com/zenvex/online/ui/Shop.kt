@@ -95,7 +95,7 @@ internal fun ShopView(s: JSONObject?, loggedIn: Boolean, now: Long, startTab: In
                         .background(if (on) Brush.horizontalGradient(listOf(Color(0xFF6A4A16), Color(0xFF2A2012))) else Brush.horizontalGradient(listOf(Px.PanelDark, Px.PanelDark)))
                         .border(1.dp, if (on) GOLD.copy(alpha = 0.7f) else Color(0x33FFFFFF), RoundedCornerShape(4.dp))
                         .clickable { tab = i }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(ic, 22.dp, if (on) GOLD else Px.Sub)
+                        if (UiArt.has(LocalContext.current, "shoptab_$i")) ArtImage("shoptab_$i", Modifier.size(26.dp)) else Icon(ic, 22.dp, if (on) GOLD else Px.Sub)
                         Spacer(Modifier.width(6.dp))
                         PT(n, 15.sp, if (on) Color.White else Px.Sub, Modifier.weight(1f))
                         if (badge > 0) Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFE04040)

@@ -1433,7 +1433,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     // V11 komutan (tür 8): kendi görseli gelene dek asker görseliyle ("npc/commander" atlasa girince o kullanılır)
     private val npc6Names = arrayOf("soldier", "merchant", "quest", "doctor", "mechanic", "trainer", "soldier", "wizard", "commander")
     private val npc6Plate = arrayOf(null, "Tüccar Marco" to "Tüccar", "Yaşlı Silas" to "Görevci", "Doktor Elena" to "Doktor",
-        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Büyücü Aldric" to "Işınlanma",
+        "Tamirci Viktor" to "Tamirci", "Eğitmen Jack" to "Köpek Eğitmeni", "Rehber" to "Öğretici", "Büyücü Aldric" to "Işınlanma",
         "Komutan Diana" to "Komutan")
     /** Görev hedefleri (ekran kenarı oku) ve etkin rehber adımı (öğretici okları) */
     private data class QuestTarget(val x: Float, val y: Float, val label: String, val guide: Boolean)
@@ -1626,6 +1626,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sx < -300 || sx > sw + 300 || sy < -300 || sy > sh + 400) return
         val dirX0 = cos(face); val dirY0 = sin(face)
         if ((kind == 2 || kind == 3) && drawBot(c, kind, x, y, sx, sy, face, state, t, fxf, hp, lv, hostile, extra)) return
+        if ((kind == 0 || kind == 1) && drawSoldier3D(c, sniper, tower, x, y, sx, sy, face, state, t, fxf, hp, lv, hostile, aimD, extra)) return
         val who = if (sniper) "sniper" else "soldier"
         // V10 yan görünüm pozları (sağa bakar): devriye, nişan, ateş, kulede çömelme, şarjör, dürbün, vurulma, düşüş, ölü.
         // Yukarı bakarken V8 sırt, kameraya doğru nişanda V8 ön karesi.
@@ -1716,6 +1717,58 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val label = "Sv $lv " + if (sniper) "Keskin Nişancı" else "M4 Askeri"
             plates += Plate(sx, top - 4 * density, label, if (hostile) 0xFFFF7A6A.toInt() else 0xFF8AD8FF.toInt(), hp, false, null)
         }
+    }
+
+    /**
+     * 3B devlet askeri / keskin nişancı: devriyede yürür, nişanda dizini kırıp öne eğilir, ateşte geri teper, ölünce düşer.
+     * Namlu alevi ve keskin nişancı lazeri göğüs hizasından nişan yönüne çizilir. Model yoksa false (piksel asker).
+     */
+    private fun drawSoldier3D(c: Canvas, sniper: Boolean, tower: Boolean, x: Float, y: Float, sx: Float, sy: Float, face: Float, state: Int,
+                              t: Float, fxf: Int, hp: Float, lv: Int, hostile: Boolean, aimD: Float, extra: Float): Boolean {
+        if (!Model3D.ready) return false
+        val model = if (sniper) "npc_sniper" else "npc_soldier"
+        val dirX = cos(face); val dirY = sin(face)
+        val yaw = Math.toDegrees(kotlin.math.atan2(dirX.toDouble(), dirY.toDouble())).toFloat()
+        val dead = state == 4
+        val (anim, at) = when {
+            dead -> 11 to extra.coerceAtMost(0.9f)
+            fxf == 1 && state < 2 -> 10 to 0.08f
+            state == 3 -> Model3D.A_SHOOT to t
+            state == 2 -> Model3D.A_AIM to 0f
+            state == 1 -> 1 to t
+            else -> 0 to t
+        }
+        val pxPerM = 62.5f * scale
+        val id = "g${x.toInt()},${y.toInt()}"
+        val fr = Model3D.actor(id, model, "", anim, at, yaw, pxPerM, Settings.current.model3d) ?: return false
+        val k = pxPerM / fr.pxPerM
+        val paint = when {
+            dead -> { deadPaint.alpha = (255 * (1f - ((extra - 3f) / 3f).coerceIn(0f, 1f))).toInt(); deadPaint }
+            fxf == 1 -> flashPaint
+            else -> bmpPaint
+        }
+        if (!dead) drawShadow3d(c, fr, sx, sy, k, pxPerM * 0.40f)
+        drawFrame3d(c, fr, sx, sy, k, paint)
+        val top = sy - fr.ay * k
+        if (!dead) {
+            // göğüs hizası (baş noktasının 0.35 m altı), nişan yönünde 0.55 m ileri: namlu ucu
+            val hx = sx + (fr.pts[8] - fr.ax) * k; val hy = sy + (fr.pts[9] - fr.ay) * k
+            val ex = hx + dirX * 0.55f * pxPerM; val ey = hy + 0.35f * pxPerM + dirY * 0.30f * pxPerM
+            if (state == 3 && (t % 0.4f) < 0.09f) {
+                fill.color = 0xFFFFE08A.toInt(); c.drawCircle(ex, ey, 6f * scale, fill)
+                fill.color = 0x80FFB040.toInt(); c.drawCircle(ex, ey, 12f * scale, fill)
+            }
+            if (sniper && state == 2 && aimD > 0f) {
+                val lx = ex + dirX * aimD * scale; val ly = ey + dirY * aimD * scale
+                stroke.color = alphaC(0xFFFF2020.toInt(), 0.35f + 0.5f * extra); stroke.strokeWidth = (1f + 2f * extra) * density
+                c.drawLine(ex, ey, lx, ly, stroke)
+                fill.color = alphaC(0xFFFF3030.toInt(), 0.6f + 0.4f * sin(time * 25f)); c.drawCircle(lx, ly, (3f + 4f * extra) * density, fill)
+            }
+            if (fxf == 2) drawFxSprite(c, "shield", x, y - 62 - (if (tower) 235f else 0f), 175f, time)
+            val label = "Sv $lv " + if (sniper) "Keskin Nişancı" else "M4 Askeri"
+            plates += Plate(sx, top - 4 * density, label, if (hostile) 0xFFFF7A6A.toInt() else 0xFF8AD8FF.toInt(), hp, false, null)
+        }
+        return true
     }
 
     /**
