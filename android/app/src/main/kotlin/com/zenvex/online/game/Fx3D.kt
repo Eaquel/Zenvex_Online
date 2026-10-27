@@ -82,7 +82,15 @@ class Fx3D {
         val color: Int, val size: Float, val kind: Int, val ground: Float, var rot: Float = 0f,
     )
 
-    private val ps = ArrayList<P>(512)
+    /** efekt yoğunluğu (0..1): yeni parçacıklar buna göre seyreltilir */
+    var density = 1f
+    private inner class PList : ArrayList<P>(512) {
+        override fun add(element: P): Boolean {
+            if (density < 1f && rnd.nextFloat() > density) return false
+            return super.add(element)
+        }
+    }
+    private val ps = PList()
     private val rnd = Random(7)
 
     private object K {

@@ -2,6 +2,9 @@ package com.zenvex.online.game
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -316,4 +319,50 @@ class GameShotsTest {
         input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 1f, 0.2f) })
     @Test fun f06_carForest() = fxShot("carforest", { cheat("level 25"); cheat("god"); cheat("hero 2"); cheat("tp deep"); cheat("vehicle car") }, steps = 8,
         input = floatArrayOf(1f, 0f, 0f, 0f, 0f), after = { drive(it, 1f, 0.1f) })
+
+    /** Çizim çağrılarını sayan tuval: ön ayarların gerçekte ne kadar iş azalttığını ölçer */
+    private class CountingCanvas(b: Bitmap) : Canvas(b) {
+        var calls = 0
+        override fun drawBitmap(bitmap: Bitmap, src: android.graphics.Rect?, dst: RectF, paint: Paint?) { calls++; super.drawBitmap(bitmap, src, dst, paint) }
+        override fun drawBitmap(bitmap: Bitmap, left: Float, top: Float, paint: Paint?) { calls++; super.drawBitmap(bitmap, left, top, paint) }
+        override fun drawBitmap(bitmap: Bitmap, matrix: android.graphics.Matrix, paint: Paint?) { calls++; super.drawBitmap(bitmap, matrix, paint) }
+        override fun drawPath(path: Path, paint: Paint) { calls++; super.drawPath(path, paint) }
+        override fun drawOval(oval: RectF, paint: Paint) { calls++; super.drawOval(oval, paint) }
+        override fun drawOval(l: Float, t: Float, r: Float, b: Float, paint: Paint) { calls++; super.drawOval(l, t, r, b, paint) }
+        override fun drawCircle(cx: Float, cy: Float, radius: Float, paint: Paint) { calls++; super.drawCircle(cx, cy, radius, paint) }
+        override fun drawLine(sx: Float, sy: Float, ex: Float, ey: Float, paint: Paint) { calls++; super.drawLine(sx, sy, ex, ey, paint) }
+        override fun drawRect(l: Float, t: Float, r: Float, b: Float, paint: Paint) { calls++; super.drawRect(l, t, r, b, paint) }
+        override fun drawRoundRect(l: Float, t: Float, r: Float, b: Float, rx: Float, ry: Float, paint: Paint) { calls++; super.drawRoundRect(l, t, r, b, rx, ry, paint) }
+        override fun drawBitmapMesh(bitmap: Bitmap, mw: Int, mh: Int, v: FloatArray, vo: Int, col: IntArray?, co: Int, paint: Paint?) { calls++; super.drawBitmapMesh(bitmap, mw, mh, v, vo, col, co, paint) }
+    }
+
+    /** Grafik ön ayarları gerçekten maliyeti düşürür: aynı kalabalık sahne 4 ön ayarda çizilir, kare süresi sıralanır. */
+    @Test fun p01_presetCost() {
+        Assume.assumeTrue("libzenvex.so yok", native())
+        com.zenvex.online.ui.Demo.on = true
+        GameSession.initPreview(paparazzi.context)
+        Model3D.initSync(paparazzi.context)
+        cheat("level 50"); cheat("god"); cheat("hero 0"); cheat("tp downtown"); cheat("killall")
+        equip("ev_blood_weapon")
+        for (z in listOf("walker", "runner", "dark", "tank", "toxic")) cheat("spawn $z 3 3")
+        val view = GameView(paparazzi.context, ui)
+        val w = 2340; val h = 1080
+        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val c = CountingCanvas(bmp)
+        val cost = FloatArray(4); val calls = IntArray(4)
+        val before = Settings.current
+        try {
+            for (preset in intArrayOf(3, 0, 1, 2, 3, 0)) {
+                Settings.preview(Settings().withPreset(preset))
+                view.previewFrames(c, w, h, 30, input = attackRight)
+                c.calls = 0
+                val t0 = System.nanoTime()
+                repeat(5) { view.previewFrames(c, w, h, 8, input = attackRight) }
+                cost[preset] = (System.nanoTime() - t0) / 1e6f / 40f
+                calls[preset] = c.calls / (5 * 6)
+            }
+        } finally { Settings.preview(before) }
+        println("PRESET_COST çağrı/kare düşük=${calls[0]} orta=${calls[1]} yüksek=${calls[2]} ultra=${calls[3]} · ms/kare ${cost.toList()}")
+        org.junit.Assert.assertTrue("çizim çağrısı düşük < orta < yüksek olmalı: ${calls.toList()}", calls[0] < calls[1] && calls[1] < calls[2])
+    }
 }

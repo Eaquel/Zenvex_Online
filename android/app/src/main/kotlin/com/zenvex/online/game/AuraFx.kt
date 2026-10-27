@@ -46,9 +46,11 @@ object AuraFx {
 
     private fun ellipse(c: Canvas, rx: Float, ry: Float, p: Paint) { rect.set(-rx, -ry, rx, ry); c.drawOval(rect, p) }
 
+    private var glowOn = true
+
     private fun stroke(c: Canvas, w: Float, color: Int, a: Float, body: (Paint) -> Unit) {
         // geniş soluk parıltı + ince parlak çizgi
-        glow.strokeWidth = w * 3.2f; glow.color = withA(color, a * 0.22f); body(glow)
+        if (glowOn) { glow.strokeWidth = w * 3.2f; glow.color = withA(color, a * 0.22f); body(glow) }
         core.strokeWidth = w; core.color = withA(color, a); body(core)
     }
 
@@ -57,7 +59,8 @@ object AuraFx {
     /**
      * (sx, sy) ayak merkezi (ekran), [rx] yatay yarıçap (px), [t] saniye, [power] 0..1 ışıma gücü (seviyeye göre).
      */
-    fun draw(c: Canvas, sx: Float, sy: Float, rx: Float, t: Float, pal: Palette, density: Float, power: Float) {
+    fun draw(c: Canvas, sx: Float, sy: Float, rx: Float, t: Float, pal: Palette, density: Float, power: Float, detail: Int = 3) {
+        glowOn = detail >= 2
         val ry = rx * 0.5f
         val lw = max(1.2f, 1.6f * density)
         val pulse = 0.78f + 0.22f * sin(t * 3.1f)
@@ -74,8 +77,8 @@ object AuraFx {
         stroke(c, lw * 1.1f, pal.hot, 0.85f * power) { ellipse(c, rx * 0.80f, ry * 0.80f, it) }
         core.pathEffect = null; glow.pathEffect = null
 
-        // 3) çentik halkası: 48 çentik, yavaş döner
-        val ticks = 48
+        // 3) çentik halkası: 48 çentik, yavaş döner (düşük detayda yok)
+        val ticks = if (detail >= 1) 48 else 0
         val spin = t * 0.22f
         for (i in 0 until ticks) {
             val a = spin + i * 2f * PI.toFloat() / ticks
@@ -90,7 +93,7 @@ object AuraFx {
         // 4) rün halkası: 12 rün ters yönde döner, her biri hafifçe titreşir
         val runeR = 0.60f
         val g = rx * 0.058f
-        for (i in 0 until 12) {
+        for (i in 0 until (if (detail >= 1) 12 else 0)) {
             val a = -t * 0.32f + i * 2f * PI.toFloat() / 12f
             val ca = cos(a); val sa = sin(a)
             // rün: halka teğetine dik yönde okunur (merkeze doğru üstü)
@@ -129,7 +132,7 @@ object AuraFx {
         stroke(c, lw * (1.6f - ph), pal.hot, (1f - ph) * (1f - ph) * 0.9f * power) { ellipse(c, rx * (0.2f + 0.95f * ph), ry * (0.2f + 0.95f * ph), it) }
 
         // 7) ışık sütunları: mührün noktalarından yükselen ince çizgiler (altı parlak, üstü söner)
-        for (i in 0 until 7) {
+        for (i in 0 until (if (detail >= 2) 7 else 0)) {
             val a = i * 2f * PI.toFloat() / 7f + t * 0.4f
             val x = cos(a) * rx * 0.88f; val y = sin(a) * ry * 0.88f
             val grow = 0.55f + 0.45f * sin(t * 2.2f + i * 1.3f)

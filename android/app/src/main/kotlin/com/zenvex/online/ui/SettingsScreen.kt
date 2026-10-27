@@ -72,12 +72,14 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             Choice("FPS Sınırı", listOf("30", "45", "60", "90", "120"), listOf(30, 45, 60, 90, 120).indexOf(s.fpsLimit).coerceAtLeast(0)) {
                                 custom(s.copy(fpsLimit = listOf(30, 45, 60, 90, 120)[it]))
                             }
+                            Choice("Çözünürlük", listOf("%67", "%80", "%100"), s.resolution) { custom(s.copy(resolution = it)) }
                             Choice("Kamera Uzaklığı", listOf("Yakın", "Normal", "Uzak"), s.zoom) { set(s.copy(zoom = it)) }
                             Choice("Bitki Yoğunluğu", listOf("Düşük", "Orta", "Yüksek"), s.vegetation) { custom(s.copy(vegetation = it)) }
                             Choice("3B Karakter Kalitesi", listOf("Düşük", "Orta", "Yüksek"), s.model3d) { custom(s.copy(model3d = it)) }
                             Toggle("Rüzgâr Animasyonu", s.wind) { custom(s.copy(wind = it)) }
                             Toggle("Gölgeler", s.shadows) { custom(s.copy(shadows = it)) }
                             Toggle("Parçacık Efektleri", s.particles) { custom(s.copy(particles = it)) }
+                            Choice("Efekt Kalitesi", listOf("Düşük", "Orta", "Yüksek", "Ultra"), s.fx) { custom(s.copy(fx = it)) }
                             Toggle("Arkasındayken Ağacı Saydamlaştır", s.treeFade) { set(s.copy(treeFade = it)) }
                             Slider("Ekran Sarsıntısı", s.screenShake, 0f, 1f, pct = true) { set(s.copy(screenShake = it)) }
                             Toggle("Hasar Sayıları", s.damageNumbers) { set(s.copy(damageNumbers = it)) }

@@ -14,6 +14,10 @@ data class Settings(
     val wind: Boolean = true,
     val shadows: Boolean = true,
     val particles: Boolean = true,
+    /** efekt yoğunluğu: 0 düşük, 1 orta, 2 yüksek, 3 ultra (parçacık sayısı, ışık halesi, aura ayrıntısı) */
+    val fx: Int = 2,
+    /** çizim çözünürlüğü: 0 %67, 1 %80, 2 %100 (yüzey gerçekten küçülür, GPU dolgu maliyeti düşer) */
+    val resolution: Int = 2,
     val treeFade: Boolean = true,
     val screenShake: Float = 0.7f,
     val damageNumbers: Boolean = true,
@@ -43,24 +47,29 @@ data class Settings(
     val uiSound: Float = 0.7f,
     // Oyun
     val language: String = "tr",
-    val colorBlind: Int = 0,
 ) {
     val vegetationDensity: Float get() = when (vegetation) { 0 -> 0.3f; 1 -> 0.6f; else -> 1f }
+    /** parçacık ve efekt çarpanı (yeni parçacık sayısı, tavan) */
+    val fxScale: Float get() = if (!particles) 0f else when (fx) { 0 -> 0.3f; 1 -> 0.6f; 2 -> 1f; else -> 1.35f }
+    val renderScale: Float get() = when (resolution) { 0 -> 0.67f; 1 -> 0.8f; else -> 1f }
     val effectiveFps: Int get() = if (batterySaver) 30 else fpsLimit
     /** Sanal ekran yüksekliği (piksel sanat pikseli cinsinden) */
     val virtualHeight: Int get() = when (zoom) { 0 -> 230; 1 -> 290; else -> 360 }
 
     fun withPreset(p: Int): Settings = when (p) {
-        0 -> copy(preset = 0, vegetation = 0, model3d = 0, wind = false, shadows = false, particles = false, fpsLimit = 30)
-        1 -> copy(preset = 1, vegetation = 1, model3d = 1, wind = true, shadows = true, particles = false, fpsLimit = 60)
-        2 -> copy(preset = 2, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fpsLimit = 60)
-        3 -> copy(preset = 3, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fpsLimit = 120)
+        0 -> copy(preset = 0, vegetation = 0, model3d = 0, wind = false, shadows = false, particles = true, fx = 0, resolution = 0, fpsLimit = 30)
+        1 -> copy(preset = 1, vegetation = 1, model3d = 1, wind = true, shadows = true, particles = true, fx = 1, resolution = 1, fpsLimit = 60)
+        2 -> copy(preset = 2, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fx = 2, resolution = 2, fpsLimit = 60)
+        3 -> copy(preset = 3, vegetation = 2, model3d = 2, wind = true, shadows = true, particles = true, fx = 3, resolution = 2, fpsLimit = 120)
         else -> copy(preset = 4)
     }
 
     companion object {
         @Volatile var current = Settings()
             private set
+
+        /** Testler: ayarı kalıcı depoya yazmadan uygula */
+        internal fun preview(s: Settings) { current = s }
 
         fun load(ctx: Context) {
             val p = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -74,6 +83,8 @@ data class Settings(
                 wind = p.getBoolean("wind", d.wind),
                 shadows = p.getBoolean("shadows", d.shadows),
                 particles = p.getBoolean("particles", d.particles),
+                fx = p.getInt("fx", d.fx),
+                resolution = p.getInt("resolution", d.resolution),
                 treeFade = p.getBoolean("treeFade", d.treeFade),
                 screenShake = p.getFloat("screenShake", d.screenShake),
                 damageNumbers = p.getBoolean("damageNumbers", d.damageNumbers),
@@ -99,7 +110,6 @@ data class Settings(
                 uiSound = p.getFloat("uiSound", d.uiSound),
                 // ilk açılışta cihaz dili (destekleniyorsa), sonra oyuncunun seçtiği
                 language = p.getString("language", null) ?: I18n.deviceDefault(),
-                colorBlind = p.getInt("colorBlind", d.colorBlind),
             )
             I18n.load(ctx, current.language)
         }
@@ -109,7 +119,7 @@ data class Settings(
             ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit()
                 .putInt("preset", s.preset).putInt("fpsLimit", s.fpsLimit).putInt("zoom", s.zoom)
                 .putInt("vegetation", s.vegetation).putInt("model3d", s.model3d).putBoolean("wind", s.wind)
-                .putBoolean("shadows", s.shadows).putBoolean("particles", s.particles)
+                .putBoolean("shadows", s.shadows).putBoolean("particles", s.particles).putInt("fx", s.fx).putInt("resolution", s.resolution)
                 .putBoolean("treeFade", s.treeFade).putFloat("screenShake", s.screenShake)
                 .putBoolean("damageNumbers", s.damageNumbers).putBoolean("showFps", s.showFps).putBoolean("showPing", s.showPing).putBoolean("hideTitles", s.hideTitles).putBoolean("uiTransparent", s.uiTransparent)
                 .putBoolean("batterySaver", s.batterySaver).putBoolean("moveDynamic", s.moveDynamic)
@@ -120,7 +130,6 @@ data class Settings(
                 .putBoolean("leftHanded", s.leftHanded).putFloat("master", s.master)
                 .putFloat("music", s.music).putFloat("sfx", s.sfx).putFloat("ambient", s.ambient)
                 .putFloat("uiSound", s.uiSound).putString("language", s.language)
-                .putInt("colorBlind", s.colorBlind)
                 .apply()
             Audio.updateVolume()
             if (s.language != I18n.lang) I18n.load(ctx, s.language)

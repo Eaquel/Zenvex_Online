@@ -131,7 +131,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     // ------------------------------------------------------------------ boyalar
-    private val density = resources.displayMetrics.density
+    private val baseDensity = resources.displayMetrics.density
+    /** çizim yüzeyi küçültüldüğünde (çözünürlük ayarı) arayüz ölçüsü yüzeyle birlikte küçülür */
+    private var density = baseDensity
+    /** dokunma koordinatı → yüzey koordinatı çarpanı */
+    private var touchK = 1f
+    private var appliedRes = -1
     private val bmpPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
     /** piksel sanat (kahraman): yumuşatmasız, keskin pikseller */
     private val pixelPaint = Paint().apply { isFilterBitmap = false; isAntiAlias = false }
@@ -232,7 +237,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private class Light(val x: Float, val y: Float, val r: Float, val color: Int, var life: Float, val max: Float)
     private class Tracer(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val color: Int, var life: Float, val width: Float)
     private val floaters = ArrayList<Floater>()
-    private val particles = ArrayList<Particle>()
+    /** Yeni parçacıklar efekt yoğunluğuna göre seyreltilir (düşük kalitede gerçekten az parçacık) */
+    private class PList : ArrayList<Particle>() {
+        override fun add(element: Particle): Boolean {
+            val k = Settings.current.fxScale
+            if (k < 1f && Math.random() > k) return false
+            return super.add(element)
+        }
+    }
+    private val particles = PList()
     private val flashes = ArrayList<Light>()
     private val tracers = ArrayList<Tracer>()
     /** kule askerinin fırlattığı mızrak: (x1,y1)→(x2,y2) yay çizerek dur sn'de uçar */
@@ -272,12 +285,26 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     override fun surfaceCreated(h: SurfaceHolder) {
         running = true
+        post { applyResolution() }
         thread = Thread(::loop, "zenvex-render").also { it.priority = Thread.MAX_PRIORITY; it.start() }
+    }
+
+    /** Çözünürlük ayarı: yüzey gerçekten küçük boyda açılır (GPU ölçekleyerek ekrana yayar), arayüz ölçüsü ve dokunma buna uyar. */
+    private fun applyResolution() {
+        val rs = Settings.current.renderScale
+        appliedRes = Settings.current.resolution
+        val vw = this.width; val vh = this.height
+        if (vw <= 0 || vh <= 0) return
+        if (rs >= 0.99f) holder.setSizeFromLayout() else holder.setFixedSize((vw * rs).toInt().coerceAtLeast(320), (vh * rs).toInt().coerceAtLeast(180))
     }
 
     override fun surfaceChanged(h: SurfaceHolder, format: Int, width: Int, height: Int) {
         sw = width; sh = height
+        val vw = this.width
+        touchK = if (vw > 0) width.toFloat() / vw else 1f
+        density = baseDensity * touchK
         layoutControls(width, height)
+        if (appliedRes != Settings.current.resolution) applyResolution()
     }
 
     override fun surfaceDestroyed(h: SurfaceHolder) {
@@ -337,6 +364,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             } catch (e: Exception) {
                 android.util.Log.e("zenvex", "kare hatası", e)
             }
+            if (appliedRes != Settings.current.resolution) post { applyResolution() }
             val target = 1_000_000_000L / Settings.current.effectiveFps
             val spent = SystemClock.elapsedRealtimeNanos() - now
             if (spent < target) Thread.sleep((target - spent) / 1_000_000L, ((target - spent) % 1_000_000L).toInt())
@@ -465,6 +493,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         bolts.removeAll { it.life -= dt; it.life <= 0 }
         ghosts.removeAll { it.life -= dt; it.life <= 0 }
         fx3d.enabled = Settings.current.particles
+        fx3d.density = Settings.current.fxScale.coerceAtMost(1f)
         fx3d.update(dt, 62.5f)
         whiteFlash = max(0f, whiteFlash - dt * 3f)
         synchronized(chatLines) { chatLines.replaceAll { it.first to it.second - dt }; chatLines.removeAll { it.second <= 0 } }
@@ -1255,6 +1284,41 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.drawOval(sx - contact / 2f, sy - contact * 0.12f, sx + contact / 2f, sy + contact * 0.12f, fill)
     }
 
+    private val spShadowPaint = Paint(Paint.FILTER_BITMAP_FLAG).apply { colorFilter = PorterDuffColorFilter(0xFF000000.toInt(), PorterDuff.Mode.SRC_IN) }
+    private val spShadowM = android.graphics.Matrix()
+    private val spShadowVals = FloatArray(9).also { it[8] = 1f }
+
+    /**
+     * Sprite siluet gölgesi: çizim kalıbı aynen zemine yatırılıp sağ alta savrulur (ışık sol üstte); [draw] sprite'ı verilen boyayla çizer.
+     * [contact]: ayak altındaki küçük koyu temas lekesinin genişliği (px). "Gölgeler" kapalıysa hiçbir şey çizilmez; efekt
+     * kalitesi düşükken tek geçiş.
+     */
+    private fun castShadow(c: Canvas, sx: Float, sy: Float, contact: Float, strength: Float = 1f, draw: (Paint) -> Unit) {
+        val st = Settings.current
+        if (!st.shadows) return
+        val passes = if (st.fx >= 2) 2 else 1
+        for (i in 0 until passes) {
+            val flat = if (i == 0) 0.30f else 0.38f; val skew = if (i == 0) 0.55f else 0.70f
+            val alpha = (if (passes == 1) 0.40f else if (i == 0) 0.30f else 0.16f) * strength
+            spShadowVals[0] = 1f; spShadowVals[1] = -skew; spShadowVals[2] = 0f
+            spShadowVals[3] = 0f; spShadowVals[4] = -flat; spShadowVals[5] = 0f
+            spShadowM.setValues(spShadowVals)
+            c.save(); c.translate(sx, sy); c.concat(spShadowM); c.translate(-sx, -sy)
+            spShadowPaint.alpha = (alpha * 255f).toInt().coerceIn(0, 255)
+            draw(spShadowPaint)
+            c.restore()
+        }
+        fill.color = alphaC(0xFF000000.toInt(), 0.30f * strength)
+        c.drawOval(sx - contact / 2f, sy - contact * 0.12f, sx + contact / 2f, sy + contact * 0.12f, fill)
+    }
+
+    /** Siluet çıkarılamayan (gökteki, dönen, aracın içi) şeyler için yalnız yer lekesi: ayarla birlikte kapanır */
+    private fun groundBlob(c: Canvas, sx: Float, sy: Float, rx: Float, ry: Float, a: Float) {
+        if (!Settings.current.shadows) return
+        fill.color = alphaC(0xFF000000.toInt(), a)
+        c.drawOval(sx - rx, sy - ry, sx + rx, sy + ry, fill)
+    }
+
     /** Ayak tozu zamanlayıcıları (aktör başına) */
     private val footT = HashMap<String, Float>()
 
@@ -1407,8 +1471,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val base = when (m.id) { "chest_wood" -> "s/chest_wood"; "chest_iron" -> "s/chest_iron"; else -> "s/chest_mil" }
                 val sp = atlas[if (i == nearChest) base + "_open" else base] ?: atlas[base]
                     ?: atlas[if (m.id == "chest_wood") "s/crate" else "s/crate_mil"] ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
-                fill.color = 0x50000000; c.drawOval(sx - 30 * scale, sy - 6 * scale, sx + 30 * scale, sy + 6 * scale, fill)
-                if (sp != null) atlas.draw(c, sp, sx, sy, scale, pixelPaint)
+                if (sp != null) {
+                    castShadow(c, sx, sy, 56 * scale) { p -> atlas.draw(c, sp, sx, sy, scale, p) }
+                    atlas.draw(c, sp, sx, sy, scale, pixelPaint)
+                }
                 if (i == nearChest) drawText(c, "Sandık ${m.used}/${m.cap}", sx - 34 * density, sy - 70 * scale, 12 * density, 0xFFFFD34A.toInt())
             }
         }
@@ -1451,7 +1517,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val (msp, fl) = marco
             val k = msp.k * scale
             w = msp.w * k; top = sy - msp.ay * k
-            fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
+            castShadow(c, sx, sy, w * 0.6f) { p -> atlas.draw(c, msp, sx, sy, scale, p, fl) }
             atlas.draw(c, msp, sx, sy, scale, pixelPaint, fl)
         } else {
             val sp = atlas[key] ?: return false
@@ -1475,7 +1541,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     meshVerts[i++] = vx; meshVerts[i++] = vy
                 }
             }
-            fill.color = 0x40000000; c.drawOval(sx - w * 0.32f, sy - 5 * scale, sx + w * 0.32f, sy + 5 * scale, fill)
+            castShadow(c, sx, sy, w * 0.6f) { p -> c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, p) }
             c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, if (ch == 11 && key == "npc/quest") wizardPaint else pixelPaint)
         }
         // büyücü: çevresinde yükselen mavi-mor kıvılcımlar
@@ -1557,7 +1623,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // nişan karesi sağa bakar; arka karede tüfek sola dönük
         val flip = if (key.endsWith("_back")) dirX > 0f else dirX < 0f
         val dead = state == 4
-        if (!dead) { fill.color = 0x40000000; c.drawOval(sx - w * 0.3f, sy - 5 * scale, sx + w * 0.3f, sy + 5 * scale, fill) }
         c.save()
         var ox = 0f; var oy = 0f
         if (state == 3) ox -= dirX * 5f * scale
@@ -1582,6 +1647,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
         }
         val paint = when { dead -> deadPaint; fxf == 1 -> flashPaint; !hostile -> friendPaint; else -> pixelPaint }
+        if (!dead) castShadow(c, sx + ox, sy + oy, w * 0.55f) { p -> c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, p) }
         c.drawBitmapMesh(bmp, meshW, meshH, meshVerts, 0, null, 0, paint)
         // tüfek: omuzdan nişan yönüne (V8 karelerde tüfek çizimin içinde; yalnız namlu ucu hesaplanır)
         if (!dead) {
@@ -1637,7 +1703,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, if (state == 4) extra else t)
         val sp = atlas[spriteKey("z/$name", anim, d5, f)] ?: atlas[spriteKey("z/$name", "idle", d5, 0)] ?: return false
         val dead = state == 4
-        if (!dead) { fill.color = 0x40000000; c.drawOval(sx - sp.w * sp.k * scale * 0.3f, sy - 5 * scale, sx + sp.w * sp.k * scale * 0.3f, sy + 5 * scale, fill) }
+        if (!dead) castShadow(c, sx, sy, sp.w * sp.k * scale * 0.55f) { p -> atlas.draw(c, sp, sx, sy, scale, p, flip) }
         val paint = when {
             dead -> { deadPaint.alpha = (255 * (1f - ((extra - 3f) / 3f).coerceIn(0f, 1f))).toInt(); deadPaint }
             fxf == 1 -> flashPaint
@@ -1666,8 +1732,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (gx < -800 || gx > sw + 800 || gy < -900 || gy > sh + 600) return
         val s = scale
         val sh2 = (1f - alt / 700f).coerceIn(0.35f, 1f)
-        fill.color = alphaC(0xFF000000.toInt(), 0.35f * sh2)
-        c.drawOval(gx - 90 * s * sh2, gy - 26 * s * sh2, gx + 90 * s * sh2, gy + 26 * s * sh2, fill)
+        groundBlob(c, gx, gy, 90 * s * sh2, 26 * s * sh2, 0.35f * sh2)
         val hy = gy - alt * s
         val body = atlas["x/heli"]
         if (body != null) {
@@ -1806,7 +1871,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun drawAura(c: Canvas, sx: Float, sy: Float, tier: Int) {
         val pal = AuraFx.PALETTES[tier.coerceIn(0, 3)]
         val rx = (150f + 22f * tier) * scale
-        AuraFx.draw(c, sx, sy, rx, time, pal, density, 0.80f + 0.07f * tier)
+        AuraFx.draw(c, sx, sy, rx, time, pal, density, 0.80f + 0.07f * tier, Settings.current.fx)
         if (!Settings.current.particles) return
         val px = hud[Native.PX]; val py = hud[Native.PY]
         val world = rx / scale
@@ -1926,13 +1991,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
         if (sp == null) sp = atlas[spriteKey("z/walker", anim, dir, f)]
         if (sp == null) { placeholder(c, sx, sy, zombieColor.getOrElse(kind) { -1 }); return }
-        // aura
-        if (kind == 4 || kind == 3 || kind == 7) {
-            val col = when (kind) { 4 -> 0x60A040FF; 3 -> 0x5090FF30; else -> if (enraged) 0x70FF3020 else 0x40FF6020 }
-            val r = sp.w * scale * 0.6f
-            fill.shader = RadialGradient(sx, sy - sp.ay * sp.k * scale * 0.45f, r, col, 0, Shader.TileMode.CLAMP)
-            c.drawCircle(sx, sy - sp.ay * sp.k * scale * 0.45f, r, fill)
-            fill.shader = null
+        if (alpha > 0.3f && anim != "death") castShadow(c, sx, sy, sp.w * sp.k * scale * 0.5f, alpha) { p -> atlas.draw(c, sp, sx, sy, scale, p, zflip) }
+        // tür aurası: yuvarlak leke değil, ayaktan yükselen dilli alev/sis (toksik: zehir yeşili, karanlık: mor, boss: kor)
+        if ((kind == 4 || kind == 3 || kind == 7) && alpha > 0.3f && Settings.current.particles) {
+            val col = when (kind) { 4 -> 0xFFB070FF; 3 -> 0xFF9AFF40; else -> if (enraged) 0xFFFF4A30 else 0xFFFF8A30 }.toInt()
+            val rate = (if (kind == 7) 0.55f else 0.30f) * (sp.w * sp.k * scale / (120f * scale)).coerceIn(0.6f, 2.2f)
+            if (Math.random() < rate) {
+                val side = (Math.random().toFloat() - 0.5f) * sp.w * sp.k * 0.7f
+                particles += Particle(x + side, y + 4f, 0f, 0f, 0f, 55f + Math.random().toFloat() * 40f, 0.85f, 0.85f, col, if (kind == 7) 8f else 5.5f, 6)
+            }
+            drawTexRing(c, sx, sy, sp.w * sp.k * scale * (0.5f + 0.06f * sin(time * 3f)), col, if (kind == 7) 0.55f else 0.4f)
         }
         val paint = when {
             flash > 0 -> flashPaint
@@ -1974,7 +2042,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sz = 38 * density * (0.5f + 0.5f * pop)
         val col = rarityColor(rarity)
         // gölge + parıltı halkası
-        fill.color = 0x50000000; c.drawOval(sx - sz * 0.4f, sy - 4 * density, sx + sz * 0.4f, sy + 4 * density, fill)
+        groundBlob(c, sx, sy, sz * 0.4f, 4 * density, 0.3f)
         fill.shader = RadialGradient(sx, sy - sz * 0.5f + bob, sz * 0.9f, (col and 0x00FFFFFF) or 0x70000000, 0, Shader.TileMode.CLAMP)
         c.drawCircle(sx, sy - sz * 0.5f + bob, sz * 0.9f, fill); fill.shader = null
         if (rarity >= 2) {
@@ -2082,9 +2150,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (driver >= 0) vehFace[driver] = right
                 val flip = if (kind == 1) !right else right
                 val sgn = if (right) 1f else -1f
-                fill.color = 0x50000000
                 val shw = sp.w * sp.k * scale * 0.46f
-                c.drawOval(sx - shw, sy - 9 * scale, sx + shw, sy + 7 * scale, fill)
+                groundBlob(c, sx, sy - scale, shw, 8 * scale, 0.3f)
                 // hafif öne eğilme (hızlanırken) ve yol sarsıntısı
                 val tilt = if (wreck) 0f else (speed / 600f).coerceIn(0f, 1f) * 1.5f * sgn
                 c.save(); if (tilt != 0f) c.rotate(tilt, sx, sy)
@@ -2346,7 +2413,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x); val sy = wy(y)
         val hover = sin(t * 3f) * 6 * scale
         val lift = 150 * scale
-        fill.color = 0x40000000; c.drawOval(sx - 26 * scale, sy - 8 * scale, sx + 26 * scale, sy + 8 * scale, fill)
+        groundBlob(c, sx, sy, 26 * scale, 8 * scale, 0.25f)
         val cy = sy - lift + hover
         fill.color = 0xFF2A2E34.toInt()
         for ((ox, oy) in listOf(-1 to -1, 1 to -1, -1 to 1, 1 to 1)) {
@@ -2512,6 +2579,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     /** Dokuyu (sx, sy) merkezli [w] px genişlikte çiz; [squash] dikey ezme (yere yatık bulutlar), [anchorBottom] tabanı sabitle (alev) */
+    /** Ayakta yere yatık, dokulu halka (toplamalı): düz daire yerine titrek, dithered kenarlı halka */
+    private fun drawTexRing(c: Canvas, sx: Float, sy: Float, rx: Float, color: Int, a: Float) {
+        drawTex(c, FxTex.ring, sx, sy, rx * 2f, 0f, texPaint(color, true), a, 0.5f)
+    }
+
     private fun drawTex(c: Canvas, bmp: Bitmap, sx: Float, sy: Float, w: Float, rot: Float, paint: Paint, alpha: Float,
                         squash: Float = 1f, anchorBottom: Boolean = false) {
         if (alpha <= 0.01f || w < 1f) return
@@ -2695,7 +2767,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // oyuncu feneri
         glow(hud[Native.PX], hud[Native.PY] - 50, 520f, 0xFFFFE8C0.toInt(), 0.85f)
         for (ls in lightSources) glow(ls[0], ls[1], ls[2], if (ls[3] == 2f) 0xFFFFA040.toInt() else 0xFFFFE0A0.toInt(), 0.9f)
-        for (f in flashes) glow(f.x, f.y, f.r, f.color, f.life / f.max)
+        if (Settings.current.fx > 0) for (f in flashes) glow(f.x, f.y, f.r, f.color, f.life / f.max)
         lightSources.clear()
         rect.set(0f, 0f, sw.toFloat(), sh.toFloat())
         c.drawBitmap(lightBmp!!, null, rect, multiply)
@@ -2949,7 +3021,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun lighten(c: Int, k: Float): Int = Color.argb(Color.alpha(c), min(255, (Color.red(c) * k).toInt()), min(255, (Color.green(c) * k).toInt()), min(255, (Color.blue(c) * k).toInt()))
 
     private fun placeholder(c: Canvas, x: Float, y: Float, col: Int) {
-        fill.color = 0x50000000; c.drawOval(x - 20 * scale, y - 6 * scale, x + 20 * scale, y + 6 * scale, fill)
+        groundBlob(c, x, y, 20 * scale, 6 * scale, 0.3f)
         fill.color = col; c.drawRoundRect(x - 14 * scale, y - 100 * scale, x + 14 * scale, y, 12 * scale, 12 * scale, fill)
     }
 
@@ -3526,7 +3598,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val i = e.actionIndex
                 val id = e.getPointerId(i)
-                val x = e.getX(i); val y = e.getY(i)
+                val x = e.getX(i) * touchK; val y = e.getY(i) * touchK
                 // inşa modu: dokunuşlar önizlemeyi taşır (joystick ve tuşlar beklemede)
                 if (buildTouch(x, y, id)) return true
                 // mini haritaya dokunma: tam harita
@@ -3564,9 +3636,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
             MotionEvent.ACTION_MOVE -> for (i in 0 until e.pointerCount) {
                 val id = e.getPointerId(i)
-                if (buildSlot >= 0 && buildPtr == id) moveBuild(e.getX(i), e.getY(i))
-                if (moveStick.pointer == id) moveStickTo(moveStick, e.getX(i), e.getY(i))
-                if (atkStick.pointer == id) moveStickTo(atkStick, e.getX(i), e.getY(i))
+                if (buildSlot >= 0 && buildPtr == id) moveBuild(e.getX(i) * touchK, e.getY(i) * touchK)
+                if (moveStick.pointer == id) moveStickTo(moveStick, e.getX(i) * touchK, e.getY(i) * touchK)
+                if (atkStick.pointer == id) moveStickTo(atkStick, e.getX(i) * touchK, e.getY(i) * touchK)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
                 val id = e.getPointerId(e.actionIndex)
@@ -3678,7 +3750,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val dz = if (st === moveStick) s.moveDeadZone else 0.05f
         if (m < dz) { vx = 0f; vy = 0f } else {
             val sens = if (st === moveStick) s.moveSensitivity else s.attackSensitivity
-            val k = (((m - dz) / (1 - dz)) * sens).coerceAtMost(1f) / m
+            var mm = (((m - dz) / (1 - dz)) * sens).coerceAtMost(1f)
+            if (st === moveStick) {
+                // çekirdek 0,6 üstünde koşar; ayardaki eşik bu noktaya eşlenir (altı yürüme, üstü koşma)
+                val rt = s.runThreshold.coerceIn(0.3f, 0.95f)
+                mm = if (mm <= rt) mm * 0.58f / rt else 0.6f + (mm - rt) / (1f - rt) * 0.4f
+            }
+            val k = mm / m
             vx *= k; vy *= k
         }
         st.vx = vx; st.vy = vy
