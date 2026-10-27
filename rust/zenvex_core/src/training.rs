@@ -100,7 +100,7 @@ mod tests {
     fn city_tutorial_training_base_flow() {
         let mut p = Progress::default();
         p.level = 10;
-        p.story.guide_v = 1;
+        p.story.guide_v = 2;
         p.story.guide = GUIDE.iter().position(|q| q.id == "g9").unwrap();
         let mut g = Game::new(7, p, 0);
         g.player.combat_t = 99.0;
@@ -139,13 +139,84 @@ mod tests {
         assert!(v["lines"].to_string().contains("Ödülün"), "{v}");
     }
 
+    /// V10 → V11 → V16: eski kayıttaki rehber sırası aynı adıma gider
     #[test]
     fn old_guide_saves_shift_to_new_chain() {
-        use crate::story::migrate_guide_index as m;
+        use crate::story::{migrate_guide_index as m1, migrate_guide_v2 as m2};
+        let m = |old: usize| m2(m1(old));
+        assert_eq!(GUIDE[m(3)].id, "g4");
         assert_eq!(GUIDE[m(4)].id, "g5");
         assert_eq!(GUIDE[m(5)].id, "g6");
         assert_eq!(GUIDE[m(6)].id, "g7");
         assert_eq!(GUIDE[m(7)].id, "g8");
-        assert_eq!(GUIDE[m(3)].id, "g4");
+        // V11 kaydı: ağaç kesme (g4a) adımındaki oyuncu aynı adımda kalır; bitirmiş oyuncu bitmiş kalır
+        let v1_chop = 5;
+        assert_eq!(GUIDE[m2(v1_chop)].id, "g4a");
+        assert_eq!(m2(12), GUIDE.len());
+    }
+
+    /// V16 öğreticisi: balta üret → kuşan → ağaç kes → kazma üret → kaya kır → El Baltası üret → kuşan
+    #[test]
+    fn tool_tutorial_steps_in_order() {
+        use crate::story::Ev;
+        let ids: Vec<&str> = GUIDE.iter().map(|q| q.id).collect();
+        let at = |id: &str| ids.iter().position(|x| *x == id).unwrap();
+        assert!(at("g4b") < at("g4c") && at("g4c") < at("g4a") && at("g4a") < at("g4d"));
+        assert!(at("g4d") < at("g4e") && at("g4e") < at("g4f") && at("g4f") < at("g4g") && at("g4g") < at("g5"));
+        let mut p = Progress::default();
+        p.story.guide_v = 2;
+        p.story.guide = at("g4c");
+        let mut g = Game::new(5, p, 1);
+        g.story_tick();
+        assert!(g.progress.story.guide_on, "kuşan adımı başlamalı");
+        // balta çantadayken tamamlanmaz; kuşanınca (canlı okunur) tamamlanır
+        g.story_tick();
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g4c");
+        g.progress.inv.add_id("t_axe_stone", 1);
+        g.progress.eq.weapon = "t_axe_stone".to_string();
+        g.story_tick();
+        g.story_tick();
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g4a", "balta kuşanınca teslim edilmeli");
+        // kaya kırma adımı kaya olayıyla ilerler
+        g.progress.story.guide = at("g4e");
+        g.progress.story.guide_on = false;
+        g.story_tick();
+        assert!(g.progress.story.guide_on);
+        g.story_event(Ev::Mine);
+        g.story_tick();
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g4f");
+        // son adım: El Baltası kuşan
+        g.progress.story.guide = at("g4g");
+        g.progress.story.guide_on = false;
+        g.progress.eq.weapon = "w_hatchet".to_string();
+        g.story_tick();
+        g.story_tick();
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g5");
+    }
+
+    /// Ana görev zinciri Sv 40'a kadar uzanır: seviyeler artar, her bölge bir karakol + bir av, sonda Titan
+    #[test]
+    fn main_chain_reaches_level_40_and_ends_with_titan() {
+        use crate::story::{Goal, MAIN};
+        let mut last = 0;
+        for q in MAIN {
+            assert!(q.min_level >= last, "{} sırası bozuk", q.id);
+            last = q.min_level;
+            assert!(!q.talk.is_empty() && !q.done.is_empty() && q.gold > 0, "{} eksik", q.id);
+        }
+        let q = MAIN.last().unwrap();
+        assert_eq!(q.id, "q20");
+        assert_eq!(q.min_level, 40);
+        assert_eq!(q.goal, Goal::KillKind(crate::data::ZKind::Titan));
+        // her bölge karakolu zincirde var
+        for post in ["burnt_post", "desert_post", "bswamp_post", "front_hq", "harbor_post"] {
+            assert!(MAIN.iter().any(|q| q.goal == Goal::Reach(post)), "{post} görevi yok");
+        }
+    }
+
+    /// Kaya kırınca günlük "12 kaya kır" ve rehber adımı ilerler
+    #[test]
+    fn mining_counts_for_daily_quest() {
+        assert!(crate::data::DAILY_POOL.iter().any(|d| d.id == "d_mine" && d.kind == crate::data::QuestKind::Mine && d.goal == 12));
     }
 }

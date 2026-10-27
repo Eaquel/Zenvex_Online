@@ -239,6 +239,9 @@ impl Game {
                     self.spawn_drop_id("scrap", 1, sx, sy);
                 }
                 self.give_xp(sx, sy, 8);
+                self.story_event(crate::story::Ev::Mine);
+                let done = self.progress.quest_event(QuestKind::Mine, 1);
+                self.quests_done(done);
             }
             Kind::Crate => {
                 self.progress.crates += 1;

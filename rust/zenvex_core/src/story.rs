@@ -56,6 +56,10 @@ pub enum Goal {
     Dog,
     /// V11: eğitim üssünü ele geçir (bombalanıp şehirde uyanınca tamamlanır)
     Train,
+    /// V16: kaya kır (kazma ya da yumruk)
+    Mine,
+    /// V16: elindeki silah/alet bu kimlikle başlıyorsa tamamlanır (canlı okunur: zaten kuşanılıysa hemen biter)
+    Equip(&'static str),
 }
 
 pub struct Quest {
@@ -111,14 +115,37 @@ pub const GUIDE: &[Quest] = &[
     q!("g4b", N_GUIDE, "Taş Balta", "Üret: 1 Taş Balta (Silah Ve Alet Sekmesi)",
        ["Ağaçlar sağlamdır: her birinin 500 canı var. Yumrukla 20 kez vurman gerekir.",
         "Çantana odun, taş ve ip kondu. Üretimdeki Silah Ve Alet sekmesinden Taş Balta yap.",
-        "Balta çantanda durdukça işe yarar: ağaca her vuruşun 50 can götürür. Demir balta 100 götürür, onu tezgâhta yaparsın."],
+        "Balta çantanda durdukça işe yarar: ağaca her vuruşun 50 can götürür. Elinde tutarsan 1,6 kat güçlü vurur. Demir balta 100 götürür, onu tezgâhta yaparsın."],
        "İşte gerçek bir hayatta kalan aleti! Kazmayı da aynı yerden yaparsın; kayalara işler.",
        Goal::Craft("t_axe_stone"), 1, 1, 15, 40, &[], &[("wood", 6), ("stone", 4), ("rope", 1)]),
+    q!("g4c", N_GUIDE, "Baltayı Kuşan", "Çantadan Taş Baltayı Kuşan",
+       ["Çantayı aç, Taş Balta'ya dokun ve Kuşan'ı seç. Elinde balta tutarken ağaca 1,6 kat güçlü vurursun; zombiye de vurabilirsin."],
+       "Elinde balta olan biri kolay kolay yenilmez. Artık ağaç keselim.",
+       Goal::Equip("t_axe_"), 1, 1, 10, 30, &[], &[]),
     q!("g4a", N_GUIDE, "Odun Topla", "1 Ağaç Kes",
        ["Şimdi baltanı dene. Kampın çevresindeki ağaçlardan birine yürü ve vurmaya devam et.",
         "Ağaç devrilince odun düşer; çamlardan reçine de çıkar. Odun üretimin temelidir."],
        "Gördün mü? Balta olunca iş hızlanıyor. Odun ve taş her zaman lazım olacak.",
        Goal::Chop, 1, 1, 15, 40, &[], &[]),
+    q!("g4d", N_GUIDE, "Taş Kazma", "Üret: 1 Taş Kazma",
+       ["Çantana odun, taş ve ip kondu. Aynı sekmeden Taş Kazma yap."],
+       "Kazma kayaya, balta ağaca. Basit ve etkili.",
+       Goal::Craft("t_pick_stone"), 1, 1, 15, 40, &[], &[("wood", 6), ("stone", 6), ("rope", 1)]),
+    q!("g4e", N_GUIDE, "Kaya Kır", "1 Kaya Kır",
+       ["Kayalar da odun kadar önemli: taş, tezgâh ve alet demek. Hepsinin 500 canı var.",
+        "Kazmayı çantanda tut (ya da kuşan) ve bir kayaya yürüyüp vurmaya devam et.",
+        "Kaya parçalanınca taş düşer; ara sıra hurda da çıkar. Hurda silah üretiminin temelidir."],
+       "Taş ve hurda: tezgâhın yakıtı. Sakın sıkılma, hepsi lazım olacak.",
+       Goal::Mine, 1, 1, 15, 40, &[], &[]),
+    q!("g4f", N_GUIDE, "İlk Silah", "Üret: 1 El Baltası",
+       ["Yumruk ilk günler için yeter ama zombiler yenilenir. Gerçek bir silaha ihtiyacın var.",
+        "Çantana odun, hurda ve ip kondu. Silah Ve Alet sekmesinden El Baltası yap: tek elle savrulan hızlı bir silahtır."],
+       "Güzel iş! Daha iyi silahlar tezgâhta ve tüccarda: bıçak, katana, tabanca, tüfek…",
+       Goal::Craft("w_hatchet"), 1, 1, 20, 50, &[], &[("wood", 4), ("scrap", 4), ("rope", 1)]),
+    q!("g4g", N_GUIDE, "Silahını Kuşan", "Çantadan El Baltasını Kuşan",
+       ["Silahını Çanta'dan Kuşan'la elinde tut. Savaşta sağ joystick silahınla vurur; ateşli silahlarda mermi şarjörden gelir."],
+       "Silahın elinde. Artık zombi sürüsü seni o kadar korkutmaz.",
+       Goal::Equip("w_hatchet"), 1, 1, 10, 30, &[], &[]),
     q!("g5", N_GUIDE, "Cebini Hazırla", "Çantada Bir Eşyayı Cebe Sürükle",
        ["Savaşın ortasında çantayı açmaya vaktin olmaz.",
         "Çantayı aç, bir bandaja ya da iksire basılı tut ve soldaki ceplerden birine sürükle.",
@@ -163,6 +190,15 @@ pub fn migrate_guide_index(old: usize) -> usize {
         0..=3 => old,
         4 | 5 => old + 2,
         _ => old + 3,
+    }
+}
+
+/// V11 sırasındaki kayıtlar (rehber_v 1: g4a 5. sırada, 12 = bitti) → V16 sırası (g4c, g4d, g4e, g4f, g4g eklendi)
+pub fn migrate_guide_v2(old: usize) -> usize {
+    match old {
+        0..=4 => old,
+        5 => 6,
+        _ => old + 5,
     }
 }
 
@@ -214,6 +250,62 @@ pub const MAIN: &[Quest] = &[
         "10. seviyeye ulaş, sonra Aldric'ten seni şehre götürmesini iste. Orada daha büyük tehlikeler ve hazineler var."],
        "10. seviyedesin! Aldric seni şehre götürmeye hazır. Artık bu kampın hikâyesi seninle anlatılacak.",
        Goal::Level, 10, 8, 300, 0, &[("medkit", 2)], &[]),
+    // V16: Sv 40'a kadar bölge zinciri: her bölgenin karakoluna git (Aldric götürür), bölgeyi avla; sonunda Titan
+    q!("q10", N_QUEST, "Kül Karakolu'na Git", "Kül Karakolu'na Git",
+       ["Şehrin doğusunda bir zamanlar ormandı; şimdi yalnız kül ve kor. Orada bir karakol kalmış.",
+        "Büyücü Aldric seni oraya götürür. Karakola ulaş, güvende olduğunu bana bildir."],
+       "Kül Karakolu hâlâ ayakta! Orada kor tazıları ve kömürleşmiş zombiler dolaşır; dikkatli ol.",
+       Goal::Reach("burnt_post"), 1, 12, 200, 400, &[("medkit", 2)], &[]),
+    q!("q11", N_QUEST, "Kor Avı", "Yanık Ormanda 20 Zombi Öldür",
+       ["Yanık Orman'daki yaratıklar ateşe dayanıklı. Kömürleşmiş zombiler yaklaşınca etrafı tutuşturur.",
+        "20 tanesini temizle. Yanıklara karşı bandaj ve iksir taşı."],
+       "Yanık Orman biraz daha nefes alıyor. Külden bir şey doğacak belki.",
+       Goal::Kill(Some(Zone::BurntForest)), 20, 15, 350, 800, &[("potion_heal", 3), ("bandage", 5)], &[]),
+    q!("q12", N_QUEST, "Çöl Karakolu'na Git", "Çöl Karakolu'na Git",
+       ["Güneyde otoyol kumlara gömülmüş. Mumyalar, akrepler ve motorcu zombiler orada.",
+        "Aldric'le Çöl Karakolu'na git. Susuzluk yok ama kum her yere işliyor."],
+       "Çöl Karakolu seni gördü, iyi. Orada hız iksiri ve araç işe yarar.",
+       Goal::Reach("desert_post"), 1, 18, 300, 700, &[("potion_speed", 2)], &[]),
+    q!("q13", N_QUEST, "Kum Fırtınası", "Çöl Otoyolunda 25 Zombi Öldür",
+       ["Otoyolu açık tutmak istiyorum: ticaret yoluydu.",
+        "Çöl Otoyolu'nda 25 zombi öldür. Akrep zehrine dikkat, panzehir şart."],
+       "Yol açıldı! Tüccar Marco'nun kamyoneti artık oradan geçebilir.",
+       Goal::Kill(Some(Zone::Desert)), 25, 20, 600, 1400, &[("potion_power", 2), ("medkit", 2)], &[]),
+    q!("q14", N_QUEST, "Kara Bataklık Karakolu'na Git", "Kara Bataklık Karakolu'na Git",
+       ["Kara Bataklık Karakolu'na kadar git. Panzehirsiz gitme.",
+        "Bataklığın kara kısmında zehirli sis var; cadılar ve şişkinler orada yaşar."],
+       "Karakola ulaştın. Çıkışta mutlaka gözlerini aç; sis her yerde.",
+       Goal::Reach("bswamp_post"), 1, 24, 500, 1200, &[("antidote", 3)], &[]),
+    q!("q15", N_QUEST, "Bataklığın Dibi", "Kara Bataklıkta 25 Zombi Öldür",
+       ["Kara Bataklık'ta 25 yaratık öldür; sürüyü seyrelt.",
+        "Bataklık Devi geceleri çamurdan çıkıp karakolu eziyor."],
+       "Bataklık sustu. Güçlendiğini hissediyorum evlat.",
+       Goal::Kill(Some(Zone::BlackSwamp)), 25, 26, 900, 2200, &[("medkit", 3), ("potion_heal", 3)], &[]),
+    q!("q16", N_QUEST, "Cephe Karargâhı'na Git", "Cephe Karargâhı'na Git",
+       ["Doğuda, devlet üslerinin ve klanların kapıştığı yer: Cephe Hattı.",
+        "Aldric seni oraya götürür. Karargâhta durum raporu al, sonra bana dön."],
+       "Cephe sıcak demek. Klanınla gitmeden üs almaya kalkma.",
+       Goal::Reach("front_hq"), 1, 30, 800, 2000, &[("potion_power", 2)], &[]),
+    q!("q17", N_QUEST, "Askeri Bölge", "Askeri Bölgede 30 Zombi Öldür",
+       ["Askeri Bölge'de çevik kuvvet zombileri ve botlar var; çoğu hâlâ görev başında.",
+        "30 tanesini indir. Ağır zırh ve iyi bir silah şart."],
+       "Askeri Bölge'yi sarstın! Oradan düşen devre kartları işine yarar.",
+       Goal::Kill(Some(Zone::Military)), 30, 34, 1400, 3500, &[("medkit", 4), ("potion_power", 2)], &[]),
+    q!("q18", N_QUEST, "Liman Karakolu'na Git", "Liman Karakolu'na Git",
+       ["En uzakta, buzla kaplı bir liman var. Donmuş denizciler ve rıhtım canavarları orada.",
+        "Liman Karakolu'na git; sıcak giyin."],
+       "Liman Karakolu'ndasın! Burası dünyanın en soğuk köşesi.",
+       Goal::Reach("harbor_post"), 1, 38, 1100, 3000, &[("potion_heal", 5)], &[]),
+    q!("q19", N_QUEST, "Buz Altında", "Donmuş Limanda 30 Zombi Öldür",
+       ["Rıhtım canavarları buzu kıran bir kuvvetle vurur; ama ateşe karşı zayıftırlar.",
+        "30 yaratığı temizle ve donmuş balık topla, sıcak yemek iyileştirir."],
+       "Liman temiz! Sen artık bir efsanesin, evlat.",
+       Goal::Kill(Some(Zone::Harbor)), 30, 40, 2000, 5000, &[("medkit", 5), ("potion_power", 3)], &[]),
+    q!("q20", N_QUEST, "Titan'ın Sonu", "Bir Titan'ı Yen",
+       ["Titan her çeyrek saatte bir bölgede uyanır; haritada nerede olduğunu Aldric gösterir.",
+        "Tek başına gidilmez. Klanınla git, ağır silah ve bol iksir al. Titan'ı yenersen senin adın destan olur."],
+       "TİTAN'I YENDİN! Duvarlar bunu yüzyıllarca anlatır. Ganimeti hak ettin.",
+       Goal::KillKind(ZKind::Titan), 1, 40, 5000, 10000, &[("titan_shard", 3)], &[]),
 ];
 
 /// Kaydedilen hikâye durumu
@@ -228,7 +320,7 @@ pub struct StoryState {
     pub main: usize,
     pub main_on: bool,
     pub main_n: u32,
-    /// rehber zinciri sürümü (V11: 1)
+    /// rehber zinciri sürümü (V11: 1, V16: 2)
     pub guide_v: u32,
 }
 
@@ -238,6 +330,10 @@ impl StoryState {
         if self.guide_v < 1 {
             self.guide = migrate_guide_index(self.guide);
             self.guide_v = 1;
+        }
+        if self.guide_v < 2 {
+            self.guide = migrate_guide_v2(self.guide);
+            self.guide_v = 2;
         }
     }
 }
@@ -255,6 +351,7 @@ pub enum Ev {
     Talk(u8),
     Dog,
     Train,
+    Mine,
 }
 
 fn chain(which: u8) -> &'static [Quest] {
@@ -316,7 +413,7 @@ impl Game {
                 (Goal::Chop, Ev::Chop) | (Goal::Pocket, Ev::Pocket) | (Goal::Roll, Ev::Roll) | (Goal::Loot, Ev::Loot) => true,
                 (Goal::Craft(a), Ev::Craft(b)) | (Goal::Use(a), Ev::Use(b)) => a == b,
                 (Goal::Talk(a), Ev::Talk(b)) => a == b,
-                (Goal::Dog, Ev::Dog) | (Goal::Train, Ev::Train) => true,
+                (Goal::Dog, Ev::Dog) | (Goal::Train, Ev::Train) | (Goal::Mine, Ev::Mine) => true,
                 _ => false,
             };
             if hit {
@@ -422,6 +519,10 @@ impl Game {
                         self.story_set(which, idx, true, q.count);
                         self.story_ready(q);
                     }
+                }
+                Goal::Equip(prefix) if self.progress.eq.weapon.starts_with(prefix) => {
+                    self.story_set(which, idx, true, q.count);
+                    self.story_ready(q);
                 }
                 Goal::Level | Goal::Dog
                     if self.quest_progress(q, n) >= q.count => {

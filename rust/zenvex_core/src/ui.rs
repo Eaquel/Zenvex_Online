@@ -1341,6 +1341,13 @@ impl Game {
                 self.day_t = self.day_t.floor() + 0.5;
                 Ok("Gündüz oldu".into())
             }
+            "guide" | "rehber" if arg(1) == "off" => {
+                // öğretici zincirini bitmiş say (tanıtım klipleri ve test için)
+                self.progress.story.guide = crate::story::GUIDE.len();
+                self.progress.story.guide_on = false;
+                self.progress.story.guide_n = 0;
+                Ok("Öğretici kapatıldı".into())
+            }
             "heal" | "can" => {
                 self.player.hp = self.progress.max_hp();
                 self.player.stamina = self.progress.max_stamina();

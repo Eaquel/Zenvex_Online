@@ -1230,6 +1230,8 @@ pub enum QuestKind {
     Soldier,
     /// devlet üssü ele geçir
     BaseCap,
+    /// kaya kır (kazma)
+    Mine,
 }
 
 pub struct QuestDef {
@@ -1389,6 +1391,15 @@ pub const DAILY_POOL: &[QuestDef] = &[
         gold: 100,
         xp: 200,
         pass_xp: 250,
+    },
+    QuestDef {
+        id: "d_mine",
+        title: "12 kaya kır",
+        kind: QuestKind::Mine,
+        goal: 12,
+        gold: 90,
+        xp: 150,
+        pass_xp: 200,
     },
 ];
 
