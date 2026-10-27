@@ -26,6 +26,7 @@ TR = "çğıöşüÇĞİÖŞÜ"
 
 # çevrilmeyenler: dil adları (her dil kendi adıyla görünür), protokol başlıkları, iç adlar
 SKIP = {
+    "Öğretici kapatıldı",
     "Türkçe", "English", "Español", "Português (Brasil)", "Русский", "Deutsch", "Français", "Italiano",
     "Bahasa Indonesia", "العربية", "Authorization", "Bearer {0}", "%.2f Mr", "Zenvex Online", "Zenvex",
     "Material", "Consumable", "Ammo", "Weapon", "Helmet", "Jacket", "Boots", "Bag", "Cloak", "Ring", "Necklace",

@@ -70,41 +70,25 @@ fun fmtId(id: Long): String = if (id < 0) "—" else id.toString().padStart(7, '
  */
 @Composable
 fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
-    val t = rememberTime()
     var tick by remember { mutableIntStateOf(0) }
     val prof = remember(epoch, tick) { GameSession.ui("profile") }
-    val chars = remember(epoch, tick) { GameSession.ui("characters") }
     // oyun tamamen çevrimiçi: hesapsız oynanmaz (misafir yok)
     var dialog by remember { mutableStateOf(if (!Account.loggedIn) "welcome" else "") }
     var devTaps by remember { mutableIntStateOf(0) }
-    val sel = prof.optInt("character").coerceIn(0, 3)
-    var dir by remember { mutableIntStateOf(1) }
     LaunchedEffect(Unit) { Account.servers(); if (Account.loggedIn) Account.refresh() }
     // oyundan atıldıysak (başka cihaz, bakım, yasak, bağlantı) nedeni göster
     val kicked = com.zenvex.online.game.Session.kicked.value
     LaunchedEffect(kicked) { if (kicked != null) { Toaster.show(kicked, false); com.zenvex.online.game.Session.kicked.value = null } }
-    val ch = chars.optJSONArray("chars")?.optJSONObject(sel) ?: JSONObject()
-    val unlocked = ch.optBoolean("unlocked", sel == 0)
-    val col = Color(0xFFB277FF)
 
     // sahne: kodla çizilen canlı yıkık şehir (gün batımı, yangınlar, kor yağmuru, uzakta sürünen zombi silüetleri, kamp ateşi)
     LiveScene(SceneKind.LOBBY) {
-        // ---- sol: büyük logo + slogan + kahraman rozeti (karakter vitrini yok: sahne kendisi konuşur)
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 54.dp, top = 76.dp), horizontalAlignment = Alignment.Start) {
+        // ---- sol: büyük logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi sağ üstteki profil simgesinde)
+        Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 70.dp), horizontalAlignment = Alignment.Start) {
             CodeLogo(150.dp)
             Spacer(Modifier.height(10.dp))
             PT("Hayatta Kal. Güçlen. Üssünü Savun.", 17.sp, Color(0xFFFFE2B8), outline = true)
-            Spacer(Modifier.height(14.dp))
-            Row(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0x99120A14)).border(1.dp, Color(0x66B277FF), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Icon("fist", 20.dp, col)
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    PT(ch.optString("name").uppercase() + " · Sv ${ch.optInt("level")}/${ch.optInt("max", 10)}", 15.sp, col)
-                    PT(ch.optString("ability") + ": " + ch.optString("ability_desc"), 11.sp, Px.Sub, maxLines = 2)
-                }
-            }
         }
+        ShotGallery(Modifier.align(Alignment.BottomStart).padding(start = 54.dp, bottom = 12.dp))
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
         val pp = if (Account.loggedIn) Account.profile.value else JSONObject().put("name", prof.optString("name")).put("level", prof.optInt("level", 1))
         ProfileBadge(pp, !Account.loggedIn, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp)) {
@@ -380,9 +364,11 @@ private val NEWS: List<List<Pair<String, String>>> = listOf(
         "Klan" to "Klan seviyesi arttıkça üye sınırı, güçlendirmeler ve klan ödülleri açılır. Ele geçirilen üsler klana dakikada XP kazandırır.",
     ),
     listOf(
-        "Yeni Görseller" to "Yeni zombiler, yeni efektler (seviye atlama, iksir auraları, vuruş kıvılcımı, katana izi, yıldırım) ve yeni yapılar (sağlık çadırı, gizemli ağaç, benzin istasyonu).",
-        "Animasyonlar" to "Kahraman ve köpek animasyonları baştan yapıldı: yürüyüş, koşu, takla, silah kavrama ve kılıç savuruşu.",
-        "Denge" to "Karakterler biraz yavaşladı, ağaç kesmek daha uzun sürüyor, yalnız saldırılar dayanıklılık harcıyor.",
+        "3B Kahramanlar" to "Kahramanlar, silahlar ve araçlar artık gerçek 3B model: her yönden, her silahla canlı animasyonlarla çizilir. Tırpanın üç vuruşluk kombosu, balta ve kazma darbeleri, RPG'nin roket yüklemesi baştan yapıldı.",
+        "Balta Ve Kazma" to "Balta ve kazmayı elinde tut: ağaç ve kayalara 1,6 kat güçlü vurursun. Silahı sağdaki silah tuşuyla değiştirirsin; roketatar her atıştan sonra yeni roket takar.",
+        "Silah Ve Aletler" to "Sağdaki silah tuşu elindeki silahları sırayla değiştirir.",
+        "Yeni Efektler" to "Kodla çizilen ateş topu, halka dalgaları, rün mührü aurası (Sv 10, 25, 40, 50), silüet gölgeler, toz ve lastik izi. Ayarlardan Efekt Kalitesi ve Çözünürlük ile cihazına göre ayarla.",
+        "Görevler" to "Öğretici baştan yazıldı (balta, kazma, ilk silah) ve görevci artık Sv 40'a kadar ana görev zinciri veriyor: karakollar, bölge avları ve Titan.",
         "Kaldırılanlar" to "Bisiklet oyundan çıkarıldı.",
     ),
 )

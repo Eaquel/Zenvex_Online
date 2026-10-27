@@ -114,6 +114,13 @@ data class Settings(
             I18n.load(ctx, current.language)
         }
 
+        /** ilk açılışta dil ekranı bir kez gösterilir (cihaz dili seçili gelir); seçilince işaretlenir */
+        fun languageChosen(ctx: Context): Boolean = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("langChosen", false)
+
+        fun markLanguageChosen(ctx: Context) {
+            ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("langChosen", true).apply()
+        }
+
         fun save(ctx: Context, s: Settings) {
             current = s
             ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit()

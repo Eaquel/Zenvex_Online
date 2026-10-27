@@ -426,7 +426,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             camX += (px - camX) * k
             camY += (py - 40f - camY) * k
             if (abs(px - camX) > 1500 || abs(py - camY) > 1500) { camX = px; camY = py - 40f }
-            val visibleM = when (s.zoom) { 0 -> 10.5f; 1 -> 13f; else -> 16.5f }
+            val visibleM = if (promoZoom > 0f) promoZoom else when (s.zoom) { 0 -> 10.5f; 1 -> 13f; else -> 16.5f }
             scale = sh / (visibleM * 62.5f)
             viewW = sw / scale; viewH = sh / scale
             viewArr[0] = camX - viewW / 2; viewArr[1] = camY - viewH / 2
@@ -827,6 +827,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         val lvl: Int = 0, val hpCur: Int = -1, val hpMax: Int = 0, val self: Boolean = false)
     private val plates = ArrayList<Plate>()
 
+    /** tanıtım/test: arayüzsüz (temiz) kare ve sabit görüş yüksekliği (metre); oyuncu ayarlarına dokunmaz */
+    internal var clean = false
+    internal var promoZoom = 0f
+
     private fun render(c: Canvas, dt: Float) {
         val s = Settings.current
         frameDt = dt
@@ -870,17 +874,19 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawBombs(c)
         drawBolts(c)
         drawLighting(c)
-        drawPlates(c)
+        if (!clean) drawPlates(c)
         drawFloaters(c)
         drawAreaEdge(c, px, py)
         c.restore()
-        drawHud(c)
-        drawBaseHud(c)
-        drawControls(c)
-        drawBuild(c)
-        drawTutorial(c)
+        if (!clean) {
+            drawHud(c)
+            drawBaseHud(c)
+            drawControls(c)
+            drawBuild(c)
+            drawTutorial(c)
+        }
         // FPS ve ping: sağ alt köşede tek satır (sol alttaki seviye/koordinat yazılarıyla çakışmaz)
-        if (s.showFps || s.showPing) {
+        if (!clean && (s.showFps || s.showPing)) {
             val d = density
             var x = sw - 10 * d
             val y = sh - 9 * d

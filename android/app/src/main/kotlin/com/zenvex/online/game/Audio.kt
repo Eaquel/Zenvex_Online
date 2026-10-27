@@ -39,7 +39,11 @@ object Audio {
     /** volume: 0..1 ek çarpan (ör. uzaklık); pitch: 0.5..2 */
     private val lastPlay = HashMap<String, Long>()
 
+    /** Test/tanıtım: çalınan her sesi dinler (ad, ses, perde); kare kare video için sesleri olayın anına yerleştirmek içindir */
+    @JvmField var tap: ((String, Float, Float) -> Unit)? = null
+
     fun play(name: String, volume: Float = 1f, pitch: Float = 1f, bus: Bus = Bus.Sfx) {
+        tap?.invoke(name, volume, pitch)
         val p = pool ?: return
         val id = ids[name] ?: return
         // aynı ses 45 ms içinde tekrar çalınmaz (çok askerli çatışmada ses kanalı ve işlemci boğulmasın)

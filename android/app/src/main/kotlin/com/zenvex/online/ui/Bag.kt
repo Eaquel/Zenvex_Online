@@ -404,6 +404,8 @@ internal fun BagView(
                                 if (equippable || usable || placeable || key) PxButton(when { equippable -> "Kuşan"; placeable -> "Üsse Kur"; key -> "Aracı Çağır"; else -> "Kullan" },
                                     Modifier.fillMaxWidth(), height = 38.dp, size = 14.sp) {
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
+                                    // V16: balta/kazma kuşanılınca elde tutmanın faydası bir kez hatırlatılır
+                                    if (equippable && r.ok && isTool(item.optString("id"))) Toaster.show("Elinde tuttuğun balta ve kazma 1,6 kat güçlü vurur ve gerçek alet olarak görünür; çantada dururken eskisi gibi çalışmaya devam eder.")
                                 }
                                 if (usable && s >= pockets) PxButton("Cebe Koy", Modifier.fillMaxWidth(), color = Px.Blue, height = 32.dp, size = 12.sp) {
                                     val free = (0 until pockets).firstOrNull { slots!!.isNull(it) } ?: 0
@@ -536,6 +538,9 @@ private val KIND_NAMES = mapOf("Material" to "Malzeme", "Consumable" to "Tüketi
     "Jacket" to "Ceket", "Boots" to "Bot", "Bag" to "Çanta", "Cloak" to "Pelerin", "Pants" to "Pantolon", "Chest" to "Sandık", "Currency" to "Para", "Ring" to "Yüzük", "Necklace" to "Kolye",
     "Tool" to "Alet")
 
+/** balta ve kazma: çantada durunca da çalışan aletler */
+private fun isTool(id: String) = id.startsWith("t_axe_") || id.startsWith("t_pick_")
+
 @Composable
 fun PxItemDetail(item: JSONObject) {
     val r = item.optInt("rarity")
@@ -549,6 +554,7 @@ fun PxItemDetail(item: JSONObject) {
     }
     Spacer(Modifier.height(8.dp))
     PT(item.optString("desc"), 12.sp, Px.Text, maxLines = 6)
+    if (isTool(item.optString("id"))) PT("Alet çantada dururken de çalışır ama gerçek gücü elinde.", 11.sp, Px.Sub, maxLines = 3)
     Spacer(Modifier.height(4.dp))
     PT("Değer: ${item.optInt("value")} Altın", 11.sp, Px.Clan)
 }

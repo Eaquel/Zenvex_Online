@@ -64,6 +64,7 @@ A unit test fails if any language misses a string or breaks a `{0}` placeholder.
 | [21 V15 plan](docs/21_BUYUK_PLAN_V15.md) | current roadmap |
 | [22 V16 asset and prompt document](docs/22_DEVASA_PROMPT_V16.md) | asset audit, production methods (3D / image / code) and prompts |
 | [23 Promo kit](docs/23_TANITIM.md) | key-art prompts and the gameplay trailer pipeline |
+| [24 Item icon prompts](docs/24_ESYA_PROMPTLARI.md) | armor sets, necklaces, rings, bags, ammo and chests |
 | [Release guide](docs/teknik/YAYIN.md) | versions, store signing, server, Supabase, store checklist |
 | [Tester notes](docs/TEST_NOTLARI.md) | what changed in this test build |
 

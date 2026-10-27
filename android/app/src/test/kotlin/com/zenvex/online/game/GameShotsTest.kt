@@ -366,7 +366,7 @@ class GameShotsTest {
         org.junit.Assert.assertTrue("çizim çağrısı düşük < orta < yüksek olmalı: ${calls.toList()}", calls[0] < calls[1] && calls[1] < calls[2])
     }
 
-    private fun fxCalm(name: String): () -> Unit = { cheat("level 8"); cheat("god"); cheat("hero 0"); cheat("tp deep"); cheat("killall"); Unit }
+    private fun fxCalm(name: String): () -> Unit = { cheat("level 8"); cheat("god"); cheat("hero 0"); cheat("tp deep"); cheat("killall") }
     @Test fun f07_explosion() = fxShot("explode", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("explode") })
     @Test fun f08_bomb() = fxShot("bomb", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("bomb", 200f, -40f) })
     @Test fun f09_levelup() = fxShot("levelup", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("levelup") })
@@ -375,4 +375,102 @@ class GameShotsTest {
     @Test fun f12_bolt() = fxShot("bolt", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("bolt", 90f, 30f) })
     @Test fun f13_fireRage() = fxShot("firerage", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("fire", 100f, 30f); it.previewEffect("rage", 0f, 0f) })
     @Test fun f14_hitFx() = fxShot("hitfx", fxCalm("x"), steps = 20, frames = 6, after = { it.previewEffect("crit", 60f, -40f); it.previewEffect("blood", 110f, -10f); it.previewEffect("frost", -70f, 10f); it.previewEffect("spark", 160f, -30f) })
+
+    // ------------------------------------------------------------------ "gerçek oyuncu gibi oynanış" klipleri (reklam/tanıtım)
+    /**
+     * Kahraman durmaz: koşar, kaçar, takla atar, sürüye döner; kamera yaklaşıp uzaklaşır.
+     * PROMO_HUD=1: gerçek oyun arayüzüyle (build/promo_hud/<ad>), yoksa arayüzsüz (build/promo/<ad>). PROMO_EVERY=n: yalnız her n. kareyi kaydet (ön izleme).
+     */
+    private fun playClip(name: String, setup: () -> Unit, warm: Int, frames: Int, move: (Int) -> FloatArray, meters: (Int) -> Float,
+                         rolls: Set<Int> = emptySet(), onFrame: ((GameView, Int) -> Unit)? = null, who: String = "Kael") {
+        Assume.assumeTrue("libzenvex.so yok", native())
+        val hud = System.getenv("PROMO_HUD") == "1"
+        val every = (System.getenv("PROMO_EVERY") ?: "1").toInt().coerceAtLeast(1)
+        com.zenvex.online.ui.Demo.on = true
+        GameSession.initPreview(paparazzi.context)
+        Model3D.initSync(paparazzi.context)
+        val before = Settings.current
+        Settings.preview(Settings().withPreset(3).copy(zoom = 0, screenShake = 0.6f, showFps = false, showPing = false))
+        try {
+            setup()
+            cheat("guide off"); cheat("heal")
+            val view = GameView(paparazzi.context, ui)
+            view.localName = who
+            view.clean = !hud
+            val portrait = System.getenv("PROMO_PORTRAIT") == "1"
+            val w = if (portrait) 1080 else 2340; val h = if (portrait) 1920 else 1080
+            val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+            val c = Canvas(bmp)
+            val mk = if (portrait) 1.55f else 1f   // dikeyde ekranın yüksekliği daha çok metre gösterir
+            view.promoZoom = meters(0) * mk
+            view.previewFrames(c, w, h, warm, input = floatArrayOf(0f, 0f, 0f, 0f, 0f))
+            // oyunun çaldığı her ses (olayın anında) kaydedilir: video sesi gerçek oyun sesleriyle birebir eşlenir
+            var frameNo = 0
+            val sfxLog = org.json.JSONArray()
+            Audio.tap = { n, v, p -> sfxLog.put(org.json.JSONObject().put("f", frameNo).put("n", n).put("v", v.toDouble()).put("p", p.toDouble())) }
+            val dir = java.io.File(if (portrait) "build/promo_v/$name" else if (hud) "build/promo_hud/$name" else "build/promo/$name").apply { deleteRecursively(); mkdirs() }
+            for (i in 0 until frames) {
+                view.promoZoom = meters(i) * mk
+                frameNo = i
+                if (i in rolls) GameSession.cmd("ability")
+                onFrame?.invoke(view, i)
+                view.previewFrames(c, w, h, 1, input = move(i))
+                if (i % every == 0) java.io.FileOutputStream(java.io.File(dir, "f%04d.png".format(i))).use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+            java.io.File(dir, "sfx.json").writeText(sfxLog.toString())
+        } finally { Audio.tap = null; Settings.preview(before) }
+    }
+
+    private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t.coerceIn(0f, 1f)
+    private fun ease(t: Float) = t.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+
+    /** Sürü: koşarak çekip toplar, sonra ortasında dönerek biçer, arada takla atar. */
+    @Test fun y01_playHorde() = playClip("horde",
+        { cheat("level 30"); cheat("god"); cheat("hero 0"); cheat("tp camp"); cheat("killall"); equip("ev_blood_weapon"); cheat("night"); cheat("spawn walker 9 20"); cheat("spawn runner 4 20"); cheat("spawn dark 3 20") },
+        110, 240,
+        move = { i ->
+            if (i < 50) { val a = i * 0.11f; floatArrayOf(kotlin.math.cos(a), kotlin.math.sin(a), kotlin.math.cos(a), kotlin.math.sin(a), 0f) }
+            else { val a = i * 0.16f; floatArrayOf(0.4f * kotlin.math.cos(a * 0.5f), 0.4f * kotlin.math.sin(a * 0.5f), kotlin.math.cos(a), kotlin.math.sin(a), 1f) }
+        },
+        meters = { i -> lerp(8.6f, 6.0f, ease((i - 30) / 50f)) + lerp(0f, 1.4f, ease((i - 170) / 60f)) },
+        rolls = setOf(95, 160))
+
+    /** Roketatar: geri çekilerek ateş eder, tank ve sürü patlar. */
+    @Test fun y02_playRocket() = playClip("rocket",
+        { cheat("level 30"); cheat("god"); cheat("hero 1"); cheat("tp downtown"); cheat("killall"); equip("w_rpg"); cheat("spawn tank 2 30"); cheat("spawn walker 10 30"); cheat("spawn runner 4 30") },
+        110, 240, who = "Lyra",
+        move = { i -> floatArrayOf(-0.55f, 0.1f * kotlin.math.sin(i / 14f), 1f, 0.05f * kotlin.math.sin(i / 20f), 1f) },
+        meters = { i -> lerp(9.0f, 7.0f, ease(i / 120f)) + lerp(0f, 1.0f, ease((i - 170) / 60f)) },
+        rolls = setOf(120))
+
+    /** Motosiklet: çölde sürüyle yarışır, zikzak çizer. */
+    @Test fun y03_playChase() = playClip("chase",
+        { cheat("level 30"); cheat("god"); cheat("hero 0"); cheat("tp desert"); cheat("killall"); cheat("spawn runner 8 30"); cheat("spawn walker 8 30"); cheat("vehicle moto") },
+        8, 270,
+        move = { i -> floatArrayOf(1f, 0.55f * kotlin.math.sin(i / 16f), 0f, 0f, 0f) },
+        meters = { i -> lerp(9.5f, 8.0f, ease(i / 90f)) },
+        onFrame = { v, i -> if (i == 0) drive(v, 1f, 0f) })
+
+    /** Titan: etrafında dönerek takla atar ve vurur. */
+    @Test fun y04_playTitan() = playClip("titan",
+        { cheat("level 50"); cheat("god"); cheat("hero 2"); cheat("tp desert"); cheat("killall"); equip("ev_titan_weapon"); cheat("boss") },
+        140, 240, who = "Vex",
+        move = { i ->
+            val a = i * 0.05f
+            if (i < 40) floatArrayOf(0.9f, -0.43f, 0.9f, -0.43f, 0f)
+            else floatArrayOf(-0.8f * kotlin.math.sin(a), 0.8f * kotlin.math.cos(a), 0.9f, -0.43f, 1f)
+        },
+        meters = { i -> lerp(9.2f, 7.0f, ease((i - 20) / 60f)) },
+        rolls = setOf(70, 120, 175))
+
+    /** Donmuş liman: buz tırpanıyla sürüyü biçer. */
+    @Test fun y05_playFrost() = playClip("frost",
+        { cheat("level 45"); cheat("god"); cheat("hero 3"); cheat("tp harbor"); cheat("killall"); equip("ev_breath_weapon"); cheat("spawn walker 8 40"); cheat("spawn dark 5 40"); cheat("spawn runner 3 40") },
+        110, 210, who = "Morvath",
+        move = { i ->
+            if (i < 40) floatArrayOf(-0.7f, 0.3f, -0.7f, 0.3f, 0f)
+            else { val a = i * 0.17f; floatArrayOf(0.35f * kotlin.math.cos(a * 0.4f), 0.35f * kotlin.math.sin(a * 0.4f), kotlin.math.cos(a), kotlin.math.sin(a), 1f) }
+        },
+        meters = { i -> lerp(8.4f, 6.2f, ease((i - 25) / 50f)) },
+        rolls = setOf(85, 150))
 }
