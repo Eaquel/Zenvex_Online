@@ -109,6 +109,39 @@ pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32,
     let ts = tex.size.max(1);
     let coarse = step > 2.0;
     let means: Vec<u32> = if coarse { tex.tex.iter().map(|t| mean_color(t)).collect() } else { Vec::new() };
+    // V19: harita ölçeğinde zemin düz renk değil, dokunun küçültülmüş hâli (kum dalgası, çatlak, çim, kar dokusu görünür):
+    // her doku `f` katı kutu ortalamasıyla küçültülür, çıktı pikseli küçük dokudan okunur
+    let f = (step.round() as usize).clamp(1, (ts / 8).max(1));
+    let ms = (ts / f).max(1);
+    let mips: Vec<Vec<u32>> = if coarse {
+        tex.tex
+            .iter()
+            .map(|t| {
+                if t.len() < ts * ts {
+                    return Vec::new();
+                }
+                let mut m = vec![0u32; ms * ms];
+                for my in 0..ms {
+                    for mx in 0..ms {
+                        let (mut r, mut g, mut b) = (0u32, 0u32, 0u32);
+                        for dy in 0..f {
+                            for dx in 0..f {
+                                let c = t[(my * f + dy) * ts + mx * f + dx];
+                                r += (c >> 16) & 255;
+                                g += (c >> 8) & 255;
+                                b += c & 255;
+                            }
+                        }
+                        let n = (f * f) as u32;
+                        m[my * ms + mx] = 0xFF00_0000 | ((r / n) << 16) | ((g / n) << 8) | (b / n);
+                    }
+                }
+                m
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let seed = world.seed;
     let warp = 26.0;
     let mat_at = |wx: f32, wy: f32| -> u8 {
@@ -169,7 +202,14 @@ pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32,
                 }
                 let mm = if (mm as usize) < tex.tex.len() && !tex.tex[mm as usize].is_empty() { mm } else { fallback(mm) };
                 if coarse {
-                    return means.get(mm as usize).copied().unwrap_or(0xFF4F8A3A);
+                    return match mips.get(mm as usize) {
+                        Some(m) if !m.is_empty() => {
+                            let u = ((wx / f as f32) as usize) % ms;
+                            let v = ((wy / f as f32) as usize) % ms;
+                            m[v * ms + u]
+                        }
+                        _ => means.get(mm as usize).copied().unwrap_or(0xFF4F8A3A),
+                    };
                 }
                 let t = &tex.tex[mm as usize];
                 let u = (wx as usize) % ts;

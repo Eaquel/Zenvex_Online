@@ -280,6 +280,8 @@ internal fun WorldMapView(
     var picked by remember { mutableStateOf(initialPick) }
     val t = rememberTime()
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    // V19: bölge dışı oyundaki gibi bulut denizi dokusu (assets/ui/cloud_tile)
+    val cloudSea = remember { UiArt.image(ctx, "cloud_tile") }
     val label = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textAlign = android.graphics.Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD } }
     val badges = remember { listOf("map_gov", "map_clan", "map_war", "map_unknown").associateWith { UiArt.image(ctx, it) } }
     fun minZoom() = if (view.width == 0) 0.02f else min(view.width / (bx1 - bx0), view.height / (by1 - by0))
@@ -346,7 +348,21 @@ internal fun WorldMapView(
                     for (r in area.rects) addRect(androidx.compose.ui.geometry.Rect(at(r[0], r[1]), at(r[2], r[3])))
                 }
                 clipPath(hole, androidx.compose.ui.graphics.ClipOp.Difference) {
-                    drawRect(Color(0xF00C0A12))
+                    if (cloudSea == null) drawRect(Color(0xF00C0A12)) else {
+                        // dünya ölçeğinde 360 px'lik döşeme (oyundaki sınırla aynı boyut), yavaşça süzülür
+                        val tw = (360f * z).coerceAtLeast(24f)
+                        val sx0 = (ox + t * 7f * z) % tw - tw; val sy0 = (oy + t * 2.5f * z) % tw - tw
+                        var yy = sy0
+                        while (yy < size.height) {
+                            var xx = sx0
+                            while (xx < size.width) {
+                                drawImage(cloudSea, IntOffset.Zero, IntSize(cloudSea.width, cloudSea.height), IntOffset(xx.toInt(), yy.toInt()),
+                                    IntSize(tw.toInt() + 1, tw.toInt() + 1), filterQuality = FilterQuality.Low)
+                                xx += tw
+                            }
+                            yy += tw
+                        }
+                    }
                 }
                 drawPath(hole, Color(0xFFB080FF).copy(alpha = 0.55f + 0.25f * sin(t * 2f)), style = androidx.compose.ui.graphics.drawscope.Stroke(2.dp.toPx()))
             }

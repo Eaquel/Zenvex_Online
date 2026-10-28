@@ -3569,8 +3569,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 rect.set(cx + (q[0] - px) / range * r, cy + (q[1] - py) / range * r, cx + (q[2] - px) / range * r, cy + (q[3] - py) / range * r)
                 c.clipOutRect(rect)
             }
-            // bölge dışı bulut denizi (oyundaki sınırla aynı renk)
-            fill.color = 0xF2A8ACC8.toInt(); c.drawCircle(cx, cy, r, fill)
+            // bölge dışı bulut denizi: oyundaki sınırla aynı doku (düz beyaz alan değil), aynı yavaşlıkta süzülür
+            val tile = cloudTile
+            if (tile == null) { fill.color = 0xF2A8ACC8.toInt(); c.drawCircle(cx, cy, r, fill) }
+            else {
+                cloudPaint.colorFilter = null; cloudPaint.alpha = 255
+                val T = 360f; val ts = T / range * r
+                val ox = time * 7f; val oy = time * 2.5f
+                val gx0 = floor((px - range - ox) / T).toInt(); val gx1 = floor((px + range - ox) / T).toInt()
+                val gy0 = floor((py - range - oy) / T).toInt(); val gy1 = floor((py + range - oy) / T).toInt()
+                for (gj in gy0..gy1) for (gi in gx0..gx1) {
+                    val x0 = cx + (gi * T + ox - px) / range * r; val y0 = cy + (gj * T + oy - py) / range * r
+                    cloudDst.set(x0, y0, x0 + ts + 1f, y0 + ts + 1f)
+                    c.drawBitmap(tile, null, cloudDst, cloudPaint)
+                }
+            }
             c.restore()
         }
         // kenar karartması
