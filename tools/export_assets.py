@@ -1,7 +1,7 @@
 """Oyundaki tüm görsel varlıkları (3B modeller hariç) tek tek PNG olarak dışa aktarır.
 
 python3 tools/export_assets.py <çıktı klasörü>
-  sprites/  atlas sprite'ları (zombi, yapı, eşya, pet, NPC, efekt…): her kare ayrı PNG, anahtar yolu klasör düzenidir
+  sprites/  atlas sprite'ları (zombi, yapı, eşya, pet, efekt…; NPC ve karakter kareleri hariç): her kare ayrı PNG, anahtar yolu klasör düzenidir
   ui/       arayüz görselleri (zaten tek tek; PNG'ye çevrilir)
   ground/   zemin dokuları
   app/      uygulama simgeleri
@@ -19,6 +19,11 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../android/app/
 ASSETS = os.path.join(ROOT, "assets")
 
 
+# karakterler (NPC kareleri ve portreler) ve karakter animasyonları dışarıda tutulur
+SKIP_SPRITE = ("n/", "npc/")
+SKIP_UI = {"commander_portrait"}
+
+
 def safe(name):
     return re.sub(r"[^A-Za-z0-9_.\-/]", "_", name)
 
@@ -32,6 +37,8 @@ def main():
         w = csv.writer(f)
         w.writerow(["key", "page", "x", "y", "w", "h", "anchor_x", "anchor_y", "scale"])
         for key, v in sorted(m["sprites"].items()):
+            if key.startswith(SKIP_SPRITE):
+                continue
             pg, x, y, sw, sh = v[:5]
             p = os.path.join(out, "sprites", safe(key) + ".png")
             os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -42,6 +49,8 @@ def main():
     for src, dst in (("ui", "ui"), ("v2/ground", "ground")):
         c = 0
         for fn in sorted(os.listdir(os.path.join(ASSETS, src))):
+            if os.path.splitext(fn)[0] in SKIP_UI:
+                continue
             try:
                 im = Image.open(os.path.join(ASSETS, src, fn)).convert("RGBA")
             except Exception:
