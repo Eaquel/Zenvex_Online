@@ -517,7 +517,7 @@ pub const WEAPONS: &[WeaponDef] = &[
         stun: 0.05,
         sprite: "katana",
     },
-    // etkinlik silahları: görsel gelene dek katana / bıçak çizimiyle (istemler: docs/15_PROMPTLAR_V11.md)
+    // etkinlik silahları: görsel gelene dek katana / bıçak çizimiyle (istemler: docs/28_GORSEL_PROMPTLARI_V19.md)
     WeaponDef {
         item: "ev_blood_weapon",
         class: WeaponClass::Melee,

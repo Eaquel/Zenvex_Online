@@ -25,7 +25,7 @@ rust/zenvex_server  optional WebSocket game server (rooms = regions)
 supabase/           SQL migrations and edge functions (accounts, saves, clans, store, support)
 deploy/             one-command server install (systemd + Caddy)
 tools/              asset pipelines (pixel, assetgen) and tools/i18n (translations)
-docs/               design and architecture; docs/archive holds superseded plans
+docs/               design and architecture
 art/                concept art and screenshots
 ```
 
@@ -61,11 +61,8 @@ A unit test fails if any language misses a string or breaks a `{0}` placeholder.
 | [04 Architecture](docs/04_TEKNIK_MIMARI.md) | Rust + Kotlin layers, JNI |
 | [09 Supabase](docs/09_SUPABASE.md) | database, functions, security model |
 | [Game server](docs/teknik/OYUN_SUNUCUSU.md) | WebSocket server and deployment |
-| [21 V15 plan](docs/21_BUYUK_PLAN_V15.md) | current roadmap |
-| [22 V16 asset and prompt document](docs/22_DEVASA_PROMPT_V16.md) | asset audit, production methods (3D / image / code) and prompts |
+| [28 Art prompts (V19)](docs/28_GORSEL_PROMPTLARI_V19.md) | chests, admin panel art and the remaining icons |
 | [23 Promo kit](docs/23_TANITIM.md) | key-art prompts and the gameplay trailer pipeline |
-| [24 Item icon prompts](docs/24_ESYA_PROMPTLARI.md) | armor sets, necklaces, rings, bags, ammo and chests |
-| [25 Shop and VIP art prompts](docs/25_MAGAZA_VIP_PROMPTLARI.md) | VIP badges 1-11, diamond packs, bundles, subscription cards, season tickets, shop background, tab icons |
 | [26 UI/UX and gameplay research](docs/26_UI_UX_ARASTIRMA.md) | 125 sources by topic, findings and what was applied in the game |
 | [Release guide](docs/teknik/YAYIN.md) | versions, store signing, server, Supabase, store checklist |
 | [Tester notes](docs/TEST_NOTLARI.md) | what changed in this test build |

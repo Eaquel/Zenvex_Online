@@ -229,7 +229,7 @@ class UiShotsTest {
                 .put("photo", if (i == 1) fakePhoto() else "").put("v", 52000L - i * 4100).put("clan", if (i % 3 == 0) "KRT" else "")
                 .put("title", if (i < 5) title("kills", i + 1) else JSONObject.NULL).put("banned", i == 6).put("vip", i == 0))
         }
-        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
+        paparazzi.snapshot { SceneBackground("bg_craft", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
     }
 
     /** Klan seviye armaları 1-9: kalkan her seviyede aynı boyda, rakam ortada */
@@ -258,7 +258,7 @@ class UiShotsTest {
                 .put("photo", "").put("v", 52000L - i * 4100).put("clan", if (i % 3 == 0) "KRT" else "")
                 .put("title", title("kills", i + 1)).put("banned", false).put("vip", false))
         }
-        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
+        paparazzi.snapshot { SceneBackground("bg_craft", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { BoardDialog({}, rows) } } }
     }
 
     @Test
@@ -268,21 +268,21 @@ class UiShotsTest {
             .put("titles", org.json.JSONArray().put(title("kills", 1)).put(title("pvp", 3)).put(title("time", 7)))
             .put("stats", JSONObject().put("titan", 41).put("soldiers", 1820).put("bases", 12).put("dog", 3400).put("crafted", 980))
             .put("clan", JSONObject().put("name", "KRT").put("rank_name", "Lider").put("title", "Efsanevi Klan"))
-        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { PlayerProfileView(p, "", false, {}, {}) {} } } }
+        paparazzi.snapshot { SceneBackground("bg_craft", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { PlayerProfileView(p, "", false, {}, {}) {} } } }
     }
 
     @Test
     fun playerProfileBanned() {
         val p = JSONObject().put("id", 7654321).put("name", "Hileci").put("avatar", 3).put("frame", "").put("level", 12).put("kills", 900).put("hours", 8)
             .put("banned", true).put("stats", JSONObject())
-        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { PlayerProfileView(p, "", false, {}, {}) {} } } }
+        paparazzi.snapshot { SceneBackground("bg_craft", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { PlayerProfileView(p, "", false, {}, {}) {} } } }
     }
 
     @Test
     fun profileEditorTitles() {
         val p = JSONObject().put("id", 1234567).put("name", "Karanlık").put("avatar", 0).put("frame", "gold").put("photo", fakePhoto()).put("level", 41).put("kills", 52310)
             .put("hours", 214).put("title", title("kills", 1)).put("titles", org.json.JSONArray().put(title("kills", 1)).put(title("pvp", 3)).put(title("time", 7)))
-        paparazzi.snapshot { SceneBackground("bg_lobby", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { ProfileEditorView(p, {}, {}) { _, _ -> } } } }
+        paparazzi.snapshot { SceneBackground("bg_craft", null, dim = 0.3f) { androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) { ProfileEditorView(p, {}, {}) { _, _ -> } } } }
     }
 
     @Test

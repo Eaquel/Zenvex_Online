@@ -167,7 +167,7 @@ class Atlas private constructor(ctx: Context) {
     }
 }
 
-/** Görseli henüz çizilmemiş V11 eşyaları: kendi simgesi atlasa girene dek yakın bir simge (istemler: docs/15_PROMPTLAR_V11.md) */
+/** Görseli henüz çizilmemiş V11 eşyaları: kendi simgesi atlasa girene dek yakın bir simge (istemler: docs/28_GORSEL_PROMPTLARI_V19.md) */
 private val ITEM_STANDIN = mapOf(
     "i/t_axe_stone" to "i/stone", "i/t_axe_iron" to "i/w_knife", "i/t_pick_stone" to "i/stone", "i/t_pick_iron" to "i/scrap",
     "i/v_wheel" to "i/gear", "i/v_engine" to "i/electronics", "i/v_frame_moto" to "i/scrap", "i/v_frame_car" to "i/scrap",
