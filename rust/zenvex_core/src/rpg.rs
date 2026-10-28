@@ -408,6 +408,8 @@ pub fn dog_upgrade_cost(lv: u8) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

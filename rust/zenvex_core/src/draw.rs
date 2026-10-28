@@ -1,4 +1,6 @@
 //! Çizim listesi (y-sıralı), HUD ve radar.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, VEHICLES, ZOMBIES};
 use crate::game::*;
 use crate::world::{Kind, Shape, STATIC_NAMES};
@@ -348,11 +350,19 @@ impl Game {
             self.draw_tmp.push(e);
         }
         self.draw_bases(x0, y0, x1, y1);
-        self.draw_tmp
-            .sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+        // derinliğe göre sıra: 52 baytlık kayıtları kararlı sıralamayla taşımak yerine (anahtar, dizin) çiftleri sıralanır
+        // (eşit derinlikte ekleme sırası korunur: dizin alt 32 bitte); kayıtlar çıktıya bir kez kopyalanır
+        self.draw_idx.clear();
+        for (i, (y, _)) in self.draw_tmp.iter().enumerate() {
+            let b = y.to_bits();
+            let key = if b & 0x8000_0000 != 0 { !b } else { b | 0x8000_0000 };
+            self.draw_idx.push(((key as u64) << 32) | i as u64);
+        }
+        self.draw_idx.sort_unstable();
         let cap = out.len() / STRIDE;
         let n = self.draw_tmp.len().min(cap);
-        for (k, (_, rec)) in self.draw_tmp.iter().take(n).enumerate() {
+        for (k, &e) in self.draw_idx.iter().take(n).enumerate() {
+            let rec = &self.draw_tmp[(e & 0xFFFF_FFFF) as usize].1;
             out[k * STRIDE..(k + 1) * STRIDE].copy_from_slice(rec);
         }
         n
@@ -383,7 +393,7 @@ impl Game {
         let boss = self
             .zombies
             .iter()
-            .find(|z| z.boss && z.state != ZState::Dead && (z.x - p.x).hypot(z.y - p.y) < 1400.0);
+            .find(|z| z.boss && z.state != ZState::Dead && (z.x - p.x).hyp(z.y - p.y) < 1400.0);
         let (bhp, bmax) = boss.map_or((-1.0, 0.0), |b| (b.hp, b.max_hp));
         let veh = p.vehicle.map(|i| &self.vehicles[i]);
         [
@@ -451,7 +461,7 @@ impl Game {
             }
         }
         for v in &self.vehicles {
-            if !v.wrecked && (v.x - px).hypot(v.y - py) < 3000.0 {
+            if !v.wrecked && (v.x - px).hyp(v.y - py) < 3000.0 {
                 push(v.x, v.y, 2.0, out);
             }
         }
@@ -467,7 +477,7 @@ impl Game {
         let cell = crate::world::MAP_PX / crate::progress::FOG_N as f32;
         for b in crate::bases::base_defs() {
             let (bx, by) = b.pos();
-            if (bx - px).hypot(by - py) < 6000.0 && self.progress.explored((bx / cell) as usize, (by / cell) as usize) {
+            if (bx - px).hyp(by - py) < 6000.0 && self.progress.explored((bx / cell) as usize, (by / cell) as usize) {
                 push(bx, by, 6.0, out);
             }
         }

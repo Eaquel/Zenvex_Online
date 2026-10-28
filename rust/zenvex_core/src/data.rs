@@ -1617,6 +1617,8 @@ pub const COSMETICS: &[Cosmetic] = &[
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

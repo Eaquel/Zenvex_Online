@@ -1,6 +1,8 @@
 //! V12.1 kurulabilir tezgâh: "Tezgâh" eşyası elle üretilir, kullanınca bulunulan yere kurulur.
 //! Kişisel üste kurulan kalıcıdır (kayıtta, en çok HOME_MAX); başka yerde BENCH_TTL saniye durur (aynı anda bir tane).
 //! Gelişmiş tarifler (bench: true) yalnız bir tezgâhın yanında, ayrı "Tezgâh" ekranında üretilir.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, ITEMS};
 use crate::game::Game;
 
@@ -27,7 +29,7 @@ impl Game {
             return Err("Önce yeniden doğ".into());
         }
         let (px, py) = (self.player.x, self.player.y);
-        if (x - px).hypot(y - py) > BUILD_RANGE {
+        if (x - px).hyp(y - py) > BUILD_RANGE {
             return Err("Çok uzak (en çok 6 karo)".into());
         }
         if crate::areas::area_at(x, y) != crate::areas::area_at(px, py) {
@@ -36,7 +38,7 @@ impl Game {
         if self.world.blocked(x, y, 26.0, &mut self.scratch) {
             return Err("Burası dolu".into());
         }
-        let near = |&(bx, by): &(f32, f32)| (bx - x).hypot(by - y) < 90.0;
+        let near = |&(bx, by): &(f32, f32)| (bx - x).hyp(by - y) < 90.0;
         if self.world.benches.iter().any(near) || self.placed_benches().iter().any(|&(bx, by, _)| near(&(bx, by))) {
             return Err("Başka bir tezgâha çok yakın".into());
         }
@@ -74,7 +76,7 @@ impl Game {
             .progress
             .benches
             .iter()
-            .position(|&(x, y)| (x - px).hypot(y - py) < BENCH_NEAR)
+            .position(|&(x, y)| (x - px).hyp(y - py) < BENCH_NEAR)
             .ok_or("Yakında kaldırılabilecek tezgâh yok")?;
         let item = data::item_index("workbench").ok_or("Tezgâh eşyası yok")?;
         if !self.progress.inv.can_fit(item, 1) {
@@ -106,12 +108,14 @@ impl Game {
 
     pub fn near_placed_bench(&self) -> bool {
         let (px, py) = (self.player.x, self.player.y);
-        self.placed_benches().iter().any(|&(x, y, _)| (x - px).hypot(y - py) < BENCH_NEAR)
+        self.placed_benches().iter().any(|&(x, y, _)| (x - px).hyp(y - py) < BENCH_NEAR)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::game::Game;
     use crate::Progress;
 

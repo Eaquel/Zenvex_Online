@@ -1,4 +1,6 @@
 //! Savaş: yakın dövüş, ateşli silahlar, mermiler, patlamalar, zombi hasarı, ganimet.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, QuestKind, WeaponClass, ZKind, ZOMBIES};
 use crate::game::*;
 use crate::world::{Kind, Zone};
@@ -38,7 +40,7 @@ impl Game {
             }
             let (rx, ry) = (r.x, r.y);
             let (dx, dy) = (rx - px, ry - py);
-            let d = dx.hypot(dy);
+            let d = dx.hyp(dy);
             if d > range + 18.0 || !self.pvp_at(rx, ry) {
                 continue;
             }
@@ -83,7 +85,7 @@ impl Game {
                 continue;
             }
             let (dx, dy) = (z.x - px, z.y - py);
-            let d = dx.hypot(dy);
+            let d = dx.hyp(dy);
             let zr = ZOMBIES[z.kind as usize].radius;
             if d > range + zr {
                 continue;
@@ -132,7 +134,7 @@ impl Game {
         let near_foe = self
             .zombies
             .iter()
-            .any(|z| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < range + m(2.0));
+            .any(|z| z.state != ZState::Dead && (z.x - px).hyp(z.y - py) < range + m(2.0));
         if near_foe {
             // zombi yanında: ağaç kesme pozu bırakılır, sonraki savuruş normal saldırı döngüsüyle iner
             if matches!(self.player.anim, A_CHOP | A_MINE) {
@@ -155,7 +157,7 @@ impl Game {
                 continue;
             }
             let (dx, dy) = (s.x - px, s.y - py);
-            let d = dx.hypot(dy);
+            let d = dx.hyp(dy);
             let sr = match s.shape {
                 crate::world::Shape::Circle(r) => r,
                 _ => 20.0,
@@ -439,7 +441,7 @@ impl Game {
                 p.y += p.vy * dt / steps as f32;
                 let (x, y) = (p.x, p.y);
                 if p.hostile {
-                    if (x - self.player.x).hypot(y - self.player.y) < 24.0 && !self.player.dead {
+                    if (x - self.player.x).hyp(y - self.player.y) < 24.0 && !self.player.dead {
                         let d = p.dmg;
                         self.damage_player(d);
                         self.player.poison_t = self.player.poison_t.max(3.0);
@@ -454,7 +456,7 @@ impl Game {
                             continue;
                         }
                         let r = ZOMBIES[z.kind as usize].radius + 8.0;
-                        if (z.x - x).hypot(z.y - y) < r {
+                        if (z.x - x).hyp(z.y - y) < r {
                             hit_z = Some(zi);
                             break;
                         }
@@ -469,7 +471,7 @@ impl Game {
                         }
                         p.hit.push(zi);
                         let (vx, vy, d) = (p.vx, p.vy, p.dmg);
-                        let l = vx.hypot(vy).max(1.0);
+                        let l = vx.hyp(vy).max(1.0);
                         let crit = false;
                         self.hurt_zombie(zi, d, crit, vx / l * 0.6, vy / l * 0.6, false, true);
                         let p = &mut self.projectiles[i];
@@ -539,7 +541,7 @@ impl Game {
             if z.state == ZState::Dead {
                 continue;
             }
-            let d = (z.x - x).hypot(z.y - y);
+            let d = (z.x - x).hyp(z.y - y);
             if d < r {
                 let k = 1.0 - d / r * 0.6;
                 let (dx, dy) = ((z.x - x) / d.max(1.0), (z.y - y) / d.max(1.0));
@@ -829,7 +831,7 @@ impl Game {
             a.life -= dt;
             match a.kind {
                 AreaKind::ToxicPuddle | AreaKind::PoisonCloud => {
-                    if (px - a.x).hypot(py - a.y) < a.r {
+                    if (px - a.x).hyp(py - a.y) < a.r {
                         pdmg += a.dps * dt;
                         self.player.poison_t = self.player.poison_t.max(1.5);
                     }
@@ -837,7 +839,7 @@ impl Game {
                 AreaKind::Shockwave => {
                     let k = 1.0 - a.life / a.max_life;
                     let rr = a.r * k;
-                    let d = (px - a.x).hypot(py - a.y);
+                    let d = (px - a.x).hyp(py - a.y);
                     if !a.hit_done && (d - rr).abs() < 40.0 {
                         a.hit_done = true;
                         shock = Some((a.x, a.y, a.dps));
@@ -855,7 +857,7 @@ impl Game {
             if !self.player_invulnerable() {
                 self.damage_player_blast(d);
                 let (dx, dy) = (px - sx, py - sy);
-                let l = dx.hypot(dy).max(1.0);
+                let l = dx.hyp(dy).max(1.0);
                 let (mut nx, mut ny) = (px + dx / l * 110.0, py + dy / l * 110.0);
                 let gate = self.progress.level >= crate::progress::CITY_LEVEL;
                 self.world.resolve(&mut nx, &mut ny, 14.0, gate, &mut self.scratch);

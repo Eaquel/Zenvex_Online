@@ -1072,6 +1072,8 @@ fn veh_hp_full() -> [f32; 2] {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     /// V8-V10 keşif kaydı (120×2) V11 düzenine (150×3) aynı hücrelerle taşınır
@@ -1316,6 +1318,8 @@ mod tests {
 
 #[cfg(test)]
 mod xp_gap_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

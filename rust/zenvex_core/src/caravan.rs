@@ -2,6 +2,8 @@
 //! herkeste aynı) bölgenin karakollarından birine gelir, park eder, satış yapar, süre bitince gider. Her gelişinde
 //! malları baştan seçilir: listedeki her eşyanın bir "gelme olasılığı" vardır (dükkânda yazar); aynı dilimde aynı bölgede
 //! herkes aynı malları görür. Bir oyuncu bir gelişte her maldan stok kadar alabilir.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::areas::{self, AREAS};
 use crate::data::{self, ITEMS};
 use crate::game::Game;
@@ -73,7 +75,7 @@ fn stop_points(w: &world::World, area: usize) -> Vec<(f32, f32)> {
     let mut v: Vec<(f32, f32)> = w.merchants.iter().copied().filter(|&(x, y)| areas::area_at(x, y) == area).collect();
     for l in world::LANDMARKS.iter().filter(|l| l.safe) {
         let (x, y) = (l.tx * TILE, (l.ty + 3.0) * TILE);
-        if areas::area_at(x, y) == area && !v.iter().any(|&(a, b)| (a - x).hypot(b - y) < 20.0 * TILE) {
+        if areas::area_at(x, y) == area && !v.iter().any(|&(a, b)| (a - x).hyp(b - y) < 20.0 * TILE) {
             v.push((x, y));
         }
     }
@@ -187,7 +189,7 @@ impl Game {
     pub fn near_caravan(&self) -> Option<usize> {
         let (px, py) = (self.player.x, self.player.y);
         self.caravans.iter().position(|c| {
-            c.parked && self.npcs.get(c.npc).is_some_and(|n| (n.x - px).hypot(n.y - py) < 150.0 || (c.x - px).hypot(c.y - py) < 180.0)
+            c.parked && self.npcs.get(c.npc).is_some_and(|n| (n.x - px).hyp(n.y - py) < 150.0 || (c.x - px).hyp(c.y - py) < 180.0)
         })
     }
 
@@ -259,6 +261,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::Progress;
 

@@ -1,5 +1,7 @@
 //! Çevrimiçi eşitleme: ev sahibi zombi anlık görüntüsü üretir, istemciler uygular.
 //! Kayıt (NET_STRIDE): id, tür, x, y, yön, anim, anim_t, can, maks_can, seviye, alfa, bayrak(1 öfke, 2 boss, 4 ölü)
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::ZKind;
 use crate::game::*;
 
@@ -68,7 +70,7 @@ impl Game {
             // iki görüntü arası hız (sıçrama/ışınlanmada sıfır)
             let gap = now - z.snap_at;
             let (vx, vy) = if idx.is_some() && gap > 0.05 && gap < 1.0 { ((r[2] - z.snap_x) / gap, (r[3] - z.snap_y) / gap) } else { (0.0, 0.0) };
-            let fast = vx.hypot(vy) > 900.0;
+            let fast = vx.hyp(vy) > 900.0;
             z.snap_vx = if fast { 0.0 } else { vx };
             z.snap_vy = if fast { 0.0 } else { vy };
             z.snap_at = now;

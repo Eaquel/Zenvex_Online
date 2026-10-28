@@ -231,6 +231,8 @@ pub fn topic_lines(kind: u8, topic: &str, seed: usize, area: &str) -> Vec<&'stat
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

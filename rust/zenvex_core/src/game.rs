@@ -1,4 +1,6 @@
 //! V2 oyun durumu ve ana döngü.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, WeaponClass, ZKind, PX_PER_M, WEAPONS};
 use crate::ground::Textures;
 use crate::progress::{Progress, CITY_LEVEL};
@@ -516,8 +518,14 @@ pub struct Game {
     pub textures: Textures,
     pub rng: Rng,
     pub scratch: Vec<u32>,
+    /// zombi itme ızgarası (her karede yeniden kurulur, bellek yeniden kullanılır): hücre başlangıçları ve sıralı zombi dizinleri
+    pub sep_start: Vec<u32>,
+    pub sep_order: Vec<u32>,
+    pub sep_cell: Vec<u32>,
     pub spawn_t: f32,
     pub draw_tmp: Vec<(f32, [f32; STRIDE])>,
+    /// çizim sırası: (sıralanabilir derinlik anahtarı << 32 | dizin); kayıtların kendisi taşınmaz
+    pub draw_idx: Vec<u64>,
     pub day_index: u32,
     /// V8 devlet üsleri (sunucu durumu + yerel garnizon)
     pub bases: Vec<crate::bases::BaseState>,
@@ -687,8 +695,12 @@ impl Game {
             textures: Textures::default(),
             rng: Rng::new(seed ^ 0x5EED),
             scratch: Vec::new(),
+            sep_start: Vec::new(),
+            sep_order: Vec::new(),
+            sep_cell: Vec::new(),
             spawn_t: 0.0,
             draw_tmp: Vec::new(),
+            draw_idx: Vec::new(),
             day_index,
             bases: Vec::new(),
             soldiers: Vec::new(),
@@ -773,7 +785,7 @@ impl Game {
         for v in self.vehicles.iter_mut() {
             v.driver = false;
         }
-        self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 900.0);
+        self.zombies.retain(|z| (z.x - x).hyp(z.y - y) > 900.0);
     }
 
     /// V18: gece/gündüz döngüsü kalktı; her zaman gündüz (`day_t` yalnız eski kayıtlar ve hile için duruyor)
@@ -847,7 +859,7 @@ impl Game {
                     .min_by(|a, b| {
                         let (ax, ay) = a.pos();
                         let (bx, by) = b.pos();
-                        (ax - px).hypot(ay - py).total_cmp(&(bx - px).hypot(by - py))
+                        (ax - px).hyp(ay - py).total_cmp(&(bx - px).hyp(by - py))
                     })
                     .map(|l| format!("{} (Güvenli)", l.name))
                     .unwrap_or_else(|| z.name().into())
@@ -994,7 +1006,7 @@ impl Game {
         }
         if self.player.pose_t > 0.0 {
             self.player.pose_t -= dt;
-            if input.attacking || input.move_x.hypot(input.move_y) > 0.08 {
+            if input.attacking || input.move_x.hyp(input.move_y) > 0.08 {
                 self.player.pose_t = 0.0;
             } else {
                 if self.player.anim != self.player.pose {
@@ -1017,7 +1029,7 @@ impl Game {
             _ => (A_RIFLE_IDLE, A_RIFLE_WALK),
         };
         // ---- saldırı
-        let atk_len = input.atk_x.hypot(input.atk_y);
+        let atk_len = input.atk_x.hyp(input.atk_y);
         let wants = input.attacking && atk_len > 0.2;
         if wants {
             self.player.dir = dir_from_vec(input.atk_x, input.atk_y);
@@ -1045,7 +1057,7 @@ impl Game {
             }
         }
         // ---- hareket
-        let mlen = input.move_x.hypot(input.move_y).min(1.0);
+        let mlen = input.move_x.hyp(input.move_y).min(1.0);
         let attacking = self.player.atk_active;
         let mut moving = false;
         if mlen > 0.08 {
@@ -1323,10 +1335,10 @@ impl Game {
                 .zombies
                 .iter()
                 .enumerate()
-                .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < 140.0)
+                .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hyp(z.y - py) < 140.0)
                 .min_by(|a, b2| {
-                    let da = (a.1.x - px).hypot(a.1.y - py);
-                    let db = (b2.1.x - px).hypot(b2.1.y - py);
+                    let da = (a.1.x - px).hyp(a.1.y - py);
+                    let db = (b2.1.x - px).hyp(b2.1.y - py);
                     da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
                 })
                 .map(|(i, _)| i);
@@ -1480,7 +1492,7 @@ impl Game {
             .zombies
             .iter()
             .enumerate()
-            .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < AURA_R)
+            .filter(|(_, z)| z.state != ZState::Dead && (z.x - px).hyp(z.y - py) < AURA_R)
             .map(|(i, _)| i)
             .collect();
         for i in hits.into_iter().rev() {
@@ -1519,7 +1531,7 @@ impl Game {
                 self.player.anim_t = 0.0;
                 let (x, y) = (self.player.x, self.player.y);
                 let near: Vec<usize> = self.zombies.iter().enumerate()
-                    .filter(|(_, z)| z.hp > 0.0 && (z.x - x).hypot(z.y - y) < m(3.5)).map(|(i, _)| i).collect();
+                    .filter(|(_, z)| z.hp > 0.0 && (z.x - x).hyp(z.y - y) < m(3.5)).map(|(i, _)| i).collect();
                 for i in near.into_iter().rev() {
                     self.hurt_zombie(i, 15.0 + 5.0 * lvl, false, x, y, true, true);
                 }
@@ -1567,7 +1579,7 @@ impl Game {
         let mut i = 0;
         while i < self.drops.len() {
             let d = &self.drops[i];
-            if d.age < 0.35 || (d.x - px).hypot(d.y - py) > 40.0 {
+            if d.age < 0.35 || (d.x - px).hyp(d.y - py) > 40.0 {
                 i += 1;
                 continue;
             }
@@ -1638,7 +1650,7 @@ impl Game {
             }
             if s.broken {
                 s.respawn -= dt;
-                if s.respawn <= 0.0 && (s.x - px).hypot(s.y - py) > 700.0 {
+                if s.respawn <= 0.0 && (s.x - px).hyp(s.y - py) > 700.0 {
                     s.broken = false;
                     s.hp = s.max_hp;
                 }
@@ -1653,7 +1665,7 @@ impl Game {
             npc.cd -= dt;
             if npc.kind != 0 {
                 let (dx, dy) = (self.player.x - npc.x, self.player.y - npc.y);
-                if dx.hypot(dy) < 500.0 {
+                if dx.hyp(dy) < 500.0 {
                     npc.dir = dir_from_vec(dx, dy);
                 }
                 continue;
@@ -1681,7 +1693,7 @@ impl Game {
                 if z.state == ZState::Dead || z.boss {
                     continue;
                 }
-                let d = (z.x - nx).hypot(z.y - ny);
+                let d = (z.x - nx).hyp(z.y - ny);
                 if d < range && best.is_none_or(|(_, bd)| d < bd) {
                     best = Some((i, d));
                 }
@@ -1702,6 +1714,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]
@@ -1715,6 +1729,8 @@ mod tests {
 
 #[cfg(test)]
 mod resume_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     /// Uygulama kapanıp açılınca (ya da arka plandan sonra yeniden girince) kayıttaki konumdan devam edilir

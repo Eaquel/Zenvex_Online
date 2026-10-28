@@ -1,4 +1,6 @@
 //! Araçlar: binme/inme, sürüş, yakıt, çarpışma, zombilere çarpma.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, VEHICLES, ZOMBIES};
 use crate::game::*;
 use std::f32::consts::{PI, TAU};
@@ -11,7 +13,7 @@ impl Game {
             if v.wrecked || v.driver {
                 continue;
             }
-            let d = (v.x - px).hypot(v.y - py) - VEHICLES[v.kind].radius;
+            let d = (v.x - px).hyp(v.y - py) - VEHICLES[v.kind].radius;
             if d < max_d && best.is_none_or(|(_, bd)| d < bd) {
                 best = Some((i, d));
             }
@@ -75,7 +77,7 @@ impl Game {
                 self.vehicles[vi].hp -= def.hp * 0.01;
             }
         }
-        let mlen = input.move_x.hypot(input.move_y).min(1.0);
+        let mlen = input.move_x.hyp(input.move_y).min(1.0);
         {
             let v = &mut self.vehicles[vi];
             let has_fuel = !def.fuel || v.fuel > 0.0;
@@ -125,7 +127,7 @@ impl Game {
             if z.state == ZState::Dead {
                 continue;
             }
-            if (z.x - x).hypot(z.y - y) < r + ZOMBIES[z.kind as usize].radius && speed > m(2.0) {
+            if (z.x - x).hyp(z.y - y) < r + ZOMBIES[z.kind as usize].radius && speed > m(2.0) {
                 hits.push(zi);
             }
         }
@@ -173,6 +175,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::data::{VEHICLES, VEH_RECALL_S};
     use crate::game::{Game, Input};
     use crate::Progress;

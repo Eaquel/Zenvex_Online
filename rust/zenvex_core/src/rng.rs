@@ -94,6 +94,8 @@ pub fn fbm(seed: u64, x: f32, y: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

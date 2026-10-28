@@ -2,6 +2,8 @@
 //! Komutan Diana görevi verince oyuncu Cephe Karargâhı'nın yanındaki eğitim üssüne ışınlanır; içerideki 6 zayıf asker
 //! indirilir, bayrak halkasında 10 sn durulunca üs alınır. Ardından hava saldırısı: bomba düşer, üs yerle bir olur,
 //! oyuncu şehirde uyanır ve görev tamamlanır.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::bases::{base_defs, BASE_HALF, TRAIN_BASE};
 use crate::game::{Event, Game};
 use crate::world::{self, TILE};
@@ -60,7 +62,7 @@ impl Game {
         let (bx, by) = base_defs()[TRAIN_BASE].pos();
         if self.train == 1 {
             // öldü ya da üssten uzaklaştı: eğitim yarıda kalır (Komutan'dan yeniden alınır)
-            let far = (self.player.x - bx).hypot(self.player.y - by) > (BASE_HALF + 30.0) * TILE;
+            let far = (self.player.x - bx).hyp(self.player.y - by) > (BASE_HALF + 30.0) * TILE;
             if self.player.dead || far {
                 self.end_training();
                 let s = &mut self.progress.story;
@@ -90,6 +92,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::bases::{base_defs, TRAIN_BASE};
     use crate::game::Game;
     use crate::story::{N_COMMANDER, GUIDE};
@@ -110,7 +114,7 @@ mod tests {
         g.talk(N_COMMANDER, "accept");
         assert_eq!(g.train, 1);
         let (bx, by) = base_defs()[TRAIN_BASE].pos();
-        assert!((g.player.x - bx).hypot(g.player.y - by) < 20.0 * TILE);
+        assert!((g.player.x - bx).hyp(g.player.y - by) < 20.0 * TILE);
         g.update_bases(0.016);
         let n = g.soldiers.iter().filter(|s| s.base as usize == TRAIN_BASE).count();
         assert_eq!(n, 6);
@@ -132,7 +136,7 @@ mod tests {
         }
         assert_eq!(g.train, 0);
         let (cx, cy) = world::city_spawn();
-        assert!((g.player.x - cx).hypot(g.player.y - cy) < 6.0 * TILE, "şehirde uyanmadı");
+        assert!((g.player.x - cx).hyp(g.player.y - cy) < 6.0 * TILE, "şehirde uyanmadı");
         let j = g.story_json();
         assert!(j.as_array().unwrap().iter().any(|q| q["id"] == "g9" && q["ready"] == true), "{j}");
         let v = g.talk(N_COMMANDER, "turnin");

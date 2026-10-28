@@ -4,6 +4,8 @@
 //! bölgeden bölgeye yalnız Büyücü Aldric ışınlar (her bölgenin giriş karakolunda bir büyücü durur).
 //! Harita ekranı yalnız bulunulan bölgeyi gösterir; büyücünün haritasında bölgeye dokununca yaratıklar, ganimet,
 //! önerilen seviye ve ücret yazar.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{ZKind, ZOMBIES};
 use crate::world::{self, Zone, TILE};
 use serde_json::{json, Value};
@@ -88,7 +90,7 @@ pub fn area_at(x: f32, y: f32) -> usize {
     area_exact(x, y).unwrap_or_else(|| {
         let (tx, ty) = (x / TILE, y / TILE);
         let dist = |a: &Area| {
-            a.rects.iter().map(|&(x0, y0, x1, y1)| (tx.clamp(x0, x1) - tx).hypot(ty.clamp(y0, y1) - ty)).fold(f32::MAX, f32::min)
+            a.rects.iter().map(|&(x0, y0, x1, y1)| (tx.clamp(x0, x1) - tx).hyp(ty.clamp(y0, y1) - ty)).fold(f32::MAX, f32::min)
         };
         (0..AREAS.len()).min_by(|&a, &b| dist(&AREAS[a]).total_cmp(&dist(&AREAS[b]))).unwrap_or(FOREST)
     })
@@ -282,7 +284,7 @@ impl crate::game::Game {
         }
         let (_, _, bx, by) = self.titan;
         let alive = self.zombies.iter().any(|z| z.boss && z.state != crate::game::ZState::Dead);
-        if !alive && !self.titan_dead && (bx - px).hypot(by - py) < 1600.0 {
+        if !alive && !self.titan_dead && (bx - px).hyp(by - py) < 1600.0 {
             self.spawn_zombie_at(ZKind::Titan, 50, bx, by);
             self.events.push(crate::game::Event::Boss { name: "TİTAN".into() });
         }
@@ -300,7 +302,7 @@ impl crate::game::Game {
     /// Oyuncu bir büyücünün yanında mı (büyücü haritası yalnız onunla konuşurken açılır)
     pub fn near_wizard(&self) -> bool {
         let (px, py) = (self.player.x, self.player.y);
-        self.npcs.iter().any(|n| n.kind == crate::story::N_WIZARD && (n.x - px).hypot(n.y - py) < 6.0 * crate::data::PX_PER_M)
+        self.npcs.iter().any(|n| n.kind == crate::story::N_WIZARD && (n.x - px).hyp(n.y - py) < 6.0 * crate::data::PX_PER_M)
     }
 }
 
@@ -339,6 +341,8 @@ pub fn region_ground(area: usize, m: u8, alt_noise: f32) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]
@@ -350,7 +354,7 @@ mod tests {
             assert!(g.world.zone(x, y).safe(), "{} girişi güvenli değil", a.id);
             // her bölgenin girişinde büyücü var
             assert!(
-                g.npcs.iter().any(|n| n.kind == crate::story::N_WIZARD && area_at(n.x, n.y) == i && (n.x - x).hypot(n.y - y) < 20.0 * TILE),
+                g.npcs.iter().any(|n| n.kind == crate::story::N_WIZARD && area_at(n.x, n.y) == i && (n.x - x).hyp(n.y - y) < 20.0 * TILE),
                 "{} girişinde büyücü yok",
                 a.id
             );

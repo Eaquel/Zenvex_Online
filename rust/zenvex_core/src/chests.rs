@@ -1,4 +1,6 @@
 //! Sandıklar: kişisel üsse kurulan kalıcı depolar (kayıtta konum + içerik).
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{ItemKind, ITEMS};
 use crate::game::Game;
 use crate::inventory::{self, Slot, POCKETS};
@@ -41,7 +43,7 @@ impl Progress {
         if self.chests.len() >= MAX_CHESTS {
             return Err("Üssüne en fazla 12 sandık kurabilirsin");
         }
-        if self.chests.iter().any(|c| (c.x - x).hypot(c.y - y) < CHEST_GAP) {
+        if self.chests.iter().any(|c| (c.x - x).hyp(c.y - y) < CHEST_GAP) {
             return Err("Burada başka bir sandık var");
         }
         self.inv.take_n(slot, Some(1));
@@ -165,7 +167,7 @@ impl Game {
             .chests
             .iter()
             .enumerate()
-            .map(|(i, c)| (i, (c.x - px).hypot(c.y - py)))
+            .map(|(i, c)| (i, (c.x - px).hyp(c.y - py)))
             .filter(|&(_, d)| d < CHEST_NEAR)
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(i, _)| i)
@@ -183,7 +185,7 @@ impl Game {
 
     fn chest_reach(&self, i: usize) -> Result<(), String> {
         let c = self.progress.chests.get(i).ok_or("Sandık yok")?;
-        if (c.x - self.player.x).hypot(c.y - self.player.y) > CHEST_NEAR * 1.5 {
+        if (c.x - self.player.x).hyp(c.y - self.player.y) > CHEST_NEAR * 1.5 {
             return Err("Sandığa çok uzaksın".into());
         }
         Ok(())
@@ -238,6 +240,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::data;
 

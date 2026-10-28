@@ -433,6 +433,8 @@ fn kind_order(k: ItemKind) -> u8 {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]
@@ -562,6 +564,8 @@ mod tests {
 
 #[cfg(test)]
 mod dur_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::Progress;
 

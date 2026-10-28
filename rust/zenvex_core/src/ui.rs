@@ -1,4 +1,6 @@
 //! Arayüz köprüsü: Kotlin ekranları için JSON görünümleri ve JSON komutları (geliştirici hileleri dahil).
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{
     self, ItemKind, CHARACTERS, COSMETICS, ITEMS, PASS_REWARDS, RECIPES,
 };
@@ -46,7 +48,7 @@ impl Game {
         self.world
             .benches
             .iter()
-            .any(|&(x, y)| (x - px).hypot(y - py) < NEAR)
+            .any(|&(x, y)| (x - px).hyp(y - py) < NEAR)
             || self.near_placed_bench()
     }
 
@@ -154,7 +156,7 @@ impl Game {
             .filter(|&i| {
                 let v = &self.vehicles[i];
                 // kendi aracın parçalandıysa nerede olursa olsun çekilir
-                (v.owned && v.wrecked) || ((v.x - px).hypot(v.y - py) < r && (v.hp < data::VEHICLES[v.kind].hp || v.fuel < 100.0 || v.wrecked))
+                (v.owned && v.wrecked) || ((v.x - px).hyp(v.y - py) < r && (v.hp < data::VEHICLES[v.kind].hp || v.fuel < 100.0 || v.wrecked))
             })
             .collect();
         if near.is_empty() {
@@ -190,7 +192,7 @@ impl Game {
     /// Belirli türde bir NPC'ye yakın mı (konuşma mesafesi)
     pub(crate) fn near_npc(&self, kind: u8) -> bool {
         let (px, py) = (self.player.x, self.player.y);
-        self.npcs.iter().any(|n| n.kind == kind && (n.x - px).hypot(n.y - py) < crate::game::m(4.0))
+        self.npcs.iter().any(|n| n.kind == kind && (n.x - px).hyp(n.y - py) < crate::game::m(4.0))
     }
 
     pub(crate) fn buy_price(&self, base: u32) -> u32 {
@@ -358,7 +360,7 @@ impl Game {
                     })
                     .collect();
                 let (px, py) = (self.player.x, self.player.y);
-                let own = self.progress.benches.iter().any(|&(x, y)| (x - px).hypot(y - py) < crate::benches::BENCH_NEAR);
+                let own = self.progress.benches.iter().any(|&(x, y)| (x - px).hyp(y - py) < crate::benches::BENCH_NEAR);
                 let temp = self.temp_benches.first().map(|b| b.2);
                 json!({ "near_bench": bench, "recipes": list, "mode": if mode_bench { "bench" } else { "hand" },
                         "own_bench": own, "temp_left": temp,
@@ -1586,7 +1588,7 @@ impl Game {
                     .statics
                     .iter()
                     .filter(|s| s.kind == want && !s.broken)
-                    .min_by(|a, b| (a.x - px).hypot(a.y - py).total_cmp(&(b.x - px).hypot(b.y - py)))
+                    .min_by(|a, b| (a.x - px).hyp(a.y - py).total_cmp(&(b.x - px).hyp(b.y - py)))
                     .map(|s| (s.x, s.y));
                 match best {
                     Some((x, y)) => {
@@ -1735,6 +1737,8 @@ fn reward_json(r: &str) -> Value {
 
 #[cfg(test)]
 mod cheat_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::game::Game;
     use crate::progress::Progress;
 
@@ -1769,6 +1773,8 @@ mod cheat_tests {
 
 #[cfg(test)]
 mod v4_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::game::{Game, Input};
     use crate::progress::Progress;
 
@@ -1923,7 +1929,7 @@ mod v4_tests {
         g.damage_player(50.0);
         assert_eq!(g.player.hp, hp, "takla sırasında hasar alınmaz");
         tick(&mut g, 15);
-        assert!((g.player.x - x0).hypot(g.player.y - y0) > 60.0, "takla oyuncuyu taşımalı");
+        assert!((g.player.x - x0).hyp(g.player.y - y0) > 60.0, "takla oyuncuyu taşımalı");
         assert!(g.player.ability_cd > 3.0, "takla 5 sn bekler");
         assert!(g.use_ability().is_err());
     }
@@ -1947,7 +1953,7 @@ mod v4_tests {
         g.cheat("dog 3").unwrap();
         tick(&mut g, 60);
         let d = g.dog.as_ref().expect("köpek doğmalı");
-        assert!((d.x - g.player.x).hypot(d.y - g.player.y) < 400.0);
+        assert!((d.x - g.player.x).hyp(d.y - g.player.y) < 400.0);
         g.cheat("spawn walker 2 1").unwrap();
         tick(&mut g, 200);
         assert!(g.progress.kills > 0 || g.zombies.iter().any(|z| z.hp < z.max_hp), "köpek saldırmalı");

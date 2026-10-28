@@ -1,5 +1,7 @@
 //! Kişisel üs (büyücünün ışınladığı, duvarla kapalı güvenli bölge) ve büyücü ışınlanması.
 //! Her oyuncu üssünü yalnız kendisi görür: başka oyuncular üs alanında çizilmez, sandıklar kayıttan gelir.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::game::*;
 use crate::areas;
 use crate::world::{self, TILE};
@@ -77,7 +79,7 @@ impl Game {
             dg.x = x + 50.0;
             dg.y = y + 30.0;
         }
-        self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 700.0 || z.boss);
+        self.zombies.retain(|z| (z.x - x).hyp(z.y - y) > 700.0 || z.boss);
         self.wiz_cd = WIZ_CD;
         self.story_event(crate::story::Ev::Ping("tp"));
         Ok(format!("{} konumuna ışınlandın", d.name))
@@ -86,6 +88,8 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::Progress;
 

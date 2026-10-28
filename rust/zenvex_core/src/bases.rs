@@ -8,6 +8,8 @@
 //! - Klan ele geçirince garnizon sıfırdan kurulur: dakikada 3 asker; dolduktan sonra ölen her asker için dakikada 1.
 //! - Klan üssünün askerleri klan üyelerine dosttur; diğer herkese (ve zombilere) ateş eder.
 //! - Askerler en yakın düşmana (oyuncu, köpek ya da zombi) sıkar; bazen ıskalar.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data;
 use crate::game::*;
 use crate::world::{self, Zone, TILE};
@@ -112,7 +114,7 @@ fn generate_defs() -> Vec<BaseDef> {
     let train_at = slots
         .iter()
         .enumerate()
-        .min_by(|a, b| (a.1 .0 - hq.tx).hypot(a.1 .1 - hq.ty).total_cmp(&(b.1 .0 - hq.tx).hypot(b.1 .1 - hq.ty)))
+        .min_by(|a, b| (a.1 .0 - hq.tx).hyp(a.1 .1 - hq.ty).total_cmp(&(b.1 .0 - hq.tx).hyp(b.1 .1 - hq.ty)))
         .map(|(i, _)| i)
         .unwrap_or(0);
     let train = slots.remove(train_at);
@@ -412,7 +414,7 @@ impl Game {
         let (px, py) = (self.player.x, self.player.y);
         for (i, b) in base_defs().iter().enumerate() {
             let (bx, by) = b.pos();
-            let d = (bx - px).hypot(by - py);
+            let d = (bx - px).hyp(by - py);
             // eğitim üssü yalnız öğretici sürerken canlı; takviye gelmez
             if i == TRAIN_BASE {
                 if self.train == 1 && !self.bases[i].active {
@@ -516,14 +518,14 @@ impl Game {
         let hostile = self.base_hostile_to_me(s.base as usize);
         let p = &self.player;
         if hostile && !p.dead && !self.passenger {
-            let d = (p.x - s.x).hypot(p.y - s.y);
+            let d = (p.x - s.x).hyp(p.y - s.y);
             if d < best.3 {
                 best = (Target::Player, p.x, p.y, d);
             }
         }
         if hostile && self.player.vehicle.is_none() {
             if let Some(dg) = self.dog.as_ref().filter(|d| d.dead_t <= 0.0) {
-                let d = (dg.x - s.x).hypot(dg.y - s.y);
+                let d = (dg.x - s.x).hyp(dg.y - s.y);
                 if d < best.3 {
                     best = (Target::Dog, dg.x, dg.y, d);
                 }
@@ -533,7 +535,7 @@ impl Game {
             if z.state == ZState::Dead || z.alpha < 0.3 {
                 continue;
             }
-            let d = (z.x - s.x).hypot(z.y - s.y);
+            let d = (z.x - s.x).hyp(z.y - s.y);
             if d < best.3 {
                 best = (Target::Zombie(z.id), z.x, z.y, d);
             }
@@ -578,7 +580,7 @@ impl Game {
                 }
                 s.tgt = t;
             }
-            let tp = self.target_pos(s.tgt).filter(|&(x, y)| (x - s.x).hypot(y - s.y) < range * 1.15);
+            let tp = self.target_pos(s.tgt).filter(|&(x, y)| (x - s.x).hyp(y - s.y) < range * 1.15);
             if tp.is_none() {
                 s.tgt = Target::None;
                 s.aim_t = 0.0;
@@ -591,7 +593,7 @@ impl Game {
                 hx += (s.anim_t * 0.7 + s.post as f32).sin() * 26.0;
             }
             let (dx, dy) = (hx - s.x, hy - s.y);
-            let dd = dx.hypot(dy);
+            let dd = dx.hyp(dy);
             s.walking = dd > 10.0;
             if s.walking {
                 let sp = if dd > 120.0 { 2.4 } else { 1.2 } * PX_PER_M_F * dt;
@@ -655,7 +657,7 @@ impl Game {
     fn soldier_fire(&mut self, si: usize, t: Target) {
         let s = self.soldiers[si].clone();
         let Some((tx, ty)) = (if s.kind == K_SNIPER { Some((s.ax, s.ay)) } else { self.target_pos(t) }) else { return };
-        let d = (tx - s.x).hypot(ty - s.y);
+        let d = (tx - s.x).hyp(ty - s.y);
         let dm = d / PX_PER_M_F;
         let mut acc = match s.kind {
             K_SNIPER => 0.8 - 0.01 * dm,
@@ -669,7 +671,7 @@ impl Game {
             }
             if s.kind == K_SNIPER {
                 let (px, py) = (self.player.x, self.player.y);
-                if (px - tx).hypot(py - ty) > 45.0 {
+                if (px - tx).hyp(py - ty) > 45.0 {
                     acc = 0.0;
                 }
             }
@@ -732,7 +734,7 @@ impl Game {
         let mut dmg = dmg;
         if s.kind == K_SHIELD && by_player {
             let (ex, ey) = (self.player.x - x, self.player.y - y);
-            if (ex * s.face.cos() + ey * s.face.sin()) / ex.hypot(ey).max(1.0) > 0.35 {
+            if (ex * s.face.cos() + ey * s.face.sin()) / ex.hyp(ey).max(1.0) > 0.35 {
                 dmg *= 0.4;
             }
         }
@@ -779,7 +781,7 @@ impl Game {
                 continue;
             }
             let (dx, dy) = (s.x - px, s.y - py);
-            let d = dx.hypot(dy);
+            let d = dx.hyp(dy);
             if d > range + 24.0 {
                 continue;
             }
@@ -797,10 +799,10 @@ impl Game {
         let (px, py) = (self.player.x, self.player.y);
         let mut best: Option<(usize, f32)> = None;
         for (i, s) in self.soldiers.iter().enumerate() {
-            if s.dead_t > 0.0 || !self.base_hostile_to_me(s.base as usize) || (s.x - px).hypot(s.y - py) > m(6.0) {
+            if s.dead_t > 0.0 || !self.base_hostile_to_me(s.base as usize) || (s.x - px).hyp(s.y - py) > m(6.0) {
                 continue;
             }
-            let d = (s.x - dx).hypot(s.y - dy);
+            let d = (s.x - dx).hyp(s.y - dy);
             if best.is_none_or(|(_, b)| d < b) {
                 best = Some((i, d));
             }
@@ -820,7 +822,7 @@ impl Game {
     fn update_capture(&mut self, dt: f32) {
         let Some(i) = self.near_base() else { return };
         let (bx, by) = base_defs()[i].pos();
-        let inside = (self.player.x - bx).hypot(self.player.y - by) < CAPTURE_R && !self.player.dead;
+        let inside = (self.player.x - bx).hyp(self.player.y - by) < CAPTURE_R && !self.player.dead;
         let alive = self.alive_in(i);
         let mine = self.my_clan > 0 && self.bases[i].owner == self.my_clan;
         let st = &mut self.bases[i];
@@ -894,7 +896,7 @@ impl Game {
             let fx = if s.inv_t > 0.0 { 2.0 } else if s.flash_t > 0.0 { 1.0 } else { 0.0 };
             let extra = if s.dead_t > 0.0 { s.dead_t } else if s.kind == K_SNIPER && s.aim_t > 0.0 { s.aim_t / SNIPER_AIM } else { 0.0 };
             // nişan noktası (lazer) ayrı kayıtta değil: açı + mesafe yeter
-            let aim_d = if s.kind == K_SNIPER && s.aim_t > 0.0 { (s.ax - s.x).hypot(s.ay - s.y) } else { 0.0 };
+            let aim_d = if s.kind == K_SNIPER && s.aim_t > 0.0 { (s.ax - s.x).hyp(s.ay - s.y) } else { 0.0 };
             self.draw_tmp.push((
                 s.y + if s.post < 4 { 40.0 } else { 0.0 },
                 [D_SOLDIER, s.kind as f32 + tower, s.x, s.y, s.face, state, s.anim_t, fx, s.hp / if s.base as usize == TRAIN_BASE { TRAIN_HP } else { SOLDIER_HP }, s.level as f32,
@@ -972,6 +974,8 @@ const PX_PER_M_F: f32 = crate::data::PX_PER_M;
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::Progress;
     use crate::world::zone_at_tile;
@@ -990,7 +994,7 @@ mod tests {
             let z = zone_at_tile(b.tx as usize, b.ty as usize);
             assert!(!z.safe(), "üs {i} güvenli bölgede");
             for c in d.iter().skip(i + 1) {
-                assert!((b.tx - c.tx).hypot(b.ty - c.ty) >= 34.0);
+                assert!((b.tx - c.tx).hyp(b.ty - c.ty) >= 34.0);
             }
         }
         // V11: hepsi Cephe Hattı'nda

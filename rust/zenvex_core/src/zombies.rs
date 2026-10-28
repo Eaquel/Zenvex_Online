@@ -1,4 +1,6 @@
 //! Zombi yapay zekası, türlere özel yetenekler, doğma ve boss.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{ZKind, ZOMBIES};
 use crate::game::*;
 use crate::world::{self, Zone, TILE};
@@ -118,7 +120,7 @@ impl Game {
         };
         // uzaktakileri kaldır
         self.zombies
-            .retain(|z| z.boss || (z.x - px).hypot(z.y - py) < ACTIVE_R + 600.0);
+            .retain(|z| z.boss || (z.x - px).hyp(z.y - py) < ACTIVE_R + 600.0);
         // V12.1 Titan: her 15 dakikada rastgele bir bölgede (areas.rs)
         self.boss_t -= dt;
         self.update_titan(px, py);
@@ -223,7 +225,7 @@ impl Game {
             for z in self.zombies.iter_mut() {
                 let ahead = (now - z.snap_at).clamp(0.0, 0.35);
                 let (tx, ty) = (z.snap_x + z.snap_vx * ahead, z.snap_y + z.snap_vy * ahead);
-                if (tx - z.x).hypot(ty - z.y) > 260.0 {
+                if (tx - z.x).hyp(ty - z.y) > 260.0 {
                     z.x = tx;
                     z.y = ty;
                 }
@@ -257,30 +259,8 @@ impl Game {
         let mut player_damage = 0.0f32;
         let mut blast_damage = 0.0f32;
         let n = self.zombies.len();
-        // birbirini itme
-        for i in 0..n {
-            for j in (i + 1)..n {
-                if self.zombies[i].state == ZState::Dead || self.zombies[j].state == ZState::Dead {
-                    continue;
-                }
-                let ri = ZOMBIES[self.zombies[i].kind as usize].radius;
-                let rj = ZOMBIES[self.zombies[j].kind as usize].radius;
-                let (dx, dy) = (
-                    self.zombies[j].x - self.zombies[i].x,
-                    self.zombies[j].y - self.zombies[i].y,
-                );
-                let d = dx.hypot(dy);
-                let min = ri + rj;
-                if d < min && d > 0.01 {
-                    let push = (min - d) * 0.5;
-                    let (ux, uy) = (dx / d * push, dy / d * push);
-                    self.zombies[i].x -= ux;
-                    self.zombies[i].y -= uy;
-                    self.zombies[j].x += ux;
-                    self.zombies[j].y += uy;
-                }
-            }
-        }
+        // birbirini itme (ızgarayla: komşu hücreler; eskiden her çift karşılaştırılıyordu, 10 bin yaratıkta kare başına 50 milyon)
+        self.separate_zombies();
         let mut spawn_puddles: Vec<(f32, f32)> = Vec::new();
         let mut summons: Vec<(f32, f32)> = Vec::new();
         let mut shockwaves: Vec<(f32, f32)> = Vec::new();
@@ -315,12 +295,12 @@ impl Game {
             let (mut px, mut py, mut pdead, mut p_safe, mut in_vehicle) = (lpx, lpy, lpdead, lp_safe, l_in_vehicle);
             let mut tdir = self.player.dir;
             let mut tanim = self.player.anim;
-            let mut best = if lpdead || lp_safe { f32::MAX } else { (lpx - z.x).hypot(lpy - z.y) };
+            let mut best = if lpdead || lp_safe { f32::MAX } else { (lpx - z.x).hyp(lpy - z.y) };
             for (k, t) in targets.iter().enumerate() {
                 if t.3 {
                     continue;
                 }
-                let d = (t.0 - z.x).hypot(t.1 - z.y);
+                let d = (t.0 - z.x).hyp(t.1 - z.y);
                 if d < best {
                     best = d;
                     ti = k as i32;
@@ -335,7 +315,7 @@ impl Game {
             }
             // köpek: yakınsa ya da zombiyi ısırdıysa önce ona saldırır (ti = -2)
             if let Some((qx, qy, qsafe)) = dog_t {
-                let d = (qx - z.x).hypot(qy - z.y);
+                let d = (qx - z.x).hyp(qy - z.y);
                 let w = if z.dog_aggro > 0.0 { d * 0.35 } else { d };
                 if !qsafe && w < best && (d < 300.0 || z.dog_aggro > 0.0) {
                     best = w;
@@ -350,8 +330,8 @@ impl Game {
                 }
             }
             let (dx, dy) = (px - z.x, py - z.y);
-            let dist = dx.hypot(dy);
-            let from_home = (z.x - z.home_x).hypot(z.y - z.home_y);
+            let dist = dx.hyp(dy);
+            let from_home = (z.x - z.home_x).hyp(z.y - z.home_y);
             // tür efektleri (sürekli)
             match z.kind {
                 ZKind::Dark => {
@@ -414,7 +394,7 @@ impl Game {
                     // bölgesine dönüyor: canı dolar, kimseyi kovalamaz
                     z.hp = (z.hp + z.max_hp * 0.25 * dt).min(z.max_hp);
                     let (mx, my) = (z.home_x - z.x, z.home_y - z.y);
-                    let md = mx.hypot(my);
+                    let md = mx.hyp(my);
                     if md < 50.0 {
                         z.ret = false;
                         z.anim = Z_IDLE;
@@ -466,7 +446,7 @@ impl Game {
                     }
                     if z.anim == Z_WALK {
                         let (mx, my) = (z.tx - z.x, z.ty - z.y);
-                        let md = mx.hypot(my);
+                        let md = mx.hyp(my);
                         if md < 6.0 {
                             z.timer = 0.0;
                         } else {
@@ -584,7 +564,7 @@ impl Game {
                                 let (cx, cy) = (dx / dist.max(1e-3), dy / dist.max(1e-3));
                                 let cone = |tx: f32, ty: f32| {
                                     let (ex, ey) = (tx - z.x, ty - z.y);
-                                    let l = ex.hypot(ey);
+                                    let l = ex.hyp(ey);
                                     l < 460.0 && (ex * cx + ey * cy) / l.max(1e-3) > 0.9
                                 };
                                 let burn = lvl_dmg * 1.5;
@@ -680,17 +660,17 @@ impl Game {
             });
             self.events.push(Event::Slam { x, y, r });
             for (k, t) in targets.iter().enumerate() {
-                if (t.0 - x).hypot(t.1 - y) < r {
+                if (t.0 - x).hyp(t.1 - y) < r {
                     remote_hits.push((k, d, false));
                 }
             }
-            if dog_t.is_some_and(|(qx, qy, _)| (qx - x).hypot(qy - y) < r) {
+            if dog_t.is_some_and(|(qx, qy, _)| (qx - x).hyp(qy - y) < r) {
                 dog_damage += d;
             }
-            if (self.player.x - x).hypot(self.player.y - y) < r {
+            if (self.player.x - x).hyp(self.player.y - y) < r {
                 blast_damage += d;
                 let (dx, dy) = (self.player.x - x, self.player.y - y);
-                let l = dx.hypot(dy).max(1.0);
+                let l = dx.hyp(dy).max(1.0);
                 let (mut nx, mut ny) =
                     (self.player.x + dx / l * 60.0, self.player.y + dy / l * 60.0);
                 self.world.resolve(
@@ -726,13 +706,119 @@ impl Game {
         }
     }
 
+    /// İki yaratığın üst üste binmesini çözer (yarı yarıya iter)
+    #[inline]
+    fn push_pair(zs: &mut [Zombie], i: usize, j: usize) {
+        let ri = ZOMBIES[zs[i].kind as usize].radius;
+        let rj = ZOMBIES[zs[j].kind as usize].radius;
+        let (dx, dy) = (zs[j].x - zs[i].x, zs[j].y - zs[i].y);
+        let min = ri + rj;
+        let d2 = dx * dx + dy * dy;
+        if d2 < min * min && d2 > 1e-4 {
+            let d = d2.sqrt();
+            let push = (min - d) * 0.5;
+            let (ux, uy) = (dx / d * push, dy / d * push);
+            zs[i].x -= ux;
+            zs[i].y -= uy;
+            zs[j].x += ux;
+            zs[j].y += uy;
+        }
+    }
+
+    /// Yaratıkların birbirini itmesi, O(n): 64 piksellik hücre ızgarası (sayma sıralaması), her yaratık yalnız kendi ve
+    /// komşu 8 hücredekilerle karşılaştırılır. İri yaratıklar (yarıçap > 32, boss'lar; birkaç tane) hepsiyle doğrudan.
+    fn separate_zombies(&mut self) {
+        const C: f32 = 64.0;
+        let n = self.zombies.len();
+        if n < 2 {
+            return;
+        }
+        let live = |z: &Zombie| z.state != ZState::Dead;
+        let big = |z: &Zombie| ZOMBIES[z.kind as usize].radius > C * 0.5;
+        let (mut x0, mut y0, mut x1, mut y1) = (f32::MAX, f32::MAX, f32::MIN, f32::MIN);
+        for z in self.zombies.iter().filter(|z| live(z) && !big(z)) {
+            x0 = x0.min(z.x);
+            y0 = y0.min(z.y);
+            x1 = x1.max(z.x);
+            y1 = y1.max(z.y);
+        }
+        if x0 <= x1 {
+            let gw = (((x1 - x0) / C) as usize + 1).min(2048);
+            let gh = (((y1 - y0) / C) as usize + 1).min(2048);
+            let cells = gw * gh;
+            let cell_of = |x: f32, y: f32| -> usize {
+                let cx = (((x - x0) / C) as usize).min(gw - 1);
+                let cy = (((y - y0) / C) as usize).min(gh - 1);
+                cy * gw + cx
+            };
+            self.sep_start.clear();
+            self.sep_start.resize(cells + 1, 0);
+            self.sep_cell.clear();
+            self.sep_cell.resize(n, u32::MAX);
+            for (i, z) in self.zombies.iter().enumerate() {
+                if live(z) && !big(z) {
+                    let c = cell_of(z.x, z.y);
+                    self.sep_cell[i] = c as u32;
+                    self.sep_start[c + 1] += 1;
+                }
+            }
+            for c in 0..cells {
+                self.sep_start[c + 1] += self.sep_start[c];
+            }
+            let m = self.sep_start[cells] as usize;
+            self.sep_order.clear();
+            self.sep_order.resize(m, 0);
+            let mut fill = self.sep_start.clone();
+            for (i, &c) in self.sep_cell.iter().enumerate() {
+                if c != u32::MAX {
+                    let k = &mut fill[c as usize];
+                    self.sep_order[*k as usize] = i as u32;
+                    *k += 1;
+                }
+            }
+            for i in 0..n {
+                let c = self.sep_cell[i];
+                if c == u32::MAX {
+                    continue;
+                }
+                let (cx, cy) = ((c as usize % gw) as isize, (c as usize / gw) as isize);
+                for oy in -1..=1isize {
+                    for ox in -1..=1isize {
+                        let (nx, ny) = (cx + ox, cy + oy);
+                        if nx < 0 || ny < 0 || nx >= gw as isize || ny >= gh as isize {
+                            continue;
+                        }
+                        let nc = ny as usize * gw + nx as usize;
+                        for k in self.sep_start[nc]..self.sep_start[nc + 1] {
+                            let j = self.sep_order[k as usize] as usize;
+                            if j > i {
+                                Self::push_pair(&mut self.zombies, i, j);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // iri yaratıklar: hepsiyle
+        for i in 0..n {
+            if !live(&self.zombies[i]) || !big(&self.zombies[i]) {
+                continue;
+            }
+            for j in 0..n {
+                if j != i && live(&self.zombies[j]) && (j > i || !big(&self.zombies[j])) {
+                    Self::push_pair(&mut self.zombies, i, j);
+                }
+            }
+        }
+    }
+
     fn move_zombie(&mut self, z: &mut Zombie, nx: f32, ny: f32, dt: f32, speed_m: f32) {
         let sp = m(speed_m) * ZOMBIE_PACE;
         let r = ZOMBIES[z.kind as usize].radius;
         let (mut x, mut y) = (z.x + nx * sp * dt, z.y + ny * sp * dt);
         self.world
             .resolve(&mut x, &mut y, r, false, &mut self.scratch);
-        if (x - z.x).hypot(y - z.y) < sp * dt * 0.3 {
+        if (x - z.x).hyp(y - z.y) < sp * dt * 0.3 {
             let (sx, sy) = (-ny, nx);
             x = z.x + sx * sp * dt;
             y = z.y + sy * sp * dt;
@@ -752,6 +838,8 @@ impl Game {
 
 #[cfg(test)]
 mod species_tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use crate::data::{species, SPECIES};
     use crate::game::Game;
     use crate::Progress;
@@ -783,5 +871,52 @@ mod species_tests {
         assert_eq!(c.zombies.len(), 1);
         assert_eq!(c.zombies[0].species, 2);
         assert!((c.zombies[0].max_hp - hp).abs() < 0.5);
+    }
+}
+
+#[cfg(test)]
+mod perf {
+    #[allow(unused_imports)]
+    use crate::Hyp;
+    use crate::data::ZKind;
+    use crate::game::{Game, Input};
+    use crate::Progress;
+
+    /// Kalabalık kıyası: cargo test -p zenvex_core --release perf_crowd -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn perf_crowd() {
+        let only: Option<usize> = std::env::var("PERF_N").ok().and_then(|v| v.parse().ok());
+        for n in [100usize, 1000, 3000, 10000].into_iter().filter(|n| only.is_none_or(|o| o == *n)) {
+            let mut p = Progress::default();
+            p.level = 30;
+            let mut g = Game::new(5, p, 0);
+            g.cheat("god").ok();
+            g.cheat("tp deep").ok();
+            let (px, py) = (g.player.x, g.player.y);
+            for k in 0..n {
+                let a = k as f32 * 2.399;
+                let r = 120.0 + (k as f32).sqrt() * 14.0;
+                g.spawn_zombie_at(ZKind::Walker, 20, px + a.cos() * r, py + a.sin() * r);
+            }
+            let mut out = vec![0f32; 200_000];
+            let inp = Input { move_x: 0.3, move_y: 0.0, atk_x: 0.0, atk_y: 0.0, attacking: false };
+            for _ in 0..20 {
+                g.step(1.0 / 60.0, inp);
+            }
+            let frames = 60;
+            let mut drawn = 0;
+            let (mut ts, mut td) = (0.0f64, 0.0f64);
+            for _ in 0..frames {
+                let t0 = std::time::Instant::now();
+                g.step(1.0 / 60.0, inp);
+                let t1 = std::time::Instant::now();
+                drawn = g.draw_list(g.player.x - 1200.0, g.player.y - 600.0, 2400.0, 1200.0, &mut out, 1.0);
+                ts += (t1 - t0).as_secs_f64();
+                td += t1.elapsed().as_secs_f64();
+            }
+            let f = 1000.0 / frames as f64;
+            println!("PERF n={n} zombies={} çizim={drawn}: adım {:.2} ms, çizim listesi {:.2} ms", g.zombies.len(), ts * f, td * f);
+        }
     }
 }

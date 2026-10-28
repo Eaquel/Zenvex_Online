@@ -31,6 +31,19 @@ mod vehicles;
 mod zombies;
 
 pub use game::{Game, Input};
+
+/// Hızlı mesafe: kütüphane `hypot`u taşmaya karşı korumalı ve yavaş (profilde toplam sürenin ~%10'u); oyundaki değerler
+/// için `sqrt(x² + y²)` aynı sonucu verir
+pub trait Hyp {
+    fn hyp(self, o: f32) -> f32;
+}
+
+impl Hyp for f32 {
+    #[inline(always)]
+    fn hyp(self, o: f32) -> f32 {
+        (self * self + o * o).sqrt()
+    }
+}
 pub use progress::Progress;
 
 /// Dünya verisi (bir kez): boyutlar, statik nesne ve zemin isimleri, eşya/zombi/araç tabloları.
@@ -204,6 +217,8 @@ pub fn progress_to_json(p: &Progress) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     #[test]

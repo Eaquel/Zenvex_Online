@@ -1,4 +1,6 @@
 //! V2 dünyası: orman + şehir, bölgeler, zemin malzemeleri, statik nesneler, çarpışma, doğuş noktaları.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::ZKind;
 use crate::rng::{fbm, value_noise, Rng};
 use crate::bases::{base_defs, BASE_HALF};
@@ -531,7 +533,7 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
     // güvenli karakollar her bölgede önce gelir (seyahat ve ışınlanma noktaları)
     for l in LANDMARKS.iter().filter(|l| l.safe) {
         let (lx, ly) = l.pos();
-        if (x - lx).hypot(y - ly) < l.r * TILE {
+        if (x - lx).hyp(y - ly) < l.r * TILE {
             return Zone::Outpost;
         }
     }
@@ -576,6 +578,10 @@ pub struct World {
     pub zones: Vec<u8>,
     pub statics: Vec<Static>,
     pub grid: Vec<Vec<u32>>,
+    /// çarpışma ızgarası (CSR): yalnız katı nesneler, kapladıkları her COL_CELL hücresine yazılı; hücre c'nin öğeleri
+    /// citems[cstart[c]..cstart[c + 1]]. Çarpışma sorgusu yalnız yakın 1-4 hücreye bakar (çizim ızgarası 512 + 400 pay)
+    pub cstart: Vec<u32>,
+    pub citems: Vec<u32>,
     pub vehicle_spawns: Vec<(usize, f32, f32, f32)>,
     pub merchants: Vec<(f32, f32)>,
     pub benches: Vec<(f32, f32)>,
@@ -583,6 +589,8 @@ pub struct World {
 }
 
 pub const GRID_CELL: f32 = 512.0;
+pub const COL_CELL: f32 = 128.0;
+pub const COL_N: usize = (MAP_PX / COL_CELL) as usize + 1;
 pub const GRID_N: usize = (MAP_PX / GRID_CELL) as usize + 1;
 
 impl World {
@@ -646,7 +654,7 @@ impl World {
         let _ = (gx, gy);
         self.statics.iter().rev().take(400).all(|s| match s.shape {
             Shape::None => true,
-            Shape::Circle(sr) => (s.x - x).hypot(s.y - y) > sr + r,
+            Shape::Circle(sr) => (s.x - x).hyp(s.y - y) > sr + r,
             Shape::Rect(hw, hh) => (x - s.x).abs() > hw + r || (y - s.y).abs() > hh + r,
         })
     }
@@ -660,6 +668,8 @@ impl World {
             zones: vec![0; n * n],
             statics: Vec::new(),
             grid: Vec::new(),
+            cstart: Vec::new(),
+            citems: Vec::new(),
             vehicle_spawns: Vec::new(),
             merchants: Vec::new(),
             benches: Vec::new(),
@@ -707,7 +717,7 @@ impl World {
                         }
                     }
                     Zone::Outpost => {
-                        let near = LANDMARKS.iter().filter(|l| l.safe).map(|l| (fx - l.tx).hypot(fy - l.ty)).fold(99.0f32, f32::min);
+                        let near = LANDMARKS.iter().filter(|l| l.safe).map(|l| (fx - l.tx).hyp(fy - l.ty)).fold(99.0f32, f32::min);
                         if near < 3.0 { ground::GRAVEL } else { ground::DIRT }
                     }
                     Zone::BurntForest => {
@@ -821,7 +831,7 @@ impl World {
                      wid: i32,
                      mat: u8,
                      rng: &mut Rng| {
-            let steps = ((x1 - x0).hypot(y1 - y0) * 1.5) as i32;
+            let steps = ((x1 - x0).hyp(y1 - y0) * 1.5) as i32;
             let mut wob = 0.0f32;
             for i in 0..=steps {
                 let t = i as f32 / steps.max(1) as f32;
@@ -1557,7 +1567,7 @@ impl World {
                 {
                     continue;
                 }
-                if LANDMARKS.iter().any(|l| !l.safe && l.id == "tree" && (x - l.tx * t).hypot(y - l.ty * t) < l.r * t) {
+                if LANDMARKS.iter().any(|l| !l.safe && l.id == "tree" && (x - l.tx * t).hyp(y - l.ty * t) < l.r * t) {
                     continue;
                 }
                 let dens = fbm(self.seed ^ 0xF0, x / 900.0, y / 900.0);
@@ -1754,7 +1764,7 @@ impl World {
             if base_defs().iter().any(|b| (x / t - b.tx).abs() < BASE_HALF + 3.0 && (y / t - b.ty).abs() < BASE_HALF + 3.0) {
                 return true;
             }
-            LANDMARKS.iter().filter(|l| l.safe).any(|l| (x / t - l.tx).hypot(y / t - l.ty) < l.r + 2.0)
+            LANDMARKS.iter().filter(|l| l.safe).any(|l| (x / t - l.tx).hyp(y / t - l.ty) < l.r + 2.0)
         };
         for gy in 0..n {
             for gx in 0..n {
@@ -1992,7 +2002,7 @@ impl World {
             for ty in (cy - h) as usize..=(cy + h) as usize {
                 for tx in (cx - h) as usize..=(cx + h) as usize {
                     let (dx, dy) = (tx as f32 - cx, ty as f32 - cy);
-                    let g = if dx.hypot(dy + 5.0) < 3.2 || dx.hypot(dy) < 2.2 { ground::CONCRETE } else if dx.abs() < h - 1.5 && dy.abs() < h - 1.5 { ground::GRAVEL } else { ground::DIRT };
+                    let g = if dx.hyp(dy + 5.0) < 3.2 || dx.hyp(dy) < 2.2 { ground::CONCRETE } else if dx.abs() < h - 1.5 && dy.abs() < h - 1.5 { ground::GRAVEL } else { ground::DIRT };
                     if let Some(c) = self.ground.get_mut(ty * MAP_TILES + tx) {
                         *c = g;
                     }
@@ -2073,7 +2083,7 @@ impl World {
             for dy in -1..=1 {
                 for dx in -1..=1 {
                     if let Some(v) = grid.get(&(cx + dx, cy + dy)) {
-                        if v.iter().any(|&(sx, sy, sr)| (sx - x).hypot(sy - y) < sr + r) {
+                        if v.iter().any(|&(sx, sy, sr)| (sx - x).hyp(sy - y) < sr + r) {
                             return false;
                         }
                     }
@@ -2085,7 +2095,7 @@ impl World {
         for (ai, a) in AREAS.iter().enumerate() {
             let id = a.id;
             let (hx, hy) = areas::hub(ai);
-            let near_hub = |x: f32, y: f32| (x - hx).hypot(y - hy) < 14.0 * t;
+            let near_hub = |x: f32, y: f32| (x - hx).hyp(y - hy) < 14.0 * t;
             // V19: sınır parçaları (b_<bölge>_*) kalktı; bölgenin kenarı yalnız bulut denizidir (istemci çizer)
             // ---- simge yapılar
             if id != "home" {
@@ -2129,7 +2139,7 @@ impl World {
                 if areas::area_at(x, y) != ai || (id != "home" && near_hub(x, y)) || busy_base(x, y) || !free(&grid, x, y, 0.6 * t) {
                     continue;
                 }
-                if id == "home" && (x - hx).hypot(y - hy) < 3.0 * t {
+                if id == "home" && (x - hx).hyp(y - hy) < 3.0 * t {
                     continue;
                 }
                 let name = format!("d_{id}_{}", rng.below(8));
@@ -2250,7 +2260,7 @@ impl World {
         let hq = landmark("front_hq");
         let busy = |tx: f32, ty: f32| -> bool {
             base_defs().iter().any(|b| (tx - b.tx).abs() < BASE_HALF + 3.0 && (ty - b.ty).abs() < BASE_HALF + 3.5)
-                || (tx - hq.tx).hypot(ty - hq.ty) < hq.r + 6.0
+                || (tx - hq.tx).hyp(ty - hq.ty) < hq.r + 6.0
         };
         let tau = std::f32::consts::TAU;
         let mut y = fy0 + 4.0;
@@ -2320,6 +2330,59 @@ impl World {
             let gy = ((s.y / GRID_CELL) as usize).min(GRID_N - 1);
             self.grid[gy * GRID_N + gx].push(i as u32);
         }
+        // çarpışma ızgarası: katı nesnenin kutusunun kapladığı hücreler (iki geçiş: say, yerleştir)
+        let cells = |s: &Static| -> Option<(usize, usize, usize, usize)> {
+            let (hw, hh) = match s.shape {
+                Shape::None => return None,
+                Shape::Circle(r) => (r, r),
+                Shape::Rect(w, h) => (w, h),
+            };
+            let c = |v: f32| ((v / COL_CELL).floor().max(0.0) as usize).min(COL_N - 1);
+            Some((c(s.x - hw), c(s.y - hh), c(s.x + hw), c(s.y + hh)))
+        };
+        let mut start = vec![0u32; COL_N * COL_N + 1];
+        for s in &self.statics {
+            if let Some((x0, y0, x1, y1)) = cells(s) {
+                for gy in y0..=y1 {
+                    for gx in x0..=x1 {
+                        start[gy * COL_N + gx + 1] += 1;
+                    }
+                }
+            }
+        }
+        for c in 0..COL_N * COL_N {
+            start[c + 1] += start[c];
+        }
+        let mut items = vec![0u32; start[COL_N * COL_N] as usize];
+        let mut fill = start.clone();
+        for (i, s) in self.statics.iter().enumerate() {
+            if let Some((x0, y0, x1, y1)) = cells(s) {
+                for gy in y0..=y1 {
+                    for gx in x0..=x1 {
+                        let k = &mut fill[gy * COL_N + gx];
+                        items[*k as usize] = i as u32;
+                        *k += 1;
+                    }
+                }
+            }
+        }
+        self.cstart = start;
+        self.citems = items;
+    }
+
+    /// Kutuyla kesişen katı nesneler (çarpışma ızgarasından; bir nesne birden çok hücrede olabilir, tekrar zararsız)
+    pub fn query_solid(&self, x0: f32, y0: f32, x1: f32, y1: f32, out: &mut Vec<u32>) {
+        out.clear();
+        if self.cstart.is_empty() {
+            return self.query(x0, y0, x1, y1, out);
+        }
+        let c = |v: f32| ((v / COL_CELL).floor().max(0.0) as usize).min(COL_N - 1);
+        for gy in c(y0)..=c(y1) {
+            for gx in c(x0)..=c(x1) {
+                let k = gy * COL_N + gx;
+                out.extend_from_slice(&self.citems[self.cstart[k] as usize..self.cstart[k + 1] as usize]);
+            }
+        }
     }
 
     pub fn query(&self, x0: f32, y0: f32, x1: f32, y1: f32, out: &mut Vec<u32>) {
@@ -2345,7 +2408,7 @@ impl World {
         gate_open: bool,
         scratch: &mut Vec<u32>,
     ) -> bool {
-        self.query(*x - 64.0, *y - 64.0, *x + 64.0, *y + 64.0, scratch);
+        self.query_solid(*x - r - 8.0, *y - r - 8.0, *x + r + 8.0, *y + r + 8.0, scratch);
         let mut hit = false;
         for &i in scratch.iter() {
             let s = &self.statics[i as usize];
@@ -2357,7 +2420,7 @@ impl World {
                 Shape::Circle(sr) => {
                     let dx = *x - s.x;
                     let dy = *y - s.y;
-                    let d = dx.hypot(dy);
+                    let d = dx.hyp(dy);
                     let min = sr + r;
                     if d < min {
                         let d = d.max(0.01);
@@ -2413,7 +2476,7 @@ impl World {
     pub fn resolve_move(&self, ox: f32, oy: f32, x: &mut f32, y: &mut f32, r: f32, gate_open: bool, scratch: &mut Vec<u32>) -> bool {
         let (dx, dy) = (*x - ox, *y - oy);
         let step = (r * 0.6).max(6.0);
-        let n = ((dx.hypot(dy) / step).ceil() as usize).clamp(1, 48);
+        let n = ((dx.hyp(dy) / step).ceil() as usize).clamp(1, 48);
         let (sx, sy) = (dx / n as f32, dy / n as f32);
         let (mut cx, mut cy) = (ox, oy);
         let mut hit = false;
@@ -2445,7 +2508,7 @@ impl World {
             }
             let inside = match s.shape {
                 Shape::None => false,
-                Shape::Circle(r) => (x - s.x).hypot(y - s.y) < r,
+                Shape::Circle(r) => (x - s.x).hyp(y - s.y) < r,
                 Shape::Rect(hw, hh) => (x - s.x).abs() < hw && (y - s.y).abs() < hh,
             };
             if inside {
@@ -2512,6 +2575,8 @@ pub const ZONES_ALL: [Zone; 18] = [
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
 
     /// V10 bölge dekorlarının her biri dünyada en az bir kez yer alır; çadırlar üç görsele dağılır.

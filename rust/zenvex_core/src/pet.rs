@@ -1,4 +1,6 @@
 //! Köpek yardımcı: oyuncuyu takip eder, yakındaki zombiye saldırır, bayılırsa 30 sn sonra döner.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::ZOMBIES;
 use crate::game::*;
 use crate::rpg;
@@ -49,7 +51,7 @@ impl Game {
             self.dog = Some(d);
             return;
         }
-        if (d.x - px).hypot(d.y - py) > 900.0 {
+        if (d.x - px).hyp(d.y - py) > 900.0 {
             d.x = px + 50.0;
             d.y = py + 30.0;
         }
@@ -59,10 +61,10 @@ impl Game {
             if z.state == ZState::Dead || z.alpha < 0.3 {
                 continue;
             }
-            if (z.x - px).hypot(z.y - py) > m(6.0) {
+            if (z.x - px).hyp(z.y - py) > m(6.0) {
                 continue;
             }
-            let dd = (z.x - d.x).hypot(z.y - d.y);
+            let dd = (z.x - d.x).hyp(z.y - d.y);
             if target.is_none_or(|(_, b)| dd < b) {
                 target = Some((i, dd));
             }
@@ -120,7 +122,7 @@ impl Game {
             // takip: oyuncunun biraz arkasında
             let (fx, fy) = dir_vec(self.player.dir);
             let (tx, ty) = (px - fx * 60.0 + fy * 30.0, py - fy * 50.0 - fx * 30.0);
-            let dist = (tx - d.x).hypot(ty - d.y);
+            let dist = (tx - d.x).hyp(ty - d.y);
             if dist > 40.0 {
                 mx = tx - d.x;
                 my = ty - d.y;
@@ -132,7 +134,7 @@ impl Game {
             }
         }
         if speed > 0.0 {
-            let l = mx.hypot(my).max(1e-3);
+            let l = mx.hyp(my).max(1e-3);
             let (mut nx, mut ny) = (d.x + mx / l * speed * dt, d.y + my / l * speed * dt);
             self.world.resolve(&mut nx, &mut ny, 12.0, true, &mut self.scratch);
             crate::areas::clamp(d.x, d.y, &mut nx, &mut ny);

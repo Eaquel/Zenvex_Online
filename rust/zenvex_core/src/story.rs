@@ -1,5 +1,7 @@
 //! Hikâye: NPC konuşmaları, rehberin öğretici görev zinciri (Sv 5'e kadar) ve görevcinin ana görev zinciri.
 //! Görev bir NPC'den konuşarak alınır, hedef tamamlanınca aynı NPC'ye dönülüp teslim edilir.
+#[allow(unused_imports)]
+use crate::Hyp;
 use crate::data::{self, ZKind};
 use crate::game::{Event, Game};
 use crate::world::{self, Zone};
@@ -530,7 +532,7 @@ impl Game {
                 (Goal::Cleanse(id), Ev::Kill { kind, x, y }) => {
                     let l = world::landmark(id);
                     let (lx, ly) = l.pos();
-                    kind == ZKind::Toxic && (x - lx).hypot(y - ly) < (l.r + 6.0) * world::TILE
+                    kind == ZKind::Toxic && (x - lx).hyp(y - ly) < (l.r + 6.0) * world::TILE
                 }
                 (Goal::Chop, Ev::Chop) | (Goal::Pocket, Ev::Pocket) | (Goal::Roll, Ev::Roll) | (Goal::Loot, Ev::Loot) => true,
                 (Goal::Craft(a), Ev::Craft(b)) | (Goal::Use(a), Ev::Use(b)) => a == b,
@@ -638,7 +640,7 @@ impl Game {
                 Goal::Reach(id) => {
                     let l = world::landmark(id);
                     let (lx, ly) = l.pos();
-                    if (self.player.x - lx).hypot(self.player.y - ly) < (l.r + 1.5) * world::TILE {
+                    if (self.player.x - lx).hyp(self.player.y - ly) < (l.r + 1.5) * world::TILE {
                         self.story_set(which, idx, true, q.count);
                         self.story_ready(q);
                     }
@@ -671,7 +673,7 @@ impl Game {
                 .iter()
                 // gezgin tüccar başka duraktayken dünya dışında bekler (eksi konum): o kopya gösterilmez
                 .filter(|n| n.kind == k && n.x >= 0.0 && n.y >= 0.0)
-                .min_by_key(|n| (crate::areas::area_at(n.x, n.y) != here, (n.x - px).hypot(n.y - py) as u32))
+                .min_by_key(|n| (crate::areas::area_at(n.x, n.y) != here, (n.x - px).hyp(n.y - py) as u32))
                 .map(|n| (n.x, n.y))
         };
         if ready {
@@ -682,8 +684,8 @@ impl Game {
         let (px, py) = (self.player.x, self.player.y);
         let here = crate::areas::area_at(px, py);
         let near = |pts: &mut dyn Iterator<Item = (f32, f32)>| {
-            pts.filter(|&(x, y)| crate::areas::area_at(x, y) == here && (x - px).hypot(y - py) < 60.0 * world::TILE)
-                .min_by(|a, b| (a.0 - px).hypot(a.1 - py).total_cmp(&(b.0 - px).hypot(b.1 - py)))
+            pts.filter(|&(x, y)| crate::areas::area_at(x, y) == here && (x - px).hyp(y - py) < 60.0 * world::TILE)
+                .min_by(|a, b| (a.0 - px).hyp(a.1 - py).total_cmp(&(b.0 - px).hyp(b.1 - py)))
         };
         let zombie = |f: &dyn Fn(&crate::game::Zombie) -> bool| {
             near(&mut self.zombies.iter().filter(|z| z.state != crate::game::ZState::Dead && !z.boss && f(z)).map(|z| (z.x, z.y)))
@@ -747,7 +749,7 @@ impl Game {
                         .npcs
                         .iter()
                         .filter(|n| n.kind == N_WIZARD && crate::areas::area_at(n.x, n.y) == here)
-                        .min_by_key(|n| (n.x - px).hypot(n.y - py) as u32)
+                        .min_by_key(|n| (n.x - px).hyp(n.y - py) as u32)
                     {
                         (x, y) = (w.x, w.y);
                     }
@@ -1027,6 +1029,8 @@ fn greeting(kind: u8) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[allow(unused_imports)]
+    use crate::Hyp;
     use super::*;
     use crate::game::Input;
     use crate::progress::Progress;
