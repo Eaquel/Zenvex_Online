@@ -27,6 +27,9 @@ pub const A_GETUP: u8 = 15;
 // V10 elle çizilmiş etkileşim pozları (oyuncu dururken oynar; hareket ya da saldırı keser)
 pub const A_PICKUP: u8 = 16;
 pub const A_CHOP: u8 = 17;
+/// Ağaç kesme ve kaya kırma animasyonunun döngüsü (sn) ve aletin gövdeye indiği an (döngü oranı); zenvex_r3d ile aynı
+pub const GATHER_CYCLE: f32 = 0.9;
+pub const GATHER_IMPACT: f32 = 0.40;
 pub const A_MINE: u8 = 18;
 pub const A_OPEN: u8 = 19;
 pub const A_DRINK: u8 = 20;
@@ -1168,23 +1171,32 @@ impl Game {
         // yorgunken savurma yavaşlar
         let tired = if self.player.stamina < ST_SWING { 1.6 } else { 1.0 };
         let p = &mut self.player;
-        let period = tired / (w.rate * (1.0 + b.atk_speed + if p.oath_t > 0.0 { 0.3 } else { 0.0 }));
+        // V19: ağaç kesme / kaya kırma (A_CHOP / A_MINE) animasyonu kendi döngüsüyle oynar (r3d: 0,9 sn, balta gövdeye
+        // 0,40'ta iner); vuruş da o anda iner. Eskiden silahın saldırı hızıyla vuruluyordu: tek savuruşta 2-3 hasar.
+        let gathering = matches!(p.anim, A_CHOP | A_MINE);
+        let period = if gathering {
+            GATHER_CYCLE * tired
+        } else {
+            tired / (w.rate * (1.0 + b.atk_speed + if p.oath_t > 0.0 { 0.3 } else { 0.0 }))
+        };
         p.atk_period = period;
         if wants && !p.atk_active {
             p.atk_active = true;
             p.hit_done = false;
-            p.anim = A_MELEE;
-            p.anim_t = 0.0;
+            if !gathering {
+                p.anim = A_MELEE;
+                p.anim_t = 0.0;
+            }
         }
         if !p.atk_active {
             return;
         }
-        if p.anim != A_MELEE {
+        if !gathering && p.anim != A_MELEE {
             p.anim = A_MELEE;
             p.anim_t = 0.0;
         }
         let ct = p.anim_t % period;
-        if !p.hit_done && ct >= period * 0.4 {
+        if !p.hit_done && ct >= period * if gathering { GATHER_IMPACT } else { 0.4 } {
             p.hit_done = true;
             self.spend_stamina(ST_SWING * if w.range_m > 1.6 { 1.3 } else { 0.75 });
             self.events.push(Event::Swing);

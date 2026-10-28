@@ -749,7 +749,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     }
                     if (hit3d) fx3d.impact(x, y - 55f, me3dWeapon, 62.5f, y)
                     Audio.play(if (kind == 1) "chop" else "hit", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
-                    if (!hit3d && kind == 0) burst(x, y + 40, 8, 0xFFB08A50.toInt(), 200f, 4f)
+                    if (!hit3d && kind == 0) burst(x, y + 40, 8, 0xFFB08A50.toInt(), 110f, 4f)
                     shake(2f, 0.08f)
                 }
                 "treefall" -> { Audio.play("treefall", near(x, y)); fx3d.treeFall(x, y, 62.5f) }
@@ -757,7 +757,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     fx("blood", x, y - 40, 150f)
                     if (Settings.current.particles) { if (pools.size > 30) pools.removeAt(0); pools += Pool(x, y, 95f) }
                     Audio.play("zdeath", near(x, y), 0.9f + Math.random().toFloat() * 0.2f)
-                    burst(x, y, 16, 0xFF6A1410.toInt(), 220f, 5f)
+                    burst(x, y, 16, 0xFF6A1410.toInt(), 110f, 5f)  // V19: zombinin boyu kadar yayılır
                 }
                 "died" -> { Audio.play("death"); vibrate(300, 255); shake(10f, 0.4f) }
                 "swing" -> {
@@ -1504,7 +1504,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 (Math.random().toFloat() - 0.5f) * 30f, 0f, 35f + Math.random().toFloat() * 30f, 0.9f, 0.9f, tc, 3.5f, 3)
         }
         drawShadow3d(c, fr, sx, sy, k, pxPerM * 0.40f)
-        // koşarken / yürürken ayak tozu: adımda iki küçük bulut, yüzeyin renginde (asfaltta çok ince)
+        // koşarken / yürürken ayak tozu: adımda iki küçük bulut, yüzeyin renginde (asfaltta çok ince); varlıkların altına çizilir
+        // (tür 8): aşağı koşarken arkada kalan toz karakterin gövdesini örtmez
         if (Settings.current.particles && (animI == 1 || animI == 2 || animI == 6 || animI == 8)) {
             if (footT.size > 60) footT.clear()
             val left = (footT[id] ?: 0f) - frameDt
@@ -1516,7 +1517,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 repeat(if (run) 2 else 1) {
                     val sd = Math.random().toFloat() - 0.5f
                     particles += Particle(x + sd * 12f - fdx * 8f, y + 4f - fdy * 4f, 1f, -fdx * (16f + Math.random().toFloat() * 26f) + sd * 24f, -fdy * 8f,
-                        12f + Math.random().toFloat() * 14f, 0.5f + Math.random().toFloat() * 0.25f, 0.75f, dustColor(surface()), if (run) 4.4f else 2.8f, 1)
+                        12f + Math.random().toFloat() * 14f, 0.5f + Math.random().toFloat() * 0.25f, 0.75f, dustColor(surface()), if (run) 4.4f else 2.8f, 8)
                 }
             } else footT[id] = left
         }

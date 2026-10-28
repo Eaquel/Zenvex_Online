@@ -134,6 +134,10 @@ impl Game {
             .iter()
             .any(|z| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < range + m(2.0));
         if near_foe {
+            // zombi yanında: ağaç kesme pozu bırakılır, sonraki savuruş normal saldırı döngüsüyle iner
+            if matches!(self.player.anim, A_CHOP | A_MINE) {
+                self.player.anim = A_PUNCH;
+            }
             return;
         }
         // statik hedef
@@ -189,6 +193,9 @@ impl Game {
             if self.progress.eq.weapon.starts_with("t_") {
                 self.wear_eq("weapon", 2);
             }
+        } else if matches!(self.player.anim, A_CHOP | A_MINE) {
+            // ağaç devrildi / kaya kırıldı: boşa kesme pozunda kalınmaz
+            self.player.anim = A_PUNCH;
         }
     }
 

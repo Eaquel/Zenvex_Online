@@ -80,8 +80,13 @@ class Fx3D {
     // ------------------------------------------------------------------ parçacıklar
     private class P(
         var x: Float, var y: Float, var vx: Float, var vy: Float, var life: Float, val max: Float,
-        val color: Int, val size: Float, val kind: Int, val ground: Float, var rot: Float = 0f,
-    )
+        val color: Int, val size: Float, val kind: Int, ground: Float, var rot: Float = 0f,
+    ) {
+        /** çıkış noktası: kırıntının yatay yayılması kaynağın boyuyla sınırlanır */
+        val x0 = x
+        /** V19: yere düşen kırıntılar tek bir çizgiye dizilmesin: her biri kaynağın derinliği içinde kendi noktasına iner */
+        val ground = ground + if (K.debris(kind)) (kotlin.random.Random.nextFloat() - 0.5f) * size * 9f else 0f
+    }
 
     /** efekt yoğunluğu (0..1): yeni parçacıklar buna göre seyreltilir */
     var density = 1f
@@ -95,6 +100,8 @@ class Fx3D {
     private val rnd = Random(7)
 
     private object K {
+        /** yere düşüp duran kırıntılar (yayılması kaynağın boyuyla sınırlı) */
+        fun debris(k: Int) = k == CHUNK || k == SPLINTER || k == SHARD || k == SPARK
         const val GLOW = 0       // ışık noktası (toplamalı)
         const val EMBER = 1      // kor: yükselir, titrer, sarı→turuncu→kırmızı
         const val MIST = 2       // sis/duman: büyüyerek söner
@@ -295,11 +302,9 @@ class Fx3D {
                     ps += P(cx, cy - unit * 0.2f, cos(a) * sp, sin(a) * sp * 0.5f - unit * (2.5f + rnd.nextFloat() * 1.5f), 0.9f, 0.9f, 0xFF5A4A40.toInt(), unit * 0.07f, K.CHUNK, cy, rnd.nextFloat() * 6f)
                 }
             } else waves += Wave(x, hip, ux, uy, if (stage % 3 == 0) 1 else 0, col, core, unit * 1.2f, 0.16f, 0.16f, 0.9f, y)
-            KNIFE -> if (stage % 3 == 2) {
-                // art arda iki kısa saplama
-                waves += Wave(x, hip, ux, uy, 0, col, core, unit * 0.8f, 0.09f, 0.09f, 0.7f, y)
-                waves += Wave(x + ux * unit * 0.35f, hip + uy * unit * 0.2f, ux, uy, 0, col, core, unit * 1.0f, 0.13f, 0.13f, 0.7f, y)
-            } else waves += Wave(x, hip, ux, uy, 0, col, core, unit * 0.9f, 0.12f, 0.12f, 0.7f, y)
+            // V19: her savuruşa tek iz (bitiricide biraz daha uzun ve derin); eskiden bitirici iki iz bırakıyordu
+            KNIFE -> waves += if (stage % 3 == 2) Wave(x + ux * unit * 0.2f, hip + uy * unit * 0.1f, ux, uy, 0, col, core, unit * 1.05f, 0.18f, 0.18f, 0.75f, y)
+                else Wave(x, hip, ux, uy, if (stage % 3 == 0) 0 else 1, col, core, unit * 0.9f, 0.16f, 0.16f, 0.7f, y)
             CLAW -> repeat(3) { i -> waves += Wave(x, hip + (if (stage % 3 == 2) (1 - i) else (i - 1)) * unit * 0.22f, ux, uy, 0, col, core, unit * 1.5f, 0.24f, 0.24f, 0.5f, y) }
             STORM -> waves += Wave(x, hip, ux, uy, stage % 2, col, core, unit * 2.0f, 0.26f, 0.26f, 1.0f, y)
             MAGMA -> {
@@ -704,12 +709,15 @@ class Fx3D {
                 K.FIRE -> { p.vx *= 1f - 2.4f * dt; p.vy = p.vy * (1f - 2.2f * dt) - unit * 0.9f * dt }
             }
             p.x += p.vx * dt; p.y += p.vy * dt
+            // kırıntı kaynağın genişliğinden (ağaç gövdesi, kaya, zombi ~1 m) öteye savrulmaz: sınıra gelince yatay hız kesilir
+            if (K.debris(p.kind) && abs(p.x - p.x0) > max(p.size * 10f, unit * 0.75f)) p.vx = 0f
             if (p.y >= p.ground && p.vy > 0f) {
                 when (p.kind) {
                     K.DROP -> { it.remove(); splats += P(p.x, p.ground, 0f, 0f, 2.5f, 2.5f, 0xFF5A0610.toInt(), p.size * 2.2f, K.SPLAT, p.ground) }
                     K.SHELL -> { p.y = p.ground; p.vy = -p.vy * 0.35f; p.vx *= 0.5f; if (abs(p.vy) < unit * 0.4f) { p.vy = 0f; p.vx = 0f } }
-                    K.SPARK, K.SHARD, K.SPLINTER -> { p.y = p.ground; p.vy = -p.vy * 0.25f; p.vx *= 0.4f }
-                    K.CHUNK -> { p.y = p.ground; p.vy = -p.vy * 0.38f; p.vx *= 0.6f; if (abs(p.vy) < unit * 0.5f) { p.vy = 0f; p.vx = 0f } }
+                    // yere değen kırıntı kaymaz: sekmesi kısa, yatay hızı çoğu kesilir
+                    K.SPARK, K.SHARD, K.SPLINTER -> { p.y = p.ground; p.vy = -p.vy * 0.25f; p.vx *= 0.2f; if (abs(p.vy) < unit * 0.4f) { p.vy = 0f; p.vx = 0f } }
+                    K.CHUNK -> { p.y = p.ground; p.vy = -p.vy * 0.38f; p.vx *= 0.3f; if (abs(p.vy) < unit * 0.5f) { p.vy = 0f; p.vx = 0f } }
                     K.LEAF -> { p.y = p.ground; p.vy = 0f; p.vx = 0f }
                 }
             }

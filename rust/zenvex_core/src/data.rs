@@ -489,8 +489,9 @@ pub const WEAPONS: &[WeaponDef] = &[
     WeaponDef {
         item: "w_knife",
         class: WeaponClass::Melee,
-        damage: 17.0,
-        rate: 2.8,
+        // V19: savuruş animasyonu görünür olsun diye hız 2,8 → 1,8; saniyedeki hasar aynı kalsın diye vuruş 17 → 26
+        damage: 26.0,
+        rate: 1.8,
         range_m: 1.5,
         ammo: "",
         mag: 0,

@@ -513,6 +513,10 @@ pub fn zone_at_tile(tx: usize, ty: usize) -> Zone {
     let Some(area) = crate::areas::area_exact(x, y) else {
         return Zone::Wall;
     };
+    // V19: kişisel üs karesinin tamamı üstür (duvar ile kare kenarı arasındaki şerit buz zemini ve zombi doğuşu almasın)
+    if area == crate::areas::HOME {
+        return Zone::Home;
+    }
     if tx < OLD_TILES && (WALL_Y..=WALL_Y + 1).contains(&ty) {
         return Zone::Wall;
     }
