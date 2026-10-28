@@ -66,6 +66,7 @@ A unit test fails if any language misses a string or breaks a `{0}` placeholder.
 | [23 Promo kit](docs/23_TANITIM.md) | key-art prompts and the gameplay trailer pipeline |
 | [24 Item icon prompts](docs/24_ESYA_PROMPTLARI.md) | armor sets, necklaces, rings, bags, ammo and chests |
 | [25 Shop and VIP art prompts](docs/25_MAGAZA_VIP_PROMPTLARI.md) | VIP badges 1-11, diamond packs, bundles, subscription cards, season tickets, shop background, tab icons |
+| [26 UI/UX and gameplay research](docs/26_UI_UX_ARASTIRMA.md) | 125 sources by topic, findings and what was applied in the game |
 | [Release guide](docs/teknik/YAYIN.md) | versions, store signing, server, Supabase, store checklist |
 | [Tester notes](docs/TEST_NOTLARI.md) | what changed in this test build |
 

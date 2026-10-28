@@ -156,7 +156,7 @@ impl Game {
                 self.progress.veh_hp[s] = 0.0;
                 self.progress.veh_wear[s] = 0.0;
                 self.progress.veh_ready[s] = self.progress.play_time + data::VEH_RECALL_S[s];
-                self.msg(&format!("Araç patladı! {} sn sonra yeniden çağırabilirsin", data::VEH_RECALL_S[s] as i64));
+                self.msg(format!("Araç patladı! {} sn sonra yeniden çağırabilirsin", data::VEH_RECALL_S[s] as i64));
             } else {
                 self.msg("Araç patladı!");
             }
