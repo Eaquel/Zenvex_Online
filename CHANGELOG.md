@@ -2,6 +2,10 @@
 
 ## Unreleased (V16 — 3D)
 
+- Settings: no scrolling anywhere — tabs sit in one row on top and each tab's controls are laid out in columns so everything
+  shows at once even on the smallest landscape phones (800×360 dp); the support form, account page, language list and legal
+  texts are laid out the same way; the support message box is now a real multi-line field
+- Lobby: the gameplay preview window at the bottom left is gone
 - Lobby: the live sunset city scene stays; the street now shows the game's own zombies (walker, runner, tank, dark,
   dog sprites) walking toward the campfire and the game's own car (3D Hellhound) instead of generic silhouettes; news tab
   lists this version's changes; info dialog fits small phones

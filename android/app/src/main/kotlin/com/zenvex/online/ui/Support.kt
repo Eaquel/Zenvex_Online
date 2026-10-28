@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,7 +51,7 @@ import org.json.JSONObject
  * talep. Yanıt posta kutusuna gelir.
  */
 @Composable
-fun SupportSection() {
+fun androidx.compose.foundation.layout.ColumnScope.SupportSection() {
     val ctx = LocalContext.current
     var topic by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
@@ -60,61 +61,74 @@ fun SupportSection() {
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(Support.MAX_PHOTOS)) { list ->
         for (u in list) if (photos.size < Support.MAX_PHOTOS && u !in photos) photos += u
     }
-    PT("Destek", 18.sp, Px.Clan)
-    PT("Bir sorun mu var? Yaz, gerekirse ekran görüntüsü ekle. Yanıtımız posta kutuna gelir.", 12.sp, Px.Sub, maxLines = 2)
-    Spacer(Modifier.height(8.dp))
-    if (!Account.loggedIn) { PT("Destek talebi için hesabına gir.", 13.sp, Px.Hard); return }
-    PT("Konu", 13.sp, Px.Text)
-    Spacer(Modifier.height(4.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (t in Support.TOPICS) {
-            val on = topic == t
-            Box(Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
-                .border(2.dp, if (on) Px.Clan else Px.Edge, RoundedCornerShape(3.dp)).clickable { topic = t }
-                .padding(horizontal = 12.dp, vertical = 7.dp)) { PT(t, 13.sp, if (on) Px.Text else Px.Sub) }
-        }
+    if (!Account.loggedIn) {
+        PT("Destek", 18.sp, Px.Clan)
+        PT("Bir sorun mu var? Yaz, gerekirse ekran görüntüsü ekle. Yanıtımız posta kutuna gelir.", 12.sp, Px.Sub, maxLines = 2)
+        Spacer(Modifier.height(8.dp))
+        PT("Destek talebi için hesabına gir.", 13.sp, Px.Hard)
+        return
     }
-    Spacer(Modifier.height(8.dp))
-    Field(body, { if (it.length <= 2000) body = it }, "Ne oldu? Ne zaman, hangi ekranda, ne yaparken…", Modifier.fillMaxWidth().height(96.dp))
-    PT("${body.length}/2000", 10.sp, Px.Sub)
-    Spacer(Modifier.height(6.dp))
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        PxButton("Fotoğraf Ekle", color = Px.Blue, icon = "plus", height = 38.dp, size = 13.sp, enabled = photos.size < Support.MAX_PHOTOS && !sending) {
-            pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        }
-        Spacer(Modifier.width(8.dp))
-        PT("${photos.size}/${Support.MAX_PHOTOS} · Her biri en çok 10 MB", 12.sp, Px.Sub)
-    }
-    if (photos.isNotEmpty()) {
-        Spacer(Modifier.height(6.dp))
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (u in photos.toList()) {
-                val thumb = remember(u) {
-                    runCatching {
-                        ctx.contentResolver.openInputStream(u)?.use { s ->
-                            android.graphics.BitmapFactory.decodeStream(s, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 })
-                        }?.asImageBitmap()
-                    }.getOrNull()
-                }
-                Box(Modifier.size(64.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15140F))) {
-                    if (thumb != null) androidx.compose.foundation.Image(thumb, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    Box(Modifier.align(Alignment.TopEnd).size(22.dp).background(Color(0xCC8A2A22)).clickable { photos.remove(u) },
-                        contentAlignment = Alignment.Center) { PT("✕", 12.sp) }
+    // iki sütun, kaydırma yok: solda konu ve metin, sağda fotoğraflar ve gönder
+    Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.weight(1.2f).fillMaxHeight()) {
+            PT("Destek", 16.sp, Px.Clan)
+            PT("Bir sorun mu var? Yaz, gerekirse ekran görüntüsü ekle. Yanıtımız posta kutuna gelir.", 11.sp, Px.Sub, maxLines = 2)
+            Spacer(Modifier.height(4.dp))
+            PT("Konu", 12.sp, Px.Text)
+            Spacer(Modifier.height(3.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                for (t in Support.TOPICS) {
+                    val on = topic == t
+                    Box(Modifier.weight(1f).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
+                        .border(2.dp, if (on) Px.Clan else Px.Edge, RoundedCornerShape(3.dp)).clickable { topic = t }
+                        .padding(vertical = 6.dp), contentAlignment = Alignment.Center) { PT(t, 12.sp, if (on) Px.Text else Px.Sub) }
                 }
             }
+            Spacer(Modifier.height(5.dp))
+            Field(body, { if (it.length <= 2000) body = it }, "Ne oldu? Ne zaman, hangi ekranda, ne yaparken…", Modifier.fillMaxWidth().weight(1f), multiline = true)
+            PT("${body.length}/2000", 10.sp, Px.Sub)
+        }
+        Column(Modifier.weight(1f).fillMaxHeight()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PxButton("Fotoğraf Ekle", color = Px.Blue, icon = "plus", height = 34.dp, size = 12.sp, enabled = photos.size < Support.MAX_PHOTOS && !sending) {
+                    pick.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
+                Spacer(Modifier.width(8.dp))
+                PT("${photos.size}/${Support.MAX_PHOTOS}", 12.sp, Px.Sub)
+            }
+            PT("Her biri en çok 10 MB", 11.sp, Px.Sub)
+            if (photos.isNotEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (u in photos.toList()) {
+                        val thumb = remember(u) {
+                            runCatching {
+                                ctx.contentResolver.openInputStream(u)?.use { s ->
+                                    android.graphics.BitmapFactory.decodeStream(s, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = 8 })
+                                }?.asImageBitmap()
+                            }.getOrNull()
+                        }
+                        Box(Modifier.size(52.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15140F))) {
+                            if (thumb != null) androidx.compose.foundation.Image(thumb, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                            Box(Modifier.align(Alignment.TopEnd).size(20.dp).background(Color(0xCC8A2A22)).clickable { photos.remove(u) },
+                                contentAlignment = Alignment.Center) { PT("✕", 11.sp) }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.weight(1f))
+            PxButton(if (sending) prog.ifEmpty { "Gönderiliyor…" } else "Gönder", Modifier.fillMaxWidth(), color = Px.Green, icon = "mail", height = 40.dp, size = 14.sp,
+                enabled = !sending && topic.isNotEmpty() && body.trim().length >= 10) {
+                sending = true; prog = ""
+                Support.send(ctx, topic, body.trim(), photos.toList(), progress = { k, n -> prog = "Fotoğraf $k/$n yüklendi" }) { err ->
+                    sending = false
+                    if (err != null) Toaster.show(err, false)
+                    else { Toaster.show("Talebin alındı. Yanıtımız posta kutuna gelecek."); topic = ""; body = ""; photos.clear() }
+                }
+            }
+            PT("Aynı cihazdan 15 dakikada bir talep gönderilebilir.", 10.sp, Px.Sub, maxLines = 2)
         }
     }
-    Spacer(Modifier.height(10.dp))
-    PxButton(if (sending) prog.ifEmpty { "Gönderiliyor…" } else "Gönder", Modifier.fillMaxWidth(), color = Px.Green, icon = "mail", height = 44.dp, size = 15.sp,
-        enabled = !sending && topic.isNotEmpty() && body.trim().length >= 10) {
-        sending = true; prog = ""
-        Support.send(ctx, topic, body.trim(), photos.toList(), progress = { k, n -> prog = "Fotoğraf $k/$n yüklendi" }) { err ->
-            sending = false
-            if (err != null) Toaster.show(err, false)
-            else { Toaster.show("Talebin alındı. Yanıtımız posta kutuna gelecek."); topic = ""; body = ""; photos.clear() }
-        }
-    }
-    PT("Aynı cihazdan 15 dakikada bir talep gönderilebilir.", 11.sp, Px.Sub)
 }
 
 // =========================================================================== yönetici: destek ve bildirimler

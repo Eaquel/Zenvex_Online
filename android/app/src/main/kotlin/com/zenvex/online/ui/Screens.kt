@@ -98,15 +98,15 @@ fun SplashScreen(done: () -> Unit) {
 }
 
 @Composable
-fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, onDone: (() -> Unit)? = null) {
-    // siyah yarı saydam zemin, beyaz yazı, piksel kenar
-    Box(modifier.height(44.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x99000000)).border(2.dp, Color(0xFF15140F), RoundedCornerShape(3.dp))
-        .padding(2.dp).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(2.dp)).padding(horizontal = 10.dp),
-        contentAlignment = Alignment.CenterStart) {
-        if (value.isEmpty()) PT(hint, 14.sp, Color(0x99FFFFFF))
-        BasicTextField(value, onChange, singleLine = true, textStyle = TextStyle(color = Color.White, fontSize = 15.sp, fontFamily = PixelFont),
+fun Field(value: String, onChange: (String) -> Unit, hint: String, modifier: Modifier = Modifier, multiline: Boolean = false, onDone: (() -> Unit)? = null) {
+    // siyah yarı saydam zemin, beyaz yazı, piksel kenar; çok satırlıda yükseklik çağıranda
+    Box((if (multiline) modifier else modifier.height(44.dp)).clip(RoundedCornerShape(3.dp)).background(Color(0x99000000)).border(2.dp, Color(0xFF15140F), RoundedCornerShape(3.dp))
+        .padding(2.dp).border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(2.dp)).padding(horizontal = 10.dp, vertical = if (multiline) 6.dp else 0.dp),
+        contentAlignment = if (multiline) Alignment.TopStart else Alignment.CenterStart) {
+        if (value.isEmpty()) PT(hint, 14.sp, Color(0x99FFFFFF), maxLines = if (multiline) 3 else 1)
+        BasicTextField(value, onChange, singleLine = !multiline, textStyle = TextStyle(color = Color.White, fontSize = 15.sp, fontFamily = PixelFont),
             cursorBrush = SolidColor(Color.White), modifier = Modifier.fillMaxWidth(),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done), keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }))
+            keyboardOptions = KeyboardOptions(imeAction = if (multiline) ImeAction.Default else ImeAction.Done), keyboardActions = KeyboardActions(onDone = { onDone?.invoke() }))
     }
 }
 

@@ -83,14 +83,13 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
 
     // sahne: kodla çizilen canlı yıkık şehir (gün batımı, yangınlar, kor yağmuru, uzakta sürünen zombi silüetleri, kamp ateşi)
     LiveScene(SceneKind.LOBBY) {
-        // ---- sol: büyük logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi ve satın alma oyunun içinde)
+        // ---- sol: büyük logo + slogan
         Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 70.dp), horizontalAlignment = Alignment.Start) {
             // tek satır "Zenvex Online" eski iki satırlıdan geniş: oyuncu kartına değmesin
             CodeLogo(118.dp)
             Spacer(Modifier.height(8.dp))
             PT("Hayatta Kal. Güçlen. Üssünü Savun.", 17.sp, Color(0xFFFFE2B8), outline = true)
         }
-        ShotGallery(Modifier.align(Alignment.BottomStart).padding(start = 54.dp, bottom = 12.dp))
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
         val pp = if (Account.loggedIn) Account.profile.value else JSONObject().put("name", prof.optString("name")).put("level", prof.optInt("level", 1))
         ProfileBadge(pp, !Account.loggedIn, Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 12.dp)) {

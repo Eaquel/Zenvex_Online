@@ -47,4 +47,27 @@ class HudShotsTest {
         val item = org.json.JSONObject().put("id", "wood").put("name", "Odun").put("n", 120)
         paparazzi.snapshot { DepotSend(c, item, {}, {}) }
     }
+
+    /** Ayarlar: her sekme küçük ekranda kaydırmadan tek alanda sığmalı */
+    private fun settingsTab(i: Int) {
+        Demo.on = true
+        com.zenvex.online.game.GameSession.initPreview(paparazzi.context)
+        com.zenvex.online.game.Account.previewLogin(1234567L)
+        val owner = object : androidx.activity.result.ActivityResultRegistryOwner {
+            override val activityResultRegistry = object : androidx.activity.result.ActivityResultRegistry() {
+                override fun <I, O> onLaunch(requestCode: Int, contract: androidx.activity.result.contract.ActivityResultContract<I, O>, input: I, options: androidx.core.app.ActivityOptionsCompat?) {}
+            }
+        }
+        paparazzi.snapshot {
+            androidx.compose.runtime.CompositionLocalProvider(androidx.activity.compose.LocalActivityResultRegistryOwner provides owner) { SettingsScreen({}, initialTab = i) }
+        }
+    }
+    @Test fun settingsGraphics() = settingsTab(0)
+    @Test fun settingsControls() = settingsTab(1)
+    @Test fun settingsSound() = settingsTab(2)
+    @Test fun settingsNotif() = settingsTab(3)
+    @Test fun settingsAccount() = settingsTab(4)
+    @Test fun settingsSupport() = settingsTab(5)
+    @Test fun settingsLanguage() = settingsTab(6)
+    @Test fun settingsLegal() = settingsTab(7)
 }
