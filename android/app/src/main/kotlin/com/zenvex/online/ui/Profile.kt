@@ -59,18 +59,20 @@ import kotlin.math.sin
 /** [pick]: seçilebilir mi (yalnız NPC görselleri; eski kahraman/asker/köpek/zombi resimleri sunucudaki sıra numaraları bozulmasın diye listede kalır) */
 data class AvatarDef(val key: String, val name: String, val crop: Float, val pick: Boolean = true,
                      /** yüz merkezi (görsel pikseli) ve kare kırpma kenarı: hepsi aynı oranda baş + omuz gösterir */
-                     val fx: Float = -1f, val fy: Float = -1f, val side: Float = 42f)
+                     val fx: Float = -1f, val fy: Float = -1f, val side: Float = 42f,
+                     /** 3B model portresi (Model3D adı); doluysa eski görsel yerine bu kullanılır */
+                     val model: String = "")
 
 val AVATARS = listOf(
     AvatarDef("l/kaan/0_0", "Savaşçı", 0.42f, false),
-    AvatarDef("npc/merchant", "Tüccar", 0.4f, fx = 51f, fy = 29f), AvatarDef("npc/quest", "Görevci", 0.4f, fx = 24f, fy = 21f),
-    AvatarDef("npc/doctor", "Doktor", 0.4f, fx = 37f, fy = 16f),
-    AvatarDef("npc/mechanic", "Tamirci", 0.4f, fx = 29f, fy = 18f), AvatarDef("npc/trainer", "Eğitmen", 0.4f, fx = 37f, fy = 16f),
+    AvatarDef("npc/merchant", "Tüccar", 0.4f, fx = 51f, fy = 29f, model = "npc_marco"), AvatarDef("npc/quest", "Görevci", 0.4f, fx = 24f, fy = 21f, model = "npc_silas"),
+    AvatarDef("npc/doctor", "Doktor", 0.4f, fx = 37f, fy = 16f, model = "npc_elena"),
+    AvatarDef("npc/mechanic", "Tamirci", 0.4f, fx = 29f, fy = 18f, model = "npc_viktor"), AvatarDef("npc/trainer", "Eğitmen", 0.4f, fx = 37f, fy = 16f, model = "npc_jack"),
     AvatarDef("npc/soldier", "Muhafız", 0.4f, false),
     AvatarDef("p/dog0/idle_0_0", "Yavru Köpek", 1f, false), AvatarDef("p/dog5/idle_0_0", "Kurt Köpeği", 1f, false), AvatarDef("p/dog10/idle_0_0", "Alfa", 1f, false),
     AvatarDef("z/walker/idle_0_0", "Aylak", 0.5f, false), AvatarDef("z/runner/idle_0_0", "Koşucu", 0.5f, false), AvatarDef("z/toxic/idle_0_0", "Zehirli", 0.5f, false),
     AvatarDef("z/dark/idle_0_0", "Karanlık", 0.5f, false), AvatarDef("z/dog/idle_0_0", "Kuduz", 1f, false), AvatarDef("z/titan/idle_0_0", "Titan", 0.45f, false),
-    AvatarDef("npc/wizard", "Büyücü Aldric", 0.4f, fx = 30f, fy = 20f),
+    AvatarDef("npc/wizard", "Büyücü Aldric", 0.4f, fx = 30f, fy = 20f, model = "npc_aldric"),
 )
 
 // =========================================================================== cihazdan fotoğraf
@@ -143,6 +145,7 @@ fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Mod
     val def = AVATARS.getOrNull(avatar)?.takeIf { it.pick } ?: AVATARS[1]
     val img = remember(def.key) { SpriteCache.get(ctx, def.key) }
     val pic = remember(photo) { PhotoCache.get(photo) }
+    val port = if (def.model.isNotEmpty() && pic == null) rememberPortrait(def.model) else null
     val t = rememberTime()
     // çizilmiş çerçeve görseli (assets/ui/frame_<id>.png, tools/pixel/frame_import.py) varsa o; yoksa kodla
     val art = remember(frame) { UiArt.image(ctx, "frame_" + frame.ifEmpty { "iron" }) }
@@ -152,6 +155,10 @@ fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Mod
             if (pic != null) Canvas(Modifier.fillMaxSize()) {
                 drawImage(pic, IntOffset.Zero, IntSize(pic.width, pic.height), IntOffset.Zero,
                     IntSize(this.size.width.toInt(), this.size.height.toInt()), filterQuality = FilterQuality.Low)
+            }
+            else if (port != null) Canvas(Modifier.fillMaxSize()) {
+                drawImage(port, IntOffset.Zero, IntSize(port.width, port.height), IntOffset.Zero,
+                    IntSize(this.size.width.toInt(), this.size.height.toInt()), filterQuality = FilterQuality.Medium)
             }
             else if (img != null && def.fx >= 0f) Canvas(Modifier.fillMaxSize()) {
                 // yüz merkezli kare: yüz biraz yukarıda, baş ve omuzlar görünür (tüm NPC'ler aynı oranda)

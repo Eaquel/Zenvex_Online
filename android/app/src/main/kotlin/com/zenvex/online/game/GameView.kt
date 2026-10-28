@@ -531,7 +531,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt
             when (p.kind) {
                 0 -> { p.vz -= 900f * dt; if (p.z < 0) { p.z = 0f; p.vz *= -0.3f; p.vx *= 0.6f; p.vy *= 0.6f } }
-                1 -> { val d = 1f - 2.2f * dt; p.vx *= d; p.vy *= d; p.vz *= 1f - 3.0f * dt }          // toz: hızla yavaşlar, süzülür
+                1, 8 -> { val d = 1f - 2.2f * dt; p.vx *= d; p.vy *= d; p.vz *= 1f - 3.0f * dt }          // toz: hızla yavaşlar, süzülür
                 6 -> { p.vx += sin(time * 7f + p.seed * 9f) * 90f * dt; p.vz *= 1f - 0.8f * dt }       // alev: yalpalar
                 else -> { p.vx *= 0.97f; p.vy *= 0.97f }
             }
@@ -941,6 +941,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawTracks(c, dt)
         drawPools(c, dt)
         drawChests(c)
+        drawParticles(c, under = true)
         fx3d.drawGround(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
@@ -1106,8 +1107,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val sw0 = sp.w * sp.k
             val l = x - sp.ax * sp.k; val r = l + sw0
             val t = y - sp.ay * sp.k
-            if (px > l + sw0 * 0.12f && px < r - sw0 * 0.12f && py > t + 20 && py < y) {
-                alphaPaint.alpha = 115; paint = alphaPaint
+            // araçtayken ağaç hem daha çok saydamlaşır hem daha geniş alanda (araç uzun): araba/motor ağaç yaprağının altında silik kalmasın
+            val veh = inVehicleNow()
+            val ext = if (veh) 110f else 0f
+            if (px > l + sw0 * 0.12f - ext && px < r - sw0 * 0.12f + ext && py > t + 20 - ext * 0.5f && py < y + ext * 0.3f) {
+                alphaPaint.alpha = if (veh) 48 else 115; paint = alphaPaint
             }
         }
         if (kind == 0 && Settings.current.wind) {
@@ -2496,7 +2500,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val r1 = Math.random().toFloat(); val r2 = Math.random().toFloat() - 0.5f; val r3 = Math.random().toFloat() - 0.5f
             particles += Particle(ox + r3 * 14f, oy + r2 * 8f, 3f + r1 * 8f,
                 bx * (45f + 70f * r1) + by * r2 * 120f, by * (28f + 40f * r1) * 0.7f - bx * r2 * 70f, 24f + 38f * r1,
-                0.8f + 0.45f * r1, 1.2f, dust, (if (kind >= 2) 7.5f else 6f) * (0.7f + 0.6f * r1), 1)
+                0.8f + 0.45f * r1, 1.2f, dust, (if (kind >= 2) 7.5f else 6f) * (0.7f + 0.6f * r1),
+                // araç ekranda aşağı gidiyorsa iz yukarıda kalır: toz aracın ve sürücünün ÜSTÜNE değil arkasına (varlıkların altına) çizilir
+                if (by < -0.05f) 8 else 1)
             // yumuşak zeminde fırlayan parçalar (kum tanesi, çamur topağı, taş kırığı, kar topağı)
             if (surf != 0 && Math.random() < 0.55) {
                 val shade = if (surf == 3) 0xFFD8E4F4.toInt() else dust
@@ -2812,9 +2818,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.restore()
     }
 
-    private fun drawParticles(c: Canvas) {
+    private fun drawParticles(c: Canvas, under: Boolean = false) {
         val u = scale * density
         for (p in particles) {
+            if ((p.kind == 8) != under) continue
             val k = (p.life / p.max).coerceIn(0f, 1f)
             val sx = wx(p.x); val sy = wy(p.y) - p.z * scale
             if (sx < -120 || sx > sw + 120 || sy < -160 || sy > sh + 120) continue
@@ -2824,7 +2831,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     val spin = (p.max - p.life) * (sd - 0.5f) * 900f
                     drawTex(c, FxTex.chunks[(sd * 5f).toInt() % 5], sx, sy, p.size * u * 1.9f, spin, texPaint(p.color, false), min(1f, k * 3f))
                 }
-                1 -> { // toz / duman bulutu: çabuk belirir, büyüyerek ve dönerek söner; yere yatık (perspektif)
+                1, 8 -> { // toz / duman bulutu (8: varlıkların altına çizilen araç tozu): çabuk belirir, büyüyerek ve dönerek söner; yere yatık (perspektif)
                     val a = min(1f, (1f - k) * 7f) * Math.pow(k.toDouble(), 0.8).toFloat() * 0.85f
                     val w = p.size * u * (1.6f + 2.4f * (1f - k))
                     drawTex(c, FxTex.puffs[(sd * 8f).toInt() % 8], sx, sy, w, sd * 360f + (1f - k) * 40f * (if (sd > 0.5f) 1f else -1f),
@@ -3262,7 +3269,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         fill.shader = RadialGradient(pcx, pcy, pr, 0xFF2E4A70.toInt(), 0xFF101828.toInt(), Shader.TileMode.CLAMP)
         c.drawCircle(pcx, pcy, pr, fill); fill.shader = null
         val ps = portraitCache.getOrPut(ch) { atlas["l/" + heroIds.getOrElse(ch) { "kaan" } + "/0_0"] ?: atlas["h/" + heroIds.getOrElse(ch) { "kaan" } + "/idle_0_0"] }
-        if (ps != null) {
+        // V18: 3B model portresi (hazırsa); yoksa eski atlas görseli
+        val p3 = com.zenvex.online.ui.Portrait3D.bitmap(Model3D.CHARS.getOrElse(ch) { "kael" })
+        if (p3 != null) {
+            c.save()
+            path.reset(); path.addCircle(pcx, pcy, pr - 2 * d, Path.Direction.CW); c.clipPath(path)
+            rect.set(pcx - pr, pcy - pr, pcx + pr, pcy + pr)
+            c.drawBitmap(p3, null, rect, bmpPaint)
+            c.restore()
+        } else if (ps != null) {
             c.save()
             path.reset(); path.addCircle(pcx, pcy, pr - 2 * d, Path.Direction.CW); c.clipPath(path)
             val bmp = atlas.page(ps.page)

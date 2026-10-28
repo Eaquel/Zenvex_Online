@@ -105,7 +105,8 @@ internal fun NpcDialogView(d: JSONObject, onOption: (String) -> Unit, onClose: (
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 24.dp, vertical = 14.dp), verticalAlignment = Alignment.Bottom) {
             // portre
             Box(Modifier.size(170.dp, 220.dp), contentAlignment = Alignment.BottomCenter) {
-                SpriteImage(npcSprite(d.optInt("npc")), Modifier.fillMaxSize().offset(y = (sin(t * 2f) * 1.5f).dp))
+                // 3B model konuşma animasyonuyla; model yoksa eski görsel
+                if (!Npc3DView(d.optInt("npc"), t)) SpriteImage(npcSprite(d.optInt("npc")), Modifier.fillMaxSize().offset(y = (sin(t * 2f) * 1.5f).dp))
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
