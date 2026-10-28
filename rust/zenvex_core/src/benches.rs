@@ -63,6 +63,7 @@ impl Game {
             format!("Tezgâh kuruldu: {} dakika durur", (BENCH_TTL / 60.0) as u32)
         };
         crate::inventory::take_from(&mut self.progress.inv.slots, slot, Some(1));
+        self.story_event(crate::story::Ev::Ping("bench"));
         Ok(msg)
     }
 

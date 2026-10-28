@@ -226,12 +226,20 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
     val r = list.firstOrNull { it.optJSONObject("out")?.optString("id") == selId } ?: list.firstOrNull()
     val near = data.optBoolean("near_bench")
 
+    // öğretici: hangi sekme, hangi tarif, hangi düğme (adıma göre)
+    val tutR = remember { HashMap<String, androidx.compose.ui.geometry.Rect>() }
+    val tstep = remember(tick) { Tut.step() }
+    val tutWant: Pair<Int, String>? = when (tstep) {
+        "g4" -> 0 to "bandage"; "g4b" -> 2 to "t_axe_stone"; "g4d" -> 2 to "t_pick_stone"; "g4f" -> 2 to "w_knife"; else -> null
+    }
+
     fun craft(v: JSONObject, n: Int) {
         val res = GameSession.cmd("craft", "i" to v.optInt("i"), "n" to n)
         Toaster.show(res.msg, res.ok); tick++
         if (res.ok) com.zenvex.online.game.Audio.play("craft")
     }
 
+    Box(Modifier.fillMaxSize()) {
     PxFrame(if (bench) "Tezgâh" else "El Üretimi", "craft", back, right = {
         PxButton(if (onlyCan) "Yapılabilenler" else "Hepsi", height = 36.dp, size = 12.sp, color = if (onlyCan) Px.Green else Px.Dark, icon = "check") {
             onlyCan = !onlyCan
@@ -254,7 +262,7 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
             tabs.forEach { (i, name) ->
                 val ready = all.count { it.optInt("tab") == i && it.optBoolean("can") }
                 val on = i == tab
-                Row(Modifier.height(36.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
+                Row(Modifier.tutRect(tutR, "tab$i").height(36.dp).clip(RoundedCornerShape(3.dp)).background(if (on) Color(0xE6524428) else Color(0xCC23221D))
                     .border(2.dp, if (on) Px.Clan else Px.Edge, RoundedCornerShape(3.dp))
                     .clickable { com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); tab = i; selId = null; variant = 0 }
                     .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -276,7 +284,7 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
                         val g = list[k]
                         val out = g.optJSONObject("out") ?: JSONObject()
                         val on = g === r
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0x80524428) else Color(0x40000000))
+                        Row(Modifier.tutRect(tutR, "rec:" + out.optString("id")).fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(if (on) Color(0x80524428) else Color(0x40000000))
                             .clickable { selId = out.optString("id"); variant = 0 }.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                             PxSlot(out, 42.dp)
                             Spacer(Modifier.width(8.dp))
@@ -311,7 +319,7 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
                     Spacer(Modifier.height(6.dp))
                     // tuşlar her zaman görünür (malzeme listesi uzasa da kaydırma gerekmez)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        PxButton("Üret", Modifier.weight(1f), color = Px.Green, icon = "craft", height = 40.dp, size = 14.sp, enabled = can) { craft(v, 1) }
+                        PxButton("Üret", Modifier.weight(1f).tutRect(tutR, "make"), color = Px.Green, icon = "craft", height = 40.dp, size = 14.sp, enabled = can) { craft(v, 1) }
                         // çoklu üretim: her biri ayrı sayılır (görev, sezon bileti, sıralama); malzeme yetmeyen tuş kapalı
                         val max = v.optInt("max", if (can) 1 else 0)
                         for (n in listOf(5, 10, 25, 50)) {
@@ -356,6 +364,30 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
                 }
             }
         }
+    }
+    // öğretici: sekme → tarif → Üret düğmesi sırasıyla parlar
+    if (tutWant != null) {
+        val (wantTab, wantId) = tutWant
+        val tg = ArrayList<TutTarget>()
+        val text: String
+        val shown = r?.optJSONObject("out")?.optString("id")
+        when {
+            tab != wantTab -> {
+                tg += TutTarget(tutR["tab$wantTab"], "Önce Bu Sekme", below = true)
+                text = if (wantTab == 0) "Üstteki parlayan Şifa sekmesine dokun: tarifler sekmelere ayrılmıştır, bandaj Şifa'dadır."
+                else "Üstteki parlayan Silah Ve Alet sekmesine dokun: tarifler sekmelere ayrılmıştır, alet ve silahlar burada."
+            }
+            shown != wantId -> {
+                tg += TutTarget(tutR["rec:$wantId"], "Bunu Seç")
+                text = "Soldaki listeden parlayan tarife dokun: sağda malzemeler ve Üret düğmesi açılır."
+            }
+            else -> {
+                tg += TutTarget(tutR["make"], "Üret'e Bas", below = true)
+                text = "Malzemeler yeşilse Üret'e bas. Altta her malzemenin nereden çıktığı yazar. ×5, ×10 çoklu üretimdir."
+            }
+        }
+        TutLayer(tg, text, cardStart = 200, cardEnd = 280)
+    }
     }
 }
 
@@ -605,7 +637,7 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit, onPlayer: ((ui
             LaunchedEffect(wait) { if (wait > 0) { delay(200); wait = Online.chatWait() } }
             fun go() {
                 val err = Online.send(channels[tab], msg)
-                if (err == null) msg = "" else Toaster.show(err, false)
+                if (err == null) { msg = ""; Tut.ping("chat") } else Toaster.show(err, false)
                 wait = Online.chatWait()
             }
             Field(msg, { if (it.length <= 140) msg = it }, if (tab == 0) "Herkese Yaz…" else "Klanına Yaz…", Modifier.weight(1f)) { go() }

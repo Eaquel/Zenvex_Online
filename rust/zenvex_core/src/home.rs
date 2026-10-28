@@ -79,6 +79,7 @@ impl Game {
         }
         self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 700.0 || z.boss);
         self.wiz_cd = WIZ_CD;
+        self.story_event(crate::story::Ev::Ping("tp"));
         Ok(format!("{} konumuna ışınlandın", d.name))
     }
 }

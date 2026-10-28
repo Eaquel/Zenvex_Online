@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -208,6 +210,39 @@ fun TutPulse(modifier: Modifier = Modifier) {
             val ph = (t * 1.1f + k * 0.5f) % 1f
             drawCircle(Color(0xFFFFE6A0).copy(alpha = 0.55f * (1f - ph)), radius = size.minDimension / 2 * (0.9f + 0.35f * ph),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
+        }
+    }
+}
+
+/** Hedefin altında yukarı bakan ok ve etiket (ekranın üst kenarına yakın tuşlar için) */
+@Composable
+fun BoxScope.TutArrowBelow(label: String) {
+    val t = rememberTime()
+    Column(Modifier.align(Alignment.BottomCenter).wrapContentWidth(unbounded = true).offset(y = (40 + sin(t * 4f) * 3).dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        androidx.compose.foundation.Canvas(Modifier.size(16.dp, 12.dp)) {
+            val p = androidx.compose.ui.graphics.Path().apply {
+                moveTo(size.width / 2, 0f); lineTo(0f, size.height); lineTo(size.width / 2, size.height * 0.6f); lineTo(size.width, size.height); close()
+            }
+            drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * sin(t * 4f)))
+            drawPath(p, Color(0xB015140F), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        }
+        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB0101010)).padding(horizontal = 9.dp, vertical = 2.dp)) {
+            PT(label, 12.sp, Color(0xFFFFF0C0))
+        }
+    }
+}
+
+/** Geniş (çubuk biçimli) hedefin çevresinde nabız gibi atan çerçeve */
+@Composable
+fun TutPulseWide(modifier: Modifier = Modifier) {
+    val t = rememberTime()
+    androidx.compose.foundation.Canvas(modifier.fillMaxSize()) {
+        for (k in 0..1) {
+            val ph = (t * 1.1f + k * 0.5f) % 1f
+            val g = 10.dp.toPx() * ph
+            drawRoundRect(Color(0xFFFFE6A0).copy(alpha = 0.6f * (1f - ph)), androidx.compose.ui.geometry.Offset(-g, -g),
+                androidx.compose.ui.geometry.Size(size.width + g * 2, size.height + g * 2), androidx.compose.ui.geometry.CornerRadius(8.dp.toPx()),
+                androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
         }
     }
 }

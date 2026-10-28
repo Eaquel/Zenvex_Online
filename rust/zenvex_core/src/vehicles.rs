@@ -53,6 +53,7 @@ impl Game {
         self.player.atk_active = false;
         let name = VEHICLES[v.kind].name;
         self.events.push(Event::EnterVehicle { v: v.kind as u8 });
+        self.story_event(crate::story::Ev::Ping("drive"));
         Ok(format!("{name} sürüyorsun"))
     }
 

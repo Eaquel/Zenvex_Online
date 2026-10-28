@@ -60,6 +60,10 @@ pub enum Goal {
     Mine,
     /// V16: elindeki silah/alet bu kimlikle başlıyorsa tamamlanır (canlı okunur: zaten kuşanılıysa hemen biter)
     Equip(&'static str),
+    /// V18: üstündeki zırh parçası sayısı (kask, ceket, pantolon, bot; canlı okunur)
+    Wear,
+    /// V18: arayüz ve sistem olayı (ışınlanma, harita, yetenek ağacı, sohbet, tezgâh kurma, satış, araç siparişi…)
+    Ping(&'static str),
 }
 
 pub struct Quest {
@@ -146,29 +150,74 @@ pub const GUIDE: &[Quest] = &[
        ["Silahını Çanta'dan Kuşan'la elinde tut. Savaşta sağ joystick silahınla vurur; ateşli silahlarda mermi şarjörden gelir."],
        "Silahın elinde. Artık zombi sürüsü seni o kadar korkutmaz.",
        Goal::Equip("w_knife"), 1, 1, 10, 30, &[], &[]),
+    q!("g4h", N_GUIDE, "Zırh Giy", "Çantadan Kaskı Ve Ceketi Kuşan",
+       ["Zırh gelen hasarı azaltır. Kask, ceket, pantolon ve bot ayrı yuvalardadır.",
+        "Çantana basit bir kask ve ceket kondu. Çantayı aç, eşyaya dokun ve Kuşan'a bas; eşya sol taraftaki ekipman yuvasına oturur."],
+       "Zırhın seni korur. Giydiğin eşyalar kullandıkça yıpranır; tezgâhta ya da Tamirci Viktor'da onarılır.",
+       Goal::Wear, 2, 1, 15, 40, &[], &[("helm_basic", 1), ("jacket_basic", 1)]),
+    q!("g4i", N_GUIDE, "Tezgâh Kur", "Çantadaki Tezgâhı Yere Kur",
+       ["Gelişmiş eşyalar tezgâhta yapılır. Kampta bir tezgâh var ama kendi tezgâhını da kurabilirsin.",
+        "Çantana bir tezgâh kondu. Çantada tezgâha dokun, Kur'a bas ve yerde yeşil çıkan bir noktaya yerleştir."],
+       "Tezgâhın hazır. Yakınına gidince üretim ekranı açılır; çantaya geri alabilirsin.",
+       Goal::Ping("bench"), 1, 1, 15, 40, &[], &[("workbench", 1)]),
     q!("g5", N_GUIDE, "Cebini Hazırla", "Çantada Bir Eşyayı Cebe Sürükle",
        ["Savaşın ortasında çantayı açmaya vaktin olmaz.",
         "Çantayı aç, bir bandaja ya da iksire basılı tut ve soldaki ceplerden birine sürükle.",
         "Cepteki eşyalar ekranın altında tuş olur: tek dokunuşla kullanırsın."],
        "Artık hazırlıklısın. Ceplerin bekleme süresini de gösterir.",
        Goal::Pocket, 1, 1, 10, 30, &[("potion_heal", 1)], &[]),
+    q!("g5b", N_GUIDE, "Cepten Kullan", "Cebindeki Bandajı Kullan",
+       ["Cepteki eşyaya dokununca kullanılır: yiyecekler ve iksirler canını yeniler, bandaj yarayı sarar.",
+        "Çantana bir bandaj kondu. Cebine koyup ekranın altından dokun."],
+       "İşte hızlı müdahale! Kullanım sonrası eşya bekleme süresine girer.",
+       Goal::Use("bandage"), 1, 1, 10, 30, &[], &[("bandage", 1)]),
     q!("g6", N_GUIDE, "Tüccarla Tanış", "Tüccar Marco ile Konuş",
        ["Marco gezgin tüccardır: kamyonetiyle bölgenin duraklarını dolaşır, her gelişinde başka mallar getirir.",
         "Haritada altın kese işaretini bul, onunla bir konuş. Fazla malzemeni de ona satarsın."],
        "Marco'yla anlaştın mı? Fiyatlarına dikkat et, kurnaz adamdır.",
        Goal::Talk(N_MERCHANT), 1, 1, 10, 30, &[], &[]),
+    q!("g6s", N_GUIDE, "Eşya Sat", "Marco'ya Bir Eşya Sat",
+       ["Marco fazla malzemeni satın alır. Onunla konuşurken Satış bölümünü aç, bir eşyaya dokun ve Sat'a bas.",
+        "Çantana satacak birkaç kumaş kondu."],
+       "Altın kazandın! Silah ve zırhı satmadan önce düşün; onarıp kullanmak çoğu zaman daha kârlıdır.",
+       Goal::Ping("sell"), 1, 1, 10, 30, &[], &[("cloth", 3)]),
     q!("g6b", N_GUIDE, "Büyücüyle Tanış", "Büyücü Aldric ile Konuş",
        ["Ateşin doğusunda mor cüppeli biri durur: Büyücü Aldric.",
         "Bölgeler ayrı haritalardır; aralarında yalnız o ışınlar. Kişisel üssüne de o götürür, 10. seviyede şehre ve Cephe Hattı'na da.",
         "Git, kendini tanıt."],
        "Aldric tuhaf adamdır ama sözünü tutar. Bölgeden bölgeye onunla geçersin.",
        Goal::Talk(N_WIZARD), 1, 1, 10, 30, &[], &[]),
+    q!("g6c", N_GUIDE, "Işınlan", "Aldric'le Kişisel Üssüne Işınlan Ve Geri Dön",
+       ["Aldric'le konuşunca bölge listesi açılır. Kişisel Üssüm'ü seç: orası yalnız senindir, duvarla çevrilidir ve ücretsizdir.",
+        "Önce üsse ışınlan, sonra üssündeki Aldric'ten Başlangıç Ormanı'na geri dön. Büyü her kullanımdan sonra kısa süre dinlenir."],
+       "Işınlanmayı öğrendin! Üssün güvenli bir depodur: sandıklarını orada kurarsın. Yeni bölgelerde Aldric yine yolun açar.",
+       Goal::Ping("tp"), 2, 1, 20, 50, &[], &[]),
+    q!("g6d", N_GUIDE, "Haritayı Aç", "Mini Haritaya Dokun",
+       ["Sağ üstteki yuvarlak mini harita çevreni gösterir: kırmızı noktalar zombi, turuncu ünlemler görev, mavi elmaslar önemli yerlerdir.",
+        "Haritaya dokun: büyük harita açılır, iki parmakla yakınlaştırırsın."],
+       "Harita yolunu bulmanın anahtarı. Karakterler ve yerler adlarıyla işaretlidir.",
+       Goal::Ping("map"), 1, 1, 10, 30, &[], &[]),
+    q!("g6e", N_GUIDE, "Yetenek Ağacı", "Yetenek Ağacını Aç",
+       ["Her seviye yeni güç getirir ama asıl gelişim yetenek ağacındadır. Sol üstteki mor ağaç tuşundan aç.",
+        "Düğümler elmasla açılır; ortadan başlayıp bağlı olanlara ilerlersin. Dört dal var: hasar, silah, can ve çeviklik."],
+       "Ağaçta ilerledikçe oyun tarzın şekillenir. Fikrini değiştirirsen harcadığın elmas kredi olarak geri döner.",
+       Goal::Ping("skills"), 1, 1, 10, 30, &[], &[]),
+    q!("g6f", N_GUIDE, "Posta Kutusu", "Posta Kutunu Aç",
+       ["Ödüller, destek yanıtları ve klan davetleri postana gelir. Sağ üstteki zarf tuşuna dokun.",
+        "Üstünde kırmızı nokta varsa okunmamış posta vardır; ödülleri oradan alırsın."],
+       "Postanı düzenli kontrol et: etkinlik ödülleri ve araç siparişleri oraya düşer.",
+       Goal::Ping("mail"), 1, 1, 10, 30, &[], &[]),
     q!("g7", N_GUIDE, "Ayakta Kal", "Seviye 5'e Ulaş",
        ["Temel bilgiler bu kadar. Gerisi tecrübe.",
         "Yaşlı Silas'ın görevlerini yap, ormanda zombi avla ve 5. seviyeye ulaş.",
         "5. seviyede sohbet açılır; diğer hayatta kalanlarla konuşabilirsin."],
        "Öğretici bitti. Sohbet açıldı; yalnız değilsin. Yolun açık olsun!",
        Goal::Level, 5, 1, 100, 0, &[("potion_power", 1)], &[]),
+    q!("g7b", N_GUIDE, "Sohbet", "Genel Sohbete Bir Mesaj Yaz",
+       ["5. seviyede sohbet açıldı. Ekranın altındaki Genel Sohbet çubuğuna dokun ve bir selam yaz.",
+        "Klan sohbeti ve özel mesajlar da orada. Küfür ve reklam yasak; kurallara uyarsan sohbet seninle kalır."],
+       "Artık yalnız değilsin! Klanlar ve takaslar da sohbetten başlar.",
+       Goal::Ping("chat"), 1, 5, 30, 80, &[], &[]),
     // V11 şehir öğreticisi (Sv 10): şehrin güvenli bölgesindeki Komutan Diana
     q!("g8", N_COMMANDER, "Şehre Hoş Geldin", "Eski Arena'ya Git",
        ["Şehre hoş geldin asker. Ben Komutan Diana; bu surların ardında hayatta kalanları ben toplarım.",
@@ -250,6 +299,26 @@ pub const MAIN: &[Quest] = &[
         "10. seviyeye ulaş, sonra Aldric'ten seni şehre götürmesini iste. Orada daha büyük tehlikeler ve hazineler var."],
        "10. seviyedesin! Aldric seni şehre götürmeye hazır. Artık bu kampın hikâyesi seninle anlatılacak.",
        Goal::Level, 10, 8, 300, 0, &[("medkit", 2)], &[]),
+    // V18: araç kurulumu (parçaları tezgâhta yap, Viktor'a ver; motosiklet postaya gelir)
+    q!("q9a", N_QUEST, "Motosiklet: Gövde", "Tezgâhta 1 Motosiklet Gövdesi Üret",
+       ["Şehre gidecek biri tek ayakla yetmez, evlat. Motosiklet işini görür ama kendin kuracaksın.",
+        "Önce gövde. Gereken hurda, dişli ve deriyi verdim; tezgâhın Araç sekmesinden Motosiklet Gövdesi üret."],
+       "Gövde sağlam. Sıra tekerlekte.",
+       Goal::Craft("v_frame_moto"), 1, 10, 100, 150, &[], &[("scrap", 12), ("gear", 1), ("leather", 2)]),
+    q!("q9b", N_QUEST, "Motosiklet: Tekerlekler", "Tezgâhta 2 Tekerlek Üret",
+       ["Motosiklete iki tekerlek gerekir. Malzemesi bende, tezgâhta üretmek sende."],
+       "İki tekerlek de tamam. Geriye motor kaldı.",
+       Goal::Craft("v_wheel"), 2, 10, 100, 150, &[], &[("scrap", 8), ("leather", 4), ("rope", 2)]),
+    q!("q9c", N_QUEST, "Motosiklet: Motor", "Tezgâhta 1 Motor Üret",
+       ["Motor işin en zor kısmı: elektronik parça ve yakıt ister. Hepsini verdim.",
+        "Tezgâhın Araç sekmesinden Motor üret."],
+       "Motoru yaptın! Artık parçaların tamam; Viktor'un işi başlıyor.",
+       Goal::Craft("v_engine"), 1, 10, 150, 250, &[], &[("scrap", 10), ("gear", 4), ("electronics", 2), ("fuel", 2)]),
+    q!("q9d", N_QUEST, "Motosiklet: Sipariş", "Parçaları Tamirci Viktor'a Teslim Et",
+       ["Parçaları kampın tamircisi Viktor'a götür. Konuşurken Araç Üretimi bölümünden Motosiklet'i seç.",
+        "Viktor parçaları alır, 10 dakika sonra Motosiklet Anahtarı postana gelir. Anahtarı kullanınca motorun yanına gelir; sür ve zombileri geride bırak."],
+       "Sipariş verildi! Postanı kontrol et; anahtar gelince çantandan kullan, motosiklete bin. Sürerken yakıt ve can çubuğuna dikkat.",
+       Goal::Ping("order"), 1, 10, 200, 300, &[("fuel", 2)], &[]),
     // V16: Sv 40'a kadar bölge zinciri: her bölgenin karakoluna git (Aldric götürür), bölgeyi avla; sonunda Titan
     q!("q10", N_QUEST, "Kül Karakolu'na Git", "Kül Karakolu'na Git",
        ["Şehrin doğusunda bir zamanlar ormandı; şimdi yalnız kül ve kor. Orada bir karakol kalmış.",
@@ -308,6 +377,23 @@ pub const MAIN: &[Quest] = &[
        Goal::KillKind(ZKind::Titan), 1, 40, 5000, 10000, &[("titan_shard", 3)], &[]),
 ];
 
+const OLD_GUIDE_V2: [&str; 17] = ["g1", "g2", "g3", "g4", "g4b", "g4c", "g4a", "g4d", "g4e", "g4f", "g4g", "g5", "g6", "g6b", "g7", "g8", "g9"];
+const OLD_MAIN_V0: [&str; 20] = ["q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8", "q9", "q10", "q11", "q12", "q13", "q14", "q15", "q16", "q17", "q18", "q19", "q20"];
+
+/// Eski zincirdeki sıradan (kimlikle) yeni zincirdeki sıraya; bitmiş zincir yeni zincirin sonu olur
+fn remap(old: &[&str], new: &[Quest], idx: usize) -> usize {
+    match old.get(idx) {
+        Some(id) => new.iter().position(|q| q.id == *id).unwrap_or(new.len()),
+        None => new.len(),
+    }
+}
+
+/// Test yardımcısı: V16 rehber sırasını güncel zincire taşır
+#[cfg(test)]
+pub fn remap_v2_guide(idx: usize) -> usize {
+    remap(&OLD_GUIDE_V2, GUIDE, idx)
+}
+
 /// Kaydedilen hikâye durumu
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -322,6 +408,8 @@ pub struct StoryState {
     pub main_n: u32,
     /// rehber zinciri sürümü (V11: 1, V16: 2)
     pub guide_v: u32,
+    /// ana zincir sürümü (V18: 1; görev sırası kimliğe göre taşınır)
+    pub main_v: u32,
 }
 
 impl StoryState {
@@ -334,6 +422,15 @@ impl StoryState {
         if self.guide_v < 2 {
             self.guide = migrate_guide_v2(self.guide);
             self.guide_v = 2;
+        }
+        // V18: zincirlere yeni adımlar eklendi; sıra eski sıranın kimliğinden yeni konuma taşınır
+        if self.guide_v < 3 {
+            self.guide = remap(&OLD_GUIDE_V2, GUIDE, self.guide);
+            self.guide_v = 3;
+        }
+        if self.main_v < 1 {
+            self.main = remap(&OLD_MAIN_V0, MAIN, self.main);
+            self.main_v = 1;
         }
     }
 }
@@ -352,6 +449,16 @@ pub enum Ev {
     Dog,
     Train,
     Mine,
+    /// V18: arayüz/sistem olayı adı (bkz. [`ping_name`])
+    Ping(&'static str),
+}
+
+/// İstemcinin bildirebildiği olay adları (hile ve yanlış ad engellenir)
+pub fn ping_name(s: &str) -> Option<&'static str> {
+    ["tp", "map", "skills", "mail", "chat", "sell", "bench", "order", "drive", "unlock", "repair", "shop", "quests"]
+        .iter()
+        .find(|n| **n == s)
+        .copied()
 }
 
 fn chain(which: u8) -> &'static [Quest] {
@@ -386,10 +493,17 @@ impl Game {
     }
 
     /// Görevin anlık ilerlemesi (seviye görevleri canlı okunur)
+    /// Üstündeki zırh parçası sayısı (kask, ceket, pantolon, bot)
+    fn armor_worn(&self) -> u32 {
+        let e = &self.progress.eq;
+        [&e.helmet, &e.jacket, &e.pants, &e.boots].iter().filter(|x| !x.is_empty()).count() as u32
+    }
+
     fn quest_progress(&self, q: &Quest, n: u32) -> u32 {
         match q.goal {
             Goal::Level => self.progress.level.min(q.count),
             Goal::Dog => u32::from(self.progress.dog_owned),
+            Goal::Wear => self.armor_worn().min(q.count),
             _ => n.min(q.count),
         }
     }
@@ -414,6 +528,7 @@ impl Game {
                 (Goal::Craft(a), Ev::Craft(b)) | (Goal::Use(a), Ev::Use(b)) => a == b,
                 (Goal::Talk(a), Ev::Talk(b)) => a == b,
                 (Goal::Dog, Ev::Dog) | (Goal::Train, Ev::Train) | (Goal::Mine, Ev::Mine) => true,
+                (Goal::Ping(a), Ev::Ping(b)) => a == b,
                 _ => false,
             };
             if hit {
@@ -519,6 +634,10 @@ impl Game {
                         self.story_set(which, idx, true, q.count);
                         self.story_ready(q);
                     }
+                }
+                Goal::Wear if self.armor_worn() >= q.count => {
+                    self.story_set(which, idx, true, q.count);
+                    self.story_ready(q);
                 }
                 Goal::Equip(prefix) if self.progress.eq.weapon.starts_with(prefix) => {
                     self.story_set(which, idx, true, q.count);

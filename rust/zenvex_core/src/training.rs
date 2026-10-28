@@ -100,7 +100,7 @@ mod tests {
     fn city_tutorial_training_base_flow() {
         let mut p = Progress::default();
         p.level = 10;
-        p.story.guide_v = 2;
+        p.story.guide_v = 3;
         p.story.guide = GUIDE.iter().position(|q| q.id == "g9").unwrap();
         let mut g = Game::new(7, p, 0);
         g.player.combat_t = 99.0;
@@ -143,7 +143,7 @@ mod tests {
     #[test]
     fn old_guide_saves_shift_to_new_chain() {
         use crate::story::{migrate_guide_index as m1, migrate_guide_v2 as m2};
-        let m = |old: usize| m2(m1(old));
+        let m = |old: usize| crate::story::remap_v2_guide(m2(m1(old)));
         assert_eq!(GUIDE[m(3)].id, "g4");
         assert_eq!(GUIDE[m(4)].id, "g5");
         assert_eq!(GUIDE[m(5)].id, "g6");
@@ -151,8 +151,8 @@ mod tests {
         assert_eq!(GUIDE[m(7)].id, "g8");
         // V11 kaydı: ağaç kesme (g4a) adımındaki oyuncu aynı adımda kalır; bitirmiş oyuncu bitmiş kalır
         let v1_chop = 5;
-        assert_eq!(GUIDE[m2(v1_chop)].id, "g4a");
-        assert_eq!(m2(12), GUIDE.len());
+        assert_eq!(GUIDE[crate::story::remap_v2_guide(m2(v1_chop))].id, "g4a");
+        assert_eq!(crate::story::remap_v2_guide(m2(12)), GUIDE.len());
     }
 
     /// V16 öğreticisi: balta üret → kuşan → ağaç kes → kazma üret → kaya kır → bıçak üret → kuşan
@@ -164,7 +164,7 @@ mod tests {
         assert!(at("g4b") < at("g4c") && at("g4c") < at("g4a") && at("g4a") < at("g4d"));
         assert!(at("g4d") < at("g4e") && at("g4e") < at("g4f") && at("g4f") < at("g4g") && at("g4g") < at("g5"));
         let mut p = Progress::default();
-        p.story.guide_v = 2;
+        p.story.guide_v = 3;
         p.story.guide = at("g4c");
         let mut g = Game::new(5, p, 1);
         g.story_tick();
@@ -191,7 +191,7 @@ mod tests {
         g.progress.eq.weapon = "w_knife".to_string();
         g.story_tick();
         g.story_tick();
-        assert_eq!(GUIDE[g.progress.story.guide].id, "g5");
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g4h");
     }
 
     /// Ana görev zinciri Sv 40'a kadar uzanır: seviyeler artar, her bölge bir karakol + bir av, sonda Titan
@@ -212,6 +212,34 @@ mod tests {
         for post in ["burnt_post", "desert_post", "bswamp_post", "front_hq", "harbor_post"] {
             assert!(MAIN.iter().any(|q| q.goal == Goal::Reach(post)), "{post} görevi yok");
         }
+    }
+
+    /// V18: her Ping hedefinin adı istemcinin gönderebildiği adlar arasında; sıra ve geçiş zinciri bütün
+    #[test]
+    fn ping_goals_are_reachable_and_chain_is_ordered() {
+        use crate::story::{ping_name, Ev, Goal, MAIN};
+        for q in GUIDE.iter().chain(MAIN.iter()) {
+            if let Goal::Ping(n) = q.goal {
+                assert_eq!(ping_name(n), Some(n), "{} adı istemciden gönderilemiyor", q.id);
+            }
+        }
+        assert_eq!(ping_name("yok"), None);
+        let ids: Vec<&str> = GUIDE.iter().map(|q| q.id).collect();
+        let at = |id: &str| ids.iter().position(|x| *x == id).unwrap();
+        assert!(at("g4g") < at("g4h") && at("g4h") < at("g4i") && at("g4i") < at("g5") && at("g5") < at("g5b") && at("g5b") < at("g6"));
+        assert!(at("g6") < at("g6s") && at("g6s") < at("g6b") && at("g6b") < at("g6c") && at("g6c") < at("g6d"));
+        assert!(at("g6f") < at("g7") && at("g7") < at("g7b") && at("g7b") < at("g8"));
+        // Ping adımı: olay gelince ilerler
+        let mut p = Progress::default();
+        p.story.guide_v = 3;
+        p.story.guide = at("g6d");
+        let mut g = Game::new(5, p, 1);
+        g.story_tick();
+        assert!(g.progress.story.guide_on);
+        g.story_event(Ev::Ping("map"));
+        g.story_tick();
+        g.story_tick();
+        assert_eq!(GUIDE[g.progress.story.guide].id, "g6e");
     }
 
     /// Kaya kırınca günlük "12 kaya kır" ve rehber adımı ilerler

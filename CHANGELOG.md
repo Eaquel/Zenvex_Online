@@ -2,6 +2,11 @@
 
 ## Unreleased (V16 — 3D)
 
+- Quests rewritten: the tutorial now teaches every system step by step (equip armor, set up a workbench, move items to
+  pockets and use them, sell to Marco, teleport to the personal base and back with Aldric, minimap, skill tree, mail, chat)
+  and Silas's chain adds the motorcycle build (frame, wheels, engine, order at Viktor); saves move to the new order by quest id
+- Interactive tutorial markers: glowing frame and bouncing arrow on the exact item, button, tab, recipe and target slot
+  (bag, crafting screen, pockets and HUD buttons), with a short explanation card; new strings in all ten languages
 - V18: VIP system removed (shop tab, points, badge, chat theme, perks); wings can no longer be chosen by players and are
   equipped or removed only by an admin (admin panel → Wings; needs the v18 admin migration)
 - Shop: 19 new generated images (tabs, tickets, cards, packs, gem piles, background)

@@ -86,6 +86,7 @@ impl Game {
         for (id, n) in parts {
             self.progress.inv.remove_id(id, *n);
         }
+        self.story_event(crate::story::Ev::Ping("order"));
         Ok(format!("{name} üretime girdi: {mins} dakika sonra postana gelecek"))
     }
 
@@ -789,7 +790,20 @@ impl Game {
                 self.cheats_ok = v["on"].as_bool().unwrap_or(false);
                 Ok(String::new())
             }
-            "tree_unlock" => self.progress.tree_unlock(v["id"].as_u64().unwrap_or(0) as u16),
+            // V18: arayüz olayı bildirimi (öğretici görevleri): yalnız bilinen adlar
+            "story_ping" => {
+                if let Some(n) = crate::story::ping_name(v["name"].as_str().unwrap_or("")) {
+                    self.story_event(crate::story::Ev::Ping(n));
+                }
+                Ok(String::new())
+            }
+            "tree_unlock" => {
+                let r = self.progress.tree_unlock(v["id"].as_u64().unwrap_or(0) as u16);
+                if r.is_ok() {
+                    self.story_event(crate::story::Ev::Ping("unlock"));
+                }
+                r
+            }
             "tree_reset" => self.progress.tree_reset(),
             "dog_buy" => self.dog_buy(),
             "doctor" => self.npc_doctor(),
@@ -1236,6 +1250,7 @@ impl Game {
             }
         }
         self.progress.add_gold(price);
+        self.story_event(crate::story::Ev::Ping("sell"));
         Ok(format!(
             "{n}× {} satıldı (+{price} altın)",
             ITEMS[item].name

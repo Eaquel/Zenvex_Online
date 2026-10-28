@@ -205,6 +205,9 @@ internal fun BagView(
     val chestSlots = chest?.optJSONArray("slots")
     var rootPos by remember { mutableStateOf(Offset.Zero) }
     val quiet = remember { MutableInteractionSource() }
+    // öğretici: etkin rehber adımı ve işaretlenecek denetimlerin ekran konumları
+    val tutR = remember { HashMap<String, Rect>() }
+    val tstep = remember(inv) { Tut.step() }
 
     fun done(r: GameSession.Reply, ok: String? = null) {
         if (!r.ok) Toaster.show(r.msg, false) else if (r.msg.isNotEmpty()) Toaster.show(r.msg) else if (ok != null) Toaster.show(ok)
@@ -264,7 +267,7 @@ internal fun BagView(
         Column(Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 8.dp)) {
             // ---- üst şerit
             Row(Modifier.fillMaxWidth().height(48.dp).pxPanel(BagPanel).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                PxIcon("back", size = 36.dp) { back() }
+                PxIcon("back", Modifier.tutRect(tutR, "back"), size = 36.dp) { back() }
                 Spacer(Modifier.width(10.dp))
                 Icon("bag", 22.dp, Px.Clan)
                 Spacer(Modifier.width(6.dp))
@@ -281,7 +284,7 @@ internal fun BagView(
                     Spacer(Modifier.width(6.dp))
                 }
                 if (onCraft != null) {
-                    PxButton("Üret", height = 36.dp, size = 13.sp, color = Px.Blue, icon = "craft") { onCraft() }
+                    PxButton("Üret", Modifier.tutRect(tutR, "craft"), height = 36.dp, size = 13.sp, color = Px.Blue, icon = "craft") { onCraft() }
                     Spacer(Modifier.width(6.dp))
                 }
                 PxButton("Sırala", height = 36.dp, size = 13.sp, color = Px.Dark, icon = "refresh") { done(cmd("sort", arrayOf("page" to page))) }
@@ -416,16 +419,16 @@ internal fun BagView(
                             val key = item.optString("id").startsWith("veh_") && inGame
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 // V15 (R8b): tezgâh → inşa modu (yeri parmakla seç, ✓ ile kur)
-                                if (kind == "Bench" && onBuild != null) PxButton("Kur", Modifier.fillMaxWidth(), icon = "hammer", height = 38.dp, size = 14.sp) {
+                                if (kind == "Bench" && onBuild != null) PxButton("Kur", Modifier.fillMaxWidth().tutRect(tutR, "act"), icon = "hammer", height = 38.dp, size = 14.sp) {
                                     sel = null; onBuild(s)
                                 }
                                 if (equippable || usable || placeable || key) PxButton(when { equippable -> "Kuşan"; placeable -> "Üsse Kur"; key -> "Aracı Çağır"; else -> "Kullan" },
-                                    Modifier.fillMaxWidth(), height = 38.dp, size = 14.sp) {
+                                    Modifier.fillMaxWidth().tutRect(tutR, "act"), height = 38.dp, size = 14.sp) {
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
                                     // V16: balta/kazma kuşanılınca elde tutmanın faydası bir kez hatırlatılır
                                     if (equippable && r.ok && isTool(item.optString("id"))) Toaster.show("Balta ve kazma yalnız elindeyken ağaca ve kayaya güçlü vurur.")
                                 }
-                                if (usable && s >= pockets) PxButton("Cebe Koy", Modifier.fillMaxWidth(), color = Px.Blue, height = 32.dp, size = 12.sp) {
+                                if (usable && s >= pockets) PxButton("Cebe Koy", Modifier.fillMaxWidth().tutRect(tutR, "act"), color = Px.Blue, height = 32.dp, size = 12.sp) {
                                     val free = (0 until pockets).firstOrNull { slots!!.isNull(it) } ?: 0
                                     val r = cmd("move", arrayOf("from" to s, "to" to free)); if (!r.ok) Toaster.show(r.msg, false); sel = null; refresh()
                                 }
@@ -457,6 +460,7 @@ internal fun BagView(
                 }
             }
         }
+        TutorialBagLayer(tstep, slots, pockets, n, sel, drag.item != null, tutR, drag.rects, inv, onCraft != null)
         // sürüklenen eşyanın hayaleti
         val it = drag.item
         if (it != null) {
@@ -597,4 +601,100 @@ fun durColor(d: Int): Color = when {
 fun PocketButton(item: JSONObject?, index: Int, onClick: () -> Unit) {
     PxSlot(item, 56.dp, hint = "${index + 1}",
         modifier = Modifier.clickable(remember { MutableInteractionSource() }, null) { onClick() })
+}
+
+
+private fun eqKeyFor(kind: String): Int? {
+    val k = when (kind) { "Weapon" -> "weapon"; "Helmet" -> "helmet"; "Jacket" -> "jacket"; "Boots" -> "boots"; "Bag" -> "bag"; "Ring" -> "ring"; "Necklace" -> "necklace"; else -> return null }
+    val l = EQ_LEFT.indexOfFirst { it.first == k }
+    if (l >= 0) return EQ + l
+    val r = EQ_RIGHT.indexOfFirst { it.first == k }
+    return if (r >= 0) EQ + 4 + r else null
+}
+
+/** Çantadaki öğretici: hangi eşyaya dokunulacak, hangi düğmeye basılacak, eşya nereye oturacak; her aşama ayrı gösterilir */
+@Composable
+private fun TutorialBagLayer(
+    step: String, slots: org.json.JSONArray?, pockets: Int, n: Int, sel: Int?, dragging: Boolean,
+    tut: Map<String, Rect>, rects: Map<Int, Rect>, inv: JSONObject, hasCraft: Boolean,
+) {
+    if (step.isEmpty()) return
+    val tg = ArrayList<TutTarget>()
+    var text: String? = null
+    when (step) {
+        "g4", "g4b", "g4d", "g4f" -> if (hasCraft) {
+            tg += TutTarget(tut["craft"], "Üret'e Bas", below = true)
+            text = when (step) {
+                "g4" -> "Üst şeritteki parlayan Üret düğmesine bas. Açılan ekranda Şifa sekmesinden Bandaj'ı seçip Üret'e basacaksın."
+                "g4b" -> "Üret düğmesine bas; Silah Ve Alet sekmesinden Taş Balta'yı seç ve Üret'e bas. Malzemeyi sana ben verdim."
+                "g4d" -> "Üret düğmesine bas; Silah Ve Alet sekmesinden Taş Kazma'yı seç ve Üret'e bas."
+                else -> "Üret düğmesine bas; Silah Ve Alet sekmesinden Bıçak'ı seç ve Üret'e bas."
+            }
+        }
+        "g4c", "g4g", "g4h", "g4i", "g5", "g5b" -> {
+            val from = if (step == "g5" || step == "g5b") pockets else 0
+            val idx = (from until n).firstOrNull { i ->
+                val o = slots?.optJSONObject(i) ?: return@firstOrNull false
+                val id = o.optString("id"); val kind = o.optString("kind")
+                when (step) {
+                    "g4c" -> id.startsWith("t_axe_")
+                    "g4g" -> id == "w_knife"
+                    "g4h" -> id == "helm_basic" || id == "jacket_basic"
+                    "g4i" -> kind == "Bench"
+                    "g5" -> kind == "Consumable"
+                    else -> id == "bandage"
+                }
+            }
+            if (idx == null) {
+                // g5b: bandaj zaten cepte; çantayı kapatıp cebe dokunması gerekir
+                if (step == "g5b") {
+                    tg += TutTarget(tut["back"], "Çantayı Kapat", below = true)
+                    text = "Bandaj cebinde. Çantayı kapat ve ekranın altındaki parlayan cebe dokun: kullanılır, bekleme süresine girer."
+                }
+            } else {
+                val item = slots?.optJSONObject(idx)
+                val picked = sel == idx
+                val pocketFree = (0 until pockets).firstOrNull { slots?.isNull(it) != false } ?: 0
+                val pocket = rects[pocketFree]
+                val wear = step == "g4c" || step == "g4g" || step == "g4h"
+                when {
+                    dragging -> if (step == "g5" || step == "g5b") {
+                        tg += TutTarget(pocket, "Burada Bırak")
+                        text = "Parmağını kaldırınca eşya cebe girer. Cep boşsa parlayan yuvaya bırak."
+                    }
+                    !picked -> {
+                        tg += TutTarget(rects[idx], if (step == "g5" || step == "g5b") "Basılı Tut" else "Dokun")
+                        if (step == "g5" || step == "g5b") tg += TutTarget(pocket, "Buraya Sürükle")
+                        text = when (step) {
+                            "g4c" -> "Parlayan Taş Balta'ya dokun: seçilince sağ panelde bilgisi ve Kuşan düğmesi çıkar."
+                            "g4g" -> "Parlayan Bıçağa dokun: seçilince sağ panelde bilgisi ve Kuşan düğmesi çıkar."
+                            "g4h" -> "Parlayan kask ya da ceketi seç. İkisini de giyeceksin, sırayla dokun."
+                            "g4i" -> "Parlayan Tezgâh'a dokun: sağ panelde Kur düğmesi çıkar."
+                            else -> "Parlayan eşyaya parmağını yarım saniye basılı tut, sonra soldaki parlayan cebe sürükleyip bırak. Dokunup Cebe Koy'u seçmek de olur."
+                        }
+                    }
+                    else -> {
+                        val kind = item?.optString("kind").orEmpty()
+                        when {
+                            wear -> {
+                                tg += TutTarget(tut["act"], "Kuşan'a Bas")
+                                eqKeyFor(kind)?.let { tg += TutTarget(rects[it], "Buraya Oturur") }
+                                text = "Kuşan'a bas: eşya parlayan ekipman yuvasına oturur. Çıkarmak istersen yuvadan dışarı sürüklersin."
+                            }
+                            step == "g4i" -> {
+                                tg += TutTarget(tut["act"], "Kur'a Bas")
+                                text = "Kur'a bas, sonra yerde yeşil çıkan bir noktaya dokunup ✓ ile tezgâhı yerleştir."
+                            }
+                            else -> {
+                                tg += TutTarget(tut["act"], "Cebe Koy'a Bas")
+                                tg += TutTarget(pocket, "Buraya Girer")
+                                text = "Cebe Koy'a bas: eşya parlayan cebe girer. Sürükleyerek de koyabilirsin."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    TutLayer(tg, text)
 }

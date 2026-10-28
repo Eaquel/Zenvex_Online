@@ -119,6 +119,15 @@ fun GameScreen(toLobby: () -> Unit) {
             }
         }
     }
+    // öğretici: harita, yetenek ağacı ve posta açılınca ilgili adım ilerler
+    LaunchedEffect(overlay) {
+        when (overlay) {
+            Overlay.Map -> Tut.ping("map")
+            Overlay.Skills -> Tut.ping("skills")
+            Overlay.Mail -> Tut.ping("mail")
+            else -> {}
+        }
+    }
     DisposableEffect(Unit) {
         Online.onChat = { l ->
             if (l.channel != "system") view.bubble(l.name, l.text)
@@ -325,6 +334,9 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             delay(400)
         }
     }
+    // etkin rehber adımı: hangi tuşun parlayıp ok göstereceğini belirler
+    val gstep = (0 until story.length()).map { story.getJSONObject(it) }
+        .firstOrNull { it.optBoolean("guide") && it.optBoolean("on") && !it.optBoolean("ready") }?.optString("id").orEmpty()
     // sol üst portre (GameView çizer): dokununca kendi profilin (başkalarının gördüğü gibi) + düzenleme
     Box(Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = 10.dp).size(68.dp)
         .clickable(remember { MutableInteractionSource() }, null) { open(Overlay.Me) })
@@ -332,7 +344,10 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     Row(Modifier.align(Alignment.TopStart).padding(start = 14.dp, top = 84.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         PassButton { open(Overlay.Pass) }
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
-        PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
+        Box {
+            PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
+            if (gstep == "g6e") { TutPulse(Modifier.matchParentSize()); TutArrowBelow("Yetenekler") }
+        }
         PxIcon("profile", size = 46.dp, tint = Color(0xFFB277FF)) { open(Overlay.Chars) }
         // Elmas Sandığı kaplamaları henüz hazır değil: tuş yalnız haber verir (ekran kodda duruyor)
         PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { Toaster.show("Koleksiyon Eşyaları Çok Yakında Geliyor") }
@@ -349,7 +364,10 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             // yönetici paneli: üst orta etkinlik afişinin altında kalmasın diye sağ üst gruba alındı
             if (Account.admin.value) PxIcon("dev", size = 44.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
             ShopButton { open(Overlay.Shop) }
-            PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
+            Box {
+                PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
+                if (gstep == "g6f") { TutPulse(Modifier.matchParentSize()); TutArrowBelow("Posta") }
+            }
             PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
         }
         Spacer(Modifier.height(6.dp))
@@ -365,25 +383,31 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             // cepler (çantada sol sütun): basınca kullanılır, bekleme süresi tuşun üstünde
             for (k in 0 until inv.optInt("pockets", 4)) {
                 val o = slots.optJSONObject(k)
-                PocketButton(o, k) {
-                    if (o == null) { open(Overlay.Bag); return@PocketButton }
-                    val r = GameSession.cmd("use", "slot" to k)
-                    if (r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) Toaster.show(r.msg, r.ok)
-                    inv = GameSession.ui("inventory")
+                Box {
+                    PocketButton(o, k) {
+                        if (o == null) { open(Overlay.Bag); return@PocketButton }
+                        val r = GameSession.cmd("use", "slot" to k)
+                        if (r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) Toaster.show(r.msg, r.ok)
+                        inv = GameSession.ui("inventory")
+                    }
+                    // öğretici: cepteki bandaj parlar ("Cepten Kullan" adımı)
+                    if (gstep == "g5b" && o?.optString("id") == "bandage") {
+                        TutPulse(Modifier.matchParentSize()); TutArrow("Dokun: Kullan", Modifier.align(Alignment.TopCenter))
+                    }
                 }
             }
             Box(Modifier.onGloballyPositioned { r -> val b = r.boundsInRoot(); com.zenvex.online.game.HudLayout.bagBtn = floatArrayOf(b.left, b.top, b.right, b.bottom) }) {
                 PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }
-                // öğretici: üretim ve cep adımlarında çantayı göster
-                val step = (0 until story.length()).map { story.getJSONObject(it) }
-                    .firstOrNull { it.optBoolean("guide") && it.optBoolean("on") && !it.optBoolean("ready") }?.optString("id")
-                if (step == "g4" || step == "g4b" || step == "g4c" || step == "g4d" || step == "g4f" || step == "g4g" || step == "g5") {
+                // öğretici: üretim, kuşanma, tezgâh ve cep adımlarında çantayı göster (bandaj cepteyse cep parlar)
+                val bandInPocket = (0 until inv.optInt("pockets", 4)).any { inv.optJSONArray("slots")?.optJSONObject(it)?.optString("id") == "bandage" }
+                if (gstep in BAG_STEPS && !(gstep == "g5b" && bandInPocket)) {
                     TutPulse(Modifier.matchParentSize())
                     TutArrow("Çantayı Aç", Modifier.align(Alignment.TopCenter))
                 }
             }
         }
         Spacer(Modifier.height(6.dp))
+        Box {
         Row(
             Modifier.width(380.dp).height(38.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xB0201F1C))
                 .clickable { open(Overlay.Chat) },
@@ -395,10 +419,17 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             PT("Mesaj", 15.sp, Px.Sub, Modifier.weight(1f).padding(start = 14.dp))
             ArtImage("btn_chat", Modifier.padding(end = 4.dp).size(34.dp))
         }
+        if (gstep == "g7b") {
+            Box(Modifier.matchParentSize()) { TutPulseWide() }
+            TutArrow("Sohbete Yaz", Modifier.align(Alignment.TopCenter))
+        }
+        }
     }
     // ilk giriş kontrol rehberi: her şeyin üstünde
     ControlsGuide()
 }
+
+private val BAG_STEPS = setOf("g4", "g4b", "g4c", "g4d", "g4f", "g4g", "g4h", "g4i", "g5", "g5b")
 
 /** Para gösterimi: 100.000'e kadar tam ("12.345"), sonra kısaltılmış ("123,4 B", "12,50 M", "1,25 Mr") */
 fun fmtMoney(n: Long): String = when {
