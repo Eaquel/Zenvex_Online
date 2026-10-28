@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -49,12 +50,23 @@ object Tut {
         return ""
     }
 
+    /** Etkin üretim görevinin istediği eşya ve tezgâh tarifi mi (rehber önce; yoksa null) */
+    fun craftWant(): Pair<String, Boolean>? {
+        val a = GameSession.ui("quests").optJSONArray("story") ?: return null
+        val qs = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.optBoolean("on") && !it.optBoolean("ready") && it.has("craft") }
+        val q = qs.firstOrNull { it.optBoolean("guide") } ?: qs.firstOrNull() ?: return null
+        return q.optString("craft") to q.optBoolean("bench")
+    }
+
     /** Olayı oyuna bildirir (görev hedefi "Ping"); bilinmeyen ad Rust'ta yok sayılır */
     fun ping(name: String) { GameSession.cmdNoSave("story_ping", "name" to name) }
 }
 
-/** Parlatılacak bir ekran bölgesi: [rect] kök koordinatında (boundsInRoot), [label] okun yanındaki kısa yazı */
-class TutTarget(val rect: Rect?, val label: String, val below: Boolean = false)
+/**
+ * Parlatılacak bir ekran bölgesi: [rect] kök koordinatında (boundsInRoot), [label] kısa yazı. [tap]: dokunulacak yer
+ * (parmak ucu ortasına inen el); değilse eşyanın varacağı yer (ok).
+ */
+class TutTarget(val rect: Rect?, val label: String, val below: Boolean = false, val tap: Boolean = true)
 
 /** Bir bileşenin kök koordinatındaki dikdörtgenini [map] içine yazar */
 fun Modifier.tutRect(map: MutableMap<String, Rect>, key: String): Modifier = onGloballyPositioned { map[key] = it.boundsInRoot() }
@@ -72,7 +84,7 @@ fun TutLayer(targets: List<TutTarget>, text: String?, cardStart: Int = 230, card
     Box(Modifier.fillMaxSize().onGloballyPositioned { root = it.positionInRoot() }) {
         for (g in targets) {
             val r = g.rect ?: continue
-            TutMark(r, root, g.label, g.below, t, dn)
+            TutMark(r, root, g.label, g.below, g.tap, t, dn)
         }
         if (text != null) {
             Box(Modifier.align(Alignment.TopStart).padding(start = cardStart.dp, end = cardEnd.dp, top = 4.dp)
@@ -86,7 +98,7 @@ fun TutLayer(targets: List<TutTarget>, text: String?, cardStart: Int = 230, card
 }
 
 @Composable
-private fun TutMark(r: Rect, root: Offset, label: String, below: Boolean, t: Float, dn: androidx.compose.ui.unit.Density) {
+private fun TutMark(r: Rect, root: Offset, label: String, below: Boolean, tap: Boolean, t: Float, dn: androidx.compose.ui.unit.Density) {
     val pad = with(dn) { 3.dp.toPx() }
     val x = r.left - root.x - pad; val y = r.top - root.y - pad
     val w = r.width + pad * 2; val h = r.height + pad * 2
@@ -105,13 +117,19 @@ private fun TutMark(r: Rect, root: Offset, label: String, below: Boolean, t: Flo
             drawRoundRect(Color(0xFFFFE08A).copy(alpha = 0.65f + 0.35f * pulse), Offset.Zero, size, rr, Stroke(2.5.dp.toPx()))
             drawRoundRect(gold.copy(alpha = 0.10f + 0.10f * pulse), Offset.Zero, size, rr)
         }
-        val bounce = (sin(t * 5f) * 3).dp
-        Column(Modifier.align(if (below) Alignment.BottomCenter else Alignment.TopCenter).wrapContentWidth(unbounded = true)
-            .offset(y = if (below) 46.dp + bounce else (-46).dp - bounce), horizontalAlignment = Alignment.CenterHorizontally) {
-            if (below) Arrow(true, pulse)
-            if (label.isNotEmpty()) Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xE0101010)).border(1.dp, gold.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
-                .padding(horizontal = 9.dp, vertical = 2.dp)) { PT(label, 12.sp, Color(0xFFFFF0C0)) }
-            if (!below) Arrow(false, pulse)
+        if (tap) {
+            // dokun eli: parmak ucu hedefin ortasına iner (tut_hand), etiket hedefin üstünde/altında
+            TutTap(label, above = !below)
+        } else {
+            val bounce = ((1f + sin(t * 5f)) * 3).dp
+            Column(Modifier.align(if (below) Alignment.BottomCenter else Alignment.TopCenter)
+                .offset(y = if (below) 4.dp + bounce else (-4).dp - bounce).tutAnchor(0.5f, if (below) 0f else 1f),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                if (below) Arrow(true, pulse)
+                if (label.isNotEmpty()) Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xE0101010)).border(1.dp, gold.copy(alpha = 0.6f), RoundedCornerShape(10.dp))
+                    .padding(horizontal = 9.dp, vertical = 2.dp)) { PT(label, 12.sp, Color(0xFFFFF0C0)) }
+                if (!below) Arrow(false, pulse)
+            }
         }
     }
 }
@@ -126,5 +144,36 @@ private fun Arrow(up: Boolean, pulse: Float) {
         }
         drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * pulse))
         drawPath(p, Color(0xB015140F), style = Stroke(1.5f))
+    }
+}
+
+/**
+ * Öğretici konuşma balonu (V19): eskiden oyun tuvalinde çiziliyordu ve üstteki arayüz katmanlarının (kontrol rehberi,
+ * pencereler) arkasında kalıyordu. Şimdi HUD'ın en üst katmanında: GameView metni ve konumu HudLayout'a yazar.
+ */
+@Composable
+fun GuideBubble() {
+    rememberTime() // her karede yeniden okunur (HudLayout değerleri Compose durumu değil)
+    val msg = com.zenvex.online.game.HudLayout.tutMsg
+    val a = com.zenvex.online.game.HudLayout.tutAlpha
+    if (msg.isEmpty() || a <= 0.01f) return
+    val diana = com.zenvex.online.game.HudLayout.tutDiana
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+        // sol üst kısayol satırının (y ≈ 84-130 dp, işaret etiketi dahil) ve sağ üst para kapsülünün altında: tuşları örtmez
+        val top = maxOf(maxHeight * com.zenvex.online.game.HudLayout.tutTop, 158.dp)
+        androidx.compose.foundation.layout.Row(Modifier.align(Alignment.TopCenter).padding(top = top + ((1f - a) * -10f).dp)
+            .alpha(a), verticalAlignment = Alignment.Top) {
+            if (diana) {
+                Box(Modifier.size(58.dp, 64.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xD8141310)).border(1.5.dp, Color(0xFF6A5A3A), RoundedCornerShape(6.dp))) {
+                    ArtImage("commander_portrait", Modifier.fillMaxSize())
+                }
+                androidx.compose.foundation.layout.Spacer(Modifier.width(4.dp))
+            }
+            Column(Modifier.widthIn(max = 430.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xE6141310))
+                .border(1.5.dp, Color(0xFF6A5A3A), RoundedCornerShape(8.dp)).padding(horizontal = 12.dp, vertical = 7.dp)) {
+                PT(if (diana) "Komutan Diana" else "İlk Adımlar", 12.sp, Color(0xFFFFD34A))
+                PT(msg, 13.sp, Color(0xFFF2EEE4), maxLines = 5)
+            }
+        }
     }
 }

@@ -228,10 +228,13 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
 
     // öğretici: hangi sekme, hangi tarif, hangi düğme (adıma göre)
     val tutR = remember { HashMap<String, androidx.compose.ui.geometry.Rect>() }
-    val tstep = remember(tick) { Tut.step() }
-    val tutWant: Pair<Int, String>? = when (tstep) {
-        "g4" -> 0 to "bandage"; "g4b" -> 2 to "t_axe_stone"; "g4d" -> 2 to "t_pick_stone"; "g4f" -> 2 to "w_knife"; else -> null
+    // V19: rehber ve ana görevlerin bütün üretim adımları (Silas'ın motosiklet parçaları dahil): sekme tarifin kendisinden
+    val craftWant = remember(tick) { Tut.craftWant() }
+    val tutWant: Pair<Int, String>? = craftWant?.let { (id, _) ->
+        all.firstOrNull { it.optJSONObject("out")?.optString("id") == id }?.let { it.optInt("tab") to id }
     }
+    // istenen tarif bu ekranda değil (el ↔ tezgâh): nereye gidileceği söylenir
+    val wrongPlace = craftWant != null && tutWant == null
 
     fun craft(v: JSONObject, n: Int) {
         val res = GameSession.cmd("craft", "i" to v.optInt("i"), "n" to n)
@@ -365,6 +368,8 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
             }
         }
     }
+    if (wrongPlace) TutLayer(emptyList(), if (craftWant!!.second) "Görevin istediği eşya tezgâhta yapılır: bu ekranı kapat, haritada işaretli tezgâha git ve ona dokun."
+        else "Görevin istediği eşya el üretiminde: bu ekranı kapat, çantadaki Üret düğmesine bas.", cardStart = 200, cardEnd = 280)
     // öğretici: sekme → tarif → Üret düğmesi sırasıyla parlar
     if (tutWant != null) {
         val (wantTab, wantId) = tutWant
@@ -374,8 +379,11 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
         when {
             tab != wantTab -> {
                 tg += TutTarget(tutR["tab$wantTab"], "Önce Bu Sekme", below = true)
-                text = if (wantTab == 0) "Üstteki parlayan Şifa sekmesine dokun: tarifler sekmelere ayrılmıştır, bandaj Şifa'dadır."
-                else "Üstteki parlayan Silah Ve Alet sekmesine dokun: tarifler sekmelere ayrılmıştır, alet ve silahlar burada."
+                text = when (wantTab) {
+                    0 -> "Üstteki parlayan Şifa sekmesine dokun: tarifler sekmelere ayrılmıştır, bandaj Şifa'dadır."
+                    2 -> "Üstteki parlayan Silah Ve Alet sekmesine dokun: tarifler sekmelere ayrılmıştır, alet ve silahlar burada."
+                    else -> "Üstteki parlayan sekmeye dokun: tarifler sekmelere ayrılmıştır, görevin istediği tarif o sekmede."
+                }
             }
             shown != wantId -> {
                 tg += TutTarget(tutR["rec:$wantId"], "Bunu Seç")

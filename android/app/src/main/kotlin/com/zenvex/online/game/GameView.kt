@@ -90,6 +90,11 @@ object HudLayout {
     @Volatile var guideWanted = false
     @Volatile var guideTargets = FloatArray(12)
     @Volatile var guideSurface = floatArrayOf(1f, 1f)
+    /** öğretici balonu: metin (boşsa yok), görünürlük (0..1), üst kenarın ekran yüksekliğine oranı, konuşan Komutan Diana mı */
+    @Volatile var tutMsg = ""
+    @Volatile var tutAlpha = 0f
+    @Volatile var tutTop = 0.1f
+    @Volatile var tutDiana = false
 }
 
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
@@ -3626,48 +3631,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     /**
-     * Rehberin konuşma balonu: üst ortada, bölge adı ve bağlamsal panelin (boss/üs/etkinlik) altında; sözcük sözcük sarılır,
-     * 9 sn sonra söner. Duyuru afişi (yeni görev, bölge) aynı yere düşer: afiş varken balon bekler ve süresi işlemez —
-     * üst ortada aynı anda tek mesaj.
+     * Öğretici: adımın yapılacak işini ve konumunu HudLayout'a yazar (balonu Compose çizer: ui/Tutorial.kt GuideBubble — üst
+     * ortada, bölge adı ve bağlamsal panelin altında, 9 sn sonra söner; duyuru afişi varken bekler ve süresi işlemez), dünya
+     * işaretlerini (denetim halkası, hedef halkası, ekran dışı yön oku) burada çizer.
      */
-    private fun guideBubble(c: Canvas, raw: String) {
-        val msg = I18n.t(raw)
-        val d = density
-        val a = (tutT / 0.35f).coerceIn(0f, 1f) * ((9.5f - tutT) / 0.6f).coerceIn(0f, 1f)
-        if (a <= 0.01f) return
-        val size = 13.5f * d
-        text.typeface = fontBold; text.textSize = size
-        val maxW = min(sw * 0.44f, 420 * d)
-        val lines = ArrayList<String>()
-        var cur = ""
-        for (w in msg.split(' ')) {
-            val t = if (cur.isEmpty()) w else "$cur $w"
-            if (text.measureText(t) > maxW && cur.isNotEmpty()) { lines += cur; cur = w } else cur = t
-        }
-        if (cur.isNotEmpty()) lines += cur
-        val lh = size * 1.3f
-        val bw = maxW + 24 * d
-        val bh = lines.size * lh + 34 * d
-        val diana = guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)
-        // Komutan Diana konuşurken balonun solunda portresi
-        val port = if (diana) com.zenvex.online.ui.UiArt.bitmap(context, "commander_portrait") else null
-        val pw = if (port != null) max(bh, 64 * d) * port.width / port.height else 0f
-        val x0 = sw / 2f - bw / 2 + pw / 2; val y0 = slotBottom + 6 * d - (1f - a) * 10 * d
-        if (port != null) {
-            val ph = max(bh, 64 * d)
-            tutOval.set(x0 - pw - 4 * d, y0, x0 - 4 * d, y0 + ph)
-            fill.color = alphaC(0xD8141310.toInt(), a); c.drawRoundRect(tutOval, 6 * d, 6 * d, fill)
-            pixelPaint.alpha = (255 * a).toInt(); c.drawBitmap(port, null, tutOval, pixelPaint); pixelPaint.alpha = 255
-            stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 6 * d, 6 * d, stroke)
-        }
-        fill.color = alphaC(0xD8141310.toInt(), a); tutOval.set(x0, y0, x0 + bw, y0 + bh); c.drawRoundRect(tutOval, 8 * d, 8 * d, fill)
-        stroke.color = alphaC(0xFF6A5A3A.toInt(), a); stroke.strokeWidth = 1.5f * d; c.drawRoundRect(tutOval, 8 * d, 8 * d, stroke)
-        drawText(c, if (diana) "Komutan Diana" else "İlk Adımlar", x0 + 12 * d, y0 + 17 * d, 12 * d, alphaC(0xFFFFD34A.toInt(), a), false, fontBold)
-        for ((i, l) in lines.withIndex()) drawText(c, l, x0 + 12 * d, y0 + 22 * d + (i + 1) * lh - 4 * d, size, alphaC(0xFFF2EEE4.toInt(), a), false, fontBold)
-    }
-
     private fun drawTutorial(c: Canvas) {
-        if (hud[Native.DEAD] > 0.5f) return
+        if (hud[Native.DEAD] > 0.5f) { HudLayout.tutMsg = ""; return }
         val d = density
         val dt = (time - tutLast).coerceIn(0f, 0.1f); tutLast = time
         if (moveStick.active && kotlin.math.hypot(moveStick.vx, moveStick.vy) > 0.3f) tutMoved = true
@@ -3688,7 +3657,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             guideStep == "g4c" -> "Çantayı aç, parlayan Taş Balta'ya dokun ve Kuşan'a bas: balta ekipman bölümündeki Silah yuvasına oturur."
             guideStep == "g4a" -> "Bir ağaca yürü ve vurmaya devam et: 500 canı var, balta her vuruşta 50 götürür."
             guideStep == "g4d" -> "Çanta → Üret → Silah Ve Alet sekmesi → Taş Kazma → Üret. Parlayan düğmeleri izle."
-            guideStep == "g4e" -> "Kazmayı çantanda tut ve bir kayaya yürüyüp vurmaya devam et: kaya 500 can taşır, kazma her vuruşta 50 götürür."
+            guideStep == "g4e" -> "Çantadan Taş Kazma'yı kuşan, sonra bir kayaya yürüyüp vurmaya devam et: kaya 500 can taşır, kazma her vuruşta 50 götürür."
             guideStep == "g4f" -> "Çanta → Üret → Silah Ve Alet sekmesi → Bıçak → Üret. Malzemeyi ben verdim."
             guideStep == "g4g" -> "Çantayı aç, parlayan Bıçağa dokun ve Kuşan'a bas. Bıçak Silah yuvasına oturur; sağ joystick artık onunla vurur."
             guideStep == "g4h" -> "Çantayı aç; kask ve ceketi sırayla seçip Kuşan'a bas. Zırh, ekipman bölümündeki Kask ve Ceket yuvalarına oturur."
@@ -3711,7 +3680,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // afiş üst ortadayken balon bekler (süresi de işlemez): aynı yerde iki yazı üst üste binmez
         if (key != tutKey) { tutKey = key; tutT = 0f } else if (bannerT <= 0f) tutT += dt
         ringAt?.let { (x, y, r) -> hintRing(c, x, y, r) }
-        if (msg != null && bannerT <= 0f) guideBubble(c, msg)
+        // V19: balon Compose katmanında, her şeyin (kontrol rehberi dahil) üstünde çizilir (ui/GuideBubble); burada yalnız yayınlanır
+        val show = msg != null && bannerT <= 0f
+        HudLayout.tutMsg = if (show) msg!! else ""
+        HudLayout.tutAlpha = if (show) (tutT / 0.35f).coerceIn(0f, 1f) * ((9.5f - tutT) / 0.6f).coerceIn(0f, 1f) else 0f
+        HudLayout.tutTop = (slotBottom + 6 * density) / sh.coerceAtLeast(1)
+        HudLayout.tutDiana = guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)
         // görev hedefi: ekrandaysa yerde halka + küçük işaret, ekran dışındaysa kenarda yön göstergesi
         val tgt = questTargets.firstOrNull { it.guide } ?: questTargets.firstOrNull() ?: return
         val px = hud[Native.PX]; val py = hud[Native.PY]

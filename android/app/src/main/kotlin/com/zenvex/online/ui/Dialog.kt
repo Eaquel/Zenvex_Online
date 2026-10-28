@@ -35,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -183,22 +184,78 @@ fun QuestTracker(story: JSONArray, modifier: Modifier = Modifier, onClick: () ->
     }
 }
 
-/** Öğretici işaretçisi (Compose): hedefin üstünde küçük zıplayan ok başı + yarı saydam etiket. Hedefin çevresine [TutPulse]. */
+/**
+ * Ölçüsü sıfır çapa: içerik yerleşimi hiç etkilemez (işaretlenen tuş genişlemez, yanındaki tuşlar kaymaz). (ax, ay):
+ * içeriğin çapa noktasına oturan yeri (0..1; 0.5, 1 → alt orta).
+ */
+fun Modifier.tutAnchor(ax: Float, ay: Float): Modifier = layout { m, _ ->
+    val p = m.measure(androidx.compose.ui.unit.Constraints())
+    layout(0, 0) { p.place((-p.width * ax).toInt(), (-p.height * ay).toInt()) }
+}
+
+@Composable
+private fun TutLabel(label: String) {
+    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xD8101010)).border(1.dp, Color(0x99FFD34A), RoundedCornerShape(10.dp))
+        .padding(horizontal = 9.dp, vertical = 2.dp)) { PT(label, 12.sp, Color(0xFFFFF0C0)) }
+}
+
+@Composable
+private fun TutArrowHead(up: Boolean, t: Float) {
+    androidx.compose.foundation.Canvas(Modifier.size(16.dp, 12.dp)) {
+        val p = androidx.compose.ui.graphics.Path().apply {
+            if (up) { moveTo(size.width / 2, 0f); lineTo(0f, size.height); lineTo(size.width / 2, size.height * 0.6f); lineTo(size.width, size.height) }
+            else { moveTo(size.width / 2, size.height); lineTo(0f, 0f); lineTo(size.width / 2, size.height * 0.4f); lineTo(size.width, 0f) }
+            close()
+        }
+        drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * sin(t * 4f)))
+        drawPath(p, Color(0xB015140F), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+    }
+}
+
+/** Öğretici işaretçisi: hedefin tam üst ortasında zıplayan ok + etiket. [modifier] hedef kutusunda Alignment.TopCenter ister. */
 @Composable
 fun TutArrow(label: String, modifier: Modifier = Modifier) {
     val t = rememberTime()
-    Column(modifier.offset(y = (-58 + sin(t * 4f) * 3).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB0101010)).padding(horizontal = 9.dp, vertical = 2.dp)) {
-            PT(label, 12.sp, Color(0xFFFFF0C0))
-        }
-        androidx.compose.foundation.Canvas(Modifier.size(16.dp, 12.dp)) {
-            val p = androidx.compose.ui.graphics.Path().apply {
-                moveTo(size.width / 2, size.height); lineTo(0f, 0f); lineTo(size.width / 2, size.height * 0.4f); lineTo(size.width, 0f); close()
-            }
-            drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * sin(t * 4f)))
-            drawPath(p, Color(0xB015140F), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+    Column(modifier.offset(y = (-4 - (1f + sin(t * 4f)) * 3).dp).tutAnchor(0.5f, 1f), horizontalAlignment = Alignment.CenterHorizontally) {
+        TutLabel(label)
+        TutArrowHead(false, t)
+    }
+}
+
+/** Hedefin tam alt ortasında yukarı bakan ok ve etiket (ekranın üst kenarına yakın tuşlar için) */
+@Composable
+fun BoxScope.TutArrowBelow(label: String) {
+    val t = rememberTime()
+    Column(Modifier.align(Alignment.BottomCenter).offset(y = (4 + (1f + sin(t * 4f)) * 3).dp).tutAnchor(0.5f, 0f), horizontalAlignment = Alignment.CenterHorizontally) {
+        TutArrowHead(true, t)
+        TutLabel(label)
+    }
+}
+
+/**
+ * Dokun eli (assets/ui/tut_hand): parmak ucu hedefin ortasına iner, basıp kalkar; dokunuşta halka yayılır. Etiket
+ * [above] ise hedefin üstünde, değilse altında. Yalnız dokunulacak tuşlarda (sürükleme hedeflerinde ok kalır).
+ */
+@Composable
+fun BoxScope.TutTap(label: String, above: Boolean = true) {
+    val t = rememberTime()
+    val ph = (t * 1.25f) % 1f
+    // 0..0.35 iniş, 0.35..0.5 basılı, sonra kalkış
+    val press = when { ph < 0.35f -> ph / 0.35f; ph < 0.5f -> 1f; else -> (1f - (ph - 0.5f) / 0.5f).coerceAtLeast(0f) }
+    if (ph in 0.35f..0.85f) {
+        val r = (ph - 0.35f) / 0.5f
+        androidx.compose.foundation.Canvas(Modifier.matchParentSize()) {
+            drawCircle(Color(0xFFFFF0C0).copy(alpha = 0.7f * (1f - r)), radius = size.minDimension * (0.18f + 0.45f * r),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
         }
     }
+    // parmak ucu (görselde yatay %36, en üst) hedefin tam ortasına; basışta el bir an küçülür, halka yayılır
+    Box(Modifier.align(Alignment.Center).tutAnchor(0.36f, 0f)) {
+        val k = 1f - 0.12f * press
+        ArtImage("tut_hand", Modifier.size((23 * k).dp, (34 * k).dp))
+    }
+    if (above) Box(Modifier.align(Alignment.TopCenter).offset(y = (-6).dp).tutAnchor(0.5f, 1f)) { TutLabel(label) }
+    else Box(Modifier.align(Alignment.BottomCenter).offset(y = 6.dp).tutAnchor(0.5f, 0f)) { TutLabel(label) }
 }
 
 /** Hedefin çevresinde sönerek genişleyen yumuşak halka (dokunulacak tuşu belli eder) */
@@ -210,24 +267,6 @@ fun TutPulse(modifier: Modifier = Modifier) {
             val ph = (t * 1.1f + k * 0.5f) % 1f
             drawCircle(Color(0xFFFFE6A0).copy(alpha = 0.55f * (1f - ph)), radius = size.minDimension / 2 * (0.9f + 0.35f * ph),
                 style = androidx.compose.ui.graphics.drawscope.Stroke(2.5f * density))
-        }
-    }
-}
-
-/** Hedefin altında yukarı bakan ok ve etiket (ekranın üst kenarına yakın tuşlar için) */
-@Composable
-fun BoxScope.TutArrowBelow(label: String) {
-    val t = rememberTime()
-    Column(Modifier.align(Alignment.BottomCenter).wrapContentWidth(unbounded = true).offset(y = (40 + sin(t * 4f) * 3).dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        androidx.compose.foundation.Canvas(Modifier.size(16.dp, 12.dp)) {
-            val p = androidx.compose.ui.graphics.Path().apply {
-                moveTo(size.width / 2, 0f); lineTo(0f, size.height); lineTo(size.width / 2, size.height * 0.6f); lineTo(size.width, size.height); close()
-            }
-            drawPath(p, Color(0xFFFFD34A).copy(alpha = 0.75f + 0.25f * sin(t * 4f)))
-            drawPath(p, Color(0xB015140F), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
-        }
-        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0xB0101010)).padding(horizontal = 9.dp, vertical = 2.dp)) {
-            PT(label, 12.sp, Color(0xFFFFF0C0))
         }
     }
 }

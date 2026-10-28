@@ -137,7 +137,7 @@ pub const GUIDE: &[Quest] = &[
        Goal::Craft("t_pick_stone"), 1, 1, 15, 40, &[], &[("wood", 6), ("stone", 6), ("rope", 1)]),
     q!("g4e", N_GUIDE, "Kaya Kır", "1 Kaya Kır",
        ["Kayalar da odun kadar önemli: taş, tezgâh ve alet demek. Hepsinin 500 canı var.",
-        "Kazmayı çantanda tut (ya da kuşan) ve bir kayaya yürüyüp vurmaya devam et.",
+        "Çantadan Taş Kazma'yı kuşan: alet yalnız elindeyken kayaya güçlü vurur. Sonra bir kayaya yürüyüp vurmaya devam et.",
         "Kaya parçalanınca taş düşer; ara sıra hurda da çıkar. Hurda silah üretiminin temelidir."],
        "Taş ve hurda: tezgâhın yakıtı. Sakın sıkılma, hepsi lazım olacak.",
        Goal::Mine, 1, 1, 15, 40, &[], &[]),
@@ -470,6 +470,14 @@ fn chain(which: u8) -> &'static [Quest] {
 }
 
 impl Game {
+    /// Etkin (kabul edilmiş, tamamlanmamış) rehber ya da ana görevin hedefi bu mu
+    pub fn story_goal_active(&self, goal: Goal) -> bool {
+        let s = &self.progress.story;
+        [(0u8, s.guide, s.guide_on, s.guide_n), (1, s.main, s.main_on, s.main_n)].iter().any(|&(w, i, on, n)| {
+            on && chain(w).get(i).is_some_and(|q| q.goal == goal && self.quest_progress(q, n) < q.count)
+        })
+    }
+
     fn story_slot(&mut self, which: u8) -> (usize, bool, u32) {
         let s = &self.progress.story;
         if which == 0 {
@@ -661,16 +669,42 @@ impl Game {
             let here = crate::areas::area_at(px, py);
             self.npcs
                 .iter()
-                .filter(|n| n.kind == k)
+                // gezgin tüccar başka duraktayken dünya dışında bekler (eksi konum): o kopya gösterilmez
+                .filter(|n| n.kind == k && n.x >= 0.0 && n.y >= 0.0)
                 .min_by_key(|n| (crate::areas::area_at(n.x, n.y) != here, (n.x - px).hypot(n.y - py) as u32))
                 .map(|n| (n.x, n.y))
         };
         if ready {
             return npc(q.giver);
         }
+        // V19: her görev bir yere götürür: zombi görevleri en yakın uygun zombiye, ganimet yerdeki eşyaya (yoksa
+        // ganimet düşüren zombiye), ağaç/kaya en yakınına, tezgâh tarifi en yakın tezgâha, satış/sipariş/ışınlanma NPC'sine
+        let (px, py) = (self.player.x, self.player.y);
+        let here = crate::areas::area_at(px, py);
+        let near = |pts: &mut dyn Iterator<Item = (f32, f32)>| {
+            pts.filter(|&(x, y)| crate::areas::area_at(x, y) == here && (x - px).hypot(y - py) < 60.0 * world::TILE)
+                .min_by(|a, b| (a.0 - px).hypot(a.1 - py).total_cmp(&(b.0 - px).hypot(b.1 - py)))
+        };
+        let zombie = |f: &dyn Fn(&crate::game::Zombie) -> bool| {
+            near(&mut self.zombies.iter().filter(|z| z.state != crate::game::ZState::Dead && !z.boss && f(z)).map(|z| (z.x, z.y)))
+        };
+        let statics = |k: world::Kind| near(&mut self.world.statics.iter().filter(|s| s.kind == k && !s.broken).map(|s| (s.x, s.y)));
         match q.goal {
             Goal::Reach(id) | Goal::Cleanse(id) => Some(world::landmark(id).pos()),
             Goal::Talk(k) => npc(k),
+            Goal::Kill(zone) => zombie(&|z| zone.is_none_or(|zn| self.world.zone(z.x, z.y) == zn)),
+            Goal::KillKind(k) => zombie(&|z| z.kind == k),
+            Goal::Loot => near(&mut self.drops.iter().map(|d| (d.x, d.y))).or_else(|| zombie(&|_| true)),
+            Goal::Chop => statics(world::Kind::Tree),
+            Goal::Mine => statics(world::Kind::Rock),
+            Goal::Craft(id) if crate::data::RECIPES.iter().any(|r| r.out == id && r.bench) => near(
+                &mut self.world.statics.iter().filter(|s| s.kind == world::Kind::Bench).map(|s| (s.x, s.y))
+                    .chain(self.temp_benches.iter().map(|b| (b.0, b.1)))
+                    .chain(self.progress.benches.iter().copied()),
+            ),
+            Goal::Ping("sell") => npc(N_MERCHANT),
+            Goal::Ping("order") => npc(N_MECHANIC),
+            Goal::Ping("tp") => npc(N_WIZARD),
             _ => None,
         }
     }
@@ -696,6 +730,11 @@ impl Game {
                 "id": q.id, "title": q.title, "hint": q.hint, "n": have, "goal": q.count, "on": on, "ready": ready,
                 "giver": npc_name(q.giver).0, "giver_kind": q.giver, "guide": which == 0, "min_level": q.min_level,
             });
+            // V19: üretim görevi: üretim ekranı istenen sekmeyi/tarifi/düğmeyi işaretler (el ya da tezgâh tarifi)
+            if let Goal::Craft(id) = q.goal {
+                v["craft"] = json!(id);
+                v["bench"] = json!(crate::data::RECIPES.iter().any(|r| r.out == id && r.bench));
+            }
             // kabul edilmemiş görev: veren NPC işaretlenir (seviye yetiyorsa)
             let target = if on { self.quest_target(q, ready) } else if self.progress.level >= q.min_level { self.quest_target(q, true) } else { None };
             if let Some((mut x, mut y)) = target {

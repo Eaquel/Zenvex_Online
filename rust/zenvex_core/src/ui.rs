@@ -1050,10 +1050,12 @@ impl Game {
             return Err("Ölüyken olmaz".into());
         }
         let max_hp = self.progress.max_hp();
+        // öğretici "Cepten Kullan" adımı: canı dolu oyuncu da bandajı kullanabilsin (yoksa adım tamamlanamıyordu)
+        let tutorial = self.story_goal_active(crate::story::Goal::Use(d.id));
         let p = &mut self.player;
         match d.id {
             "bandage" | "medkit" => {
-                if p.hp >= max_hp {
+                if p.hp >= max_hp && !tutorial {
                     return Err("Canın zaten dolu".into());
                 }
                 if p.pot_cd[3] > 0.0 {
@@ -1511,6 +1513,13 @@ impl Game {
                 self.progress.story.guide_on = false;
                 self.progress.story.guide_n = 0;
                 Ok("Öğretici kapatıldı".into())
+            }
+            "guide" | "rehber" if crate::story::GUIDE.iter().any(|q| q.id == arg(1)) => {
+                // öğretici adımına atla (yönetici testi ve ekran görüntüleri): adım kabul edilmiş başlar
+                self.progress.story.guide = crate::story::GUIDE.iter().position(|q| q.id == arg(1)).unwrap_or(0);
+                self.progress.story.guide_on = true;
+                self.progress.story.guide_n = 0;
+                Ok(format!("Öğretici adımı: {}", arg(1)))
             }
             "heal" | "can" => {
                 self.player.hp = self.progress.max_hp();

@@ -242,6 +242,36 @@ mod tests {
         assert_eq!(GUIDE[g.progress.story.guide].id, "g6e");
     }
 
+    /// V19: zombi görevi en yakın zombiyi gösterir; "Cepten Kullan" adımında canı dolu oyuncu da bandajı kullanabilir
+    #[test]
+    fn quests_point_to_targets_and_tutorial_bandage_works_at_full_hp() {
+        let at = |id: &str| GUIDE.iter().position(|q| q.id == id).unwrap();
+        let mut p = Progress::default();
+        p.story.guide_v = 3;
+        p.story.guide = at("g1");
+        let mut g = Game::new(5, p, 1);
+        g.story_tick();
+        g.zombies.clear();
+        let (zx, zy) = (g.player.x + 600.0, g.player.y + 200.0);
+        g.spawn_zombie_at(crate::data::ZKind::Walker, 1, zx, zy);
+        let j = g.story_json();
+        let q = j.as_array().unwrap().iter().find(|q| q["id"] == "g1").unwrap().clone();
+        let (tx, ty) = (q["x"].as_f64().unwrap() as f32, q["y"].as_f64().unwrap() as f32);
+        assert!((tx - g.zombies[0].x).abs() < 1.0 && (ty - g.zombies[0].y).abs() < 1.0, "{q}");
+        // g5b: can dolu, bandaj cepte → kullanılır ve adım ilerler
+        g.progress.story.guide = at("g5b");
+        g.progress.story.guide_on = false;
+        g.story_tick();
+        assert!(g.progress.story.guide_on);
+        g.player.hp = g.progress.max_hp();
+        g.progress.inv.add_id("bandage", 1);
+        let slot = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| crate::data::ITEMS[s.item as usize].id == "bandage")).unwrap();
+        assert!(g.use_slot(slot).is_ok(), "öğretici bandajı canı dolu da olsa kullanılmalı");
+        g.story_tick();
+        g.story_tick();
+        assert_ne!(GUIDE[g.progress.story.guide].id, "g5b");
+    }
+
     /// Kaya kırınca günlük "12 kaya kır" ve rehber adımı ilerler
     #[test]
     fn mining_counts_for_daily_quest() {

@@ -41,6 +41,27 @@ class HudShotsTest {
         }
     }
 
+    /** Öğretici: çanta tuşunda dokun eli (yerleşimi kaydırmadan) ve en üst katmandaki konuşma balonu */
+    @Test fun hudTutorialBag() = tutorialShot("g4", "Alttaki parlayan çanta tuşuna dokun, üstteki Üret düğmesine bas ve Şifa sekmesinden Bandaj'ı üret.")
+
+    /** Öğretici: yetenek tuşu işaretliyken sol üst tuşlar arası boşluk değişmemeli */
+    @Test fun hudTutorialSkills() = tutorialShot("g6e", "Sol üstteki parlayan mor Yetenekler tuşuna dokun: ağaç açılır, düğümleri elmasla açarsın.")
+
+    private fun tutorialShot(step: String, msg: String) {
+        org.junit.Assume.assumeTrue("libzenvex.so yok", runCatching { com.zenvex.online.game.Native.hashCode(); true }.getOrDefault(false))
+        Demo.on = true
+        com.zenvex.online.game.GameSession.initPreview(paparazzi.context)
+        com.zenvex.online.game.Account.previewLogin(1234567L)
+        com.zenvex.online.game.GameSession.cmd("cheat", "text" to "guide $step")
+        com.zenvex.online.game.HudLayout.tutMsg = msg
+        com.zenvex.online.game.HudLayout.tutAlpha = 1f
+        com.zenvex.online.game.HudLayout.tutTop = 0.14f
+        paparazzi.snapshot {
+            Box(Modifier.fillMaxSize().background(Color(0xFF2E3A26))) { Hud {} }
+        }
+        com.zenvex.online.game.HudLayout.tutMsg = ""
+    }
+
     /** Klan deposundan gönder penceresi: alanlar ve Gönder tuşu küçük ekranda görünmeli */
     @Test fun clanSendSmallPhone() {
         val c = org.json.JSONObject().put("members", org.json.JSONArray((1..9).map { org.json.JSONObject().put("id", it).put("name", "Üye $it") }))

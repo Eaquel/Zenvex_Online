@@ -208,6 +208,7 @@ internal fun BagView(
     // öğretici: etkin rehber adımı ve işaretlenecek denetimlerin ekran konumları
     val tutR = remember { HashMap<String, Rect>() }
     val tstep = remember(inv) { Tut.step() }
+    val craftHand = remember(inv) { Tut.craftWant()?.takeIf { !it.second } != null }
 
     fun done(r: GameSession.Reply, ok: String? = null) {
         if (!r.ok) Toaster.show(r.msg, false) else if (r.msg.isNotEmpty()) Toaster.show(r.msg) else if (ok != null) Toaster.show(ok)
@@ -460,7 +461,7 @@ internal fun BagView(
                 }
             }
         }
-        TutorialBagLayer(tstep, slots, pockets, n, sel, drag.item != null, tutR, drag.rects, inv, onCraft != null)
+        TutorialBagLayer(tstep, slots, pockets, n, sel, drag.item != null, tutR, drag.rects, inv, onCraft != null, craftHand)
         // sürüklenen eşyanın hayaleti
         val it = drag.item
         if (it != null) {
@@ -616,8 +617,13 @@ private fun eqKeyFor(kind: String): Int? {
 @Composable
 private fun TutorialBagLayer(
     step: String, slots: org.json.JSONArray?, pockets: Int, n: Int, sel: Int?, dragging: Boolean,
-    tut: Map<String, Rect>, rects: Map<Int, Rect>, inv: JSONObject, hasCraft: Boolean,
+    tut: Map<String, Rect>, rects: Map<Int, Rect>, inv: JSONObject, hasCraft: Boolean, craftHand: Boolean = false,
 ) {
+    // rehber dışı (ana görev) el üretimi: Üret düğmesi parlar
+    if (step !in setOf("g4", "g4b", "g4d", "g4f", "g4c", "g4e", "g4g", "g4h", "g4i", "g5", "g5b") && craftHand && hasCraft) {
+        TutLayer(listOf(TutTarget(tut["craft"], "Üret'e Bas", below = true)), "Görevin bir üretim istiyor: Üret'e bas, istenen tarif parlayacak.")
+        return
+    }
     if (step.isEmpty()) return
     val tg = ArrayList<TutTarget>()
     var text: String? = null
@@ -631,13 +637,14 @@ private fun TutorialBagLayer(
                 else -> "Üret düğmesine bas; Silah Ve Alet sekmesinden Bıçak'ı seç ve Üret'e bas."
             }
         }
-        "g4c", "g4g", "g4h", "g4i", "g5", "g5b" -> {
+        "g4c", "g4e", "g4g", "g4h", "g4i", "g5", "g5b" -> {
             val from = if (step == "g5" || step == "g5b") pockets else 0
             val idx = (from until n).firstOrNull { i ->
                 val o = slots?.optJSONObject(i) ?: return@firstOrNull false
                 val id = o.optString("id"); val kind = o.optString("kind")
                 when (step) {
                     "g4c" -> id.startsWith("t_axe_")
+                    "g4e" -> id.startsWith("t_pick_")
                     "g4g" -> id == "w_knife"
                     "g4h" -> id == "helm_basic" || id == "jacket_basic"
                     "g4i" -> kind == "Bench"
@@ -656,17 +663,18 @@ private fun TutorialBagLayer(
                 val picked = sel == idx
                 val pocketFree = (0 until pockets).firstOrNull { slots?.isNull(it) != false } ?: 0
                 val pocket = rects[pocketFree]
-                val wear = step == "g4c" || step == "g4g" || step == "g4h"
+                val wear = step == "g4c" || step == "g4e" || step == "g4g" || step == "g4h"
                 when {
                     dragging -> if (step == "g5" || step == "g5b") {
-                        tg += TutTarget(pocket, "Burada Bırak")
+                        tg += TutTarget(pocket, "Burada Bırak", tap = false)
                         text = "Parmağını kaldırınca eşya cebe girer. Cep boşsa parlayan yuvaya bırak."
                     }
                     !picked -> {
                         tg += TutTarget(rects[idx], if (step == "g5" || step == "g5b") "Basılı Tut" else "Dokun")
-                        if (step == "g5" || step == "g5b") tg += TutTarget(pocket, "Buraya Sürükle")
+                        if (step == "g5" || step == "g5b") tg += TutTarget(pocket, "Buraya Sürükle", tap = false)
                         text = when (step) {
                             "g4c" -> "Parlayan Taş Balta'ya dokun: seçilince sağ panelde bilgisi ve Kuşan düğmesi çıkar."
+                            "g4e" -> "Parlayan Taş Kazma'ya dokun ve Kuşan'a bas: kazma yalnız elindeyken kayaya güçlü vurur."
                             "g4g" -> "Parlayan Bıçağa dokun: seçilince sağ panelde bilgisi ve Kuşan düğmesi çıkar."
                             "g4h" -> "Parlayan kask ya da ceketi seç. İkisini de giyeceksin, sırayla dokun."
                             "g4i" -> "Parlayan Tezgâh'a dokun: sağ panelde Kur düğmesi çıkar."
@@ -678,7 +686,7 @@ private fun TutorialBagLayer(
                         when {
                             wear -> {
                                 tg += TutTarget(tut["act"], "Kuşan'a Bas")
-                                eqKeyFor(kind)?.let { tg += TutTarget(rects[it], "Buraya Oturur") }
+                                eqKeyFor(kind)?.let { tg += TutTarget(rects[it], "Buraya Oturur", tap = false) }
                                 text = "Kuşan'a bas: eşya parlayan ekipman yuvasına oturur. Çıkarmak istersen yuvadan dışarı sürüklersin."
                             }
                             step == "g4i" -> {
@@ -687,7 +695,7 @@ private fun TutorialBagLayer(
                             }
                             else -> {
                                 tg += TutTarget(tut["act"], "Cebe Koy'a Bas")
-                                tg += TutTarget(pocket, "Buraya Girer")
+                                tg += TutTarget(pocket, "Buraya Girer", tap = false)
                                 text = "Cebe Koy'a bas: eşya parlayan cebe girer. Sürükleyerek de koyabilirsin."
                             }
                         }

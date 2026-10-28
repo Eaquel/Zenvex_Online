@@ -346,7 +346,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         Box {
             PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
-            if (gstep == "g6e") { TutPulse(Modifier.matchParentSize()); TutArrowBelow("Yetenekler") }
+            if (gstep == "g6e") { TutPulse(Modifier.matchParentSize()); TutTap("Yetenekler", above = false) }
         }
         PxIcon("profile", size = 46.dp, tint = Color(0xFFB277FF)) { open(Overlay.Chars) }
         // Elmas Sandığı kaplamaları henüz hazır değil: tuş yalnız haber verir (ekran kodda duruyor)
@@ -366,7 +366,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             ShopButton { open(Overlay.Shop) }
             Box {
                 PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
-                if (gstep == "g6f") { TutPulse(Modifier.matchParentSize()); TutArrowBelow("Posta") }
+                if (gstep == "g6f") { TutPulse(Modifier.matchParentSize()); TutTap("Posta", above = false) }
             }
             PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
         }
@@ -392,7 +392,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
                     }
                     // öğretici: cepteki bandaj parlar ("Cepten Kullan" adımı)
                     if (gstep == "g5b" && o?.optString("id") == "bandage") {
-                        TutPulse(Modifier.matchParentSize()); TutArrow("Dokun: Kullan", Modifier.align(Alignment.TopCenter))
+                        TutPulse(Modifier.matchParentSize()); TutTap("Dokun: Kullan")
                     }
                 }
             }
@@ -400,9 +400,14 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
                 PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }
                 // öğretici: üretim, kuşanma, tezgâh ve cep adımlarında çantayı göster (bandaj cepteyse cep parlar)
                 val bandInPocket = (0 until inv.optInt("pockets", 4)).any { inv.optJSONArray("slots")?.optJSONObject(it)?.optString("id") == "bandage" }
-                if (gstep in BAG_STEPS && !(gstep == "g5b" && bandInPocket)) {
+                // ana görevlerin el üretimi adımları da (ör. İlk Yardım Kiti) çantayı gösterir
+                val craftHand = (0 until story.length()).map { story.getJSONObject(it) }
+                    .any { it.optBoolean("on") && !it.optBoolean("ready") && it.has("craft") && !it.optBoolean("bench") }
+                // kaya kırma adımı: kazma elde değilse çanta gösterilir
+                val pickHeld = inv.optJSONObject("eq")?.optJSONObject("weapon")?.optString("id")?.startsWith("t_pick_") == true
+                if ((gstep in BAG_STEPS || craftHand || (gstep == "g4e" && !pickHeld)) && !(gstep == "g5b" && bandInPocket)) {
                     TutPulse(Modifier.matchParentSize())
-                    TutArrow("Çantayı Aç", Modifier.align(Alignment.TopCenter))
+                    TutTap("Çantayı Aç")
                 }
             }
         }
@@ -421,12 +426,14 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
         }
         if (gstep == "g7b") {
             Box(Modifier.matchParentSize()) { TutPulseWide() }
-            TutArrow("Sohbete Yaz", Modifier.align(Alignment.TopCenter))
+            TutTap("Sohbete Yaz")
         }
         }
     }
     // ilk giriş kontrol rehberi: her şeyin üstünde
     ControlsGuide()
+    // öğretici balonu: kontrol rehberinin de üstünde (arkada kalıp okunmuyordu)
+    GuideBubble()
 }
 
 private val BAG_STEPS = setOf("g4", "g4b", "g4c", "g4d", "g4f", "g4g", "g4h", "g4i", "g5", "g5b")
