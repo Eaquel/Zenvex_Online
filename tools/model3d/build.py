@@ -35,7 +35,8 @@ OUT = os.path.join(ROOT, "android", "app", "src", "main", "assets", "m3d")
 
 # ad: (kategori, ham dosya, hedef üçgen, bake/kayıt doku boyu, ek ayarlar)
 CHARS = {
-    "kael": ("Characters/Meshy_AI_Ember_Eyed_Shadow_Rog_1026163839_texture.glb", dict(height=1.86)),
+    # hood: kapüşonun içi (yüz dahil) karanlık boyanır; yüz görünmez
+    "kael": ("Characters/Meshy_AI_Ember_Eyed_Shadow_Rog_1026163839_texture.glb", dict(height=1.86, hood=True)),
     "vex": ("Characters/Meshy_AI_Ironclad_Brute_1026170455_texture.glb", dict(height=1.98)),
     "lyra": ("Characters/Meshy_AI_Cybernetic_Outlaw_1026170152_texture.glb", dict(height=1.80)),
     "morvath": ("Characters/Meshy_AI_Plague_Alchemist_1026170129_texture.glb", dict(height=1.86)),
@@ -273,7 +274,122 @@ def unwrap(v, t, res):
     return vmap.astype(np.int64), idx.astype(np.int64), uvs.astype(np.float64)
 
 
-def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False):
+def vertex_convexity(v, t, n):
+    """Köşe başına dışbükeylik: komşu köşeler teğet düzlemin altındaysa (+), üstündeyse (−); model boyuna göre ölçekli."""
+    e = np.concatenate([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]])
+    e = np.concatenate([e, e[:, ::-1]])
+    d = v[e[:, 1]] - v[e[:, 0]]
+    ln_ = np.maximum(np.linalg.norm(d, axis=1), 1e-9)
+    c = -np.einsum("nd,nd->n", n[e[:, 0]], d) / ln_
+    acc = np.zeros(len(v))
+    cnt = np.zeros(len(v))
+    np.add.at(acc, e[:, 0], c)
+    np.add.at(cnt, e[:, 0], 1)
+    conv = acc / np.maximum(cnt, 1)
+    return conv / max(np.percentile(np.abs(conv), 95), 1e-6)
+
+
+def smooth_vertex(v, t, x, it=2):
+    """Köşe değerini komşularıyla ortalar (it tur)."""
+    e = np.concatenate([t[:, [0, 1]], t[:, [1, 2]], t[:, [2, 0]]])
+    e = np.concatenate([e, e[:, ::-1]])
+    for _ in range(it):
+        acc = x.copy()
+        cnt = np.ones(len(v))
+        np.add.at(acc, e[:, 0], x[e[:, 1]])
+        np.add.at(cnt, e[:, 0], 1)
+        x = acc / cnt
+    return x
+
+
+def hood_inside(v, t, n, th):
+    """Kapüşonun içindeki köşeler (0..1): baş bölgesindeki bir noktadan yukarı, sola, sağa ve çapraz yukarı atılan
+    ışınların çoğu modele çarpıyorsa nokta kapalı bir oyuğun (kapüşonun) içindedir. Yüz ve kapüşonun iç yüzü böyle bulunur."""
+    cand = np.where(v[:, 2] > 0.76 * th)[0]
+    tri = t[(v[t].max(axis=1)[:, 2] > 0.72 * th)]
+    a, b, c = v[tri[:, 0]], v[tri[:, 1]], v[tri[:, 2]]
+    e1, e2 = b - a, c - a
+    dirs = np.array([[0, 0, 1], [-1, 0, 0], [1, 0, 0], [-0.7, 0, 0.7], [0.7, 0, 0.7]], float)
+    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    hit = np.zeros((len(cand), len(dirs)), bool)
+    for di, d in enumerate(dirs):
+        pv = np.cross(d, e2)
+        det = np.einsum("kd,kd->k", e1, pv)
+        ok = np.abs(det) > 1e-12
+        inv = np.where(ok, 1.0 / np.where(ok, det, 1.0), 0.0)
+        for s0 in range(0, len(cand), 256):
+            idx = cand[s0:s0 + 256]
+            o = v[idx] + n[idx] * 0.004 * th
+            tv = o[:, None, :] - a[None]
+            u = np.einsum("mkd,kd->mk", tv, pv) * inv
+            qv = np.cross(tv, e1[None])
+            w = np.einsum("mkd,d->mk", qv, d) * inv
+            dist = np.einsum("mkd,kd->mk", qv, e2) * inv
+            h = ok & (u >= 0) & (w >= 0) & (u + w <= 1) & (dist > 0.002 * th) & (dist < 0.35 * th)
+            hit[s0:s0 + 256, di] = h.any(axis=1)
+    score = hit.mean(axis=1)
+    out = np.zeros(len(v))
+    out[cand] = smoothstep(0.45, 0.85, score) * smoothstep(0.77 * th, 0.81 * th, v[cand, 2])
+    return np.clip(smooth_vertex(v, t, out, 3), 0, 1)
+
+
+def guided(I, p, r, eps):
+    """Kenarı koruyan düzleştirme (guided filter, He vd.): I rehber (gri), p kanal; r yarıçap."""
+    f = lambda x: ndimage.uniform_filter(x, 2 * r + 1, mode="nearest")
+    mI, mp = f(I), f(p)
+    a = (f(I * p) - mI * mp) / (f(I * I) - mI * mI + eps)
+    b = mp - a * mI
+    return f(a) * I + f(b)
+
+
+def repaint(img, res, attr):
+    """Meshy dokusunun lekeli/çamurlu boyamasını temizler ve elle boyanmış görünüm verir:
+    1) büyük yarıçaplı kenar korumalı düzleştirme: aynı malzemedeki kir yamaları ve lekeler gider, malzeme rengi düzgünleşir
+    2) ince tane geri eklenir (deri gözeneği, kumaş örgüsü, metal çiziği), orta ölçekli kabartma desenleri yarı yarıya korunur
+    3) geometriden boyama: dışbükey kenarlara aşınma ışığı, içbükeylere koyu, yukarıdan aşağı hafif ışık geçişi
+    4) yerel kontrast ve doygunluk; kapüşon içi karanlık
+    attr: dışbükeylik (-1..1), göreli yükseklik (0..1), karanlık (0..1) haritaları
+    """
+    x = img.astype(np.float32) / 255.0
+    g = x @ np.array([0.3, 0.59, 0.11], np.float32)
+    r = max(4, res // 128)
+    flat = np.stack([guided(g, x[..., k], r, 0.0025) for k in range(3)], -1)
+    # malzeme paleti: dokudaki ana renkler (k-ortalama); iki malzemenin çamur gibi karıştığı ara tonlar en yakın
+    # malzemeye yumuşakça çekilir (yumuşak atama: sert bant/posterleşme olmaz), sınırlar temiz boyanmış gibi durur
+    rng = np.random.default_rng(7)
+    pts = flat.reshape(-1, 3)[rng.choice(res * res, 60000, replace=False)]
+    from scipy.cluster.vq import kmeans2
+    cent, _ = kmeans2(pts.astype(np.float64), 12, minit="++", seed=7)
+    cent = cent.astype(np.float32)
+    snap = np.zeros_like(flat)
+    for y0 in range(0, res, 512):
+        blk = flat[y0:y0 + 512]
+        d2 = ((blk[..., None, :] - cent[None, None]) ** 2).sum(-1)
+        w = np.exp(-(d2 - d2.min(-1, keepdims=True)) / 0.004)
+        w /= w.sum(-1, keepdims=True)
+        snap[y0:y0 + 512] = w @ cent
+    flat = flat * 0.5 + snap * 0.5
+    fine = x - ndimage.gaussian_filter(x, (1.4, 1.4, 0))
+    mid = ndimage.gaussian_filter(x, (1.4, 1.4, 0)) - flat
+    y = flat + 0.5 * mid + 1.0 * fine
+    conv, zrel, dark = attr[..., 0], attr[..., 1], attr[..., 2]
+    # aşınmış kenar ışığı ve oyuk gölgesi (geometriden), yükseklik geçişi
+    edge = np.clip(conv, 0, 1) ** 1.5
+    pit = np.clip(-conv, 0, 1) ** 1.5
+    y = y * (1.0 - 0.18 * pit[..., None]) + 0.10 * edge[..., None] * (0.35 + y)
+    y = y * (0.90 + 0.14 * zrel[..., None])
+    # yerel kontrast (geniş yarıçap) ve doygunluk
+    blur = ndimage.gaussian_filter(y, (res / 256, res / 256, 0))
+    y = y + 0.22 * (y - blur)
+    lum = (y @ np.array([0.3, 0.59, 0.11], np.float32))[..., None]
+    y = lum + (y - lum) * 1.10
+    # kapüşon içi: neredeyse siyah, hafif soğuk ton (yüz görünmez)
+    d = dark[..., None]
+    y = y * (1.0 - d) + d * (y * 0.06 + np.array([0.035, 0.035, 0.045], np.float32))
+    return np.clip(y * 255.0, 0, 255).astype(np.float32)
+
+
+def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False, vattr=None):
     """Düşük poligonlu modelin UV uzayında her doku pikselinin 3B konumunu bulup en yakın uygun örneğin rengini alır.
 
     cavity > 0: orijinal yüzeyin normali (yakın örneklerin ortalaması) düşük poligonlu yüzeyden ne kadar sapıyorsa piksel o
@@ -285,7 +401,7 @@ def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False):
     img = np.zeros((res, res, 3), np.float32)
     filled = np.zeros((res, res), bool)
     P = luv * res
-    allp, alln, allxy, allt, allb = [], [], [], [], []
+    allp, alln, allxy, allt, allb, alla = [], [], [], [], [], []
     for tri in lt:
         p0, p1, p2 = P[tri]
         x0 = int(max(math.floor(min(p0[0], p1[0], p2[0])), 0))
@@ -319,6 +435,8 @@ def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False):
             allb.append(np.repeat(((e2 * du1 - e1 * du2) * r)[None], k, 0))
         allp.append(w @ lv[tri])
         alln.append(w @ ln[tri])
+        if vattr is not None:
+            alla.append(w @ vattr[tri])
         allxy.append(np.stack([xs[m].astype(np.int64), ys[m].astype(np.int64)], 1))
     q = np.concatenate(allp)
     qn = np.concatenate(alln)
@@ -363,6 +481,10 @@ def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False):
     # adacık kenarlarını taşır (doku süzgeci kenarda boşluk görmesin)
     _, (iy, ix) = ndimage.distance_transform_edt(~filled, return_indices=True)
     img = img[iy, ix]
+    if vattr is not None:
+        amap = np.zeros((res, res, vattr.shape[1]), np.float32)
+        amap[xy[:, 1], xy[:, 0]] = np.concatenate(alla)
+        img = repaint(img, res, amap[iy, ix])
     out = np.clip(img, 0, 255).astype(np.uint8)
     if not normals:
         return out
@@ -666,7 +788,12 @@ def build(src, name, kind, opt):
     ln = vertex_normals(lv, lt)
     res, size = BAKE[kind]
     vmap, idx, nuv = unwrap(lv, lt, res)
-    img, nimg = bake(lv[vmap], ln[vmap], idx, nuv, samples, res, CAVITY[kind], normals=True)
+    # yeniden boyama için köşe öznitelikleri: dışbükeylik, göreli yükseklik, karanlık (kapüşon içi)
+    conv = smooth_vertex(lv, lt, vertex_convexity(lv, lt, ln), 1)
+    zrel = (lv[:, 2] - lv[:, 2].min()) / max(np.ptp(lv[:, 2]), 1e-6)
+    dark = hood_inside(lv, lt, ln, opt["height"]) if opt.get("hood") else np.zeros(len(lv))
+    vattr = np.stack([conv, zrel, dark], 1)
+    img, nimg = bake(lv[vmap], ln[vmap], idx, nuv, samples, res, CAVITY[kind], normals=True, vattr=vattr[vmap])
     meta["parts"] = parts
     meta["tex"] = name + ".webp"
     os.makedirs(OUT, exist_ok=True)

@@ -342,6 +342,10 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
         let spec = light.spec * sp * sp * sp * 255.0;
         // doygunluk: doku renkleri ışık çarpanıyla grileşmesin
         let lum = 0.3 * base[0] + 0.59 * base[1] + 0.11 * base[2];
+        // parlama yüzeyin açıklığıyla: koyu yüzeyde (kapüşonun içi, siyah kumaş) ışık noktası olmaz
+        let spec = spec * (0.15 + 0.85 * (lum / 160.0).min(1.0));
+        // kenar ışığı da neredeyse siyah yüzeyde söner (kapüşonun içi boşluk gibi kalsın, yüz hatları belirmesin)
+        let rim = rim * (lum / 28.0).min(1.0);
         let g = ly.glow;
         let mut out = [0u8, 0, 0, 255];
         for k in 0..3 {
