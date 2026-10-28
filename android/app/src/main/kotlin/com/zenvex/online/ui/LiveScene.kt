@@ -116,6 +116,9 @@ fun LiveScene(
 /** çatı yangınının alev dilleri: (yatay kayma, yarı genişlik, yükseklik, zaman hızı) — alev boyu biriminde */
 private val FIRE_TONGUES = listOf(floatArrayOf(0f, 1.15f, 3.0f, 1f), floatArrayOf(-0.95f, 0.7f, 1.8f, 1.2f), floatArrayOf(0.9f, 0.6f, 1.5f, 1.35f))
 
+/** bir yürüyüş turunda alınan yol (zombi boyu cinsinden): hız = tur sıklığı × bu × boy */
+private const val STRIDE_PER_HEIGHT = 0.46f
+
 /** sahnedeki zombi türleri (atlas önekleri) ve boy çarpanı */
 private val SCENE_ZOMBIES = listOf("walker" to 1f, "runner" to 1.02f, "tank" to 1.22f, "dark" to 1f, "dog" to 0.62f, "walker" to 1f, "runner" to 1.02f)
 
@@ -594,12 +597,16 @@ private fun DrawScope.drawScene(w: World, k: SceneKind, t: Float, fx: Int, zombi
     val dusk = ColorFilter.tint(mix(c(k.fog), Color(0xFF8A8494), 0.55f), BlendMode.Modulate)
     for ((i, z) in w.walkers.withIndex()) {
         val span = 1.3f
-        val x = span - ((z[0] + t * 0.004f * z[3]) % span) - 0.15f
-        val y = groundTop + H * 0.03f * z[1]
         val frames = zombies.getOrNull(i % zombies.size.coerceAtLeast(1)).orEmpty()
-        if (frames.isEmpty()) { drawZombie(x * W, y, H * 0.125f * z[1], t * z[3] + z[2], c(k.near)); continue }
-        val img = frames[((t * 7f * z[3] + z[2] * 3f).toInt() % frames.size + frames.size) % frames.size]
         val hgt = H * 0.18f * z[1] * SCENE_ZOMBIES[i % SCENE_ZOMBIES.size].second
+        // yürüyüş hızı animasyona bağlı: bir tur (kare sayısı) boyunca bir adım boyu yol alınır, ayaklar yerde kaymaz
+        val fps = 7f * z[3]
+        val cycles = fps / frames.size.coerceAtLeast(8)
+        val speed = cycles * hgt * STRIDE_PER_HEIGHT / W
+        val x = span - ((z[0] * span + t * speed) % span) - 0.15f
+        val y = groundTop + H * 0.03f * z[1]
+        if (frames.isEmpty()) { drawZombie(x * W, y, H * 0.125f * z[1], t * z[3] + z[2], c(k.near)); continue }
+        val img = frames[((t * fps + z[2] * 3f).toInt() % frames.size + frames.size) % frames.size]
         val wid = hgt * img.width / img.height.coerceAtLeast(1)
         // ayak gölgesi
         drawOval(Color.Black.copy(alpha = 0.4f), Offset(x * W - wid * 0.3f, y - hgt * 0.035f), Size(wid * 0.6f, hgt * 0.07f))

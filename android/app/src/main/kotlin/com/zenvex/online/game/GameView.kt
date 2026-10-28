@@ -682,6 +682,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "dodge" -> floaters += Floater(x, y, "KAÇTI", 0xFFB8F0FF.toInt(), 20f)
                 "potion" -> {
+                    drinkT = time
                     val k = e.optInt("kind")
                     val (txt, col) = when (k) { 0 -> "Can İksiri" to 0xFFFF6A6A.toInt(); 1 -> "Hız İksiri" to 0xFF6AE0FF.toInt(); else -> "Güç İksiri" to 0xFFFFA040.toInt() }
                     floaters += Floater(hud[Native.PX], hud[Native.PY] - 140, txt, col, 20f, 1.4f, 1.4f)
@@ -752,7 +753,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 "died" -> { Audio.play("death"); vibrate(300, 255); shake(10f, 0.4f) }
                 "swing" -> {
                     swingT = time
-                    if (time - me3dT < 0.3f && me3dWeapon in 1..Fx3D.CHAINSAW && hud[Native.IN_VEHICLE] < 0.5f)
+                    // alet (balta, kazma) ağaca/kayaya iner: kesik izi yok, vuruş kıymık/kıvılcımı kendi efektiyle gelir (iz her savuruşta çıkıp vuruştan fazla görünüyordu)
+                    val tool = me3dWeapon == Fx3D.HATCHET || me3dWeapon == Fx3D.HANDAXE || me3dWeapon == Fx3D.PICKAXE
+                    if (!tool && time - me3dT < 0.3f && me3dWeapon in 1..Fx3D.CHAINSAW && hud[Native.IN_VEHICLE] < 0.5f)
                         fx3d.slash(hud[Native.PX], hud[Native.PY], if (lastAtkX == 0f && lastAtkY == 0f) 1f else lastAtkX, lastAtkY, me3dWeapon, me3dStage, 62.5f)
                     Audio.play("swing", 0.6f, 0.9f + Math.random().toFloat() * 0.25f)
                     // kesik izi: saldırı yönüne dönük kızıl yay (katana geniş, bıçak kısa); yumrukta yok
@@ -964,6 +967,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 D_FLAG -> drawFlag(c, o)
             }
         }
+        drawBorderClouds(c)
         drawFx(c)
         drawParticles(c)
         fx3d.draw(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
@@ -974,7 +978,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawLighting(c)
         if (!clean) drawPlates(c)
         drawFloaters(c)
-        drawAreaEdge(c, px, py)
         c.restore()
         if (!clean) {
             drawHud(c)
@@ -1011,29 +1014,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 x -= text.measureText(t)
                 drawText(c, t, x, y, 11 * d, 0xFF9AFF9A.toInt())
             }
-        }
-    }
-
-    /**
-     * Bölge sınırının ötesi başka harita: sınırdan dışarı doğru koyulaşan sis (katmanlı, her katman bölgeyi biraz daha
-     * genişleterek dışarıda kalanı karartır). Ekran tamamen bölge içindeyse hiçbir şey çizilmez.
-     */
-    private fun drawAreaEdge(c: Canvas, px: Float, py: Float) {
-        val i = com.zenvex.online.ui.areaIndexAt(areas, px, py)
-        val a = areas.getOrNull(i) ?: return
-        val vx0 = camX - viewW / 2 - tile * 5; val vy0 = camY - viewH / 2 - tile * 5
-        val vx1 = camX + viewW / 2 + tile * 5; val vy1 = camY + viewH / 2 + tile * 5
-        if (a.rects.any { vx0 >= it[0] && vy0 >= it[1] && vx1 <= it[2] && vy1 <= it[3] }) return
-        fill.style = Paint.Style.FILL
-        fill.color = 0x5A0C0A12
-        for (e in AREA_FADE) {
-            c.save()
-            for (r in a.rects) {
-                rect.set(wx(r[0] - e * tile), wy(r[1] - e * tile), wx(r[2] + e * tile), wy(r[3] + e * tile))
-                c.clipOutRect(rect)
-            }
-            c.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), fill)
-            c.restore()
         }
     }
 
@@ -1374,6 +1354,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     /** yerel kahramanın son 3B karesi: zaman, silah (Wk), namlu ucu (ekran dünyası) — ateş/vuruş efektleri buradan çıkar */
     private var me3dT = -9f
     private var me3dWeapon = 0
+    private var drinkT = -10f
     private var me3dMx = 0f
     private var me3dMy = 0f
     /** silahın arka ucu (roketatar arka alevi) ve kombonun vuruş sırası */
@@ -1480,6 +1461,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (who == -1f) {
             if (weapon == "rpg" && hud[Native.MAG] < 0.5f) flags = flags or 1
             if ((animI == 17 && hud[Native.TOOL_AXE] >= 2f) || (animI == 18 && hud[Native.TOOL_PICK] >= 2f)) flags = flags or 2
+            // iksir içme: yürürken ve koşarken de el ağza kalkar (üst gövde katmanı; ilerleme 12 basamak)
+            val dp = (time - drinkT) / 0.9f
+            if (dp in 0f..1f && animI !in intArrayOf(11, 12, 13, 14, 15)) flags = flags or 4 or (((dp * 11.99f).toInt() * 255 / 11) shl 8)
         }
         val fr = Model3D.actor(id, Model3D.CHARS[ch], weapon, animI, t, yaw, pxPerM, Settings.current.model3d, flags,
             if (who == -1f) Skins.wings else "") ?: return false
@@ -1490,6 +1474,19 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
             skin.isNotEmpty() -> skinPaint(skin, false)
             else -> bmpPaint
+        }
+        // kanat efektleri: kor, parıltı, boşluk kıvılcımı sırtın iki yanından süzülür (yerel oyuncu; yalnız yönetici taktığı kanatla)
+        if (who == -1f && Skins.wings.isNotEmpty() && Settings.current.particles && Math.random() < 0.55) {
+            val sd = if (Math.random() < 0.5) -1f else 1f
+            val wx = x + sd * (20f + Math.random().toFloat() * 64f); val h0 = 50f + Math.random().toFloat() * 70f
+            val rv = Math.random().toFloat()
+            when (Skins.wings) {
+                "wings_ash" -> particles += Particle(wx, y + 6f, h0, sd * 10f * rv, 0f, 38f + 50f * rv, 1.1f, 1.1f, 0xFFFF8A2A.toInt(), 2.4f + rv, 4)
+                "wings_dragon" -> if (rv < 0.6f) particles += Particle(wx, y + 6f, h0, sd * 14f * rv, 0f, 30f + 40f * rv, 1.0f, 1.0f, 0xFFFF4A3A.toInt(), 2.6f, 4)
+                    else particles += Particle(wx, y + 8f, h0 + 10f, sd * 20f, 0f, 22f, 0.9f, 1.2f, 0xFF3A2428.toInt(), 5f, 1)
+                "wings_titan" -> particles += Particle(wx, y + 6f, h0, sd * 12f * rv, 0f, 26f + 30f * rv, 1.0f, 1.0f, 0xFFB07AFF.toInt(), 3.2f, 3)
+                "wings_s1" -> particles += Particle(wx, y + 6f, h0, sd * 8f * rv, 0f, 20f + 24f * rv, 1.2f, 1.2f, 0xFFA8D8FF.toInt(), 3.0f, 3)
+            }
         }
         if (skin.isNotEmpty() && Settings.current.particles) {
             val tc = Skins.trail(skin)
@@ -2443,6 +2440,91 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             fx3d.muzzle(ex, ey, -fx / flen, -fy / flen, Fx3D.RPG, 62.5f, y)
         }
         return true
+    }
+
+
+    // ------------------------------------------------------------------ bölge sınırı: bulut denizi (haritadaki gibi)
+    /** yumuşak bulut kabarcığı: merkez yoğun, kenar gürültüyle dağılır (gölgelendirici gerekmez) */
+    private val puffBmp: Bitmap by lazy {
+        val n = 128
+        val rnd = java.util.Random(23)
+        val g = Array(9) { FloatArray(9) { rnd.nextFloat() } }
+        val px = IntArray(n * n)
+        for (y in 0 until n) for (x in 0 until n) {
+            val dx = (x - n / 2f) / (n / 2f); val dy = (y - n / 2f) / (n / 2f)
+            val d = kotlin.math.sqrt(dx * dx + dy * dy)
+            val fx = x * 8f / n; val fy = y * 8f / n
+            val ix = fx.toInt().coerceAtMost(7); val iy = fy.toInt().coerceAtMost(7); val tx = fx - ix; val ty = fy - iy
+            val a0 = g[iy][ix] + (g[iy][ix + 1] - g[iy][ix]) * tx
+            val b0 = g[iy + 1][ix] + (g[iy + 1][ix + 1] - g[iy + 1][ix]) * tx
+            val nz = a0 + (b0 - a0) * ty
+            val a = ((1f - d) * (0.65f + 0.7f * nz)).coerceIn(0f, 1f)
+            val al = (a * a * (3f - 2f * a) * 255f).toInt()
+            px[y * n + x] = (al shl 24) or 0xFFFFFF
+        }
+        Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888)
+    }
+    private val cloudPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val cloudBase = Paint().apply { style = Paint.Style.FILL }
+    private val cloudDst = RectF()
+
+    private fun cloudHash(i: Int, j: Int, k: Int): Float {
+        var h = i * 374761393 + j * 668265263 + k * 2147483647.toInt()
+        h = (h xor (h ushr 13)) * 1274126177
+        return ((h xor (h ushr 16)) and 0xFFFF) / 65535f
+    }
+
+    /** Bölgenin dışı bulutla kaplı; içeride kenardan içeri doğru seyrelir. Komşu bölge görünmez. */
+    private fun drawBorderClouds(c: Canvas) {
+        val ai = groundArea
+        if (ai < 0 || ai >= areas.size) return
+        val rs = areas[ai].rects
+        if (rs.isEmpty()) return
+        val ax0 = rs.minOf { it[0] }; val ay0 = rs.minOf { it[1] }; val ax1 = rs.maxOf { it[2] }; val ay1 = rs.maxOf { it[3] }
+        val feather = 260f
+        // görüşün dünya aralığı
+        val vx0 = camX - viewW / 2 - 140f; val vx1 = camX + viewW / 2 + 140f
+        val vy0 = camY - viewH / 2 - 140f; val vy1 = camY + viewH / 2 + 140f
+        // alan görüşü ve bandı hiç kesmiyorsa (tamamen içeride) çizme
+        if (vx0 > ax0 + feather && vx1 < ax1 - feather && vy0 > ay0 + feather && vy1 < ay1 - feather) return
+        val G = 84f
+        // dış zemin: bulut tabanı (koyu leylak-gri), bölge dikdörtgeni kesilir
+        val l = wx(ax0); val t = wy(ay0); val r = wx(ax1); val b = wy(ay1)
+        // (dört dikdörtgenle: clipOutRect bazı ortamlarda desteklenmiyor)
+        cloudBase.color = 0xFF8E92B0.toInt()
+        val W0 = sw.toFloat(); val H0 = sh.toFloat()
+        if (t > 0f) c.drawRect(0f, 0f, W0, min(t, H0), cloudBase)
+        if (b < H0) c.drawRect(0f, max(b, 0f), W0, H0, cloudBase)
+        val ty0 = max(t, 0f); val ty1 = min(b, H0)
+        if (l > 0f) c.drawRect(0f, ty0, min(l, W0), ty1, cloudBase)
+        if (r < W0) c.drawRect(max(r, 0f), ty0, W0, ty1, cloudBase)
+        val i0 = floor(vx0 / G).toInt(); val i1 = floor(vx1 / G).toInt(); val j0 = floor(vy0 / G).toInt(); val j1 = floor(vy1 / G).toInt()
+        for (j in j0..j1) for (i in i0..i1) {
+            val h1 = cloudHash(i, j, 1); val h2 = cloudHash(i, j, 2); val h3 = cloudHash(i, j, 3)
+            val wx0 = (i + h1) * G + sin(time * 0.22f + h3 * 6.28f) * 9f
+            val wy0 = (j + h2) * G + cos(time * 0.17f + h1 * 6.28f) * 5f
+            // bölge dikdörtgenine uzaklık: dışarıda >0, içeride <0 (kenardan derinlik)
+            val ox = max(max(ax0 - wx0, wx0 - ax1), 0f); val oy = max(max(ay0 - wy0, wy0 - ay1), 0f)
+            val inside = ox == 0f && oy == 0f
+            val alpha = if (!inside) 0.95f else {
+                val depth = min(min(wx0 - ax0, ax1 - wx0), min(wy0 - ay0, ay1 - wy0))
+                ((feather - depth) / feather).coerceIn(0f, 1f).let { it * it * 0.9f }
+            }
+            if (alpha < 0.02f) continue
+            val sz = G * (2.0f + 1.1f * h3) * scale
+            val sx = wx(wx0); val sy = wy(wy0)
+            // gölge (alt, koyu) sonra ışıklı üst yüz: hacim hissi
+            cloudPaint.colorFilter = null
+            cloudPaint.alpha = (alpha * 150).toInt()
+            cloudPaint.colorFilter = PorterDuffColorFilter(0xFF4A4E70.toInt(), PorterDuff.Mode.SRC_IN)
+            cloudDst.set(sx - sz / 2, sy - sz * 0.38f + sz * 0.08f, sx + sz / 2, sy + sz * 0.38f + sz * 0.08f)
+            c.drawBitmap(puffBmp, null, cloudDst, cloudPaint)
+            cloudPaint.alpha = (alpha * 255).toInt()
+            cloudPaint.colorFilter = PorterDuffColorFilter(if (h1 > 0.5f) 0xFFF4F4FF.toInt() else 0xFFE2E6F8.toInt(), PorterDuff.Mode.SRC_IN)
+            cloudDst.set(sx - sz * 0.46f, sy - sz * 0.40f - sz * 0.04f, sx + sz * 0.46f, sy + sz * 0.34f - sz * 0.04f)
+            c.drawBitmap(puffBmp, null, cloudDst, cloudPaint)
+        }
+        cloudPaint.colorFilter = null
     }
 
     // ------------------------------------------------------------------ yüzeye göre araç izi ve tozu

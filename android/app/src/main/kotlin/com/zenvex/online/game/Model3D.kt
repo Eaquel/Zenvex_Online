@@ -45,6 +45,13 @@ object Model3D {
         "t_axe_stone" to "hatchet", "t_axe_iron" to "handaxe", "t_pick_stone" to "pickaxe", "t_pick_iron" to "pickaxe",
     )
 
+    /** yakın dövüş kombosundaki vuruş sayısı (zenvex_r3d anim::combo_len): tırpan ve tek elli silahlar 3, ağır silahlar 2 */
+    fun comboLen(weapon: String): Int = when {
+        weapon.endsWith("scythe") -> 3
+        weapon in setOf("knife", "katana", "void_claw", "hatchet", "handaxe", "club", "effigy") -> 3
+        else -> 2
+    }
+
     class Frame(val bmp: Bitmap, val ax: Float, val ay: Float, val pxPerM: Float, val pts: FloatArray)
 
     @Volatile var ready = false
@@ -231,7 +238,7 @@ object Model3D {
             0, 5, 7 -> 6.25f to 60
             1, 6, 8 -> 1f / (1.12f * (1f - heavy)) to 16
             2 -> 1f / (1.45f * (1f - heavy)) to 14
-            3 -> 8f / 14f to 8
+            3 -> 12f / 14f to 12  // üç yumruk: sol düz, sağ çapraz, aperkat
             12 -> 0.698f to 10
             17, 18 -> 0.9f to 14
             A_TALK -> 3.125f to 30
@@ -248,8 +255,8 @@ object Model3D {
               wings: String = ""): Frame? {
         if (!ready || ch0 !in names) return null
         val ch = if (wings.isNotEmpty() && wings in names) "$ch0+$wings" else ch0
-        // tırpan kombosu üç vuruşlu (zenvex_r3d anim::combo_len); diğer silahlar iki
-        val stages = if (weapon.endsWith("scythe")) 3 else 2
+        // kombo uzunluğu zenvex_r3d anim::combo_len ile aynı olmalı (önbellek anahtarı vuruş sırasını buna göre sarar)
+        val stages = comboLen(weapon)
         val tq = quantize(anim, t, ch0, stages)
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)

@@ -280,11 +280,28 @@ class Fx3D {
                     else ps += P(px, py, cos(a) * sp + ux * unit * 3f, sin(a) * sp * 0.6f - unit * 1.2f, 0.6f, 0.75f, 0xFFDDF8FF.toInt(), unit * 0.07f, K.SHARD, y, rnd.nextFloat() * 6f)
                 }
             }
-            KATANA -> waves += Wave(x, hip, ux, uy, if (stage % 2 == 0) 0 else 1, col, core, unit * 2.3f, 0.22f, 0.22f, 0.8f, y)
-            HATCHET, HANDAXE, CLUB, EFFIGY -> waves += Wave(x, hip, ux, uy, if (stage % 2 == 0) 1 else 0, col, core, unit * 1.2f, 0.16f, 0.16f, 0.9f, y)
-            KNIFE -> waves += Wave(x, hip, ux, uy, 0, col, core, unit * 0.9f, 0.12f, 0.12f, 0.7f, y)
-            CLAW -> repeat(3) { i -> waves += Wave(x, hip + (i - 1) * unit * 0.22f, ux, uy, 0, col, core, unit * 1.5f, 0.24f, 0.24f, 0.5f, y) }
-            STORM -> { waves += Wave(x, hip, ux, uy, 1, col, core, unit * 2.0f, 0.26f, 0.26f, 1.0f, y) }
+            // V18: her vuruş aşamasının izi hareketine uyar (üçüncü aşama bitirici)
+            KATANA -> if (stage % 3 == 2) {
+                // baş üstünden dik iniş: iki yay üst üste (çapraz parlama)
+                waves += Wave(x, hip, ux, uy, 0, col, core, unit * 2.0f, 0.22f, 0.22f, 0.8f, y)
+                waves += Wave(x, hip - unit * 0.5f, ux, uy, 1, col, core, unit * 1.7f, 0.2f, 0.2f, 0.8f, y)
+            } else waves += Wave(x, hip, ux, uy, if (stage % 3 == 0) 0 else 1, col, core, unit * 2.3f, 0.22f, 0.22f, 0.8f, y)
+            HATCHET, HANDAXE, CLUB, EFFIGY -> if (stage % 3 == 2) {
+                // bitirici çakma: yerde şok halkası ve kırıntılar
+                val cx = x + ux * unit * 1.2f; val cy = y + uy * unit * 0.7f
+                waves += Wave(cx, cy, 0f, 0f, 2, col, core, unit * 1.8f, 0.34f, 0.34f, 0f, cy)
+                repeat(5) {
+                    val a = rnd.nextFloat() * 2f * PI.toFloat(); val sp = unit * (2f + rnd.nextFloat() * 3f)
+                    ps += P(cx, cy - unit * 0.2f, cos(a) * sp, sin(a) * sp * 0.5f - unit * (2.5f + rnd.nextFloat() * 1.5f), 0.9f, 0.9f, 0xFF5A4A40.toInt(), unit * 0.07f, K.CHUNK, cy, rnd.nextFloat() * 6f)
+                }
+            } else waves += Wave(x, hip, ux, uy, if (stage % 3 == 0) 1 else 0, col, core, unit * 1.2f, 0.16f, 0.16f, 0.9f, y)
+            KNIFE -> if (stage % 3 == 2) {
+                // art arda iki kısa saplama
+                waves += Wave(x, hip, ux, uy, 0, col, core, unit * 0.8f, 0.09f, 0.09f, 0.7f, y)
+                waves += Wave(x + ux * unit * 0.35f, hip + uy * unit * 0.2f, ux, uy, 0, col, core, unit * 1.0f, 0.13f, 0.13f, 0.7f, y)
+            } else waves += Wave(x, hip, ux, uy, 0, col, core, unit * 0.9f, 0.12f, 0.12f, 0.7f, y)
+            CLAW -> repeat(3) { i -> waves += Wave(x, hip + (if (stage % 3 == 2) (1 - i) else (i - 1)) * unit * 0.22f, ux, uy, 0, col, core, unit * 1.5f, 0.24f, 0.24f, 0.5f, y) }
+            STORM -> waves += Wave(x, hip, ux, uy, stage % 2, col, core, unit * 2.0f, 0.26f, 0.26f, 1.0f, y)
             MAGMA -> {
                 // balyoz yere çarpar: şok halkası, kaya parçaları, kor
                 val cx = x + ux * unit * 1.5f; val cy = y + uy * unit * 0.9f

@@ -55,8 +55,9 @@ impl Default for Light {
     fn default() -> Self {
         Light {
             dir: v3(-0.45, 0.62, 0.64).norm(),
-            ambient: 0.42,
-            diffuse: 0.74,
+            // V18: karakterler karanlık görünüyordu: gölge tarafı ve ortam ışığı yükseltildi (+ çıkışta hafif gama)
+            ambient: 0.58,
+            diffuse: 0.78,
             rim: 0.30,
             rim_color: [0.85, 0.92, 1.0],
             tint: [1.0, 1.0, 1.0],
@@ -245,10 +246,22 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
         let mut out = [0u8, 0, 0, 255];
         for k in 0..3 {
             let v = base[k] * (l * light.tint[k] + g) + rim * 255.0 * light.rim_color[k];
-            out[k] = v.clamp(0.0, 255.0) as u8;
+            out[k] = lift(v.clamp(0.0, 255.0) as u8);
         }
         f.color[i] = out;
     }
+}
+
+/// Koyu tonları kaldıran hafif gama (0.84): siyah pelerin ve koyu zırhlar ormanda kaybolmasın
+fn lift(v: u8) -> u8 {
+    static LUT: std::sync::OnceLock<[u8; 256]> = std::sync::OnceLock::new();
+    LUT.get_or_init(|| {
+        let mut t = [0u8; 256];
+        for (i, o) in t.iter_mut().enumerate() {
+            *o = (255.0 * (i as f32 / 255.0).powf(0.84)).round() as u8;
+        }
+        t
+    })[v as usize]
 }
 
 /// Dış kontur (kalınlık `px`) ve iç derinlik kırığı çizgileri.

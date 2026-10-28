@@ -284,6 +284,8 @@ pub struct In {
 pub const F_EMPTY: u32 = 1;
 /// toplama aleti demir kademesinde (balta → savaş baltası modeli)
 pub const F_IRON: u32 = 2;
+/// iksir içme üst gövde katmanı (yürürken/koşarken de): bits 8..15 = ilerleme (0..255 → 0..1)
+pub const F_DRINK: u32 = 4;
 
 impl In {
     pub fn new(anim: u8, t: f32, period: f32, weapon: Wk, style: Style) -> In {
@@ -491,7 +493,8 @@ fn stride(st: &Style, t: f32, run: bool, wk: Wk, s: f32) -> K {
 }
 
 /// Silahsız yumruk (sol direkt + sağ kroşe), faz 0..1 tek yumruk; `alt` sırayı değiştirir
-fn punch(st: &Style, ph: f32, alt: bool) -> K {
+/// Yumruk turu (V18: üç hareket): 0 sol düz, 1 sağ çapraz, 2 sağ aperkat (çömelip yükselerek)
+fn punch(st: &Style, ph: f32, kind: u32) -> K {
     let mut g = rest(st);
     // gard
     g.arm_r = v(60.0, 18.0, 0.0);
@@ -504,14 +507,39 @@ fn punch(st: &Style, ph: f32, alt: bool) -> K {
     g.shin_l = 14.0;
     g.shin_r = 10.0;
     let mut hit = g;
-    if alt {
-        hit.arm_r = v(88.0, 6.0, 0.0);
-        hit.elbow_r = 6.0;
-        hit.chest.z = 24.0;
-    } else {
-        hit.arm_l = v(88.0, 6.0, 0.0);
-        hit.elbow_l = 6.0;
-        hit.chest.z = -20.0;
+    match kind {
+        1 => {
+            hit.arm_r = v(88.0, 6.0, 0.0);
+            hit.elbow_r = 6.0;
+            hit.chest.z = 24.0;
+        }
+        2 => {
+            // aperkat: dizler bükülü çömelme, sağ yumruk alttan yukarı, gövde geri yaslanır
+            let mut dip = g;
+            dip.off.z = -0.10;
+            dip.thigh_r.x = 26.0;
+            dip.thigh_l.x = 20.0;
+            dip.shin_r = 40.0;
+            dip.shin_l = 36.0;
+            dip.chest.x = 22.0;
+            dip.chest.z = 16.0;
+            dip.arm_r = v(20.0, 12.0, 0.0);
+            dip.elbow_r = 80.0;
+            hit.arm_r = v(120.0, 4.0, 0.0);
+            hit.elbow_r = 34.0;
+            hit.chest.x = -6.0;
+            hit.chest.z = 22.0;
+            hit.off.z = 0.04;
+            hit.off.y = -0.04;
+            hit.thigh_r.x = -10.0;
+            hit.shin_r = 8.0;
+            return track(&[(0.0, g), (0.22, dip), (0.38, hit), (0.58, hit), (1.0, g)], ph);
+        }
+        _ => {
+            hit.arm_l = v(88.0, 6.0, 0.0);
+            hit.elbow_l = 6.0;
+            hit.chest.z = -20.0;
+        }
     }
     hit.off.y = -0.05;
     hit.chest.x = 12.0;
@@ -679,6 +707,36 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
             }
         },
         // ---------------------------------------------------------------- balyoz, fırtına baltası, kazma, testere (iki el)
+        Wk::Hammer | Wk::Pickaxe if stage % 2 == 1 => {
+            // yatay savuruş: balyoz/kazma gövdeyle birlikte dönerek geniş bir yay çizer, ağırlıkla öne çöker
+            let heavy = if wk == Wk::Hammer { 1.0 } else { 0.5 };
+            let a = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.50, 0.04, 1.12, s);
+                k.hand_l = h(-0.20, 0.10, 1.02, s);
+                k.wdir = v(-0.92, 0.38, 0.08);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = 44.0 + 8.0 * heavy;
+                k.chest.x = 8.0;
+                k.hips.z = 20.0;
+                coil(k, 0.06 + 0.04 * heavy);
+            });
+            let b = with(&a, |k| {
+                k.hand_r = h(0.30, -0.46, 1.04, s);
+                k.hand_l = h(0.14, -0.32, 0.98, s);
+                k.wdir = v(0.86, -0.48, -0.10);
+                k.chest.z = -46.0 - 8.0 * heavy;
+                k.chest.x = 18.0;
+                k.hips.z = -24.0;
+                lunge(k, 0.10 + 0.04 * heavy, 0.06);
+            });
+            let c = with(&b, |k| {
+                k.hand_r = h(0.40, -0.26, 1.00, s);
+                k.wdir = v(0.70, 0.10, -0.15);
+                k.chest.z = -58.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.28, a), (0.40, b), (0.58, c), (1.0, r)], trail: (0.30, 0.58) }
+        }
         Wk::Hammer => {
             // gövde ağırlığıyla baş üstünden yere çakma; çarpmada gövde sarsılır
             let up = with(&r, |k| {
@@ -707,6 +765,37 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
                 k.off.z += 0.03;
             });
             Mel { keys: vec![(0.0, r), (0.26, up), (0.30, up), (0.40, slam), (0.47, rebound), (0.66, slam), (1.0, r)], trail: (0.30, 0.46) }
+        }
+        Wk::StormAxe if stage % 2 == 1 => {
+            // ters çapraz kesik: sol omuzdan sağ kalçaya, iki elle yukarıdan çarpma sonrası yarım dönüş
+            let k1 = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(0.26, 0.02, 1.64, s);
+                k.hand_l = h(0.06, 0.08, 1.44, s);
+                k.wdir = v(0.40, 0.48, 0.78);
+                k.wup = v(0.0, 0.8, -0.6);
+                k.chest.x = -10.0;
+                k.chest.z = -30.0;
+                k.hips.z = -14.0;
+                coil(k, 0.05);
+            });
+            let k2 = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.20, -0.58, 0.98, s);
+                k.hand_l = h(-0.06, -0.42, 0.90, s);
+                k.wdir = v(-0.34, -0.78, -0.50);
+                k.wup = v(0.0, -0.6, 0.8);
+                k.chest.x = 28.0;
+                k.chest.z = 20.0;
+                lunge(k, 0.13, 0.05);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(-0.40, -0.34, 0.74, s);
+                k.hand_l = h(-0.20, -0.22, 0.72, s);
+                k.wdir = v(-0.60, -0.36, -0.70);
+                k.chest.z = 36.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.56, k3), (1.0, r)], trail: (0.28, 0.60) }
         }
         Wk::StormAxe => {
             // çapraz şimşek kesik: sağ omuzdan sol kalçaya
@@ -792,6 +881,32 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
             Mel { keys: vec![(0.0, r), (0.18, a), (0.40, a), (0.58, b), (0.80, b), (1.0, r)], trail: (0.26, 0.74) }
         }
         // ---------------------------------------------------------------- tek elle: bıçak, balta, tokmak, katana, pençe
+        Wk::Knife if stage == 2 => {
+            // art arda iki hızlı saplama: kalçadan fırlayan düz hamleler, ikincisi daha derin
+            let pull = with(&r, |k| {
+                k.hand_r = h(-0.16, -0.06, 0.92, s);
+                k.wdir = v(0.0, -0.96, 0.05);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = 18.0;
+                k.chest.x = 4.0;
+                coil(k, 0.03);
+            });
+            let jab = with(&r, |k| {
+                k.ik_r = 1.0;
+                k.hand_r = h(-0.08, -0.72, 1.12, s);
+                k.wdir = v(0.0, -1.0, 0.02);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = -14.0;
+                k.chest.x = 12.0;
+                lunge(k, 0.15, 0.0);
+            });
+            let jab2 = with(&jab, |k| {
+                k.hand_r = h(-0.04, -0.82, 1.14, s);
+                k.chest.x = 18.0;
+                lunge(k, 0.22, 0.02);
+            });
+            Mel { keys: vec![(0.0, r), (0.16, pull), (0.40, jab), (0.50, pull), (0.64, jab2), (1.0, r)], trail: (0.34, 0.68) }
+        }
         Wk::Knife => {
             if stage.is_multiple_of(2) {
                 // derin atılımla sapla, ters elden yatay kesik
@@ -834,6 +949,33 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
                 Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
             }
         }
+        Wk::Katana if stage == 2 => {
+            // iki elle baş üstünden dik iniş (kesin vuruş), ardından kılıcı çevirip silkeleme
+            let up = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.08, 0.08, 1.74, s);
+                k.hand_l = h(0.02, 0.12, 1.56, s);
+                k.wdir = v(-0.06, 0.45, 0.88);
+                k.wup = v(0.0, 0.88, -0.45);
+                k.chest.x = -16.0;
+                k.chest.z = 6.0;
+            });
+            let cut = with(&r, |k| {
+                k.ik_l = 1.0;
+                k.hand_r = h(-0.04, -0.58, 0.84, s);
+                k.hand_l = h(0.04, -0.44, 0.80, s);
+                k.wdir = v(0.04, -0.78, -0.62);
+                k.wup = v(0.0, -0.62, 0.78);
+                k.chest.x = 30.0;
+                lunge(k, 0.13, 0.08);
+            });
+            let flick = with(&cut, |k| {
+                k.hand_r = h(0.10, -0.50, 0.90, s);
+                k.wdir = v(0.50, -0.70, -0.40);
+                k.chest.z = -18.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.24, up), (0.28, up), (0.40, cut), (0.54, cut), (0.70, flick), (1.0, r)], trail: (0.30, 0.52) }
+        }
         Wk::Katana => {
             // iaido: omuzdan yatay kesik, geri dönüşte ters kesik
             let flip = stage % 2 == 1;
@@ -861,6 +1003,31 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
             });
             Mel { keys: vec![(0.0, r), (0.24, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
         }
+        Wk::Claw if stage == 2 => {
+            // alttan yukarı çapraz pençe: yere çömelip tırmalayarak yükselir
+            let k1 = with(&r, |k| {
+                k.hand_r = h(0.20, -0.30, 0.52, s);
+                k.wdir = v(0.6, -0.3, -0.7);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = -30.0;
+                k.chest.x = 22.0;
+                coil(k, 0.10);
+            });
+            let k2 = with(&r, |k| {
+                k.ik_r = 1.0;
+                k.hand_r = h(-0.32, -0.52, 1.36, s);
+                k.wdir = v(-0.5, -0.6, 0.7);
+                k.wup = v(0.0, 0.0, 1.0);
+                k.chest.z = 30.0;
+                lunge(k, 0.11, 0.0);
+            });
+            let k3 = with(&k2, |k| {
+                k.hand_r = h(-0.50, -0.14, 1.52, s);
+                k.wdir = v(-0.8, 0.1, 0.5);
+                k.chest.z = 44.0;
+            });
+            Mel { keys: vec![(0.0, r), (0.22, k1), (0.40, k2), (0.58, k3), (1.0, r)], trail: (0.26, 0.62) }
+        }
         Wk::Claw => {
             let k1 = with(&r, |k| {
                 k.hand_r = h(-0.40, 0.0, 1.45, s);
@@ -886,6 +1053,32 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
         Wk::Hatchet | Wk::Handaxe | Wk::Club | Wk::Effigy => {
             // ağır silah daha yüksekten, daha çok gövdeyle; balta iki yönlü hızlı kombo
             let heavy = if matches!(wk, Wk::Handaxe | Wk::Club | Wk::Effigy) { 1.0 } else { 0.0 };
+            if stage == 2 {
+                // bitirici: iki elle baş üstünden tüm ağırlıkla çakma, ardından silah yerde kalır
+                let up = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(-0.12, 0.10, 1.76, s);
+                    k.hand_l = h(0.02, 0.16, 1.56, s);
+                    k.wdir = v(-0.08, 0.50, 0.86);
+                    k.wup = v(0.0, 0.86, -0.50);
+                    k.chest.x = -14.0 - 4.0 * heavy;
+                    k.chest.z = 8.0;
+                });
+                let slam = with(&r, |k| {
+                    k.ik_l = 1.0;
+                    k.hand_r = h(-0.04, -0.64, 0.88, s);
+                    k.hand_l = h(0.04, -0.48, 0.82, s);
+                    k.wdir = v(0.0, -0.80, -0.60);
+                    k.wup = v(0.0, -0.60, 0.80);
+                    k.chest.x = 30.0 + 6.0 * heavy;
+                    lunge(k, 0.13 + 0.03 * heavy, 0.09);
+                });
+                let rebound = with(&slam, |k| {
+                    k.hand_r = h(-0.05, -0.58, 0.96, s);
+                    k.chest.x = 22.0;
+                });
+                return Mel { keys: vec![(0.0, r), (0.26, up), (0.30, up), (0.40, slam), (0.52, slam), (0.68, rebound), (1.0, r)], trail: (0.30, 0.46) };
+            }
             if stage.is_multiple_of(2) {
                 let k1 = with(&r, |k| {
                     k.hand_r = h(-0.30, 0.10, 1.62 + 0.10 * heavy, s);
@@ -940,7 +1133,8 @@ fn melee_keys(r: &K, wk: Wk, s: f32, stage: u32) -> Mel {
 /// Yakın dövüşte kombo düzeni: kaç vuruşluk bir tur
 pub fn combo_len(wk: Wk) -> u32 {
     match wk {
-        Wk::BloodScythe | Wk::IceScythe => 3,
+        // V18: tek elli silahlara üçüncü (bitirici) hareket eklendi; ağır silahların ikinci hareketi yatay savuruş
+        Wk::BloodScythe | Wk::IceScythe | Wk::Knife | Wk::Katana | Wk::Claw | Wk::Hatchet | Wk::Handaxe | Wk::Club | Wk::Effigy => 3,
         _ => 2,
     }
 }
@@ -1295,7 +1489,32 @@ fn aim_pose(st: &Style, kick: f32) -> K {
 }
 
 /// Animasyon durumundan anahtar kareyi üretir
+/// Taban animasyon + isteğe bağlı üst gövde katmanları (iksir içme: yürüme, koşma, duruş üstüne biner)
 pub fn key_of(inp: &In, s: f32) -> Key {
+    let mut key = key_base(inp, s);
+    if inp.flags & F_DRINK != 0 && !matches!(inp.anim, a::DEATH | a::KNOCK | a::GETUP | a::ROLL | a::RIDE | a::DRINK) {
+        let ph = ((inp.flags >> 8) & 0xFF) as f32 / 255.0;
+        // elin ağza kalkışı hızlı, içme anı uzun, iniş yumuşak
+        let w = if ph < 0.22 { smooth01(ph / 0.22) } else if ph < 0.72 { 1.0 } else { 1.0 - smooth01((ph - 0.72) / 0.28) };
+        // el kalçadan ağza kalkar (IK hedefi göğüs uzayında); katman kapanınca taban hareket geri gelir
+        let mouth = v(-0.04, -0.18, 1.55) * s;
+        let hip = v(-0.20, -0.10, 0.95) * s;
+        if w > 0.02 {
+            let mut d = key.k;
+            d.ik_r = 1.0;
+            d.hand_r = hip + (mouth - hip) * w;
+            d.head.x = key.k.head.x - 22.0 * w;
+            d.chest.x = key.k.chest.x - 6.0 * w;
+            key.k = d;
+            if w > 0.3 {
+                key.shown = Wk::None; // iksir sağ elde: silah gizlenir
+            }
+        }
+    }
+    key
+}
+
+fn key_base(inp: &In, s: f32) -> Key {
     let st = &inp.style;
     let wk = inp.weapon;
     let t = inp.t;
@@ -1309,7 +1528,9 @@ pub fn key_of(inp: &In, s: f32) -> Key {
             // çekirdek: 4/14 sn'de bir yumruk, sırayla sol/sağ
             let half = 4.0 / 14.0;
             let n = (t / half) as u32;
-            plain(punch(st, (t % half) / half, n % 2 == 1), Wk::None)
+            // sol düz → sağ çapraz → sağ aperkat (zenvex_core yumruk aralığı 4/14 sn; döngü 12/14 sn)
+            let kind = match n % 3 { 0 => 0, 1 => 1, _ => 2 };
+            plain(punch(st, (t % half) / half, kind), Wk::None)
         }
         a::MELEE => {
             let per = inp.period.max(0.2);

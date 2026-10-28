@@ -191,10 +191,12 @@ impl Service {
             let back = self.backs[ch];
             let s = sk.height / 1.86;
             let hz = flap_hz(r.anim, style.heavy);
-            let w = (r.t * std::f32::consts::TAU * hz).sin();
-            // açık durur, yavaşça çırpar; koşarken daha geniş; arkaya 12° yatık
-            let amp = if hz > 1.0 { 14.0 } else { 7.0 };
-            let open = -8.0 + amp * w;
+            let ph = r.t * std::f32::consts::TAU * hz;
+            // V18: ikinci harmonik çırpışa hız farkı verir (aşağı vuruş hızlı, yukarı kalkış yavaş); döngü dikişsiz kalır
+            let w = ph.sin() + 0.24 * (2.0 * ph + 0.9).sin();
+            // belirgin çırpar: boşta geniş ve yavaş, koşarken çok geniş; arkaya 12° yatık
+            let amp = if hz > 1.0 { 32.0 } else { 17.0 };
+            let open = -6.0 + amp * w;
             let place = Xf::new(M3::rx(-12.0), back).then(&out.world[SPINE]);
             let scale = s;
             self.gp.clear();
@@ -210,10 +212,17 @@ impl Service {
             let pr = g.part("wing_r").map(|p| V3::from(p.pivot)).unwrap_or(V3::ZERO);
             let pl = g.part("wing_l").map(|p| V3::from(p.pivot)).unwrap_or(V3::ZERO);
             // sağ kanat (−X) Y ekseni etrafında: + açı ucu yukarı; sol kanat ters
-            let rr = M3::ry(-open) * M3::rz(-6.0);
-            let rl = M3::ry(open) * M3::rz(6.0);
+            // kanat boyu: kökten en uzak köşe (uç, kökten daha çok ve gecikmeli döner: kanat esner)
+            let span = |piv: V3, mine: u8| {
+                g.verts.iter().enumerate().filter(|(i, _)| owner[*i] == mine).map(|(_, v)| (v.p.x - piv.x).abs()).fold(0.05_f32, f32::max)
+            };
+            let (span_r, span_l) = (span(pr, 0), span(pl, 1));
+            let lag = ((ph - 0.7).sin() + 0.24 * (2.0 * (ph - 0.7) + 0.9).sin()) * amp - amp * w;
             for (i, v) in g.verts.iter().enumerate() {
-                let (rot, piv) = if owner[i] == 1 { (rl, pl) } else { (rr, pr) };
+                let (sgn, piv, sp) = if owner[i] == 1 { (1.0, pl, span_l) } else { (-1.0, pr, span_r) };
+                let tip = ((v.p.x - piv.x).abs() / sp).clamp(0.0, 1.0);
+                let ang = open * (0.55 + 0.45 * tip) + lag * tip * tip;
+                let rot = M3::ry(-sgn * ang) * M3::rz(-sgn * 6.0);
                 let p = piv + rot.apply(v.p - piv);
                 self.gp.push(place.apply(p * scale));
                 self.gn.push(place.r.apply(rot.apply(v.n)));

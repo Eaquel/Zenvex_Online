@@ -57,9 +57,14 @@ impl Game {
         );
         self.draw_tmp.clear();
         self.world.query(x0, y0, x1, y1, &mut self.scratch);
+        // V18: her bölge kendi alanında izole; sınırın ötesinde komşu bölgenin ağaç, bina ve eşyaları görünmez
+        let here = crate::areas::area_exact(self.player.x, self.player.y);
         for &i in &self.scratch {
             let s = &self.world.statics[i as usize];
             if s.x < x0 || s.x > x1 || s.y < y0 || s.y > y1 {
+                continue;
+            }
+            if here.is_some() && crate::areas::area_exact(s.x, s.y) != here {
                 continue;
             }
             if s.kind == Kind::Deco && ((s.phase * 1000.0) % 1.0) > deco_density {

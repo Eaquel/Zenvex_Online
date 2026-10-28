@@ -212,6 +212,9 @@ class GameShotsTest {
     @Test fun g28_evTitanWalk() = shot("ev_titan_walk", { evWeapon("titan") }, steps = 40, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
     @Test fun g29_evPackAttack() = shot("ev_pack_attack", { evWeapon("pack"); cheat("spawn walker 2 2") }, steps = 50, input = floatArrayOf(0f, 0f, 1f, 0f, 0f))
 
+    /** V18 bölge sınırı: komşu bölgenin nesneleri görünmez, sınırın ötesi bulut denizi */
+    @Test fun e01_borderEast() = shot("border_east", { cheat("level 20"); cheat("tp 355 470") }, steps = 30)
+    @Test fun e02_borderCorner() = shot("border_corner", { cheat("level 20"); cheat("tp 193 383") }, steps = 30)
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
     // ------------------------------------------------------------------ V16 3B kahramanlar, silahlar, araçlar
     private fun equip(item: String) {
