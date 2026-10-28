@@ -2,6 +2,20 @@
 
 ## Unreleased (V16 — 3D)
 
+- V19 performance pass (no quality loss):
+  - map fix: the detailed region map was never built (a "ground ready" flag fell once on the first frames and never
+    recovered), so the minimap and the big map kept showing the old flat-colour world map
+  - crowds: creature separation O(n²) → grid O(n), solid-object collision grid, cheaper draw-order sort and distance
+    maths; 10,000 creatures: 311 → 3.9 ms per simulation frame (desktop), 1,000 creatures drawn: 85 → 22 ms per frame
+  - no per-frame garbage: gradients and colour filters cached, sprite lookups cached by number, particle cap with
+    O(n) removal; creature plates and silhouette shadows thin out only in huge crowds
+  - memory: atlas pages unused for 45 s are freed from GPU memory (they used to pile up to ~277 MB), ground tiles live
+    only on the GPU, weapon/wing/vehicle models load when first seen, caches shrink on low-memory phones and when the
+    system asks
+  - heat: the scene is not drawn behind full-screen windows (world keeps running at 20 Hz), predictive thermal headroom
+    on Android 11+ eases off before the phone heats up, HUD data is only re-parsed when it changes, saves are written
+    in the background
+
 - V19: every 3D model (4 heroes, 9 NPCs, 18 weapons, car and motorcycle, 4 wing sets) rebuilt from the original
   high-detail sources: ~2.4× the triangles (heroes 26k, NPCs 16k, cars 22k, weapons 5k), sharper textures (heroes and
   cars 1536, weapons 512) and new normal maps so stitches, straps, armour plates and wrinkles catch the light

@@ -56,7 +56,10 @@ object Model3D {
 
     @Volatile var ready = false
         private set
-    private val names = HashSet<String>()
+    private val names: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    /** yüklenmek üzere kuyruğa alınmış modeller */
+    private val loading: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    private var appCtx: Context? = null
 
     private class Req(val key: String, val actor: String, val vehicle: Boolean, val a: String, val b: String, val p: FloatArray)
 
@@ -77,7 +80,7 @@ object Model3D {
         private set
 
     /** yüklenen modeller (tanı ve testler) */
-    fun loaded(): Set<String> = synchronized(names) { names.toSet() }
+    fun loaded(): Set<String> = names.toSet()
 
     /** Silah eşyasının 3B modeli ("" yumruk) */
     fun itemModel(item: String): String = when {
@@ -97,23 +100,38 @@ object Model3D {
         thread = Thread({ loop(app) }, "zx-3d").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
     }
 
+    /**
+     * Açılışta yalnız kahramanlar ve NPC'ler yüklenir (her yerde görünürler); silahlar, kanatlar ve araçlar ilk kez
+     * istendiklerinde arka planda yüklenir. Eskiden 37 modelin tamamı (dokularıyla ~100 MB yerel bellek) baştan
+     * yükleniyordu; bir oturumda çoğu silah, kanat ve araç hiç görünmez (1 GB cihazlarda bellek baskısı ve geç açılış).
+     */
     private fun loop(ctx: Context) {
-        if (!loadAll(ctx)) return
+        appCtx = ctx
+        if (!loadModels(ctx, (CHARS + NPCS).distinct())) return
         while (true) {
             val r = try { queue.takeFirst() } catch (_: InterruptedException) { return }
+            if (r.key.startsWith("load|")) { loadModels(ctx, listOf(r.a)); loading -= r.a; continue }
+            // isteğin modelleri (kanatlı karakter "kael+wings_s1", silah ya da sürücü) yüklü değilse önce yükle
+            for (n in r.a.split('+') + r.b) if (n.isNotEmpty() && n !in names && n in MODELS) { loadModels(ctx, listOf(n)); loading -= n }
             render(r)
         }
     }
 
-    private fun loadAll(ctx: Context): Boolean {
+    /** Model yüklü değilse arka planda yüklenmek üzere sıraya alır (çizim isteklerinden önce) */
+    private fun ensure(name: String) {
+        if (name.isEmpty() || name in names || name !in MODELS || sync) return
+        if (loading.add(name)) queue.addFirst(Req("load|$name", "", false, name, "", FloatArray(0)))
+    }
+
+    private fun loadAll(ctx: Context): Boolean = loadModels(ctx, MODELS.toList())
+
+    private fun loadModels(ctx: Context, list: List<String>): Boolean {
         try {
             val am = ctx.assets
-            // sabit liste (assets.list bazı ortamlarda boş döner; açmak her yerde çalışır)
-            val files = MODELS.map { "$it.zxm" }
             val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888; inScaled = false }
-            for (f in files) {
-                val name = f.removeSuffix(".zxm")
-                val zxm = runCatching { am.open("m3d/$f").use { it.readBytes() } }.getOrNull() ?: continue
+            for (name in list) {
+                if (name in names) continue
+                val zxm = runCatching { am.open("m3d/$name.zxm").use { it.readBytes() } }.getOrNull() ?: continue
                 if (lowRam) {
                     val b = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                     runCatching { am.open("m3d/$name.webp").use { BitmapFactory.decodeStream(it, null, b) } }
@@ -122,7 +140,7 @@ object Model3D {
                 val tex = runCatching { am.open("m3d/$name.webp").use { BitmapFactory.decodeStream(it, null, opts) } }.getOrNull()
                 val px = IntArray((tex?.width ?: 0) * (tex?.height ?: 0))
                 tex?.getPixels(px, 0, tex.width, 0, 0, tex.width, tex.height)
-                if (Native.r3dLoad(name, zxm, tex?.width ?: 0, tex?.height ?: 0, px) == 1) synchronized(names) { names += name }
+                if (Native.r3dLoad(name, zxm, tex?.width ?: 0, tex?.height ?: 0, px) == 1) names += name
                 tex?.recycle()
                 // normal haritası (orijinal yüksek ayrıntılı yüzeyin kıvrımları); düşük bellekte yüklenmez
                 if (!lowRam) {
@@ -215,7 +233,8 @@ object Model3D {
     }
 
     private fun trim() {
-        while (queue.size > 32) queue.pollLast()?.let { pending -= it.key }
+        // atılan bir yükleme isteği de unutulur (sonraki istekte yeniden sıraya girer)
+        while (queue.size > 32) queue.pollLast()?.let { pending -= it.key; if (it.key.startsWith("load|")) loading -= it.a }
     }
 
     /** Aktör artık görünmüyor (uzak oyuncu ayrıldı): son karesini bırak */
@@ -284,7 +303,9 @@ object Model3D {
      */
     fun actor(actor: String, ch0: String, weapon: String, anim: Int, t: Float, yaw: Float, pxPerM: Float, quality: Int, flags: Int = 0,
               wings: String = ""): Frame? {
-        if (!ready || ch0 !in names) return null
+        if (!ready) return null
+        if (ch0 !in names) { ensure(ch0); return null }
+        if (wings.isNotEmpty() && wings !in names) ensure(wings)
         val ch = if (wings.isNotEmpty() && wings in names) "$ch0+$wings" else ch0
         // kombo uzunluğu zenvex_r3d anim::combo_len ile aynı olmalı (önbellek anahtarı vuruş sırasını buna göre sarar)
         val stages = comboLen(weapon)
@@ -306,7 +327,8 @@ object Model3D {
 
     /** Araç karesi */
     fun vehicle(actor: String, name: String, rider: String, yaw: Float, wheel: Float, bounce: Float, tilt: Float, riderT: Float, pxPerM: Float, quality: Int): Frame? {
-        if (!ready || name !in names) return null
+        if (!ready) return null
+        if (name !in names) { ensure(name); return null }
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)
         // tekerlek 45° (jant simetrisiyle akıcı görünür), sarsıntı 3, eğim 2° basamak: araç başına sınırlı kare
