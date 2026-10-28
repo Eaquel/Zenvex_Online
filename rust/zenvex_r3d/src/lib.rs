@@ -93,7 +93,7 @@ pub fn render(items: &[Item], s: &Settings, light: &Light) -> Image {
         raster::rasterize(&mut f, li, &svs[li], tris, true);
         layers.push(Layer { verts: &svs[li], tris, tex: it.model.tex.as_ref(), nmap: it.model.nmap.as_ref(), glow: it.glow, id: it.id });
     }
-    raster::shade(&mut f, &layers, light, scale);
+    raster::shade(&mut f, &layers, light, scale, ks);
     raster::outline(&mut f, s.outline_px * ks, [12, 11, 16, 255], 0.10, 0.62);
     if ks > 1 {
         let mut rgba = raster::downsample(&f, ks);

@@ -233,7 +233,7 @@ fn trilinear(tx: &Texture, lod: f32, u: f32, v: f32) -> [f32; 3] {
 }
 
 /// Geçiş 2: görünen pikselleri gölgelendir
-pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
+pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32, ks: usize) {
     // üçgen başına doku ayrıntı seviyesi (piksel başına düşen doku pikseli → mip)
     let lods: Vec<Vec<f32>> = layers
         .iter()
@@ -277,10 +277,17 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
             _ => 0.0,
         })
         .collect();
-    for i in 0..f.w * f.h {
-        let tag = f.tri[i];
+    // MSAA gibi: k×k alt örnek bloğunun hepsi aynı üçgendeyse (kenar değil) blok bir kez, dokunun piksele uygun mip'iyle
+    // gölgelendirilir; kenar bloklarında her alt örnek ayrı gölgelendirilir (kenar yumuşatma korunur)
+    let (fw, fh) = (f.w, f.h);
+    let tri_buf = &f.tri;
+    let bary_buf = &f.bary;
+    let depth_buf = &f.depth;
+    let color = &mut f.color;
+    let px = |i: usize, bias: f32| -> Option<[u8; 4]> {
+        let tag = tri_buf[i];
         if tag == 0 {
-            continue;
+            return None;
         }
         let li = ((tag >> 24) - 1) as usize;
         let ti = (tag & 0xFF_FFFF) as usize;
@@ -289,7 +296,7 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
         let a = &ly.verts[t[0] as usize];
         let b = &ly.verts[t[1] as usize];
         let c = &ly.verts[t[2] as usize];
-        let [w1, w2] = f.bary[i];
+        let [w1, w2] = bary_buf[i];
         let w0 = 1.0 - w1 - w2;
         let mut n = (a.n * w0 + b.n * w1 + c.n * w2).norm();
         let mut flip = 1.0;
@@ -299,7 +306,7 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
         }
         let u = a.uv[0] * w0 + b.uv[0] * w1 + c.uv[0] * w2;
         let v = a.uv[1] * w0 + b.uv[1] * w1 + c.uv[1] * w2;
-        let lod = lods[li][ti];
+        let lod = lods[li][ti] + bias;
         // üç doğrusal: en yakın örnek kumlu/lekeli görünüyordu
         let base = match ly.tex {
             Some(tx) => trilinear(tx, lod, u, v),
@@ -309,8 +316,9 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
         if let Some(nm) = ly.nmap {
             let (t, bt) = tans[li].get(ti).copied().unwrap_or((V3::ZERO, V3::ZERO));
             if t != V3::ZERO {
+                // normal haritası tek mip seviyesinden (en yakın) çift doğrusal: harmanlama farkı görünmez, örnekleme yarıya iner
                 let nl = (lod + nshift[li]).max(0.0);
-                let s = trilinear(nm, nl, u, v);
+                let s = nm.sample((nl + 0.5) as usize, u, v);
                 let k = light.bump;
                 let tx_ = (s[0] / 127.5 - 1.0) * k;
                 let ty_ = (s[1] / 127.5 - 1.0) * k;
@@ -353,7 +361,48 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
             let v = bk * (l * light.tint[k] + g) + rim * 255.0 * light.rim_color[k] + spec;
             out[k] = lift(shoulder(v).clamp(0.0, 255.0) as u8);
         }
-        f.color[i] = out;
+        Some(out)
+    };
+    let k = ks.max(1);
+    let bias_k = (k as f32).log2();
+    for by in (0..fh).step_by(k) {
+        for bx in (0..fw).step_by(k) {
+            let (kx, ky) = (k.min(fw - bx), k.min(fh - by));
+            // aynı yüzey: blokta boş alt örnek yok, hepsi aynı katmanda (gövde/silah) ve derinlik kırığı yok (2 cm)
+            let tag = tri_buf[by * fw + bx];
+            let mut same = k > 1 && kx == k && ky == k && tag != 0;
+            if same {
+                let (mut zlo, mut zhi) = (f32::MAX, f32::MIN);
+                'chk: for y in by..by + k {
+                    for x in bx..bx + k {
+                        let t = tri_buf[y * fw + x];
+                        if t == 0 || t >> 24 != tag >> 24 {
+                            same = false;
+                            break 'chk;
+                        }
+                        let z = depth_buf[y * fw + x];
+                        zlo = zlo.min(z);
+                        zhi = zhi.max(z);
+                    }
+                }
+                same &= zhi - zlo < 0.02;
+            }
+            if same {
+                if let Some(c) = px((by + k / 2) * fw + bx + k / 2, bias_k) {
+                    for y in by..by + k {
+                        color[y * fw + bx..y * fw + bx + k].fill(c);
+                    }
+                }
+            } else {
+                for y in by..by + ky {
+                    for x in bx..bx + kx {
+                        if let Some(c) = px(y * fw + x, 0.0) {
+                            color[y * fw + x] = c;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
