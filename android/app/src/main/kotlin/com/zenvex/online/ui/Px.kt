@@ -120,11 +120,29 @@ fun PT(
     )
 }
 
-/** Düz koyu panel (piksel kenarlı). */
+/** Koyu panel (piksel kenarlı): üstten hafif ışık, kenar içinde ince ışık çizgisi ve alt gölge (kabartma). */
 fun Modifier.pxPanel(color: Color = Px.Panel): Modifier = this
     .clip(RoundedCornerShape(3.dp))
     .background(color)
+    .pxBevel()
     .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
+
+/**
+ * Kabartma ışığı: üstten aşağı sönen parlaklık, kenarın hemen içinde 1 dp ışık (üst) ve gölge (alt) çizgisi.
+ * [raised] false: gömük (ışık altta, gölge üstte) — ray, yuva gibi içe basık yüzeyler için.
+ */
+fun Modifier.pxBevel(raised: Boolean = true, light: Float = 0.06f): Modifier = drawBehind {
+    val e = 2.dp.toPx(); val l = 1.dp.toPx()
+    val w = size.width; val h = size.height
+    if (raised) {
+        drawRect(Brush.verticalGradient(listOf(Color.White.copy(alpha = light), Color.Transparent), 0f, h * 0.55f), Offset.Zero, Size(w, h * 0.55f))
+        drawRect(Color.White.copy(alpha = light * 1.4f), Offset(e, e), Size(w - e * 2, l))
+        drawRect(Color.Black.copy(alpha = 0.28f), Offset(e, h - e - l), Size(w - e * 2, l))
+    } else {
+        drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.30f), Color.Transparent), 0f, h * 0.5f), Offset.Zero, Size(w, h * 0.5f))
+        drawRect(Color.White.copy(alpha = light), Offset(e, h - e - l), Size(w - e * 2, l))
+    }
+}
 
 @Composable
 fun PxPanel(modifier: Modifier = Modifier, color: Color = Px.Panel, pad: Dp = 10.dp, content: @Composable ColumnScope.() -> Unit) {

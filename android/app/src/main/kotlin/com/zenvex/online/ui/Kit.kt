@@ -128,6 +128,7 @@ fun T(
 fun Modifier.glass(radius: Dp = 18.dp, accent: Color? = null, alpha: Float = 1f): Modifier = this
     .clip(RoundedCornerShape(3.dp))
     .background(Px.Panel.copy(alpha = Px.Panel.alpha * alpha))
+    .pxBevel()
     .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
     .then(if (accent != null) Modifier.padding(2.dp).border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(2.dp)) else Modifier)
 
@@ -216,7 +217,9 @@ fun Tabs(items: List<Pair<String, String>>, selected: Int, modifier: Modifier = 
         items.forEachIndexed { i, (icon, label) ->
             val on = i == selected
             Row(
-                Modifier.background(if (on) Px.Panel else Px.PanelDark).border(2.dp, Px.Edge)
+                Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Px.Panel else Px.PanelDark).pxBevel(light = if (on) 0.10f else 0.04f)
+                    .drawBehind { if (on) drawRect(Px.Clan, Offset(0f, size.height - 3.dp.toPx()), Size(size.width, 3.dp.toPx())) }
+                    .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
                     .clickable { Audio.play("click", bus = Audio.Bus.Ui); onSelect(i) }
                     .padding(horizontal = 12.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,

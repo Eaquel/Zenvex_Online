@@ -43,7 +43,9 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
@@ -78,11 +80,19 @@ fun PxFrame(title: String, icon: String, onBack: () -> Unit, right: @Composable 
             while (y < size.height) { drawRect(Color(0x08FFFFFF), Offset(0f, y), Size(size.width, 1f)); y += st }
         }
         Column(Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth().height(50.dp).pxPanel(Px.PanelDark).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // başlık şeridi: soldan sağa sönen altın ışık, altta altın vurgu çizgisi; simge kendi gömük yuvasında
+            Row(Modifier.fillMaxWidth().height(50.dp).pxPanel(Px.PanelDark)
+                .drawBehind {
+                    drawRect(Brush.horizontalGradient(listOf(Px.Clan.copy(alpha = 0.10f), Color.Transparent), 0f, size.width * 0.45f))
+                    drawRect(Brush.horizontalGradient(listOf(Px.Clan.copy(alpha = 0.75f), Px.Clan.copy(alpha = 0.0f)), 0f, size.width * 0.6f),
+                        Offset(2.dp.toPx(), size.height - 4.dp.toPx()), Size(size.width * 0.6f, 2.dp.toPx()))
+                }
+                .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 PxIcon("back", size = 38.dp) { onBack() }
-                Spacer(Modifier.width(12.dp))
-                Icon(icon, 24.dp, Px.Clan)
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(10.dp))
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF15140F)).pxBevel(false)
+                    .border(1.5.dp, Px.Clan.copy(alpha = 0.45f), RoundedCornerShape(3.dp)), contentAlignment = Alignment.Center) { Icon(icon, 22.dp, Px.Clan) }
+                Spacer(Modifier.width(10.dp))
                 PT(title, 22.sp, Px.Text, outline = true)
                 Spacer(Modifier.weight(1f))
                 right()

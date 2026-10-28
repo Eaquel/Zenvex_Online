@@ -38,6 +38,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
@@ -62,13 +66,22 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
     fun set(n: Settings) { s = n; Settings.save(ctx, n) }
     fun custom(n: Settings) = set(n.copy(preset = 4))
     val tabs = listOf("Grafik", "Kontroller", "Ses", "Bildirimler", "Hesap", "Destek", "Dil · Language", "Yasal")
+    val tabIcons = listOf("eye", "fist", "volume", "mail", "user", "info", "globe", "scroll")
 
     PxFrame("Ayarlar", "gear", back) {
+        // sekmeler: kabartma plaka; etkin olan yeşil, üstten ışıklı ve altında altın çizgi
         Row(Modifier.fillMaxWidth().height(34.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             tabs.forEachIndexed { i, n ->
                 val on = tab == i
-                Box(Modifier.weight(n.length + 5f).fillMaxHeight().background(if (on) Px.Green else Px.Dark).border(2.dp, Px.Edge).clickable { tab = i },
-                    contentAlignment = Alignment.Center) { PT(n, 12.sp, if (on) Color.White else Px.Sub) }
+                Row(Modifier.weight(n.length + 7f).fillMaxHeight().clip(RoundedCornerShape(3.dp)).background(if (on) Px.Green else Px.PanelDark)
+                    .pxBevel(light = if (on) 0.16f else 0.05f)
+                    .drawBehind { if (on) drawRect(Px.Clan, Offset(0f, size.height - 3.dp.toPx()), Size(size.width, 3.dp.toPx())) }
+                    .border(2.dp, Px.Edge, RoundedCornerShape(3.dp)).clickable { com.zenvex.online.game.Audio.play("click", bus = com.zenvex.online.game.Audio.Bus.Ui); tab = i },
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Icon(tabIcons[i], 14.dp, if (on) Px.Clan else Px.Sub.copy(alpha = 0.8f))
+                    Spacer(Modifier.width(5.dp))
+                    PT(n, 12.sp, if (on) Color.White else Px.Sub)
+                }
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -123,16 +136,17 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                         Choice("Titreşim", listOf("Kapalı", "Hafif", "Güçlü"), s.haptics) { set(s.copy(haptics = it)) }
                         Toggle("Sol El Modu (Joystickleri Değiştir)", s.leftHanded) { set(s.copy(leftHanded = it)) }
                         Spacer(Modifier.weight(1f))
-                        PxButton("Kontrol Rehberini Göster", Modifier.fillMaxWidth(), color = Px.Blue, icon = "info", height = 34.dp, size = 13.sp) {
-                            com.zenvex.online.game.HudLayout.guideReplay = true
-                            Toaster.show("Oyuna dönünce gösterilir")
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        PxButton("Varsayılana Dön", Modifier.fillMaxWidth(), color = Px.Dark, icon = "refresh", height = 34.dp, size = 13.sp) {
-                            val d = Settings()
-                            set(s.copy(moveDynamic = d.moveDynamic, moveSensitivity = d.moveSensitivity, moveDeadZone = d.moveDeadZone,
-                                runThreshold = d.runThreshold, attackSensitivity = d.attackSensitivity, attackDeadZone = d.attackDeadZone,
-                                joystickSize = d.joystickSize, joystickOpacity = d.joystickOpacity, haptics = d.haptics, leftHanded = d.leftHanded))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            PxButton("Rehber", Modifier.weight(1f), color = Px.Blue, icon = "info", height = 34.dp, size = 12.sp) {
+                                com.zenvex.online.game.HudLayout.guideReplay = true
+                                Toaster.show("Oyuna dönünce gösterilir")
+                            }
+                            PxButton("Sıfırla", Modifier.weight(1f), color = Px.Dark, icon = "refresh", height = 34.dp, size = 12.sp) {
+                                val d = Settings()
+                                set(s.copy(moveDynamic = d.moveDynamic, moveSensitivity = d.moveSensitivity, moveDeadZone = d.moveDeadZone,
+                                    runThreshold = d.runThreshold, attackSensitivity = d.attackSensitivity, attackDeadZone = d.attackDeadZone,
+                                    joystickSize = d.joystickSize, joystickOpacity = d.joystickOpacity, haptics = d.haptics, leftHanded = d.leftHanded))
+                            }
                         }
                     }
                 }
@@ -220,17 +234,28 @@ private fun ColumnScope.LanguageSection(current: String, pick: (String) -> Unit)
 }
 
 @Composable
-private fun Head(t: String) = PT(t, 14.sp, Px.Clan, Modifier.padding(top = 2.dp, bottom = 3.dp))
+private fun Head(t: String) {
+    // bölüm başlığı: sol altın çubuk, yazı ve sağa uzayan ince çizgi
+    Row(Modifier.fillMaxWidth().padding(top = 2.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(3.dp, 14.dp).background(Px.Clan))
+        Spacer(Modifier.width(6.dp))
+        PT(t, 14.sp, Px.Clan)
+        Spacer(Modifier.width(8.dp))
+        Box(Modifier.weight(1f).height(1.dp).background(Brush.horizontalGradient(listOf(Px.Clan.copy(alpha = 0.4f), Color.Transparent))))
+    }
+}
 
 @Composable
 fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().heightIn(min = 28.dp).clickable { onChange(!value) }.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         PT(label, 12.sp, modifier = Modifier.weight(1f), maxLines = 2)
         Spacer(Modifier.width(8.dp))
-        // piksel anahtar: koyu yuva, kayan kare düğme
-        Box(Modifier.width(44.dp).height(22.dp).background(Px.Edge).padding(2.dp).background(if (value) Px.Green else Px.Dark).padding(2.dp)) {
-            Box(Modifier.align(if (value) Alignment.CenterEnd else Alignment.CenterStart).size(14.dp).background(if (value) Color(0xFFE8F0D0) else Px.Sub)
-                .border(1.dp, Px.Edge))
+        // piksel anahtar: gömük yuva (açıkken yeşil ve ışıklı), kabartma kare düğme
+        val k by androidx.compose.animation.core.animateFloatAsState(if (value) 1f else 0f, androidx.compose.animation.core.tween(140), label = "tg")
+        Box(Modifier.width(44.dp).height(22.dp).clip(RoundedCornerShape(3.dp)).background(Px.Edge).padding(2.dp)
+            .background(androidx.compose.ui.graphics.lerp(Color(0xFF26251F), Px.Green, k)).pxBevel(false).padding(2.dp)) {
+            Box(Modifier.offset(x = (22 * k).dp).size(14.dp).background(androidx.compose.ui.graphics.lerp(Px.Sub, Color(0xFFF0F6DC), k))
+                .pxBevel(light = 0.3f).border(1.dp, Px.Edge))
         }
     }
 }
@@ -239,11 +264,17 @@ fun Toggle(label: String, value: Boolean, onChange: (Boolean) -> Unit) {
 fun Choice(label: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
         PT(label, 12.sp)
-        Spacer(Modifier.height(2.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Spacer(Modifier.height(1.dp))
+        // gömük ray içinde seçenekler; seçili olan yeşil kabartma plaka
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(3.dp)).background(Color(0xFF17160F)).pxBevel(false)
+            .border(1.dp, Px.Edge, RoundedCornerShape(3.dp)).padding(2.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             options.forEachIndexed { i, o ->
-                Box(Modifier.weight(1f).background(if (i == selected) Px.Green else Px.PanelDark).border(2.dp, Px.Edge).clickable { onSelect(i) }
-                    .padding(vertical = 5.dp), contentAlignment = Alignment.Center) { PT(o, 11.sp, if (i == selected) Color.White else Px.Sub) }
+                val on = i == selected
+                Box(Modifier.weight(1f).clip(RoundedCornerShape(2.dp)).background(if (on) Px.Green else Color(0xFF2A2924))
+                    .pxBevel(light = if (on) 0.18f else 0.04f)
+                    .then(if (on) Modifier.border(1.dp, Px.GreenHi, RoundedCornerShape(2.dp)) else Modifier)
+                    .clickable { onSelect(i) }
+                    .padding(vertical = 3.dp), contentAlignment = Alignment.Center) { PT(o, 11.sp, if (on) Color.White else Px.Sub) }
             }
         }
     }
@@ -271,7 +302,8 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
             PxBar(frac, Px.Clan, Modifier.fillMaxWidth(), 8.dp)
             // düğme ölçülmüş genişliğe bağlı değil (ilk karede 0'a atlıyordu): doluluk oranındaki kutunun ucunda durur
             Box(Modifier.fillMaxWidth(frac).height(20.dp)) {
-                Box(Modifier.align(Alignment.CenterEnd).offset(x = 6.dp).size(12.dp, 20.dp).background(Color(0xFFE8E4D4)).border(2.dp, Px.Edge))
+                Box(Modifier.align(Alignment.CenterEnd).offset(x = 6.dp).size(12.dp, 20.dp).background(Color(0xFFE8E4D4)).pxBevel(light = 0.4f)
+                    .border(2.dp, Px.Edge))
             }
         }
     }
