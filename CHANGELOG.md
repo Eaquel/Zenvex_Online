@@ -5,6 +5,15 @@
 - Lobby: the live sunset city scene stays; the street now shows the game's own zombies (walker, runner, tank, dark,
   dog sprites) walking toward the campfire and the game's own car (3D Hellhound) instead of generic silhouettes; news tab
   lists this version's changes; info dialog fits small phones
+- Realistic lobby scene (GPU shaders on Android 13+, the old drawing on older phones and on the lowest effects setting):
+  sky with light scattering around the sun, soft drifting clouds lit on the sun side and light rays through the gaps;
+  rooftop fires as moving noise flames (dark red → orange → white-hot core) spreading along the roof, with thick smoke
+  columns bending in the wind and fire light washing over the nearby walls; drifting fog between the city layers and at
+  street level; buildings with lit side faces, floors, glass windows (dark, broken, lit, flickering TV, burning with soot
+  marks), torn holes, water tanks, AC boxes, antennas with blinking red lights and rebar on broken roofs; wet street with
+  kerb, worn lane line, cracks, rubble and puddles reflecting the sky; street lamp light cone; campfire with stone ring,
+  glowing logs and smoke; sandbag barricade lit by the fire; falling ash. Buildings and street are drawn once per screen
+  size, so the scene costs little per frame
 
 - Smoothness: ground chunks are built on a background thread in short strips (the game loop no longer waits for 256 px
   chunks when entering new ground); the ring around the view and two chunks ahead in the walking direction load early
