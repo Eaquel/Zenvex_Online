@@ -924,6 +924,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
 
     /** tanıtım/test: arayüzsüz (temiz) kare ve sabit görüş yüksekliği (metre); oyuncu ayarlarına dokunmaz */
     internal var clean = false
+    /** yerel oyuncu çizilmez (lobi arka planı çekimi: kahraman lobide ayrıca 3B çizilir) */
+    internal var hideMe = false
     internal var promoZoom = 0f
 
     private fun render(c: Canvas, dt: Float) {
@@ -1224,6 +1226,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sx = wx(x)
         var sy = wy(y)
         if (sx < -300 || sx > sw + 300 || sy < -200 || sy > sh + 500) return
+        if (hideMe && who == -1f) return
         if (ch >= 4 && drawNpc6(c, ch, x, y, sx, if (who <= -3f) sy - 235f * scale else sy, dir, t)) return
         // aura karakterin altında, zeminde
         if (who == -1f && hud[Native.DEAD] < 0.5f) {
@@ -1670,7 +1673,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (ch >= 5 && d < 170f && d < nearNpcD) { nearNpc = ch; nearNpcD = d }
         if (ch >= 5) npcBoxes += floatArrayOf(ch.toFloat(), sx - w * 0.4f, top, sx + w * 0.4f, sy, d)
         npc6Plate.getOrNull(ch - 4)?.let { (n, sub) -> plates += Plate(sx, top - 4 * density, n, 0xFFFFD34A.toInt(), -1f, false, sub) }
-        questMarks[ch]?.let { m ->
+        if (!clean) questMarks[ch]?.let { m ->
             // başın üstünde zıplayan görev işareti
             val by = top - 34 * density + sin(time * 4f) * 4 * density
             fill.color = 0xFF15140F.toInt(); c.drawRect(sx - 11 * density, by - 13 * density, sx + 11 * density, by + 11 * density, fill)

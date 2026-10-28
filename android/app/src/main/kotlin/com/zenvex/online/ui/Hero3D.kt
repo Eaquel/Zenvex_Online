@@ -35,7 +35,8 @@ fun equippedWeaponModel(): String = runCatching {
  * Modeller yüklenmemişse false döner (çağıran piksel görsele düşer).
  */
 @Composable
-fun Hero3DView(actor: String, ch: Int, dir: Int, t: Float, unlocked: Boolean, weapon: String = "", modifier: Modifier = Modifier.fillMaxSize()): Boolean {
+fun Hero3DView(actor: String, ch: Int, dir: Int, t: Float, unlocked: Boolean, weapon: String = "", modifier: Modifier = Modifier.fillMaxSize(),
+               wings: String = ""): Boolean {
     if (!Model3D.ready) return false
     // yön: 8 basamaklı seçimi en kısa yoldan sarılmamış açıya çevir (döner, ters dönmez); hafif yarı profil
     val unwrapped = remember { floatArrayOf(dir * 45f) }
@@ -54,7 +55,7 @@ fun Hero3DView(actor: String, ch: Int, dir: Int, t: Float, unlocked: Boolean, we
         val pxPerM = (hPx * 0.86f / 2.0f).coerceAtLeast(30f)
         // boşta döngüsü 6,25 sn; vitrinde 30 basamak (önbellekte az yer)
         val tq = ((t % 6.25f) / 6.25f * 30f).toInt() * (6.25f / 30f)
-        val fr = Model3D.actor(actor, Model3D.CHARS.getOrElse(ch) { "kael" }, weapon, 0, tq, yaw, pxPerM, 3)
+        val fr = Model3D.actor(actor, Model3D.CHARS.getOrElse(ch) { "kael" }, weapon, 0, tq, yaw, pxPerM, 3, wings = wings)
         val img = remember(fr) { fr?.bmp?.asImageBitmap() }
         Canvas(Modifier.fillMaxSize()) {
             val foot = size.height * 0.95f

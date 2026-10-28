@@ -49,7 +49,8 @@ class GameShotsTest {
     private fun cmd(o: JSONObject) = synchronized(GameSession.lock) { Native.command(GameSession.handle, o.toString()) }
 
     private fun shot(name: String, setup: () -> Unit, steps: Int = 60, input: FloatArray? = null, hud: Boolean = true,
-                     after: ((GameView) -> Unit)? = null, overlay: (@androidx.compose.runtime.Composable () -> Unit)? = null) {
+                     after: ((GameView) -> Unit)? = null, overlay: (@androidx.compose.runtime.Composable () -> Unit)? = null,
+                     prep: ((GameView) -> Unit)? = null) {
         Assume.assumeTrue("libzenvex.so yok", native())
         com.zenvex.online.ui.Demo.on = true
         GameSession.initPreview(paparazzi.context)
@@ -57,6 +58,7 @@ class GameShotsTest {
         setup()
         val view = GameView(paparazzi.context, ui)
         view.localName = "Oyuncu"
+        prep?.invoke(view)
         val w = 2340; val h = 1080
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         view.previewFrames(Canvas(bmp), w, h, steps, input = input)
@@ -78,6 +80,13 @@ class GameShotsTest {
     }
 
     @Test fun g01_campSpawn() = shot("camp", { })
+
+    /**
+     * Lobi arka planı: oyunun kendi kampı alacakaranlıkta (kamp ateşi, çadırlar, NPC'ler), arayüzsüz, oyuncusuz.
+     * Çıktı: build/game-shots/lobby_camp.png → tools/promo/lobby_bg.py ile assets/ui/bg_lobby_camp.webp
+     */
+    @Test fun l01_lobbyCamp() = shot("lobby_camp", { cheat("level 6"); cheat("time 20.5") }, steps = 120, hud = false,
+        prep = { it.clean = true; it.hideMe = true; it.promoZoom = 12.5f })
 
     @Test fun g02_forestFight() = shot("fight", {
         cheat("level 6"); cheat("god"); cheat("tp deep"); cheat("spawn walker 4 4"); cheat("spawn runner 2 4")

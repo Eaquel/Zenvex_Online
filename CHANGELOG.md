@@ -2,6 +2,9 @@
 
 ## Unreleased (V16 — 3D)
 
+- Lobby: the background is the game's own camp at night (rendered by the engine, slow pan, warm ember light) and your 3D
+  hero stands in it with the equipped weapon and wings; news tab lists this version's changes; info dialog fits small phones
+
 - Smoothness: ground chunks are built on a background thread in short strips (the game loop no longer waits for 256 px
   chunks when entering new ground); the ring around the view and two chunks ahead in the walking direction load early
 - Audio mix: per-sound levels and priorities, background sounds drop out in crowded fights so hits and explosions stay

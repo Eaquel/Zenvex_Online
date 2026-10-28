@@ -54,6 +54,10 @@ import com.zenvex.online.game.GameSession
 import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.sin
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.BoxScope
 
 val HERO_IDS = listOf("kaan", "nova", "rady", "elif")
 val HERO_COLORS = listOf(Color(0xFFFF7A4A), Color(0xFF4AD8FF), Color(0xFFB277FF), Color(0xFF5BE38A))
@@ -80,13 +84,44 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
     val kicked = com.zenvex.online.game.Session.kicked.value
     LaunchedEffect(kicked) { if (kicked != null) { Toaster.show(kicked, false); com.zenvex.online.game.Session.kicked.value = null } }
 
-    // sahne: kodla çizilen canlı yıkık şehir (gün batımı, yangınlar, kor yağmuru, uzakta sürünen zombi silüetleri, kamp ateşi)
-    LiveScene(SceneKind.LOBBY) {
-        // ---- sol: büyük logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi ve satın alma oyunun içinde)
-        Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 70.dp), horizontalAlignment = Alignment.Start) {
-            CodeLogo(150.dp)
-            Spacer(Modifier.height(10.dp))
-            PT("Hayatta Kal. Güçlen. Üssünü Savun.", 17.sp, Color(0xFFFFE2B8), outline = true)
+    // sahne: oyunun kendi kampı (oyun motorundan çekilmiş gece görüntüsü, yavaşça kayar) + önünde senin 3B kahramanın,
+    // elindeki silah ve sırtındaki kanatla; kamp görseli yoksa eski kodla çizilen sahne
+    val ctx = LocalContext.current
+    val camp = remember { UiArt.has(ctx, "bg_lobby_camp") }
+    val t = rememberTime()
+    val scene: @Composable (@Composable BoxScope.() -> Unit) -> Unit = { body ->
+        if (camp) SceneBackground("bg_lobby_camp", t, dim = 0.18f, zoom = 1.08f, drift = 0.35f) {
+            // kenar karartma + kor ışığı: arayüz okunur kalsın, sahne sıcak dursun
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Brush.horizontalGradient(listOf(Color(0xCC07060A), Color(0x3307060A), Color(0x00000000), Color(0x8807060A))))
+                drawRect(Brush.verticalGradient(listOf(Color(0x66000000), Color(0x00000000), Color(0x00000000), Color(0x99000000))))
+                val k = 0.5f + 0.5f * sin(t * 2.3f) * sin(t * 0.7f + 1f)
+                drawCircle(Brush.radialGradient(listOf(Color(0x33FF8A2A).copy(alpha = 0.16f + 0.08f * k), Color.Transparent), Offset(size.width * 0.36f, size.height * 0.78f), size.height * 0.55f),
+                    size.height * 0.55f, Offset(size.width * 0.36f, size.height * 0.78f))
+            }
+            body()
+        } else LiveScene(SceneKind.LOBBY) { body() }
+    }
+    scene {
+        // ---- sol: logo + slogan; altta gerçek oyundan alınmış kareler (kahraman seçimi ve satın alma oyunun içinde)
+        Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 66.dp), horizontalAlignment = Alignment.Start) {
+            CodeLogo(100.dp)
+            Spacer(Modifier.height(6.dp))
+            PT("Hayatta Kal. Güçlen. Üssünü Savun.", 16.sp, Color(0xFFFFE2B8), outline = true)
+        }
+        // ---- orta: senin kahramanın (seçili karakter, kuşanılı silah, kanat) kamp ateşinin başında
+        val heroCh = prof.optInt("character", 0)
+        val heroWeapon = remember(epoch, tick) { equippedWeaponModel() }
+        val heroWings = prof.optString("wings")
+        // yer: galerinin sağı ile oyuncu kartının solu arası (kart 340 dp + kenar); dar ekranda küçülür, logoya binmez
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize()) {
+            val left = 272.dp
+            val room = maxWidth - 372.dp - left
+            val w = room.coerceIn(120.dp, 220.dp)
+            val h = (maxHeight * 0.64f).coerceAtMost(w * 1.4f)
+            Box(Modifier.align(Alignment.BottomStart).padding(start = left + (room - w) / 2, bottom = 10.dp).size(w, h)) {
+                Hero3DView("lobby", heroCh, 1, t, true, heroWeapon, Modifier.fillMaxSize(), wings = heroWings)
+            }
         }
         ShotGallery(Modifier.align(Alignment.BottomStart).padding(start = 54.dp, bottom = 12.dp))
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
@@ -329,7 +364,8 @@ fun NewsDialog(start: Int = 0, close: () -> Unit) {
             }
         }
         Spacer(Modifier.height(8.dp))
-        Column(Modifier.height(300.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // 360 dp yüksekliğindeki telefonda da pencere ekrana sığar (içerik kayar)
+        Column(Modifier.height(220.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (tab == 4) PT("Zenvex Online'ı herkes için adil ve keyifli tutmak için bu kurallara uy. Kuralları çiğneyen hesaplara yöneticiler işlem uygular.", 13.sp, Px.Sub, maxLines = 3)
             for ((head, body) in if (tab == 4) RULES else NEWS[tab]) {
                 PT(head, 16.sp, Px.Clan)
@@ -362,12 +398,12 @@ private val NEWS: List<List<Pair<String, String>>> = listOf(
         "Klan" to "Klan seviyesi arttıkça üye sınırı, güçlendirmeler ve klan ödülleri açılır. Ele geçirilen üsler klana dakikada XP kazandırır.",
     ),
     listOf(
-        "3B Kahramanlar" to "Kahramanlar, silahlar ve araçlar artık gerçek 3B model: her yönden, her silahla canlı animasyonlarla çizilir. Tırpanın üç vuruşluk kombosu, balta ve kazma darbeleri, RPG'nin roket yüklemesi baştan yapıldı.",
-        "Balta Ve Kazma" to "Balta ve kazma yalnız elindeyken işe yarar: taş alet 50, demir alet 100 vurur (yumruk 25). Roketatar her atıştan sonra yeni roket takar.",
-        "Silah Ve Aletler" to "Sağdaki silah tuşu elindeki silahları sırayla değiştirir.",
-        "Yeni Efektler" to "Kodla çizilen ateş topu, halka dalgaları, rün mührü aurası (Sv 10, 25, 40, 50), silüet gölgeler, toz ve lastik izi. Ayarlardan Efekt Kalitesi ve Çözünürlük ile cihazına göre ayarla.",
-        "Görevler" to "Öğretici baştan yazıldı (balta, kazma, ilk silah) ve görevci artık Sv 40'a kadar ana görev zinciri veriyor: karakollar, bölge avları ve Titan.",
-        "Kaldırılanlar" to "Bisiklet oyundan çıkarıldı.",
+        "Canlı NPC'ler Ve Kanatlar" to "Marco, Silas, Elena, Viktor, Jack, Aldric, Diana ve üs askerleri artık 3B: yaklaşınca sana döner ve konuşur. VIP 3, 6 ve 9'da sırtına takılan çırpan kanatlar (Karakterler ekranından takılır); Sezon Kartı 30'da Sezon 1 Kanatları.",
+        "Her Şeyin Canı Var" to "Silah, alet, zırh, çanta, yüzük ve kolye kullandıkça yıpranır: yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.",
+        "Araçların Canı" to "Araba 500, motosiklet 200 can. Sürerken araç hasarı üstlenir ve yavaşça aşınır; patlarsa araba 60, motosiklet 30 saniye sonra yeniden çağrılır.",
+        "Daha Düzenli Ekran" to "Üstteki yazılar artık sırayla gelir, üst üste binmez. Altın ve elmas tek kapsülde, şarjör tuşu saldırı çemberinin yanında. Etkinlikler 10. seviyede açılır.",
+        "Aletler Elde Çalışır" to "Balta ve kazma yalnız elindeyken güçlü vurur (taş 50, demir 100). El Baltası kalktı; öğretici artık bıçak yaptırır.",
+        "Güvenli Takas" to "Ekipman dayanıklılığıyla takas edilir; karşı teklif değişince onay 3 saniye bekler, onayından sonra teklif değişirse takas tamamlanmaz.",
     ),
 )
 
