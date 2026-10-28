@@ -90,8 +90,13 @@ CARS = {
     "nightstalker": ("Cars/Meshy_AI_Wasteland_Marauder_1026170417_texture.glb", dict(length=2.3, wheels="moto")),
 }
 
-TARGET = {"char": 11000, "npc": 7000, "wing": 3000, "weapon": 2000, "car": 9000}
-BAKE = {"char": (2048, 1024), "npc": (1024, 512), "wing": (1024, 512), "weapon": (512, 256), "car": (2048, 1024)}
+# V19: modeller orijinalden daha ayrıntılı üretilir (üçgen ~2,4×, kayıt dokusu 1,5-2×); bake 2× büyük çizilip küçültülür
+TARGET = {"char": 26000, "npc": 16000, "wing": 7000, "weapon": 5000, "car": 22000}
+BAKE = {"char": (3072, 1536), "npc": (1536, 768), "wing": (1536, 768), "weapon": (1024, 512), "car": (3072, 1536)}
+# küçük ayrıntı gölgesi gücü: küçültmede kaybolan yüzey kıvrımları (dikiş, oyuk, perçin) dokuya koyulaşma olarak işlenir
+CAVITY = {"char": 0.4, "npc": 0.4, "wing": 0.3, "weapon": 0.35, "car": 0.35}
+# normal haritası kayıt boyu (teğet uzayı; çizici zenvex_r3d raster::tangents ile aynı çatıyı kurar)
+NSIZE = {"char": 1024, "npc": 512, "wing": 512, "weapon": 256, "car": 1024}
 
 
 # ----------------------------------------------------------------------------- GLB
@@ -268,14 +273,19 @@ def unwrap(v, t, res):
     return vmap.astype(np.int64), idx.astype(np.int64), uvs.astype(np.float64)
 
 
-def bake(lv, ln, lt, luv, samples, res):
-    """Düşük poligonlu modelin UV uzayında her doku pikselinin 3B konumunu bulup en yakın uygun örneğin rengini alır."""
+def bake(lv, ln, lt, luv, samples, res, cavity=0.0, normals=False):
+    """Düşük poligonlu modelin UV uzayında her doku pikselinin 3B konumunu bulup en yakın uygun örneğin rengini alır.
+
+    cavity > 0: orijinal yüzeyin normali (yakın örneklerin ortalaması) düşük poligonlu yüzeyden ne kadar sapıyorsa piksel o
+    kadar koyulaşır. Küçültmede kaybolan kıvrım, dikiş, oyuk ve kabartma kenarları böylece dokuda görünür kalır.
+    normals: ikinci çıktı teğet uzayı normal haritası (T = dP/du, B = dP/dv, N = düşük poligon normali).
+    """
     pts, cols, nrm = samples
     tree = cKDTree(pts)
     img = np.zeros((res, res, 3), np.float32)
     filled = np.zeros((res, res), bool)
     P = luv * res
-    allp, alln, allxy = [], [], []
+    allp, alln, allxy, allt, allb = [], [], [], [], []
     for tri in lt:
         p0, p1, p2 = P[tri]
         x0 = int(max(math.floor(min(p0[0], p1[0], p2[0])), 0))
@@ -296,6 +306,17 @@ def bake(lv, ln, lt, luv, samples, res):
         if not m.any():
             continue
         w = np.stack([w0[m], w1[m], w2[m]], 1)
+        if normals:
+            q0, q1, q2 = lv[tri]
+            u0, u1, u2 = luv[tri]
+            e1, e2 = q1 - q0, q2 - q0
+            du1, dv1 = u1 - u0
+            du2, dv2 = u2 - u0
+            dd = du1 * dv2 - du2 * dv1
+            r = 1.0 / dd if abs(dd) > 1e-12 else 0.0
+            k = int(m.sum())
+            allt.append(np.repeat(((e1 * dv2 - e2 * dv1) * r)[None], k, 0))
+            allb.append(np.repeat(((e2 * du1 - e1 * du2) * r)[None], k, 0))
         allp.append(w @ lv[tri])
         alln.append(w @ ln[tri])
         allxy.append(np.stack([xs[m].astype(np.int64), ys[m].astype(np.int64)], 1))
@@ -311,10 +332,45 @@ def bake(lv, ln, lt, luv, samples, res):
     best = nb[np.arange(len(nb)), np.argmin(score, axis=1)]
     img[xy[:, 1], xy[:, 0]] = cols[best]
     filled[xy[:, 1], xy[:, 0]] = True
+    nimg = None
+    if cavity > 0 or normals:
+        # yakın ve yönü uyuşan örneklerin normal ortalaması (tek üçgenin gürültüsü değil, yüzeyin kıvrımı)
+        wgt = (agree >= 0.2) / np.maximum(dist, 1e-5)
+        nh = np.einsum("nk,nkd->nd", wgt, nrm[nb])
+        nh /= np.maximum(np.linalg.norm(nh, axis=1, keepdims=True), 1e-12)
+        bad = np.linalg.norm(nh, axis=1) < 0.5
+        nh[bad] = qn[bad]
+    if normals:
+        T = np.concatenate(allt)
+        B = np.concatenate(allb)
+        T = T - qn * np.einsum("nd,nd->n", T, qn)[:, None]
+        B = B - qn * np.einsum("nd,nd->n", B, qn)[:, None]
+        T /= np.maximum(np.linalg.norm(T, axis=1, keepdims=True), 1e-12)
+        B /= np.maximum(np.linalg.norm(B, axis=1, keepdims=True), 1e-12)
+        tn = np.stack([np.einsum("nd,nd->n", nh, T), np.einsum("nd,nd->n", nh, B), np.einsum("nd,nd->n", nh, qn)], 1)
+        tn[:, 2] = np.maximum(tn[:, 2], 0.05)
+        tn /= np.maximum(np.linalg.norm(tn, axis=1, keepdims=True), 1e-12)
+        nimg = np.zeros((res, res, 3), np.float32)
+        nimg[..., 2] = 1.0
+        nimg[xy[:, 1], xy[:, 0]] = tn
+    if cavity > 0:
+        dev = 1.0 - np.clip(np.einsum("nd,nd->n", nh, qn), 0.0, 1.0)
+        shade = np.ones((res, res), np.float32)
+        shade[xy[:, 1], xy[:, 0]] = np.clip(1.0 - cavity * np.sqrt(dev) * 1.6, 0.55, 1.0)
+        # tek piksellik kırıntı olmasın: hafif bulanıklaştırılır (yalnız dolu bölgede anlamlı)
+        shade = ndimage.gaussian_filter(shade, 0.8)
+        img *= shade[:, :, None]
     # adacık kenarlarını taşır (doku süzgeci kenarda boşluk görmesin)
     _, (iy, ix) = ndimage.distance_transform_edt(~filled, return_indices=True)
     img = img[iy, ix]
-    return np.clip(img, 0, 255).astype(np.uint8)
+    out = np.clip(img, 0, 255).astype(np.uint8)
+    if not normals:
+        return out
+    nimg = nimg[iy, ix]
+    # hafif yumuşatma (tek üçgen gürültüsü), sonra yeniden birim boy
+    nimg = ndimage.gaussian_filter(nimg, (0.7, 0.7, 0))
+    nimg /= np.maximum(np.linalg.norm(nimg, axis=2, keepdims=True), 1e-12)
+    return out, np.clip((nimg * 0.5 + 0.5) * 255.0 + 0.5, 0, 255).astype(np.uint8)
 
 
 # ----------------------------------------------------------------------------- iskelet
@@ -610,13 +666,14 @@ def build(src, name, kind, opt):
     ln = vertex_normals(lv, lt)
     res, size = BAKE[kind]
     vmap, idx, nuv = unwrap(lv, lt, res)
-    img = bake(lv[vmap], ln[vmap], idx, nuv, samples, res)
+    img, nimg = bake(lv[vmap], ln[vmap], idx, nuv, samples, res, CAVITY[kind], normals=True)
     meta["parts"] = parts
     meta["tex"] = name + ".webp"
     os.makedirs(OUT, exist_ok=True)
     write_zxm(os.path.join(OUT, name + ".zxm"), meta, lv[vmap], ln[vmap], nuv, idx,
               None if b0 is None else b0[vmap], None if b1 is None else b1[vmap], None if w0 is None else w0[vmap])
     save_tex(os.path.join(OUT, name + ".webp"), img, size)
+    Image.fromarray(nimg).resize((NSIZE[kind], NSIZE[kind]), Image.LANCZOS).save(os.path.join(OUT, name + "_n.webp"), "WEBP", quality=90, method=6)
     print(f"  → {len(idx)} üçgen, {len(vmap)} köşe, {time.time() - t0:.0f} sn", flush=True)
 
 

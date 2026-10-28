@@ -14,15 +14,24 @@ fn main() {
             let name = p.file_stem().unwrap().to_string_lossy().to_string();
             let im = image::open(dir.join(format!("{name}.webp"))).unwrap().to_rgba8();
             s.load(&name, &std::fs::read(&p).unwrap(), im.width() as usize, im.height() as usize, im.as_raw()).unwrap();
+            if std::env::var("NOBUMP").is_err() {
+                if let Ok(nm) = image::open(dir.join(format!("{name}_n.webp"))) {
+                    let nm = nm.to_rgba8();
+                    s.load_normal(&name, nm.width() as usize, nm.height() as usize, nm.as_raw());
+                }
+            }
         }
     }
+    // ölçek ve kenar yumuşatma: SCALE (px/m, varsayılan 90), AA (1-3, varsayılan 2)
+    let scale = std::env::var("SCALE").ok().and_then(|v| v.parse().ok()).unwrap_or(90.0);
+    let aa = std::env::var("AA").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
     let mut rows = Vec::new();
     for line in args[3].split(';') {
         let f: Vec<&str> = line.split(':').collect();
         let (ch, anim, yaw) = (f[0], f[1].parse::<u8>().unwrap(), f[2].parse::<f32>().unwrap());
         let mut row = Vec::new();
         for t in f[3].split(',') {
-            let r = ActorReq { ch, weapon: f.get(4).copied().unwrap_or(""), anim, t: t.parse().unwrap(), period: 0.4, yaw, pitch: 22.0, scale: 90.0, ssaa: 2, flags: 0 };
+            let r = ActorReq { ch, weapon: f.get(4).copied().unwrap_or(""), anim, t: t.parse().unwrap(), period: 0.4, yaw, pitch: 22.0, scale, ssaa: aa, flags: 0 };
             row.push(s.actor(&r).unwrap_or_else(|| panic!("{ch}")).0);
         }
         rows.push(row);

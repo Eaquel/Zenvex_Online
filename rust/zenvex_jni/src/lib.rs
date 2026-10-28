@@ -488,6 +488,30 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dLoad<'l>(
     }
 }
 
+/// Modelin normal haritası (ARGB). dönüş 1: yüklendi
+#[no_mangle]
+pub extern "system" fn Java_com_zenvex_online_game_Native_r3dNormal<'l>(
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    name: JString<'l>,
+    tw: jint,
+    th: jint,
+    argb: JIntArray<'l>,
+) -> jint {
+    let name = rstr(&mut env, &name);
+    let n = (tw.max(0) * th.max(0)) as usize;
+    let mut px = vec![0i32; n];
+    if n == 0 || env.get_int_array_region(&argb, 0, &mut px).is_err() {
+        return 0;
+    }
+    let mut rgba = Vec::with_capacity(n * 4);
+    for p in px {
+        let p = p as u32;
+        rgba.extend_from_slice(&[(p >> 16) as u8, (p >> 8) as u8, p as u8, 255]);
+    }
+    r3d(|s| s.load_normal(&name, tw as usize, th as usize, &rgba)) as jint
+}
+
 fn put_image(env: &mut JNIEnv, img: &zenvex_r3d::Image, pts: &zenvex_r3d::service::Points, out: &JIntArray, info: &JFloatArray) -> jint {
     let cap = env.get_array_length(out).unwrap_or(0) as usize;
     let n = img.w * img.h;

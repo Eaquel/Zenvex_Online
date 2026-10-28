@@ -55,6 +55,8 @@ pub struct Light {
     pub spec: f32,
     /// doygunluk çarpanı
     pub sat: f32,
+    /// normal haritası gücü (0: yok, 1: tam)
+    pub bump: f32,
 }
 
 impl Default for Light {
@@ -71,6 +73,7 @@ impl Default for Light {
             sky: 0.07,
             spec: 0.16,
             sat: 1.12,
+            bump: 0.9,
         }
     }
 }
@@ -90,6 +93,7 @@ pub struct Layer<'a> {
     pub verts: &'a [SVert],
     pub tris: &'a [[u16; 3]],
     pub tex: Option<&'a Texture>,
+    pub nmap: Option<&'a Texture>,
     pub glow: f32,
     pub id: u8,
 }
@@ -199,8 +203,37 @@ pub fn rasterize(f: &mut Frame, layer: usize, verts: &[SVert], tris: &[[u16; 3]]
     }
 }
 
+/// Üçgenin görünüm uzayındaki teğet (dP/du) ve iki-teğet (dP/dv) yönleri; ekran köşelerinden (scale: metre başına piksel).
+/// Model üretimindeki (tools/model3d/build.py) formülün aynısı: normal haritası bu çatıda yazılmıştır.
+fn tangents(a: &SVert, b: &SVert, c: &SVert, scale: f32) -> (V3, V3) {
+    let p = |v: &SVert| v3(v.s.x / scale, -v.s.y / scale, v.s.z);
+    let (p0, p1, p2) = (p(a), p(b), p(c));
+    let (e1, e2) = (p1 - p0, p2 - p0);
+    let (du1, dv1) = (b.uv[0] - a.uv[0], b.uv[1] - a.uv[1]);
+    let (du2, dv2) = (c.uv[0] - a.uv[0], c.uv[1] - a.uv[1]);
+    let d = du1 * dv2 - du2 * dv1;
+    if d.abs() < 1e-12 {
+        return (V3::ZERO, V3::ZERO);
+    }
+    let r = 1.0 / d;
+    ((e1 * dv2 - e2 * dv1) * r, (e2 * du1 - e1 * du2) * r)
+}
+
+/// Doku örneği: üç doğrusal (komşu iki mip'in çift doğrusal örnekleri harmanlanır)
+#[inline]
+fn trilinear(tx: &Texture, lod: f32, u: f32, v: f32) -> [f32; 3] {
+    let l0 = lod.floor();
+    let fr = lod - l0;
+    let s0 = tx.sample(l0 as usize, u, v);
+    if fr < 0.05 {
+        return s0;
+    }
+    let s1 = tx.sample(l0 as usize + 1, u, v);
+    [s0[0] + (s1[0] - s0[0]) * fr, s0[1] + (s1[1] - s0[1]) * fr, s0[2] + (s1[2] - s0[2]) * fr]
+}
+
 /// Geçiş 2: görünen pikselleri gölgelendir
-pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
+pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
     // üçgen başına doku ayrıntı seviyesi (piksel başına düşen doku pikseli → mip)
     let lods: Vec<Vec<f32>> = layers
         .iter()
@@ -215,6 +248,33 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
                     (0.5 * (uva * s * s / area).max(1e-6).log2()).clamp(0.0, 15.0)
                 })
                 .collect()
+        })
+        .collect();
+    // normal haritalı katmanlarda üçgen başına birim teğet çatısı (T, B) ve normal haritasının mip kayması (piksel başına değil)
+    let tans: Vec<Vec<(V3, V3)>> = layers
+        .iter()
+        .map(|ly| match (ly.nmap, ly.tex) {
+            (Some(_), Some(_)) => ly
+                .tris
+                .iter()
+                .map(|t| {
+                    let (a, b, c) = (&ly.verts[t[0] as usize], &ly.verts[t[1] as usize], &ly.verts[t[2] as usize]);
+                    let (tt, bt) = tangents(a, b, c, scale);
+                    if tt == V3::ZERO {
+                        (V3::ZERO, V3::ZERO)
+                    } else {
+                        (tt.norm(), bt.norm())
+                    }
+                })
+                .collect(),
+            _ => Vec::new(),
+        })
+        .collect();
+    let nshift: Vec<f32> = layers
+        .iter()
+        .map(|ly| match (ly.nmap, ly.tex) {
+            (Some(nm), Some(tx)) => (nm.size() / tx.size()).log2(),
+            _ => 0.0,
         })
         .collect();
     for i in 0..f.w * f.h {
@@ -232,27 +292,42 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
         let [w1, w2] = f.bary[i];
         let w0 = 1.0 - w1 - w2;
         let mut n = (a.n * w0 + b.n * w1 + c.n * w2).norm();
+        let mut flip = 1.0;
         if n.z < 0.0 {
             n = -n;
+            flip = -1.0;
         }
+        let u = a.uv[0] * w0 + b.uv[0] * w1 + c.uv[0] * w2;
+        let v = a.uv[1] * w0 + b.uv[1] * w1 + c.uv[1] * w2;
+        let lod = lods[li][ti];
+        // üç doğrusal: en yakın örnek kumlu/lekeli görünüyordu
         let base = match ly.tex {
-            Some(tx) => {
-                // üç doğrusal: komşu iki mip seviyesinin çift doğrusal örnekleri harmanlanır (en yakın örnek kumlu/lekeli görünüyordu)
-                let lod = lods[li][ti];
-                let u = a.uv[0] * w0 + b.uv[0] * w1 + c.uv[0] * w2;
-                let v = a.uv[1] * w0 + b.uv[1] * w1 + c.uv[1] * w2;
-                let l0 = lod.floor();
-                let fr = lod - l0;
-                let s0 = tx.sample(l0 as usize, u, v);
-                if fr < 0.05 {
-                    s0
-                } else {
-                    let s1 = tx.sample(l0 as usize + 1, u, v);
-                    [s0[0] + (s1[0] - s0[0]) * fr, s0[1] + (s1[1] - s0[1]) * fr, s0[2] + (s1[2] - s0[2]) * fr]
-                }
-            }
+            Some(tx) => trilinear(tx, lod, u, v),
             None => [180.0, 180.0, 180.0],
         };
+        // normal haritası: yüksek ayrıntılı yüzeyin kıvrımları (dikiş, kabartma, oyuk) ışığa katılır
+        if let Some(nm) = ly.nmap {
+            let (t, bt) = tans[li].get(ti).copied().unwrap_or((V3::ZERO, V3::ZERO));
+            if t != V3::ZERO {
+                let nl = (lod + nshift[li]).max(0.0);
+                let s = trilinear(nm, nl, u, v);
+                let k = light.bump;
+                let tx_ = (s[0] / 127.5 - 1.0) * k;
+                let ty_ = (s[1] / 127.5 - 1.0) * k;
+                let tz_ = 1.0 - k + (s[2] / 127.5 - 1.0) * k;
+                // birim T ve B yüzeye neredeyse dik: normal doğrultusundaki payı çıkarmak yeter (ayrıca birim boya getirilmez)
+                let tp = (t - n * n.dot(t)) * flip;
+                let bp = (bt - n * n.dot(bt)) * flip;
+                let m = tp * tx_ + bp * ty_ + n * tz_;
+                let ml = m.dot(m);
+                if ml > 1e-6 {
+                    n = m * (1.0 / ml.sqrt());
+                    if n.z < 0.02 {
+                        n = (n + v3(0.0, 0.0, 0.02 - n.z)).norm();
+                    }
+                }
+            }
+        }
         let ndl = n.dot(light.dir);
         // V19: yarı bantlı ışık (cel bandı + yumuşak yarım Lambert) ve gökyüzü/yer ışığı: hacim okunur, düz ve soluk görünmez
         let half = (0.5 + 0.5 * ndl).clamp(0.0, 1.0);

@@ -59,14 +59,14 @@ pub struct Vertex {
     pub w: f32,
 }
 
-/// RGBA8 doku + 2× küçülen mip seviyeleri (ilk seviye kaynak)
+/// RGB8 doku + 2× küçülen mip seviyeleri (ilk seviye kaynak). Alfa tutulmaz (modeller opak): büyük dokularda bellek ¾.
 pub struct Texture {
-    pub levels: Vec<(usize, usize, Vec<[u8; 4]>)>,
+    pub levels: Vec<(usize, usize, Vec<[u8; 3]>)>,
 }
 
 impl Texture {
     pub fn from_rgba(w: usize, h: usize, rgba: &[u8]) -> Texture {
-        let base: Vec<[u8; 4]> = rgba.as_chunks::<4>().0.to_vec();
+        let base: Vec<[u8; 3]> = rgba.as_chunks::<4>().0.iter().map(|c| [c[0], c[1], c[2]]).collect();
         let mut levels = vec![(w, h, base)];
         loop {
             let (pw, ph, prev) = levels.last().unwrap();
@@ -75,17 +75,17 @@ impl Texture {
                 break;
             }
             let (nw, nh) = (pw / 2, ph / 2);
-            let mut out = vec![[0u8; 4]; nw * nh];
+            let mut out = vec![[0u8; 3]; nw * nh];
             for y in 0..nh {
                 for x in 0..nw {
-                    let mut acc = [0u32; 4];
+                    let mut acc = [0u32; 3];
                     for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
                         let c = prev[(y * 2 + dy) * pw + x * 2 + dx];
-                        for k in 0..4 {
+                        for k in 0..3 {
                             acc[k] += c[k] as u32;
                         }
                     }
-                    out[y * nw + x] = [(acc[0] / 4) as u8, (acc[1] / 4) as u8, (acc[2] / 4) as u8, (acc[3] / 4) as u8];
+                    out[y * nw + x] = [(acc[0] / 4) as u8, (acc[1] / 4) as u8, (acc[2] / 4) as u8];
                 }
             }
             levels.push((nw, nh, out));
@@ -131,6 +131,8 @@ pub struct Model {
     pub verts: Vec<Vertex>,
     pub tris: Vec<[u16; 3]>,
     pub tex: Option<Texture>,
+    /// normal haritası (teğet uzayı, RGB = (x, y, z)·0,5 + 0,5): orijinal yüksek ayrıntılı yüzeyin kıvrımları
+    pub nmap: Option<Texture>,
 }
 
 impl Model {
@@ -167,7 +169,7 @@ impl Model {
             tris.push([u16a(r, 0) as u16, u16a(r, 2) as u16, u16a(r, 4) as u16]);
             off += 6;
         }
-        Ok(Model { meta, verts, tris, tex: None })
+        Ok(Model { meta, verts, tris, tex: None, nmap: None })
     }
 
     pub fn part(&self, name: &str) -> Option<&PartDef> {

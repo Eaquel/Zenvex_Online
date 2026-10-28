@@ -64,6 +64,8 @@ object Model3D {
     private val pending = HashSet<String>()
     /** önbellek bellek bütçesi (bayt): dolunca en uzun süredir kullanılmayan kare atılır */
     private var budget = 40L shl 20
+    /** düşük bellekli cihaz: önbellek küçük, 1024'ten büyük model dokuları yarı boyutta yüklenir */
+    private var lowRam = false
     private var bytes = 0L
     private val cache = LinkedHashMap<String, Frame>(512, 0.75f, true)
     /** aktör başına son kare (yeni kare hazır olana dek bu çizilir) */
@@ -88,7 +90,8 @@ object Model3D {
         val app = ctx.applicationContext
         // düşük bellekli cihazda daha küçük önbellek
         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-        budget = if (am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192) 20L shl 20 else 40L shl 20
+        lowRam = am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192
+        budget = if (lowRam) 20L shl 20 else 40L shl 20
         thread = Thread({ loop(app) }, "zx-3d").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
     }
 
@@ -109,11 +112,27 @@ object Model3D {
             for (f in files) {
                 val name = f.removeSuffix(".zxm")
                 val zxm = runCatching { am.open("m3d/$f").use { it.readBytes() } }.getOrNull() ?: continue
+                if (lowRam) {
+                    val b = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    runCatching { am.open("m3d/$name.webp").use { BitmapFactory.decodeStream(it, null, b) } }
+                    opts.inSampleSize = if (b.outWidth > 1024) 2 else 1
+                }
                 val tex = runCatching { am.open("m3d/$name.webp").use { BitmapFactory.decodeStream(it, null, opts) } }.getOrNull()
                 val px = IntArray((tex?.width ?: 0) * (tex?.height ?: 0))
                 tex?.getPixels(px, 0, tex.width, 0, 0, tex.width, tex.height)
                 if (Native.r3dLoad(name, zxm, tex?.width ?: 0, tex?.height ?: 0, px) == 1) synchronized(names) { names += name }
                 tex?.recycle()
+                // normal haritası (orijinal yüksek ayrıntılı yüzeyin kıvrımları); düşük bellekte yüklenmez
+                if (!lowRam) {
+                    opts.inSampleSize = 1
+                    val nm = runCatching { am.open("m3d/${name}_n.webp").use { BitmapFactory.decodeStream(it, null, opts) } }.getOrNull()
+                    if (nm != null) {
+                        val np = IntArray(nm.width * nm.height)
+                        nm.getPixels(np, 0, nm.width, 0, 0, nm.width, nm.height)
+                        Native.r3dNormal(name, nm.width, nm.height, np)
+                        nm.recycle()
+                    }
+                }
             }
             ready = true
             return true

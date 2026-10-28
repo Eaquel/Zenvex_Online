@@ -158,6 +158,17 @@ impl Service {
         Ok(())
     }
 
+    /// Modelin normal haritası (isteğe bağlı; model önce yüklenmiş olmalı)
+    pub fn load_normal(&mut self, name: &str, tw: usize, th: usize, rgba: &[u8]) -> bool {
+        match self.models.get_mut(name) {
+            Some(m) if tw > 0 && th > 0 && rgba.len() >= tw * th * 4 => {
+                m.nmap = Some(Texture::from_rgba(tw, th, rgba));
+                true
+            }
+            _ => false,
+        }
+    }
+
     pub fn has(&self, name: &str) -> bool {
         self.models.contains_key(name)
     }
