@@ -2,6 +2,14 @@
 
 ## Unreleased (V16 — 3D)
 
+- V19: every 3D model (4 heroes, 9 NPCs, 18 weapons, car and motorcycle, 4 wing sets) rebuilt from the original
+  high-detail sources: ~2.4× the triangles (heroes 26k, NPCs 16k, cars 22k, weapons 5k), sharper textures (heroes and
+  cars 1536, weapons 512) and new normal maps so stitches, straps, armour plates and wrinkles catch the light
+- V19: surfaces repainted: blotches and muddy smears cleaned up per material, clean material boundaries, fine grain kept,
+  worn edge highlights and crevice shading from the geometry; heroes' arms no longer get wrong, washed-out colours
+  (colours are baked before the arms are lowered); Kael's face is hidden in the dark of his hood
+- V19: very bright surfaces no longer blow out to white; specular and rim light fade on near-black surfaces; model
+  textures kept without alpha and halved on low-memory phones
 - V19: 3D characters look sharper up close and from afar: textures use trilinear filtering (no more grainy patches),
   High quality renders with 3× anti-aliasing plus light sharpening, lighting has more contrast (soft shadow side, sky light,
   specular glints, stronger rim light, richer colours); showcase renders (character screen, lobby) are no longer upscaled

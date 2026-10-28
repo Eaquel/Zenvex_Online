@@ -16,6 +16,10 @@ fn main() {
         let zxm = std::fs::read(dir.join(format!("{n}.zxm"))).unwrap();
         let im = image::open(dir.join(format!("{n}.webp"))).unwrap().to_rgba8();
         sv.load(n, &zxm, im.width() as usize, im.height() as usize, im.as_raw()).unwrap();
+        if let Ok(nm) = image::open(dir.join(format!("{n}_n.webp"))) {
+            let nm = nm.to_rgba8();
+            sv.load_normal(n, nm.width() as usize, nm.height() as usize, nm.as_raw());
+        }
     }
     let mut imgs = Vec::new();
     let t0 = std::time::Instant::now();
