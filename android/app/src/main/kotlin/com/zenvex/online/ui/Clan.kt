@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -395,7 +396,7 @@ private fun DepositPicker(changed: () -> Unit) {
 }
 
 @Composable
-private fun DepotSend(c: JSONObject, item: JSONObject, close: () -> Unit, changed: () -> Unit) {
+internal fun DepotSend(c: JSONObject, item: JSONObject, close: () -> Unit, changed: () -> Unit) {
     var to by remember { mutableStateOf<JSONObject?>(null) }
     // V15 (R3): bir eşyadan tek seferde en çok 50 (sunucu da denetler); altında depodaki kadar
     val max = item.optInt("n").coerceIn(1, 50)
@@ -403,41 +404,40 @@ private fun DepotSend(c: JSONObject, item: JSONObject, close: () -> Unit, change
     var note by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     PxDialog("Depodan Gönder", close, 600.dp) {
-        Row(Modifier.fillMaxWidth().height(210.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        // küçük ekranda (360 dp) da tamamı görünür: sabit yükseklik 176 dp, kaydırma çubuğu yok; klavye açılınca
+        // pencere kayar (Dim imePadding) ve Gönder tuşu görünür kalır
+        Row(Modifier.fillMaxWidth().height(176.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // sol: eşya, miktar, açıklama
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PxSlot(JSONObject().put("id", item.optString("id")).put("count", item.optInt("n")), 52.dp)
+                    PxSlot(JSONObject().put("id", item.optString("id")).put("count", item.optInt("n")), 46.dp)
                     Spacer(Modifier.width(8.dp))
                     Column {
                         PT(item.optString("name").ifEmpty { item.optString("id") }, 14.sp, Px.Text, maxLines = 1)
-                        PT("Depoda ${item.optInt("n")} · En Çok $max", 11.sp, Px.Sub)
+                        PT("Depoda ${item.optInt("n")} · En Çok $max", 11.sp, Px.Sub, maxLines = 1)
                     }
                 }
-                Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PxIcon("minus", size = 34.dp) { if (n > 1) n-- }
-                    PT("$n", 22.sp, Px.Text, Modifier.width(52.dp).padding(start = 14.dp), outline = true)
-                    PxIcon("plus", size = 34.dp) { if (n < max) n++ }
+                    PxIcon("minus", size = 36.dp) { if (n > 1) n-- }
+                    PT("$n", 20.sp, Px.Text, Modifier.width(56.dp).padding(start = 12.dp), outline = true, maxLines = 1)
+                    PxIcon("plus", size = 36.dp) { if (n < max) n++ }
                     Spacer(Modifier.width(6.dp))
-                    PxButton("Tümü", color = if (n == max) Px.Blue else Px.Dark, height = 32.dp, size = 12.sp) { n = max }
+                    PxButton("+10", color = Px.Dark, height = 34.dp, size = 12.sp) { n = (n + 10).coerceAtMost(max) }
+                    Spacer(Modifier.width(4.dp))
+                    PxButton("Tümü", color = if (n == max) Px.Blue else Px.Dark, height = 34.dp, size = 12.sp) { n = max }
                 }
-                if (max > 1) androidx.compose.material3.Slider(
-                    value = n.toFloat(), onValueChange = { n = it.toInt().coerceIn(1, max) }, valueRange = 1f..max.toFloat(), steps = (max - 2).coerceAtLeast(0),
-                    colors = androidx.compose.material3.SliderDefaults.colors(thumbColor = Px.Clan, activeTrackColor = Px.Orange, inactiveTrackColor = Px.Dark),
-                )
                 Field(note, { note = it.take(120) }, "Açıklama (İsteğe Bağlı)", Modifier.fillMaxWidth())
             }
             // sağ: üye seçimi
-            Column(Modifier.width(220.dp).fillMaxHeight().pxPanel(Px.PanelDark).padding(4.dp)) {
+            Column(Modifier.width(200.dp).fillMaxHeight().pxPanel(Px.PanelDark).padding(4.dp)) {
                 PT("Kime?", 13.sp, Px.Clan)
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     val m = c.optJSONArray("members") ?: JSONArray()
                     for (i in 0 until m.length()) {
                         val o = m.getJSONObject(i)
                         val on = to?.optLong("id") == o.optLong("id")
-                        Row(Modifier.fillMaxWidth().background(if (on) Color(0x553A6AB0) else Color.Transparent)
-                            .clickable { to = o }.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).background(if (on) Color(0x553A6AB0) else Color.Transparent)
+                            .clickable { to = o }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                             PT(o.optString("name"), 14.sp, if (on) Px.Text else Px.Sub, Modifier.weight(1f), maxLines = 1)
                             if (on) Icon("check", 16.dp, Px.Name)
                         }

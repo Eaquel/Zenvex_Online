@@ -300,7 +300,7 @@ fun PxDialog(title: String, close: () -> Unit, width: Dp = 480.dp, content: @Com
         // perçinli metal çerçeveli pencere (köşeler esnemez)
         // V10 kurukafa köşeli pencere çerçevesi (yoksa eski metal çerçeve)
         Column(Modifier.width(width).metalFrame(px = 0.9.dp, name = "frame_panel", corner = 32)
-            .clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 30.dp, vertical = 26.dp)) {
+            .clickable(remember { MutableInteractionSource() }, null) {}.padding(horizontal = 30.dp, vertical = 18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PT(title, 22.sp, Px.Orange)
                 Spacer(Modifier.weight(1f))

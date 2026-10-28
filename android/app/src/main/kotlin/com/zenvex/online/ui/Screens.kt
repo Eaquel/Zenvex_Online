@@ -631,6 +631,11 @@ internal fun vipChatTheme(vip: Int): Color? = when {
 }
 
 // =========================================================================== takas
+/**
+ * Takas: solda çanta (dokun → teklife ekle), sağda iki teklif. Tekil ekipman dayanıklılığıyla gider (çubuk görünür).
+ * Güvenlik: karşı teklif değişince Onayla 3 sn kilitlenir; sen hazırken karşı taraf teklifini değiştirirse sunucu takası
+ * bitirmez, ekranda uyarı çıkar (iptal edip yeniden başlat).
+ */
 @Composable
 fun TradeScreen(close: () -> Unit) {
     val st = Online.trade.value
@@ -638,6 +643,8 @@ fun TradeScreen(close: () -> Unit) {
     val inv = remember(tick) { GameSession.ui("inventory") }
     val offer = remember { androidx.compose.runtime.mutableStateListOf<Online.TradeItem>() }
     var gold by remember { mutableStateOf("") }
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { now = System.currentTimeMillis(); delay(250) } }
     fun push() {
         val g = gold.toIntOrNull() ?: 0
         Online.setTradeItems(offer.toList() + if (g > 0) listOf(Online.TradeItem("coin", g)) else emptyList())
@@ -651,21 +658,25 @@ fun TradeScreen(close: () -> Unit) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             // çanta
             Column(Modifier.weight(1f).fillMaxHeight().glass(20.dp).padding(10.dp)) {
-                SectionTitle("Çantan (eklemek için dokun)")
+                SectionTitle(if (st.myOk) "Teklifin kilitli" else "Çantan (eklemek için dokun)")
                 @OptIn(ExperimentalLayoutApi::class)
                 FlowRow(Modifier.verticalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     val slots = inv.optJSONArray("slots")
                     for (i in 0 until (slots?.length() ?: 0)) {
                         val s = slots!!.optJSONObject(i) ?: continue
                         val id = s.optString("id")
+                        if (id.startsWith("ev_")) continue  // hesaba bağlı etkinlik ödülleri takas edilemez
                         val have = s.optInt("count")
-                        val used = offer.filter { it.id == id }.sumOf { it.n }
-                        ItemSlot(id, have - used, s.optInt("rarity"), 54.dp) {
-                            if (have - used > 0) {
-                                val ix = offer.indexOfFirst { it.id == id }
-                                if (ix >= 0) offer[ix] = Online.TradeItem(id, offer[ix].n + 1) else offer += Online.TradeItem(id, 1)
-                                push()
+                        val single = s.has("dur")
+                        val used = if (single) offer.count { it.slot == i } else offer.filter { it.id == id && it.slot < 0 }.sumOf { it.n }
+                        ItemSlot(id, have - used, s.optInt("rarity"), 54.dp, dur = if (single) s.optInt("dur") else -1) {
+                            if (st.myOk || have - used <= 0) return@ItemSlot
+                            if (single) offer += Online.TradeItem(id, 1, i, s.optInt("dur_raw", 1000))
+                            else {
+                                val ix = offer.indexOfFirst { it.id == id && it.slot < 0 }
+                                if (ix >= 0) offer[ix] = offer[ix].copy(n = offer[ix].n + 1) else offer += Online.TradeItem(id, 1)
                             }
+                            push()
                         }
                     }
                 }
@@ -674,26 +685,34 @@ fun TradeScreen(close: () -> Unit) {
             Column(Modifier.weight(1.2f).fillMaxHeight().glass(20.dp, Pal.Blue).padding(12.dp)) {
                 SectionTitle("Senin teklifin" + if (st.myOk) " ✔" else "")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                    for (it in offer) ItemSlot(it.id, it.n, 0, 54.dp) { offer.remove(it); push() }
+                    if (offer.isEmpty()) T("Çantandan eşya ekle", 12.sp, Pal.Sub)
+                    for (it in offer) ItemSlot(it.id, it.n, 0, 54.dp, dur = if (it.slot >= 0) it.dur / 10 else -1) { if (!st.myOk) { offer.remove(it); push() } }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon("coin", 22.dp, Pal.Gold); Spacer(Modifier.width(6.dp))
-                    Field(gold, { v -> gold = v.filter { c -> c.isDigit() }.take(7); push() }, "Altın", Modifier.width(140.dp))
+                    Field(gold, { v -> if (!st.myOk) { gold = v.filter { c -> c.isDigit() }.take(7); push() } }, "Altın", Modifier.width(140.dp))
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 SectionTitle("${st.otherName} teklifi" + if (st.theirOk) " ✔" else "")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     if (st.theirs.isEmpty()) T("Henüz bir şey eklemedi", 12.sp, Pal.Sub)
-                    for (it in st.theirs) ItemSlot(it.id, it.n, 0, 54.dp)
+                    for (it in st.theirs) ItemSlot(it.id, it.n, 0, 54.dp, dur = if (it.dur < 1000 && it.id != "coin") it.dur / 10 else -1)
+                }
+                if (st.changedAfterReady) {
+                    Spacer(Modifier.height(6.dp))
+                    T("Sen onayladıktan sonra karşı taraf teklifini değiştirdi. Bu takas tamamlanamaz: iptal edip yeniden başlat.", 12.sp, Pal.Red, bold = true)
                 }
                 Spacer(Modifier.weight(1f))
+                // karşı teklif yeni değiştiyse onay 3 sn bekler (son anda değiştirilen teklifi fark etmeden onaylama)
+                val wait = ((st.theirsAt + 3000 - now) / 1000 + 1).toInt().coerceAtLeast(0).let { if (st.theirsAt + 3000 <= now) 0 else it }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GButton("İptal", Modifier.weight(1f), Tone.Red, height = 44.dp) { Online.cancelTrade(); close() }
-                    GButton(if (st.myOk) "Hazırım ✔" else "Onayla", Modifier.weight(1.4f), if (st.myOk) Tone.Dark else Tone.Green, height = 44.dp) {
-                        Online.setTradeReady(!st.myOk)
+                    GButton(when { st.myOk -> "Hazırım ✔"; wait > 0 -> "Onayla ($wait)"; else -> "Onayla" }, Modifier.weight(1.4f),
+                        if (st.myOk || wait > 0) Tone.Dark else Tone.Green, height = 44.dp) {
+                        if (wait == 0 && !st.changedAfterReady) Online.setTradeReady(!st.myOk)
                     }
                 }
-                T("İki taraf da onaylayınca eşyalar takas edilir. Teklif değişirse onaylar sıfırlanır.", 11.sp, Pal.Sub)
+                T("İki taraf da onaylayınca eşyalar takas edilir. Ekipman dayanıklılığıyla gider. Onayından sonra karşı teklif değişirse takas tamamlanmaz.", 11.sp, Pal.Sub, maxLines = 3)
             }
         }
     }

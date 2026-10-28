@@ -39,31 +39,52 @@ object Trade {
         }
     }
 
-    /** Teklifi kilitler (emanet). [done] true → sunucu kabul etti. */
-    fun ready(tid: Long, items: List<Online.TradeItem>, done: (Boolean) -> Unit) {
-        if (tid <= 0) { Toaster.show("Takas henüz açılmadı, bekle", false); done(false); return }
+    /** Sunucu kaydındaki biçim (iki istemci aynı sırayla aynı diziyi üretir: karşılaştırma bunun üstünden) */
+    private fun wire(list: List<Online.TradeItem>): JSONArray {
         val arr = JSONArray()
+        for (it in list) {
+            val idx = indexOf(it.id)
+            if (idx < -1 || it.n <= 0) continue
+            arr.put(JSONObject().put("item", idx).put("n", it.n).put("dur", it.dur))
+        }
+        return arr
+    }
+
+    /**
+     * Teklifi kilitler (emanet). [theirs]: o an ekranda görülen karşı teklif — sunucu, karşı taraf hazır olurken teklifi
+     * bundan farklıysa takası bitirmez (son anda teklif değiştirme). [done] true → sunucu kabul etti.
+     */
+    fun ready(tid: Long, items: List<Online.TradeItem>, theirs: List<Online.TradeItem>, done: (Boolean) -> Unit) {
+        if (tid <= 0) { Toaster.show("Takas henüz açılmadı, bekle", false); done(false); return }
         val taken = ArrayList<Online.TradeItem>()
         for (it in items) {
             val idx = indexOf(it.id)
             if (idx < -1 || it.n <= 0) continue
-            val r = GameSession.cmdNoSave("trade_take", "id" to it.id, "n" to it.n)
+            val r = if (it.slot >= 0) GameSession.cmdNoSave("trade_take", "id" to it.id, "n" to 1, "slot" to it.slot)
+                else GameSession.cmdNoSave("trade_take", "id" to it.id, "n" to it.n)
             if (!r.ok) {
-                for (b in taken) GameSession.cmdNoSave("trade_give", "id" to b.id, "n" to b.n)
+                for (b in taken) GameSession.cmdNoSave("trade_give", "id" to b.id, "n" to b.n, "dur" to b.dur)
                 Toaster.show(r.msg, false); done(false); return
             }
-            taken += it
-            arr.put(JSONObject().put("item", idx).put("n", it.n))
+            // gerçek dayanıklılık çekirdekten (ekranda gösterilenle aynı olmalı)
+            taken += it.copy(dur = r.msg.toIntOrNull() ?: it.dur)
         }
+        val arr = wire(taken)
         val snap = GameSession.snapshot()
-        val args = Session.signedSave(snap.level, snap.data, snap.kills, snap.xp).put("p_trade", tid).put("p_items", arr)
-        Supa.rpc("zx_trade_ready", args) { r ->
+        val base = Session.signedSave(snap.level, snap.data, snap.kills, snap.xp).put("p_trade", tid).put("p_items", arr)
+        fun fail(e: Throwable) {
+            for (b in taken) GameSession.cmdNoSave("trade_give", "id" to b.id, "n" to b.n, "dur" to b.dur)
+            GameSession.save(cloud = true)
+            Toaster.show(e.message ?: "Takas onaylanamadı", false)
+            done(false)
+        }
+        Supa.rpc("zx_trade_ready", JSONObject(base.toString()).put("p_expect", wire(theirs))) { r ->
             r.onSuccess { done(true); poll(tid) }
                 .onFailure { e ->
-                    for (b in taken) GameSession.cmdNoSave("trade_give", "id" to b.id, "n" to b.n)
-                    GameSession.save(cloud = true)
-                    Toaster.show(e.message ?: "Takas onaylanamadı", false)
-                    done(false)
+                    // eski sunucu (p_expect yok): aynı teklifle bir kez daha, beklentisiz
+                    if ((e.message ?: "").contains("p_expect") || (e.message ?: "").contains("PGRST202"))
+                        Supa.rpc("zx_trade_ready", base) { r2 -> r2.onSuccess { done(true); poll(tid) }.onFailure { fail(it) } }
+                    else fail(e)
                 }
         }
     }
@@ -103,7 +124,7 @@ object Trade {
             val it = items.getJSONObject(i)
             val id = idOf(it.optInt("item", -2))
             if (id.isEmpty()) continue
-            val r = GameSession.cmdNoSave("trade_give", "id" to id, "n" to it.optInt("n"))
+            val r = GameSession.cmdNoSave("trade_give", "id" to id, "n" to it.optInt("n"), "dur" to it.optInt("dur", 1000))
             if (r.ok) got += r.msg
         }
         GameSession.save(cloud = true)

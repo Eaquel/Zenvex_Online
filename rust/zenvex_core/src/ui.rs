@@ -276,6 +276,7 @@ impl Game {
                             if crate::inventory::durable(s.item as usize) {
                                 // dayanıklılık yüzdesi (0-100) ve onarım bedeli
                                 v["dur"] = json!((s.dur as f32 / 10.0).round() as i32);
+                                v["dur_raw"] = json!(s.dur);
                                 v["repair"] = json!(Self::repair_cost(s.item as usize, s.dur));
                             }
                             if let Some((left, max)) = self.item_cd(id) {
@@ -907,8 +908,17 @@ impl Game {
                     } else {
                         Err("Yeterli altın yok".into())
                     }
+                } else if let Some(slot) = v["slot"].as_u64().map(|s| s as usize) {
+                    // tekil ekipman: tam o yuvadaki eşya (dayanıklılığı karşıya geçer; yanıt = dayanıklılık)
+                    match self.progress.inv.slots.get(slot).copied().flatten() {
+                        Some(s) if ITEMS[s.item as usize].id == id => {
+                            self.progress.inv.slots[slot] = None;
+                            Ok(s.dur.to_string())
+                        }
+                        _ => Err("Eşya yok".into()),
+                    }
                 } else if self.progress.inv.remove_id(id, n) {
-                    Ok("ok".into())
+                    Ok(crate::inventory::DUR_FULL.to_string())
                 } else {
                     Err("Eşya yok".into())
                 }
@@ -920,8 +930,18 @@ impl Game {
                 if id == "coin" {
                     self.progress.add_gold(n);
                     Ok(format!("+{n} altın"))
-                } else if crate::data::item_index(id).is_some() {
-                    let left = self.progress.inv.add_id(id, n);
+                } else if let Some(i) = crate::data::item_index(id) {
+                    // tekil ekipman dayanıklılığıyla gelir (takasla onarım yok)
+                    let left = if crate::inventory::durable(i) {
+                        let dur = v["dur"].as_u64().map_or(crate::inventory::DUR_FULL, |d| (d as u16).min(crate::inventory::DUR_FULL));
+                        let mut left = 0;
+                        for _ in 0..n {
+                            left += self.progress.inv.put(crate::inventory::Slot { item: i as u16, count: 1, dur });
+                        }
+                        left
+                    } else {
+                        self.progress.inv.add_id(id, n)
+                    };
                     if left > 0 {
                         let (x, y) = (self.player.x, self.player.y);
                         self.spawn_drop_id(id, left, x, y);

@@ -40,4 +40,11 @@ class HudShotsTest {
             }
         }
     }
+
+    /** Klan deposundan gönder penceresi: alanlar ve Gönder tuşu küçük ekranda görünmeli */
+    @Test fun clanSendSmallPhone() {
+        val c = org.json.JSONObject().put("members", org.json.JSONArray((1..9).map { org.json.JSONObject().put("id", it).put("name", "Üye $it") }))
+        val item = org.json.JSONObject().put("id", "wood").put("name", "Odun").put("n", 120)
+        paparazzi.snapshot { DepotSend(c, item, {}, {}) }
+    }
 }

@@ -36,12 +36,17 @@ object Online {
     private fun myAvatar() = Account.profile.value.optInt("avatar", 1)
     private fun myFrame() = Account.profile.value.optString("frame").takeIf { it != "null" } ?: ""
     data class Near(val uid: String, val name: String, val x: Float, val y: Float, val vehicle: Int, val dist: Float)
-    data class TradeItem(val id: String, val n: Int)
+    /** Teklifteki eşya: tekil ekipmanda çantadaki yuvası ve dayanıklılığı (binde) da taşınır */
+    data class TradeItem(val id: String, val n: Int, val slot: Int = -1, val dur: Int = 1000)
     data class TradeState(
         val sid: String, val other: String, val otherName: String,
         val mine: List<TradeItem>, val theirs: List<TradeItem>, val myOk: Boolean, val theirOk: Boolean, val done: Boolean,
         /** sunucudaki emanetli takas numarası (0 = henüz açılmadı) */
         val tid: Long = 0,
+        /** karşı teklifin son değiştiği an (ms): değişince onay tuşu 3 sn kilitlenir */
+        val theirsAt: Long = 0,
+        /** ben hazırken karşı taraf teklifini değiştirdi: takas tamamlanamaz, iptal edip yeniden başlatılmalı */
+        val changedAfterReady: Boolean = false,
     )
 
     val status = mutableStateOf("Çevrimdışı")
@@ -567,7 +572,7 @@ object Online {
     private fun sendOffer(cancel: Boolean = false) {
         val t = trade.value ?: return
         val items = JSONArray()
-        for (it in myItems) items.put(JSONObject().put("id", it.id).put("n", it.n))
+        for (it in myItems) items.put(JSONObject().put("id", it.id).put("n", it.n).put("dur", it.dur))
         channel?.send("tr", JSONObject().put("to", t.other).put("u", uid).put("sid", t.sid).put("tid", t.tid).put("items", items)
             .put("ok", myOk).put("cancel", cancel))
     }
@@ -577,9 +582,12 @@ object Online {
         if (p.optString("sid") != t.sid) return
         if (p.optBoolean("cancel")) { Trade.cancel(t.tid); trade.value = null; system("Takas iptal edildi"); return }
         val arr = p.optJSONArray("items") ?: JSONArray()
-        val theirs = (0 until arr.length()).map { arr.getJSONObject(it).let { o -> TradeItem(o.optString("id"), o.optInt("n", 1)) } }
+        val theirs = (0 until arr.length()).map { arr.getJSONObject(it).let { o -> TradeItem(o.optString("id"), o.optInt("n", 1), dur = o.optInt("dur", 1000)) } }
         val tid = if (t.tid == 0L) p.optLong("tid") else t.tid
-        trade.value = t.copy(mine = myItems, theirs = theirs, myOk = myOk, theirOk = p.optBoolean("ok"), tid = tid)
+        val changed = theirs != t.theirs
+        trade.value = t.copy(mine = myItems, theirs = theirs, myOk = myOk, theirOk = p.optBoolean("ok"), tid = tid,
+            theirsAt = if (changed) System.currentTimeMillis() else t.theirsAt,
+            changedAfterReady = t.changedAfterReady || (changed && myOk))
     }
 
     /** Sunucu takası bitirdi (Trade.apply). */
@@ -602,7 +610,7 @@ object Online {
     fun setTradeReady(ok: Boolean) {
         val t = trade.value ?: return
         if (!ok || myOk) return
-        Trade.ready(t.tid, myItems) { accepted ->
+        Trade.ready(t.tid, myItems, t.theirs) { accepted ->
             if (!accepted) return@ready
             myOk = true
             trade.value = trade.value?.copy(myOk = true)

@@ -253,9 +253,10 @@ fun SpriteImage(key: String, modifier: Modifier = Modifier) {
 
 /** Eşya kutusu: nadirlik çerçevesi + simge + adet. */
 @Composable
-fun ItemSlot(id: String?, count: Int = 0, rarity: Int = 0, size: Dp = 64.dp, selected: Boolean = false, label: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null) {
-    // piksel eşya kutusu (PxSlot ile aynı görünüm)
-    val item = id?.let { org.json.JSONObject().put("id", it).put("count", count).put("rarity", rarity) }
+fun ItemSlot(id: String?, count: Int = 0, rarity: Int = 0, size: Dp = 64.dp, selected: Boolean = false, label: String? = null, modifier: Modifier = Modifier,
+             dur: Int = -1, onClick: (() -> Unit)? = null) {
+    // piksel eşya kutusu (PxSlot ile aynı görünüm); dur ≥ 0 → dayanıklılık çubuğu (yüzde)
+    val item = id?.let { org.json.JSONObject().put("id", it).put("count", count).put("rarity", rarity).apply { if (dur >= 0) put("dur", dur) } }
     PxSlot(item, size, selected, hint = label,
         modifier = modifier.then(if (onClick != null) Modifier.clickable { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); onClick() } else Modifier))
 }
