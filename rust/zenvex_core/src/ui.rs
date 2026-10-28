@@ -234,7 +234,15 @@ impl Game {
             "cheat" => {
                 let items: Vec<Value> = ITEMS.iter().filter(|d| d.kind != ItemKind::Currency && data::item_in_game(d.id))
                     .map(|d| json!([d.id, d.name, format!("{:?}", d.kind), d.rarity as u8])).collect();
-                json!({ "god": self.player.god, "onehit": self.player.one_hit, "speed": self.player.speed_cheat,
+                // yönetici paneli: güncel bölgeler (hub'a ışınlanma) ve yaratıklar (temel türler + bölge türleri)
+                let areas: Vec<Value> = crate::areas::AREAS.iter().map(|a| json!([a.id, a.name])).collect();
+                let mut kinds: Vec<Value> = [("walker", data::ZKind::Walker), ("runner", data::ZKind::Runner), ("dog", data::ZKind::Dog),
+                    ("toxic", data::ZKind::Toxic), ("dark", data::ZKind::Dark), ("tank", data::ZKind::Tank), ("mystery", data::ZKind::Mystery)]
+                    .iter().map(|(id, k)| json!([id, data::ZOMBIES[*k as usize].name, ""])).collect();
+                kinds.extend(data::SPECIES.iter().map(|sp| json!([sp.id, sp.name, sp.area])));
+                let here = crate::areas::AREAS[crate::areas::area_at(self.player.x, self.player.y)].name;
+                json!({ "god": self.player.god, "onehit": self.player.one_hit, "speed": self.player.speed_cheat, "areas": areas, "kinds": kinds,
+                        "area": here, "zombies": self.zombies.len(), "hp": self.player.hp, "hp_max": g.max_hp(),
                         "net": self.net, "level": g.level, "gold": g.gold, "items": items,
                         "infammo": self.player.inf_ammo, "nocd": self.player.no_cd, "invis": self.player.invis, "timescale": self.time_scale,
                         "x": (self.player.x / world::TILE) as i32, "y": (self.player.y / world::TILE) as i32 })
@@ -1581,6 +1589,11 @@ impl Game {
             }
             "tp" | "isinla" => {
                 let (x, y) = match arg(1) {
+                    // V19: bölge kimliğiyle o bölgenin merkez noktasına ("tp area desert")
+                    "area" | "bolge" => match crate::areas::AREAS.iter().position(|a| a.id == arg(2)) {
+                        Some(i) => crate::areas::hub(i),
+                        None => return Err("Bilinmeyen bölge".into()),
+                    },
                     "city" | "sehir" => world::city_spawn(),
                     "camp" | "kamp" => world::camp_spawn(),
                     "boss" | "titan" => (world::BOSS.0 - 600.0, world::BOSS.1 + 400.0),

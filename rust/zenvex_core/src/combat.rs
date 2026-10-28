@@ -268,7 +268,7 @@ impl Game {
             Kind::Crate => {
                 self.progress.crates += 1;
                 self.events.push(Event::Crate { x: sx, y: sy });
-                let mil = name == "crate_mil";
+                let mil = name == "chest_mil";
                 self.crate_loot(sx, sy, zone, mil);
                 self.give_xp(sx, sy, 12);
                 let done = self.progress.quest_event(QuestKind::Crate, 1);

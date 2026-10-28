@@ -99,8 +99,8 @@ pub const STATIC_NAMES: &[&str] = &[
     "lamp",
     "wreck0",
     "wreck1",
-    "crate",
-    "crate_mil",
+    "chest_wood",
+    "chest_mil",
     "barrel",
     "barrel_tox", // 46-56
     "workbench",
@@ -125,7 +125,7 @@ pub const STATIC_NAMES: &[&str] = &[
     "portal", // 76 (V8 kişisel üs dönüş kapısı)
     // 77+ V8 kullanıcı görselleri (art/v8/props): bölge simge yapıları, üs yapıları, kişisel üs eşyaları
     "burnt_tree", "burnt_stump", "desert_wreck", "swamp_shack", "harbor_containers", "hangar", "bunker", "watchtower",
-    "helipad", "supply_crate", "bed", "stove", "fence_wood", "base_gate", "weapon_rack", "rain_barrel",
+    "helipad", "chest_iron", "bed", "stove", "fence_wood", "base_gate", "weapon_rack", "rain_barrel",
     // 93+ V10 bölge dekorları (art/v10/props): donmuş liman, yanık orman, çöl, kara bataklık, askerî bölge, eski şehir, kamp çadırları
     "snow_pine", "ice_boulder", "frozen_boat", "anchor_snow", "snow_barrels",
     "burnt_pine", "smolder_log", "charred_log", "deer_skeleton", "ember_rocks",
@@ -1276,7 +1276,7 @@ impl World {
                         );
                     } else if r < 0.75 {
                         self.push(
-                            "crate",
+                            "chest_wood",
                             Kind::Crate,
                             x,
                             y,
@@ -1311,7 +1311,7 @@ impl World {
                         );
                     } else if r < 0.5 {
                         self.push(
-                            "crate",
+                            "chest_wood",
                             Kind::Crate,
                             x,
                             y,
@@ -1330,7 +1330,7 @@ impl World {
                 _ => {
                     if r < 0.3 {
                         self.push(
-                            "crate_mil",
+                            "chest_mil",
                             Kind::Crate,
                             x,
                             y,
@@ -1511,7 +1511,7 @@ impl World {
         );
         for (ox, oy) in [(-2.0, -6.0), (2.5, -6.0)] {
             self.push(
-                "crate",
+                "chest_wood",
                 Kind::Prop,
                 cx + ox * t,
                 cy + oy * t,
@@ -1654,7 +1654,7 @@ impl World {
                     }
                 } else if !path && r < p_tree + 0.09 && z != Zone::Camp {
                     self.push(
-                        "crate",
+                        "chest_wood",
                         Kind::Crate,
                         x,
                         y,
@@ -1773,7 +1773,7 @@ impl World {
                         } else if r < p_tree + 0.2 {
                             self.push(["rock_small0", "rock_small1", "grass2"][rng.below(3) as usize], Kind::Deco, x, y, Shape::None, 0.0, ph);
                         } else if r < p_tree + 0.21 {
-                            self.push("crate", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
+                            self.push("chest_wood", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
                         }
                     }
                     Zone::BlackSwamp => {
@@ -1795,7 +1795,7 @@ impl World {
                                 self.push("barrel_tox", Kind::Prop, x, y, Shape::Circle(0.3 * t), 0.0, 0.0);
                             }
                         } else if r < 0.41 {
-                            self.push("crate", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
+                            self.push("chest_wood", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
                         }
                     }
                     Zone::Desert => {
@@ -1813,12 +1813,12 @@ impl World {
                         } else if r < 0.135 {
                             self.push("bush4", Kind::Bush, x, y, Shape::None, 1.0, ph);
                         } else if r < 0.142 {
-                            self.push("crate", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
+                            self.push("chest_wood", Kind::Crate, x, y, Shape::Circle(0.45 * t), 30.0, 0.0);
                         }
                     }
                     Zone::Military => {
                         if r < 0.018 {
-                            self.push("crate_mil", Kind::Crate, x, y, Shape::Circle(0.45 * t), 40.0, 0.0);
+                            self.push("chest_mil", Kind::Crate, x, y, Shape::Circle(0.45 * t), 40.0, 0.0);
                         } else if r < 0.04 {
                             self.push("sandbags", Kind::Prop, x, y, Shape::Rect(1.4 * t, 0.35 * t), 0.0, 0.0);
                         } else if r < 0.05 {
@@ -1835,7 +1835,7 @@ impl World {
                         if r < 0.03 {
                             self.push(["pine0", "pine1", "dead0"][rng.below(3) as usize], Kind::Tree, x, y, Shape::Circle(0.28 * t), 55.0, ph);
                         } else if r < 0.045 {
-                            self.push("crate_mil", Kind::Crate, x, y, Shape::Circle(0.45 * t), 40.0, 0.0);
+                            self.push("chest_mil", Kind::Crate, x, y, Shape::Circle(0.45 * t), 40.0, 0.0);
                         } else if r < 0.065 {
                             self.push("barrel", Kind::Prop, x, y, Shape::Circle(0.3 * t), 0.0, 0.0);
                         } else if r < 0.075 {
@@ -1875,10 +1875,10 @@ impl World {
                     self.push(name, kind, cx * t, cy * t, Shape::Rect(hw * t, hh * t), 0.0, 0.0);
                     for k in 0..3 {
                         let (ox, oy) = (rng.range(-hw - 2.5, hw + 2.5), hh + 1.5 + k as f32 * 0.8);
-                        let pr = if z == Zone::Military { ["sandbags", "crate_mil", "barrel"][k] } else { ["barrel", "crate_mil", "trash"][k] };
+                        let pr = if z == Zone::Military { ["sandbags", "chest_mil", "barrel"][k] } else { ["barrel", "chest_mil", "trash"][k] };
                         match pr {
                             "sandbags" => self.push(pr, Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Rect(1.4 * t, 0.35 * t), 0.0, 0.0),
-                            "crate_mil" => self.push(pr, Kind::Crate, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.45 * t), 40.0, 0.0),
+                            "chest_mil" => self.push(pr, Kind::Crate, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.45 * t), 40.0, 0.0),
                             _ => self.push(pr, Kind::Prop, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.35 * t), 0.0, 0.0),
                         }
                     }
@@ -1933,7 +1933,7 @@ impl World {
                 self.push("lamp", Kind::Lamp, x, y, Shape::Circle(0.15 * t), 0.0, 0.0);
             }
             let (x, y) = at(5.0, 0.5);
-            self.push("crate", Kind::Prop, x, y, Shape::Circle(0.4 * t), 0.0, 0.0);
+            self.push("chest_wood", Kind::Prop, x, y, Shape::Circle(0.4 * t), 0.0, 0.0);
         }
     }
 
@@ -2027,10 +2027,10 @@ impl World {
             }
             // komuta sığınağı, ödül sandığı ve helikopter pisti (zemin betonunun üstünde)
             self.push("bunker", Kind::Building, (cx - 6.5) * t, (cy - 6.5) * t, Shape::Rect(2.6 * t, 1.8 * t), 0.0, 0.0);
-            self.push("supply_crate", Kind::Prop, (cx + 6.5) * t, (cy - 6.5) * t, Shape::Rect(0.8 * t, 0.45 * t), 0.0, 0.0);
+            self.push("chest_iron", Kind::Prop, (cx + 6.5) * t, (cy - 6.5) * t, Shape::Rect(0.8 * t, 0.45 * t), 0.0, 0.0);
             self.push("helipad", Kind::Deco, cx * t, (cy - 5.0) * t, Shape::None, 0.0, 0.0);
             for (ox, oy) in [(-8.0, 5.5), (8.0, 5.5), (-3.0, -8.5)] {
-                self.push("crate_mil", Kind::Crate, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.45 * t), 40.0, 0.0);
+                self.push("chest_mil", Kind::Crate, (cx + ox) * t, (cy + oy) * t, Shape::Circle(0.45 * t), 40.0, 0.0);
             }
             for ox in [-4.0f32, 4.0] {
                 self.push("barricade", Kind::Prop, (cx + ox) * t, (y1 + 1.6) * t, Shape::Rect(0.8 * t, 0.2 * t), 0.0, 0.0);
@@ -2287,7 +2287,7 @@ impl World {
                 } else if r < 0.07 {
                     self.push(["burnt_tree", "dead0", "dead1"][rng.below(3) as usize], Kind::Tree, wx, wy, Shape::Circle(0.22 * t), 25.0, ph);
                 } else if r < 0.078 {
-                    self.push("crate_mil", Kind::Crate, wx, wy, Shape::Circle(0.45 * t), 40.0, 0.0);
+                    self.push("chest_mil", Kind::Crate, wx, wy, Shape::Circle(0.45 * t), 40.0, 0.0);
                 } else if r < 0.1 {
                     self.push(["ember_rocks", "rock_small1", "grass2", "cone"][rng.below(4) as usize], Kind::Deco, wx, wy, Shape::None, 0.0, ph);
                 } else if r < 0.105 {

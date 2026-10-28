@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -355,7 +356,14 @@ fun ItemPickerDialog(title: String, close: () -> Unit, maxAmount: Int = 9999, pi
     var q by remember { mutableStateOf("") }
     var sel by remember { mutableStateOf<JSONArray?>(null) }
     var n by remember { mutableStateOf("1") }
+    // V19: türe göre süzme (yalnız oyunda olan eşyalar gelir; kalkmış eşyalar listede yok)
+    var kind by remember { mutableStateOf("") }
+    val kinds = remember(items) { (0 until items.length()).mapNotNull { items.optJSONArray(it)?.optString(2) }.distinct() }
     PxDialog(title, close, width = 760.dp) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (k in listOf("") + kinds) PxButton(ITEM_KIND_TR[k] ?: k, color = if (kind == k) Px.Green else Px.Dark, height = 30.dp, size = 11.sp) { kind = k }
+        }
+        Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(q, { q = it.take(24) }, "Eşya Ara (Ad)", Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
@@ -377,6 +385,7 @@ fun ItemPickerDialog(title: String, close: () -> Unit, maxAmount: Int = 9999, pi
                 for (i in 0 until items.length()) {
                     val a = items.optJSONArray(i) ?: continue
                     if (q.isNotBlank() && !a.optString(1).contains(q.trim(), ignoreCase = true)) continue
+                    if (kind.isNotEmpty() && a.optString(2) != kind) continue
                     val chosen = sel?.optString(0) == a.optString(0)
                     Column(Modifier.width(72.dp).clickable { sel = a }, horizontalAlignment = Alignment.CenterHorizontally) {
                         PxSlot(JSONObject().put("id", a.optString(0)).put("rarity", a.optInt(3)), 50.dp, selected = chosen)
@@ -387,3 +396,7 @@ fun ItemPickerDialog(title: String, close: () -> Unit, maxAmount: Int = 9999, pi
         }
     }
 }
+
+private val ITEM_KIND_TR = mapOf("" to "Hepsi", "Weapon" to "Silah", "Tool" to "Alet", "Helmet" to "Kask", "Jacket" to "Ceket", "Pants" to "Pantolon",
+    "Boots" to "Bot", "Bag" to "Çanta", "Ring" to "Yüzük", "Necklace" to "Kolye", "Consumable" to "Tüketim", "Material" to "Malzeme",
+    "Chest" to "Sandık", "Bench" to "Tezgâh", "Vehicle" to "Araç", "Part" to "Parça")

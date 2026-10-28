@@ -67,6 +67,11 @@ class UiShotsTest {
     @Test fun merchantOdds() { val d = sample("merchant"); paparazzi.snapshot { MerchantView(d, 2, {}, {}, {}, {}, {}) } }
     @Test fun characters() { val d = sample("characters"); paparazzi.snapshot { CharactersView(d, {}, {}) {} } }
 
+    /** Yönetici paneli (V19 düzeni): genel bakış, posta, dünya */
+    @Test fun adminHome() { com.zenvex.online.game.Account.admin.value = true; paparazzi.snapshot { DevMenu({}, 0) } }
+    @Test fun adminMail() { com.zenvex.online.game.Account.admin.value = true; paparazzi.snapshot { DevMenu({}, 5) } }
+    @Test fun adminWorld() { com.zenvex.online.game.Account.admin.value = true; paparazzi.snapshot { DevMenu({}, 9) } }
+
     @Test
     fun skillTree() {
         val data = sample("tree")

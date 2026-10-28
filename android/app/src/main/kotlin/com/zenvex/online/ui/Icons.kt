@@ -21,7 +21,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 /** V11 piksel simgeleri (assets/ui/ic_<ad>.png, tools/pixel/icons_v11.py): varsa vektörün yerine çizilir, renklendirilmez. */
-internal val PIXEL_ICONS = setOf("coin", "gem", "quest", "magic", "skill", "crate", "bag", "trade", "clan", "level")
+internal val PIXEL_ICONS = setOf("coin", "gem", "quest", "magic", "skill", "crate", "bag", "trade", "clan", "level", "respawn")
 
 /** Çözünürlükten bağımsız vektör ikonlar (Canvas ile çizilir); piksel karşılığı olanlar piksel simge. */
 @Composable
@@ -238,6 +238,10 @@ fun DrawScope.drawIcon(name: String, c: Color) {
         "volume" -> {
             drawPath(path(0.12f, 0.38f, 0.3f, 0.38f, 0.52f, 0.18f, 0.52f, 0.82f, 0.3f, 0.62f, 0.12f, 0.62f), c)
             drawArc(c, -45f, 90f, false, p(0.46f, 0.3f), Size(w * 0.32f, w * 0.4f), style = thin)
+        }
+        "search" -> {
+            drawCircle(c, w * 0.26f, p(0.42f, 0.42f), style = thin)
+            drawLine(c, p(0.61f, 0.61f), p(0.88f, 0.88f), w * 0.12f, StrokeCap.Round)
         }
         "eye" -> {
             drawOval(c, p(0.08f, 0.28f), Size(w * 0.84f, w * 0.44f), style = thin)

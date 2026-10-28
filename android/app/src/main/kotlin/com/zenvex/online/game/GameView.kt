@@ -1596,7 +1596,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 // V8 sandık görselleri (ahşap / demir / askerî); yanındayken kapağı açık
                 val base = when (m.id) { "chest_wood" -> "s/chest_wood"; "chest_iron" -> "s/chest_iron"; else -> "s/chest_mil" }
                 val sp = atlas[if (i == nearChest) base + "_open" else base] ?: atlas[base]
-                    ?: atlas[if (m.id == "chest_wood") "s/crate" else "s/crate_mil"] ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
+                    ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
                 if (sp != null) {
                     castShadow(c, sx, sy, 56 * scale) { p -> atlas.draw(c, sp, sx, sy, scale, p) }
                     atlas.draw(c, sp, sx, sy, scale, pixelPaint)
