@@ -9,10 +9,59 @@ pub const POCKETS: usize = 4;
 /// Çanta bölmeleri: 0 = ana çanta (seviyeyle büyür), 1-3 = kuşanılan çantanın açtığı ek bölmeler.
 pub const PAGES: usize = 4;
 
+/// Dayanıklılık birimi: binde (1000 = %100). Tekil ekipmanın (silah, alet, zırh, çanta, yüzük, kolye) canı;
+/// yığınlanan eşyada hep 1000.
+pub const DUR_FULL: u16 = 1000;
+
+fn dur_full() -> u16 {
+    DUR_FULL
+}
+
+fn dur_is_full(d: &u16) -> bool {
+    *d == DUR_FULL
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Slot {
     pub item: u16,
     pub count: u16,
+    /// dayanıklılık (binde); tam olanlar kayda yazılmaz (eski kayıtlar tam sayılır)
+    #[serde(default = "dur_full", skip_serializing_if = "dur_is_full")]
+    pub dur: u16,
+}
+
+impl Slot {
+    pub fn new(item: u16, count: u16) -> Slot {
+        Slot { item, count, dur: DUR_FULL }
+    }
+}
+
+/// Eşyanın dayanıklılığı var mı: yığınlanmayan ekipman (araç anahtarının canı aracın kendisinde)
+pub fn durable(item: usize) -> bool {
+    let d = &ITEMS[item];
+    d.stack <= 1
+        && matches!(
+            d.kind,
+            ItemKind::Weapon | ItemKind::Helmet | ItemKind::Jacket | ItemKind::Boots | ItemKind::Bag | ItemKind::Pants | ItemKind::Ring | ItemKind::Necklace
+        )
+}
+
+/// Slotu dayanıklılığıyla koyar: yığınlanan eşya yığınlara, tekil eşya ilk boş yere (canı korunur). Sığmayan adet döner.
+pub fn put_slot(slots: &mut [Option<Slot>], s: Slot) -> u32 {
+    if ITEMS[s.item as usize].stack > 1 {
+        return stack_into(slots, s.item as usize, s.count as u32);
+    }
+    let mut left = s.count as u32;
+    for x in slots.iter_mut() {
+        if left == 0 {
+            break;
+        }
+        if x.is_none() {
+            *x = Some(Slot { count: 1, ..s });
+            left -= 1;
+        }
+    }
+    left
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -45,7 +94,7 @@ pub fn stack_into(slots: &mut [Option<Slot>], item: usize, mut count: u32) -> u3
         }
         if s.is_none() {
             let put = stack.min(count);
-            *s = Some(Slot { item: item as u16, count: put as u16 });
+            *s = Some(Slot::new(item as u16, put as u16));
             count -= put;
         }
     }
@@ -56,8 +105,8 @@ pub fn stack_into(slots: &mut [Option<Slot>], item: usize, mut count: u32) -> u3
 pub fn take_from(slots: &mut [Option<Slot>], idx: usize, n: Option<u32>) -> Option<Slot> {
     let cur = (*slots.get(idx)?)?;
     let n = n.unwrap_or(cur.count as u32).clamp(1, cur.count as u32) as u16;
-    slots[idx] = if n < cur.count { Some(Slot { item: cur.item, count: cur.count - n }) } else { None };
-    Some(Slot { item: cur.item, count: n })
+    slots[idx] = if n < cur.count { Some(Slot { count: cur.count - n, ..cur }) } else { None };
+    Some(Slot { count: n, ..cur })
 }
 
 /// Aralıktaki eşyaları türe göre sıralar ve yığınları birleştirir.
@@ -140,7 +189,7 @@ impl Inventory {
         for s in spill {
             let mut left = s.count as u32;
             for v in pages.iter_mut() {
-                left = stack_into(v, s.item as usize, left);
+                left = put_slot(v, Slot { count: left as u16, ..s });
                 if left == 0 {
                     break;
                 }
@@ -149,7 +198,7 @@ impl Inventory {
                 if pages.is_empty() {
                     pages.push(Vec::new());
                 }
-                pages.last_mut().unwrap().push(Some(Slot { item: s.item, count: left as u16 }));
+                pages.last_mut().unwrap().push(Some(Slot { count: left as u16, ..s }));
             }
         }
         let pockets: Vec<Option<Slot>> = self.slots[..POCKETS.min(self.slots.len())].to_vec();
@@ -179,8 +228,8 @@ impl Inventory {
             .find(|&i| self.slots[i].is_none())
             .or_else(|| (POCKETS..self.slots.len()).find(|&i| self.slots[i].is_none()))
             .ok_or("Çantada boş yer yok")?;
-        self.slots[from] = Some(Slot { item: s.item, count: s.count - n as u16 });
-        self.slots[to] = Some(Slot { item: s.item, count: n as u16 });
+        self.slots[from] = Some(Slot { count: s.count - n as u16, ..s });
+        self.slots[to] = Some(Slot { count: n as u16, ..s });
         Ok(to)
     }
 
@@ -191,11 +240,11 @@ impl Inventory {
             return Ok(());
         }
         let s = self.slots.get(from).copied().flatten().ok_or("Boş slot")?;
-        let left = stack_into(&mut self.slots[r], s.item as usize, s.count as u32);
+        let left = put_slot(&mut self.slots[r], s);
         if left == s.count as u32 {
             return Err("Bölme dolu");
         }
-        self.slots[from] = if left > 0 { Some(Slot { item: s.item, count: left as u16 }) } else { None };
+        self.slots[from] = if left > 0 { Some(Slot { count: left as u16, ..s }) } else { None };
         Ok(())
     }
 
@@ -238,8 +287,8 @@ impl Inventory {
             if b.item == a.item {
                 let stack = ITEMS[a.item as usize].stack.max(1);
                 let put = (stack.saturating_sub(b.count)).min(a.count);
-                self.slots[to] = Some(Slot { item: b.item, count: b.count + put });
-                self.slots[from] = if a.count > put { Some(Slot { item: a.item, count: a.count - put }) } else { None };
+                self.slots[to] = Some(Slot { count: b.count + put, ..b });
+                self.slots[from] = if a.count > put { Some(Slot { count: a.count - put, ..a }) } else { None };
                 return Ok(());
             }
             if Self::is_pocket(from) && !Self::pocket_ok(b.item as usize) {
@@ -276,6 +325,15 @@ impl Inventory {
     }
 
     /// Ekler, sığmayan miktarı döndürür.
+    /// Var olan slotu (dayanıklılığıyla) çantaya koyar: tekil ekipman canını korur. Sığmayan adet döner.
+    pub fn put(&mut self, s: Slot) -> u32 {
+        if ITEMS[s.item as usize].stack > 1 {
+            return self.add(s.item as usize, s.count as u32);
+        }
+        let from = POCKETS.min(self.slots.len());
+        put_slot(&mut self.slots[from..], s)
+    }
+
     pub fn add(&mut self, item: usize, mut count: u32) -> u32 {
         let stack = ITEMS[item].stack.max(1) as u32;
         // önce ceplerdeki yığınlar (yerden alınan iksir cepteki yığına eklenir), sonra çanta
@@ -295,10 +353,7 @@ impl Inventory {
             }
             if s.is_none() {
                 let put = stack.min(count);
-                *s = Some(Slot {
-                    item: item as u16,
-                    count: put as u16,
-                });
+                *s = Some(Slot::new(item as u16, put as u16));
                 count -= put;
             }
         }
@@ -399,18 +454,9 @@ mod tests {
         let wood = data::item_index("wood").unwrap();
         let glock = data::item_index("w_knife").unwrap();
         let p = POCKETS;
-        inv.slots[p + 3] = Some(Slot {
-            item: wood as u16,
-            count: 10,
-        });
-        inv.slots[p + 5] = Some(Slot {
-            item: wood as u16,
-            count: 15,
-        });
-        inv.slots[p + 1] = Some(Slot {
-            item: glock as u16,
-            count: 1,
-        });
+        inv.slots[p + 3] = Some(Slot::new(wood as u16, 10));
+        inv.slots[p + 5] = Some(Slot::new(wood as u16, 15));
+        inv.slots[p + 1] = Some(Slot::new(glock as u16, 1));
         inv.sort();
         assert_eq!(inv.slots[p].unwrap().item as usize, glock);
         assert_eq!(inv.slots[p + 1].unwrap().count, 25);
@@ -438,7 +484,7 @@ mod tests {
         inv.sort();
         assert_eq!(inv.slots[0].unwrap().count, 5);
         // eski kayıt göçü
-        let mut old = Inventory { slots: vec![Some(Slot { item: wood as u16, count: 1 })], pk: false, pages: Vec::new() };
+        let mut old = Inventory { slots: vec![Some(Slot::new(wood as u16, 1))], pk: false, pages: Vec::new() };
         old.migrate();
         assert_eq!(old.slots.len(), 1 + POCKETS);
         assert!(old.slots[POCKETS].is_some());
@@ -504,12 +550,56 @@ mod tests {
         inv.layout(&[3, 3]);
         let wood = data::item_index("wood").unwrap();
         let r1 = inv.page_range(1).unwrap();
-        inv.slots[r1.start + 2] = Some(Slot { item: wood as u16, count: 4 });
-        inv.slots[r1.start] = Some(Slot { item: wood as u16, count: 3 });
-        inv.slots[POCKETS + 1] = Some(Slot { item: wood as u16, count: 1 });
+        inv.slots[r1.start + 2] = Some(Slot::new(wood as u16, 4));
+        inv.slots[r1.start] = Some(Slot::new(wood as u16, 3));
+        inv.slots[POCKETS + 1] = Some(Slot::new(wood as u16, 1));
         inv.sort_page(1);
         assert_eq!(inv.slots[r1.start].unwrap().count, 7);
         assert!(inv.slots[r1.start + 1].is_none());
         assert_eq!(inv.slots[POCKETS + 1].unwrap().count, 1);
+    }
+}
+
+#[cfg(test)]
+mod dur_tests {
+    use super::*;
+    use crate::Progress;
+
+    /// V17 dayanıklılık: çıkar-giy, bölme taşıma, sandık ve kayıt canı yenilemez; kırık silah yumruk olur; onarım bedelli
+    #[test]
+    fn durability_survives_moves_and_save() {
+        let mut p = Progress::default();
+        p.relayout_inv();
+        p.inv.add_id("w_katana", 1);
+        let slot = (0..p.inv.slots.len()).find(|&i| p.inv.slots[i].is_some_and(|s| ITEMS[s.item as usize].id == "w_katana")).unwrap();
+        p.inv.slots[slot].as_mut().unwrap().dur = 400;
+        p.equip_slot(slot).unwrap();
+        assert_eq!(p.eq.dur("weapon"), 400);
+        p.eq.wear("weapon", 100);
+        p.unequip("weapon").unwrap();
+        let s = p.inv.slots.iter().flatten().find(|s| ITEMS[s.item as usize].id == "w_katana").copied().unwrap();
+        assert_eq!(s.dur, 300, "çıkarınca can korunmalı");
+        // kayıt: tam olmayan can yazılır, okununca aynı
+        let q: Progress = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
+        let s2 = q.inv.slots.iter().flatten().find(|s| ITEMS[s.item as usize].id == "w_katana").copied().unwrap();
+        assert_eq!(s2.dur, 300);
+        // eski kayıt (dur alanı yok) tam sayılır
+        let old: Slot = serde_json::from_str(r#"{"item":3,"count":1}"#).unwrap();
+        assert_eq!(old.dur, DUR_FULL);
+        assert!(!serde_json::to_string(&Slot::new(3, 1)).unwrap().contains("dur"));
+    }
+
+    #[test]
+    fn broken_weapon_is_fist_until_repaired() {
+        let mut g = crate::game::Game::new(4, Progress::default(), 0);
+        g.progress.eq.weapon = "w_katana".into();
+        assert_ne!(g.weapon().item, "");
+        g.progress.eq.wear("weapon", DUR_FULL);
+        assert!(g.progress.eq.broken("weapon"));
+        assert_eq!(g.weapon().item, crate::data::WEAPONS[0].item, "kırık silah yumruk olmalı");
+        // onarım yalnız tezgâh/Viktor yanında
+        g.progress.gold = 100_000;
+        let r = g.command(r#"{"cmd":"repair","eq":"weapon"}"#);
+        assert!(r.contains("tezgâh") || r.contains("Viktor"), "{r}");
     }
 }

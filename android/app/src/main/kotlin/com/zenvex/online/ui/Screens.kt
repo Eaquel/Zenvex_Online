@@ -65,44 +65,11 @@ import com.zenvex.online.game.Online
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class Screen { Splash, Language, Lobby, Settings, Loading, Game }
+enum class Screen { Splash, Lobby, Settings, Loading, Game }
 
 private val CRAFT_TAB_ICONS = listOf("tab_heal", "tab_potion", "tab_weapon", "tab_gear", "tab_jewel", "tab_material", "tab_vehicle", "tab_base")
 
 fun JSONArray?.objs(): List<JSONObject> = if (this == null) emptyList() else List(length()) { optJSONObject(it) ?: JSONObject() }
-
-// =========================================================================== ilk açılış: dil
-/** İlk açılışta bir kez: cihaz dili seçili gelir, tek dokunuşla devam edilir (sonradan Ayarlar'dan değişir). */
-@Composable
-fun LanguageScreen(done: () -> Unit) {
-    val ctx = LocalContext.current
-    val lang = I18n.lang
-    val dev = remember { I18n.deviceDefault() }
-    LiveScene(SceneKind.LOBBY, dim = 0.2f) {
-        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-            CodeLogo(96.dp)
-            Spacer(Modifier.height(14.dp))
-            PT("Dil · Language", 22.sp, Px.Clan, outline = true)
-            Spacer(Modifier.height(10.dp))
-            for (row in I18n.LANGS.entries.chunked(5)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(vertical = 3.dp).fillMaxWidth(0.94f).widthIn(max = 860.dp)) {
-                    for ((code, name) in row) {
-                        PxButton(name.substringBefore(" ("), Modifier.weight(1f), if (code == lang) Px.Green else Px.Dark, height = 46.dp, size = 13.sp) {
-                            Settings.save(ctx, Settings.current.copy(language = code))
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-            if (dev != lang) PT(I18n.LANGS[dev].orEmpty(), 12.sp, Px.Sub)
-            Spacer(Modifier.height(12.dp))
-            PxButton("Devam Et", Modifier.width(300.dp), Px.Green, icon = "play", size = 22.sp, height = 56.dp) {
-                Settings.markLanguageChosen(ctx)
-                done()
-            }
-        }
-    }
-}
 
 // =========================================================================== açılış
 @Composable

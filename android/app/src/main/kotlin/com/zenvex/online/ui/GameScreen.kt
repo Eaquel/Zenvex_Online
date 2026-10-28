@@ -335,8 +335,11 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
         if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
     }
-    // etkinlik afişi: üst orta, bölge adı ve PvP uyarısının altında
-    EventBanner(Modifier.align(Alignment.TopCenter).padding(top = 54.dp)) { open(Overlay.Event) }
+    // etkinlik afişi: üst orta, bölge adının altında; 10. seviyeden önce yok, boss çubuğu ya da üs kartı varken gizli
+    val evOn = level >= com.zenvex.online.game.Events.MIN_LEVEL && !com.zenvex.online.game.HudLayout.topBusy &&
+        com.zenvex.online.game.Events.current.optBoolean("active")
+    com.zenvex.online.game.HudLayout.eventShown = evOn
+    if (evOn) EventBanner(Modifier.align(Alignment.TopCenter).padding(top = 50.dp)) { open(Overlay.Event) }
     // (görev takipçisi kaldırıldı: görevler Görevler tuşunda; ekranda yalnız haritadaki hedef işareti kalır)
     // sağ üst (radarın solunda): mağaza + posta + menü, altında altın ve elmas (+ → mağaza)
     Column(Modifier.align(Alignment.TopEnd).padding(end = 150.dp, top = 12.dp), horizontalAlignment = Alignment.End) {
@@ -346,10 +349,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }
         }
         Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            CurrencyChip("coin", gold, Px.Clan) { open(Overlay.Shop) }
-            CurrencyChip("gem", gems, Color(0xFF7FE0FF)) { open(Overlay.Shop) }
-        }
+        // altın ve elmas tek kompakt kapsülde (genişlik içeriğe göre; dokununca mağaza)
+        CurrencyPill(gold, gems) { open(Overlay.Shop) }
         OfferStrip { open(Overlay.Shop) }
     }
     // alt orta: hızlı eşyalar + çanta + sohbet çubuğu
@@ -400,14 +401,19 @@ fun fmtMoney(n: Long): String = when {
     else -> "%.2f Mr".format(n / 1_000_000_000.0)
 }.replace('.', ',').let { if (n < 100_000) fmtL(n) else it }
 
-/** Altın / elmas kapsülü: sabit genişlik (6-7 haneli para haritaya taşmaz), sağda "+" (mağaza) */
+/**
+ * Altın + elmas tek kapsülde: genişlik içeriğe göre (100.000 üstü kısaltılır, en geniş hâli ~170 dp), sonda küçük "+"
+ * (mağaza). Eskiden iki ayrı 130 dp'lik kapsül haritanın solunu kaplıyordu.
+ */
 @Composable
-private fun CurrencyChip(icon: String, value: Long, color: Color, plus: () -> Unit) {
-    Row(Modifier.height(30.dp).clip(RoundedCornerShape(15.dp)).background(Color(0xD0141310)).border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(15.dp))
-        .clickable { plus() }.padding(start = 4.dp, end = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, 22.dp, color)
-        PT(fmtMoney(value), 14.sp, color, Modifier.width(76.dp).padding(start = 4.dp), maxLines = 1)
-        Box(Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(Px.Green), contentAlignment = Alignment.Center) { PT("+", 16.sp, Color.White) }
+private fun CurrencyPill(gold: Long, gems: Long, shop: () -> Unit) {
+    Row(Modifier.height(28.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xD0141310)).border(1.dp, Color(0x55FFD34A), RoundedCornerShape(14.dp))
+        .clickable { shop() }.padding(start = 5.dp, end = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon("coin", 18.dp, Px.Clan)
+        PT(fmtMoney(gold), 13.sp, Px.Clan, Modifier.padding(start = 3.dp, end = 8.dp), maxLines = 1)
+        Icon("gem", 18.dp, Color(0xFF7FE0FF))
+        PT(fmtMoney(gems), 13.sp, Color(0xFF7FE0FF), Modifier.padding(start = 3.dp, end = 5.dp), maxLines = 1)
+        Box(Modifier.size(20.dp).clip(RoundedCornerShape(6.dp)).background(Px.Green), contentAlignment = Alignment.Center) { PT("+", 14.sp, Color.White) }
     }
 }
 

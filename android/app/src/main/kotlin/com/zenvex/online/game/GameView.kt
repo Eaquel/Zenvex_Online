@@ -69,6 +69,20 @@ private val AREA_FADE = floatArrayOf(0f, 0.7f, 1.4f, 2.2f, 3.2f, 4.5f, 6f)
 /** Bu kadar seviye altındaki yaratıktan XP gelmez (Rust: progress::XP_LEVEL_GAP ile aynı) */
 const val XP_LEVEL_GAP = 10
 
+/**
+ * Ekranın üst ortası tek düzen: bölge adı → bağlamsal panel (boss çubuğu, üs kartı ya da etkinlik afişi; aynı anda yalnız
+ * biri) → duyuru afişi. Compose tarafı (etkinlik afişi) burayı okur; boss/üs varken afiş gizlenir.
+ */
+/** duyuru afişinin ekranda kalma süresi (sn) */
+private const val BANNER_DUR = 2.6f
+
+object HudLayout {
+    /** boss çubuğu ya da üs kartı üst ortada (etkinlik afişi gösterilmez) */
+    @Volatile var topBusy = false
+    /** etkinlik afişi görünüyor (Compose yazar; duyuru afişi onun altına iner) */
+    @Volatile var eventShown = false
+}
+
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
@@ -267,6 +281,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private var bannerSub = ""
     private var bannerT = 0f
     private var bannerColor = Color.WHITE
+    /** sıradaki afişler: aynı anda tek afiş, üst üste binmez (başlık, alt yazı, renk) */
+    private val bannerQueue = ArrayDeque<Triple<String, String, Int>>()
+    /** üst ortadaki bağlamsal panelin (boss, üs kartı, etkinlik afişi) alt kenarı: afiş ve öğretici balonu bunun altında */
+    private var slotBottom = 0f
     private var vignetteRed = 0f
     private var fps = 0f
     private var autosaveT = 0f
@@ -328,16 +346,18 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val ax = right.homeX; val ay = right.homeY
         val d = density
         val ring = stickR + 58 * d
-        fun place(b: Btn, angDeg: Float, r: Float) {
+        fun place(b: Btn, angDeg: Float, r: Float, rr: Float = ring) {
             val a = Math.toRadians(angDeg.toDouble())
             val sx = if (s.leftHanded) -1 else 1
-            val cx = ax - sx * cos(a).toFloat() * ring
-            val cy = ay - sin(a).toFloat() * ring
+            val cx = ax - sx * cos(a).toFloat() * rr
+            val cy = ay - sin(a).toFloat() * rr
             b.r.set(cx - r, cy - r, cx + r, cy + r)
         }
         place(btnAbility, 100f, 32 * d)
         place(btnWeapon, 140f, 28 * d)
-        place(btnReload, 175f, 24 * d)
+        // şarjör: saldırı çemberinin dış kenarı ile takla arasında, ekran kenarına taşmadan (iç yay; başparmak saldırıdan
+        // kaymadan ulaşır, taklayla ve saldırı çemberiyle çakışmaz)
+        place(btnReload, 135f, 27 * d, stickR + 36 * d)
         place(btnVehicle, 62f, 28 * d)
         place(btnInteract, 28f, 28 * d)
         place(btnTrade, -2f, 24 * d)
@@ -445,6 +465,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (shakeT > 0) shakeT -= dt
         updateFx(dt)
         if (bannerT > 0) bannerT -= dt
+        if (bannerT <= 0f && bannerQueue.isNotEmpty()) {
+            val (t, sub, col) = bannerQueue.removeFirst()
+            banner = t; bannerSub = sub; bannerColor = col; bannerT = BANNER_DUR
+        }
         vignetteRed = max(0f, vignetteRed - dt * 1.6f)
         val fit = floaters.iterator()
         while (fit.hasNext()) { val f = fit.next(); f.life -= dt; f.y -= 42f * dt; if (f.life <= 0) fit.remove() }
@@ -666,7 +690,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     if (!hit3d && kind == 0) burst(x, y + 40, 8, 0xFFB08A50.toInt(), 200f, 4f)
                     shake(2f, 0.08f)
                 }
-                "treefall" -> { Audio.play("treefall", near(x, y)); burst(x, y, 24, 0xFF4E8A34.toInt(), 260f, 5f, 0, 1.0f) }
+                "treefall" -> { Audio.play("treefall", near(x, y)); fx3d.treeFall(x, y, 62.5f) }
                 "kill" -> {
                     fx("blood", x, y - 40, 150f)
                     if (Settings.current.particles) { if (pools.size > 30) pools.removeAt(0); pools += Pool(x, y, 95f) }
@@ -755,8 +779,20 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 }
                 "boss" -> { setBanner(e.getString("name"), "Bir boss uyandı!", 0xFFFF4A3A.toInt()); Audio.play("boss"); shake(8f, 0.6f) }
                 "quest" -> {
-                    setBanner("GÖREV TAMAMLANDI", e.getString("title"), 0xFF7FE07F.toInt()); Audio.play("quest")
-                    fx("sparkle", 0f, 0f, 190f, follow = true)
+                    // başlık olayın türüne göre: yeni görev, teslim, konuşmaya git ya da biten görev
+                    val title = e.getString("title")
+                    when {
+                        title.startsWith("Yeni Görev: ") -> setBanner("YENİ GÖREV", title.removePrefix("Yeni Görev: "), 0xFFFFD34A.toInt())
+                        title.startsWith("Görev Teslim Edildi: ") -> {
+                            setBanner("GÖREV TAMAMLANDI", title.removePrefix("Görev Teslim Edildi: "), 0xFF7FE07F.toInt()); Audio.play("quest")
+                            fx("sparkle", 0f, 0f, 190f, follow = true)
+                        }
+                        title.contains(" ile konuş") -> { setBanner("GÖREV HAZIR", title, 0xFF7FE07F.toInt()); Audio.play("quest") }
+                        else -> {
+                            setBanner("GÖREV TAMAMLANDI", title, 0xFF7FE07F.toInt()); Audio.play("quest")
+                            fx("sparkle", 0f, 0f, 190f, follow = true)
+                        }
+                    }
                 }
                 "zone" -> {
                     val lo = e.getInt("lo"); val hi = e.getInt("hi")
@@ -806,8 +842,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
+    /** Afişi kuyruğa ekler: aynısı zaten gösteriliyor/sırada ise atlanır; kuyruk en çok 3 (en eskisi düşer) */
     private fun setBanner(t: String, sub: String, color: Int) {
-        banner = t; bannerSub = sub; bannerColor = color; bannerT = 2.8f
+        if ((bannerT > 0f && banner == t && bannerSub == sub) || bannerQueue.any { it.first == t && it.second == sub }) return
+        if (bannerT <= 0f) { banner = t; bannerSub = sub; bannerColor = color; bannerT = BANNER_DUR; return }
+        // bölge değişimi gibi eski haber yenisine yer açar
+        if (bannerQueue.size >= 3) bannerQueue.removeFirst()
+        bannerQueue.addLast(Triple(t, sub, color))
+        // sırada bekleyen varken gösterilen afiş kısalır (bilgi gecikmesin)
+        bannerT = min(bannerT, 1.2f)
     }
 
     private fun rarityColor(r: Int) = when (r) {
@@ -1919,7 +1962,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val b = baseNear ?: return
         if (!b.has("id")) return
         val d = density
-        val cx = sw / 2f; val top = 64 * d
+        val cx = sw / 2f; val top = 58 * d
         val w = 300 * d; val h = if (b.optDouble("cap", 0.0) > 0) 82 * d else 62 * d
         val r = RectF(cx - w / 2, top, cx + w / 2, top + h)
         fill.color = 0xD0151410.toInt(); c.drawRoundRect(r, 6 * d, 6 * d, fill)
@@ -3182,7 +3225,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val a = 0.65f + 0.35f * kotlin.math.sin(time * 4f)
             drawText(c, "⚔ PvP Bölgesi · Oyuncular Saldırabilir", sw / 2f, 44 * d, 12 * d, alphaC(0xFFFF5A4A.toInt(), a), true)
         }
-        // boss barı
+        // boss barı (üst orta bağlamsal panel)
         if (hud[Native.BOSS_HP] >= 0 && hud[Native.BOSS_MAX] > 0) {
             val w = sw * 0.42f
             drawText(c, "TİTAN", sw / 2f, 64 * d, 16 * d, 0xFFFF6A50.toInt(), true, fontDisplay)
@@ -3212,14 +3255,23 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 y -= 17 * d
             }
         }
-        // ---- afiş
+        // ---- afiş: üst ortadaki bağlamsal panelin (boss, üs kartı, etkinlik) altında
+        val boss = hud[Native.BOSS_HP] >= 0 && hud[Native.BOSS_MAX] > 0
+        val base = baseNear?.has("id") == true
+        HudLayout.topBusy = boss || base
+        slotBottom = when {
+            base -> 58 * d + (if (baseNear?.optDouble("cap", 0.0) ?: 0.0 > 0.0) 82 else 62) * d
+            boss -> 84 * d
+            HudLayout.eventShown -> 100 * d
+            else -> 50 * d
+        }
         if (bannerT > 0) {
-            val k = bannerT / 2.8f
+            val k = (bannerT / BANNER_DUR).coerceIn(0f, 1f)
             val a = if (k > 0.85f) (1f - k) / 0.15f else if (k < 0.2f) k / 0.2f else 1f
-            val y = sh * 0.28f
+            val y = max(sh * 0.26f, slotBottom + 46 * d)
             fill.shader = LinearGradient(sw * 0.2f, 0f, sw * 0.8f, 0f, intArrayOf(0, alphaC(0xCC0A0E16.toInt(), a), 0), null, Shader.TileMode.CLAMP)
             c.drawRect(0f, y - 44 * d, sw.toFloat(), y + 26 * d, fill); fill.shader = null
-            drawText(c, banner, sw / 2f, y, 34 * d * (if (k > 0.85f) 1f + (k - 0.85f) else 1f), alphaC(bannerColor, a), true, fontDisplay)
+            drawText(c, banner, sw / 2f, y, 30 * d * (if (k > 0.85f) 1f + (k - 0.85f) else 1f), alphaC(bannerColor, a), true, fontDisplay)
             drawText(c, bannerSub, sw / 2f, y + 19 * d, 14 * d, alphaC(0xFFEEF2F0.toInt(), a), true)
         }
     }
@@ -3386,15 +3438,19 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
-    /** Rehberin konuşma balonu: üst ortada, sözcük sözcük sarılır; 9 sn sonra söner */
+    /**
+     * Rehberin konuşma balonu: üst ortada, bölge adı ve bağlamsal panelin (boss/üs/etkinlik) altında; sözcük sözcük sarılır,
+     * 9 sn sonra söner. Duyuru afişi (yeni görev, bölge) aynı yere düşer: afiş varken balon bekler ve süresi işlemez —
+     * üst ortada aynı anda tek mesaj.
+     */
     private fun guideBubble(c: Canvas, raw: String) {
         val msg = I18n.t(raw)
         val d = density
         val a = (tutT / 0.35f).coerceIn(0f, 1f) * ((9.5f - tutT) / 0.6f).coerceIn(0f, 1f)
         if (a <= 0.01f) return
-        val size = 14 * d
+        val size = 13.5f * d
         text.typeface = fontBold; text.textSize = size
-        val maxW = min(sw * 0.46f, 440 * d)
+        val maxW = min(sw * 0.44f, 420 * d)
         val lines = ArrayList<String>()
         var cur = ""
         for (w in msg.split(' ')) {
@@ -3409,7 +3465,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // Komutan Diana konuşurken balonun solunda portresi
         val port = if (diana) com.zenvex.online.ui.UiArt.bitmap(context, "commander_portrait") else null
         val pw = if (port != null) max(bh, 64 * d) * port.width / port.height else 0f
-        val x0 = sw / 2f - bw / 2 + pw / 2; val y0 = 58 * d - (1f - a) * 10 * d
+        val x0 = sw / 2f - bw / 2 + pw / 2; val y0 = slotBottom + 6 * d - (1f - a) * 10 * d
         if (port != null) {
             val ph = max(bh, 64 * d)
             tutOval.set(x0 - pw - 4 * d, y0, x0 - 4 * d, y0 + ph)
@@ -3451,9 +3507,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             else -> null
         }
         val key = "$guideStep|$tutMoved|$tutAttacked|$guideReady|$guideOffer|$guideN"
-        if (key != tutKey) { tutKey = key; tutT = 0f } else tutT += dt
+        // afiş üst ortadayken balon bekler (süresi de işlemez): aynı yerde iki yazı üst üste binmez
+        if (key != tutKey) { tutKey = key; tutT = 0f } else if (bannerT <= 0f) tutT += dt
         ringAt?.let { (x, y, r) -> hintRing(c, x, y, r) }
-        if (msg != null) guideBubble(c, msg)
+        if (msg != null && bannerT <= 0f) guideBubble(c, msg)
         // görev hedefi: ekrandaysa yerde halka + küçük işaret, ekran dışındaysa kenarda yön göstergesi
         val tgt = questTargets.firstOrNull { it.guide } ?: questTargets.firstOrNull() ?: return
         val px = hud[Native.PX]; val py = hud[Native.PY]
@@ -3537,7 +3594,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         btnWeapon.visible = false
         btnAbility.visible = !inVehicleNow()
         if (btnAbility.visible) roundBtn(c, btnAbility, "roll", if (cd > 0) "${cd.roundToInt()}" else null, 0xFF5A3A8A.toInt(), cd > 0)
-        if (btnReload.visible) roundBtn(c, btnReload, "reload", null, 0xFF3A4A5A.toInt(), hud[Native.RELOADING] > 0)
+        if (btnReload.visible) drawReloadBtn(c)
         if (btnVehicle.visible) roundBtn(c, btnVehicle, if (hud[Native.IN_VEHICLE] > 0) "exit" else "car", if (hud[Native.IN_VEHICLE] > 0) "Araçtan İn" else "Araca Bin", 0xFF2E8A5A.toInt(), false)
         if (btnTrade.visible) roundBtn(c, btnTrade, "trade", null, 0xFF2E7AA0.toInt(), false)
         if (btnRide.visible) roundBtn(c, btnRide, if (rideUid != null) "exit" else "car", if (rideUid != null) "İn" else "Yolcu Ol", 0xFF8A5AC0.toInt(), false)
@@ -3547,6 +3604,56 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             else if (hud[Native.NEAR_BENCH] > 0) roundBtn(c, btnInteract, "craft", "Tezgâh", 0xFFC08A20.toInt(), false)
             else roundBtn(c, btnInteract, "craft", null, 0xFFC08A20.toInt(), false)
         }
+    }
+
+    /**
+     * Şarjör tuşu: şarjör + dönen ok simgesi, altında şarjördeki mermi; şarjör boşken kırmızı nabız halkası,
+     * değiştirilirken simgenin çevresinde dönen yay.
+     */
+    private fun drawReloadBtn(c: Canvas) {
+        val b = btnReload
+        val d = density
+        val cx = b.r.centerX(); val cy = b.r.centerY(); val r = b.r.width() / 2 * (if (b.pressed >= 0) 0.92f else 1f)
+        val reloading = hud[Native.RELOADING] > 0
+        val mag = hud[Native.MAG].toInt(); val empty = mag <= 0 && !reloading
+        fill.color = 0x59000000; c.drawCircle(cx, cy + 2 * d, r, fill)
+        fill.shader = RadialGradient(cx - r * 0.3f, cy - r * 0.4f, r * 1.5f, alphaC(0xFF4A5A6A.toInt(), 0.92f), alphaC(0xFF141A22.toInt(), 0.92f), Shader.TileMode.CLAMP)
+        c.drawCircle(cx, cy, r, fill); fill.shader = null
+        stroke.color = if (empty) 0xFFFF5A4A.toInt() else 0xFF8A949E.toInt(); stroke.strokeWidth = 3f * d
+        c.drawCircle(cx, cy, r, stroke)
+        if (empty) {
+            val ph = (time * 1.6f) % 1f
+            stroke.color = alphaC(0xFFFF5A4A.toInt(), 0.7f * (1f - ph)); stroke.strokeWidth = 2.5f * d
+            c.drawCircle(cx, cy, r * (1f + 0.35f * ph), stroke)
+        }
+        // şarjör: ortada, hafif kavisli gövde, üstte pirinç mermi ucu
+        val s = r * 0.62f
+        c.save(); c.rotate(12f, cx, cy)
+        fill.color = alphaC(0xFFE8ECEF.toInt(), if (reloading) 0.6f else 1f)
+        rect.set(cx - s * 0.30f, cy - s * 0.42f, cx + s * 0.30f, cy + s * 0.62f); c.drawRoundRect(rect, s * 0.12f, s * 0.12f, fill)
+        fill.color = 0xFF27303A.toInt()
+        for (k in 0..2) { val ly = cy - s * 0.12f + k * s * 0.24f; c.drawRect(cx - s * 0.18f, ly, cx + s * 0.18f, ly + s * 0.07f, fill) }
+        fill.color = alphaC(0xFFFFC860.toInt(), if (reloading) 0.6f else 1f)
+        rect.set(cx - s * 0.13f, cy - s * 0.68f, cx + s * 0.13f, cy - s * 0.38f); c.drawRoundRect(rect, s * 0.13f, s * 0.13f, fill)
+        c.restore()
+        // şarjörü saran dönüş oku: değiştirilirken döner
+        val ar = r * 0.74f
+        c.save(); if (reloading) c.rotate(time * 360f, cx, cy)
+        stroke.color = 0xFF7AF4FF.toInt(); stroke.strokeWidth = r * 0.11f; stroke.strokeCap = Paint.Cap.ROUND
+        rect.set(cx - ar, cy - ar, cx + ar, cy + ar); c.drawArc(rect, -60f, 290f, false, stroke)
+        val ea = Math.toRadians(-60.0)
+        val ex = cx + cos(ea).toFloat() * ar; val ey = cy + sin(ea).toFloat() * ar
+        val tx = -sin(ea).toFloat(); val ty = cos(ea).toFloat()   // yay yönünde teğet
+        val nx = cos(ea).toFloat(); val ny = sin(ea).toFloat()
+        val hs = r * 0.24f
+        path.reset()
+        path.moveTo(ex + tx * hs, ey + ty * hs)
+        path.lineTo(ex - tx * hs * 0.4f + nx * hs * 0.8f, ey - ty * hs * 0.4f + ny * hs * 0.8f)
+        path.lineTo(ex - tx * hs * 0.4f - nx * hs * 0.8f, ey - ty * hs * 0.4f - ny * hs * 0.8f); path.close()
+        fill.color = 0xFF7AF4FF.toInt(); c.drawPath(path, fill)
+        c.restore(); stroke.strokeCap = Paint.Cap.BUTT
+        // şarjördeki mermi (tuşun altında, okunur boy)
+        drawText(c, if (reloading) "…" else mag.toString(), cx, cy + r + 14 * d, 13 * d, if (empty) 0xFFFF7A6A.toInt() else 0xFFF2EEE4.toInt(), true, fontBold)
     }
 
     private fun roundBtn(c: Canvas, b: Btn, icon: String, label: String?, color: Int, dim: Boolean, small: Boolean = false) {

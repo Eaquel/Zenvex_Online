@@ -2,6 +2,25 @@
 
 ## Unreleased (V16 — 3D)
 
+- Screen layout: one top-centre stack (zone name → boss bar / base card / event banner, only one at a time → announcement);
+  announcements are queued instead of overlapping; the tutorial bubble waits while a banner shows; toasts moved above the
+  pockets; gold and gems share one compact pill; correct banner titles (NEW QUEST / QUEST COMPLETE / QUEST READY)
+- No language screen: the game follows the device language until a language is picked in Settings
+- Events unlock at level 10 (no banner and no points before that)
+- Reload button moved next to the attack stick, new magazine icon, rounds left under it, red pulse when empty
+- Vehicles: car 500 HP, motorcycle 200 HP; while driving the car takes all damage, the motorcycle 70%; wear 1% per 60 s (car)
+  / 30 s (motorcycle) of driving; at 0 HP it explodes and can be summoned again after 60 / 30 s of play time; HP, wear and
+  cooldown are saved (dismounting, switching vehicles, quitting or re-joining cannot refresh them); the mechanic repairs
+- Durability for every weapon, tool, armour piece, bag, ring and necklace: a bar under each slot, "Durability %" in the item
+  panel; weapons wear per hit or shot, tools per gather hit, armour/jewellery per hit taken, the bag on death; broken items
+  stop working (weapon = fist) until repaired at a workbench or the mechanic; worn items sell for less; durability is kept
+  when equipping, moving, storing in chests or dropping on the ground
+- Axes and pickaxes only work when held (stone 50, iron 100 per hit; fist 25)
+- Hand Axe removed (owned ones become knives); the tutorial now crafts and equips a knife
+- Fewer creature types: two signature creatures per region; a regional creature replaces the classic look of its role
+- Leaves: a falling tree drops leaves from its crown around the trunk instead of a green burst; swings no longer hit nearby
+  trees and rocks while a zombie is close
+
 - NPCs are 3D models (Marco, Silas, Elena, Viktor, Jack, Aldric, Diana, soldier, sniper): they breathe, turn to face the
   player and switch to a talking animation when you come close; new NPC animations (talk, aim, shoot) in the renderer
 - Wings: four 3D wing cosmetics worn on the back that flap with the hero's movement (Ember Wings VIP 3, Dragon Wings VIP 6,

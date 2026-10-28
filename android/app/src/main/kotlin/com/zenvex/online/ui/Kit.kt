@@ -332,10 +332,11 @@ fun BoxScope.ToastHost() {
     val reward = Toaster.good && (text.contains("altın") || text.contains("XP") || text.contains("kazandın") || text.contains("eklendi"))
     val accent = when { !Toaster.good -> Color(0xFFE0483C); reward -> Px.Clan; else -> Px.Name }
     val icon = when { !Toaster.good -> "close"; reward -> "coin"; else -> "check" }
+    // alt orta, cep/çanta sırasının üstünde: üst orta bölge adı, etkinlik ve duyuru afişlerine ayrıldı (üst üste binmez)
     androidx.compose.animation.AnimatedVisibility(
-        visible, Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
-        enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn(),
-        exit = androidx.compose.animation.slideOutVertically { -it } + androidx.compose.animation.fadeOut(),
+        visible, Modifier.align(Alignment.BottomCenter).padding(bottom = 124.dp),
+        enter = androidx.compose.animation.slideInVertically { it / 2 } + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.slideOutVertically { it / 2 } + androidx.compose.animation.fadeOut(),
     ) { ToastPlate(text, accent, icon) }
 }
 

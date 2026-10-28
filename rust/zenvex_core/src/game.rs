@@ -363,6 +363,8 @@ pub struct Zombie {
 pub struct Drop {
     pub item: u16,
     pub count: u32,
+    /// tekil ekipmanın dayanıklılığı (binde; yere bırakıp almak canı yenilemez)
+    pub dur: u16,
     pub x: f32,
     pub y: f32,
     pub age: f32,
@@ -780,7 +782,11 @@ impl Game {
         self.light() < 0.6
     }
 
+    /// Eldeki silah (kırıksa yumruk: onarana dek iş görmez)
     pub fn weapon(&self) -> &'static data::WeaponDef {
+        if self.progress.eq.broken("weapon") {
+            return &WEAPONS[0];
+        }
         &WEAPONS[data::weapon_for(&self.progress.eq.weapon)]
     }
 
@@ -1238,6 +1244,9 @@ impl Game {
         p.atk_active = false;
         self.progress.deaths += 1;
         self.events.push(Event::Died);
+        // ölümde çanta yıpranır (%2) ve elindeki silah sarsılır (%1)
+        self.wear_eq("bag", 20);
+        self.wear_eq("weapon", 10);
         if self.hardcore {
             // çantadaki her şey ölüm yerine düşer, altının yarısı gider
             let (x, y) = (self.player.x, self.player.y);
@@ -1245,6 +1254,9 @@ impl Game {
             for (i, s) in slots.into_iter().enumerate() {
                 let a = i as f32 * 2.4;
                 self.spawn_drop(s.item as usize, s.count as u32, x + a.cos() * 40.0, y + a.sin() * 30.0);
+                if let Some(d) = self.drops.last_mut() {
+                    d.dur = s.dur;
+                }
             }
             self.progress.gold /= 2;
             self.msg("Hardcore: çantan ölüm yerine düştü, altının yarısı gitti");
@@ -1315,6 +1327,18 @@ impl Game {
         if z.safe() {
             return;
         }
+        // araçtayken hasarın çoğunu araç alır (araba hepsini, motosiklet %70'ini); araç canı 0'da patlar
+        let mut amount = amount;
+        if let Some(vi) = self.player.vehicle {
+            if let Some(v) = self.vehicles.get_mut(vi) {
+                let share = crate::data::veh_slot(v.kind).map_or(1.0, |s| crate::data::VEH_ABSORB[s]);
+                v.hp -= amount * share;
+                amount *= 1.0 - share;
+                if amount <= 0.0 {
+                    return;
+                }
+            }
+        }
         let armor = self.progress.armor();
         let amount = if self.hardcore { amount * 1.5 } else { amount };
         let mut dmg = amount * 100.0 / (100.0 + armor) * (1.0 - self.progress.damage_resist());
@@ -1330,6 +1354,13 @@ impl Game {
         }
         p.hp -= dmg;
         let (x, y) = (p.x, p.y);
+        if !dot {
+            // her darbede zırh, yüzük ve kolye binde 1 aşınır
+            for k in ["helmet", "jacket", "pants", "boots", "ring", "necklace"] {
+                self.wear_eq(k, 1);
+            }
+        }
+        let p = &mut self.player;
         if dot {
             p.dot_acc += dmg;
             if p.dot_t <= 0.0 {
@@ -1505,6 +1536,7 @@ impl Game {
         self.drops.push(Drop {
             item: item as u16,
             count,
+            dur: crate::inventory::DUR_FULL,
             x: x + a.cos() * r,
             y: y + a.sin() * r * 0.6,
             age: 0.0,
@@ -1530,7 +1562,7 @@ impl Game {
             }
             let item = d.item as usize;
             let def = &data::ITEMS[item];
-            let (dx, dy, cnt) = (d.x, d.y, d.count);
+            let (dx, dy, cnt, dur) = (d.x, d.y, d.count, d.dur);
             if def.id == "coin" {
                 self.progress.add_gold(cnt);
                 self.events.push(Event::Gold {
@@ -1548,7 +1580,11 @@ impl Game {
                 self.drops.swap_remove(i);
                 continue;
             }
-            let left = self.progress.inv.add(item, cnt);
+            let left = if crate::inventory::durable(item) {
+                self.progress.inv.put(crate::inventory::Slot { item: item as u16, count: cnt.min(u16::MAX as u32) as u16, dur })
+            } else {
+                self.progress.inv.add(item, cnt)
+            };
             if left < cnt {
                 self.play_pose(A_PICKUP, 0.3);
                 self.story_event(crate::story::Ev::Loot);

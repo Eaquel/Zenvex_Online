@@ -311,10 +311,27 @@ class Fx3D {
             ps += P(x, y, side * sp * (0.3f + rnd.nextFloat() * 0.8f), -unit * (1f + rnd.nextFloat() * 2.5f), 0.5f + rnd.nextFloat() * 0.3f, 0.8f, 0xFFD9B27A.toInt(), unit * 0.028f, K.SPLINTER, ground, rnd.nextFloat() * 6f)
         }
         repeat(3) {
-            ps += P(x + (rnd.nextFloat() - 0.5f) * unit * 0.8f, y - unit * (1.2f + rnd.nextFloat()), (rnd.nextFloat() - 0.5f) * 30f, unit * 0.4f, 1.8f + rnd.nextFloat(), 2.4f,
+            // yapraklar tacın altından (gövdenin ~2-3 m üstü) iner, gövdenin dibine yakın konar
+            ps += P(x + (rnd.nextFloat() - 0.5f) * unit * 1.2f, y - unit * (2.0f + rnd.nextFloat() * 1.2f), (rnd.nextFloat() - 0.5f) * 16f, unit * 0.4f, 2.0f + rnd.nextFloat(), 2.6f,
                 if (rnd.nextFloat() < 0.5f) 0xFF5C9A3A.toInt() else 0xFF8AB040.toInt(), unit * 0.07f, K.LEAF, ground, rnd.nextFloat() * 6f)
         }
         ps += P(x, y + unit * 0.1f, 0f, -unit * 0.2f, 0.5f, 0.5f, 0xFFB8A484.toInt(), unit * 0.16f, K.MIST, ground)
+    }
+
+    /**
+     * Ağaç devrilince: yapraklar tacın yüksekliğinden (gövdenin 2-4 m üstü) sallanarak gövdenin çevresine iner ve
+     * yerde kısa süre kalıp söner; toz bulutu gövdenin dibinde. Eski radyal yeşil patlama yaprakları etrafa saçıyordu.
+     */
+    fun treeFall(x: Float, y: Float, unit: Float) {
+        if (!enabled) return
+        repeat(14) {
+            val ox = (rnd.nextFloat() - 0.5f) * unit * 2.2f
+            ps += P(x + ox, y - unit * (2.2f + rnd.nextFloat() * 1.8f), (rnd.nextFloat() - 0.5f) * 20f, unit * 0.3f, 2.2f + rnd.nextFloat() * 0.8f, 3.0f,
+                if (rnd.nextFloat() < 0.5f) 0xFF5C9A3A.toInt() else 0xFF8AB040.toInt(), unit * 0.07f, K.LEAF, y + ox * 0.15f, rnd.nextFloat() * 6f)
+        }
+        repeat(3) { k ->
+            ps += P(x + (k - 1) * unit * 0.5f, y, (k - 1) * unit * 0.4f, -unit * 0.15f, 0.9f, 0.9f, 0xFFB8A484.toInt(), unit * 0.3f, K.MIST, y)
+        }
     }
 
     /** Kayaya kazma: gri parçalar, parlak kıvılcımlar, toz ve çarpma ışığı */

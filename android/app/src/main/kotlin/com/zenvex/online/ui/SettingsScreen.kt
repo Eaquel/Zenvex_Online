@@ -155,7 +155,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                             }
                         }
                         5 -> SupportSection()
-                        6 -> LanguageSection(s.language) { set(s.copy(language = it)) }
+                        6 -> LanguageSection(s.language) { Settings.markLanguageChosen(ctx); set(s.copy(language = it)) }
                         else -> LegalSection()
                     }
                 }

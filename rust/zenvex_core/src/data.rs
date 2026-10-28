@@ -205,20 +205,20 @@ pub const ITEMS: &[ItemDef] = &[
     item!("powder_pouch", "Barut Kesesi", Material, Rare, 20, 80, "Cephe Hattı'ndaki askerlerden. Güç İksiri yapımında kullanılır."),
     item!("gold_watch", "Altın Saat", Material, Epic, 10, 250, "Eski şehirden. Rün Yüzüğü yapımında kullanılır ya da tüccara iyi fiyata satılır."),
     item!("rusty_key", "Paslı Anahtar", Material, Rare, 10, 90, "Eski şehirden. Askerî Sandık yapımında kullanılır."),
-    // V11 aletler: balta/kazma çantada dururken de işe yarar (en iyisi), elde tutulunca 1,6 kat güçlü vurur ve gerçek alet olarak görünür
+    // aletler: yalnız elde tutulunca işe yarar (taş 50, demir 100 vuruş; yumruk 25) ve gerçek alet olarak görünür
     // (armor = ağaç/kaya başına vuruş gücü; yumruk 25)
-    item!("t_axe_stone", "Taş Balta", Weapon, Common, 1, 30, "Elinde tut: ağaçları 3 kat hızlı keser, zombiye de vurur. Çantada durunca da 2 kat.", 50.0, 0.0),
-    item!("t_axe_iron", "Demir Balta", Weapon, Rare, 1, 120, "Elinde tut: ağaçları 6 kat hızlı keser, zombiye de vurur. Çantada durunca da 4 kat.", 100.0, 0.0),
-    item!("t_pick_stone", "Taş Kazma", Weapon, Common, 1, 30, "Elinde tut: kayaları 3 kat hızlı kırar, zombiye de vurur. Çantada durunca da 2 kat.", 50.0, 0.0),
-    item!("t_pick_iron", "Demir Kazma", Weapon, Rare, 1, 120, "Elinde tut: kayaları 6 kat hızlı kırar, zombiye de vurur. Çantada durunca da 4 kat.", 100.0, 0.0),
+    item!("t_axe_stone", "Taş Balta", Weapon, Common, 1, 30, "Elinde tutunca ağaca her vuruşta 50 can götürür (yumruk 25), zombiye de vurur. Çantada dururken işe yaramaz.", 50.0, 0.0),
+    item!("t_axe_iron", "Demir Balta", Weapon, Rare, 1, 120, "Elinde tutunca ağaca her vuruşta 100 can götürür (yumruk 25), zombiye de vurur. Çantada dururken işe yaramaz.", 100.0, 0.0),
+    item!("t_pick_stone", "Taş Kazma", Weapon, Common, 1, 30, "Elinde tutunca kayaya her vuruşta 50 can götürür (yumruk 25), zombiye de vurur. Çantada dururken işe yaramaz.", 50.0, 0.0),
+    item!("t_pick_iron", "Demir Kazma", Weapon, Rare, 1, 120, "Elinde tutunca kayaya her vuruşta 100 can götürür (yumruk 25), zombiye de vurur. Çantada dururken işe yaramaz.", 100.0, 0.0),
     // V11 araç parçaları: Tamirci Viktor'a verilir, araç belirli sürede üretilip postayla gelir
     item!("v_wheel", "Tekerlek", Material, Rare, 8, 60, "Araç parçası. Motosiklete 2, arabaya 4 gerekir."),
     item!("v_engine", "Motor", Material, Epic, 2, 250, "Araç parçası. Her araca 1 gerekir."),
     item!("v_frame_moto", "Motosiklet Gövdesi", Material, Rare, 1, 150, "Araç parçası: motosikletin gövdesi. Parçaları Tamirci Viktor'a götür, aracını o yapar."),
     item!("v_frame_car", "Araba Gövdesi", Material, Epic, 1, 400, "Araç parçası: arabanın gövdesi. Parçaları Tamirci Viktor'a götür, aracını o yapar."),
     // V11 araç anahtarları: kullanınca aracın yanına gelir (eskisi kaybolur); dünyada artık sahipsiz araç yok
-    item!("veh_moto", "Motosiklet Anahtarı", Tool, Epic, 1, 0, "Kullanınca motosikletin yanına gelir."),
-    item!("veh_car", "Araba Anahtarı", Tool, Legendary, 1, 0, "Kullanınca araban yanına gelir."),
+    item!("veh_moto", "Motosiklet Anahtarı", Tool, Epic, 1, 0, "Kullanınca motosikletin yanına gelir. 200 can; sürerken 30 sn'de %1 aşınır, hasarın %70'ini o alır. Patlarsa 30 sn sonra yeniden çağrılır."),
+    item!("veh_car", "Araba Anahtarı", Tool, Legendary, 1, 0, "Kullanınca araban yanına gelir. 500 can; sürerken 60 sn'de %1 aşınır, hasarın hepsini o alır. Patlarsa 60 sn sonra yeniden çağrılır."),
     // V11 etkinlik silahları (3. sıra ödülü; kaskların yerine)
     item!("ev_blood_weapon", "Kan Ayı Orağı", Weapon, Seasonal, 1, 0, "Kan Ayı etkinliğinde 3. sırada bitirerek elde edilir. Geniş kızıl kesik, birden çok düşmana vurur. Sınırlı sürelidir (30 gün), takas edilemez."),
     item!("ev_titan_weapon", "Titan Kırıcı Balyoz", Weapon, Seasonal, 1, 0, "Titan Avı etkinliğinde 3. sırada bitirerek elde edilir. Yavaş ama sersemleten ağır darbe. Sınırlı sürelidir (30 gün), takas edilemez."),
@@ -289,7 +289,9 @@ pub const RETIRED_ITEMS: &[&str] = &["w_baton", "w_m4", "ammo_", "powder", "cloa
     // V12.1 eşya temizliği: tekrarlı ara malzemeler (RETIRE_INTO ile dönüşür)
     "screw", "glue", "tape", "nails", "plastic", "spring", "copper", "tooth",
     // etkinlik kaskları yerine etkinlik silahları geldi (elde olanlar süresi dolana dek çalışır)
-    "ev_blood_helm", "ev_titan_helm", "ev_base_helm", "ev_scrap_helm", "ev_pack_helm", "ev_breath_helm"];
+    "ev_blood_helm", "ev_titan_helm", "ev_base_helm", "ev_scrap_helm", "ev_pack_helm", "ev_breath_helm",
+    // V17: El Baltası kalktı (Taş Balta ile karışıyordu); elde olan bıçağa döner (RETIRE_INTO)
+    "w_hatchet"];
 
 /// V15 VIP: ek çanta yuvası (V2 +5, V5 +10, V9 +15)
 pub fn vip_bag_slots(vip: u8) -> usize {
@@ -808,6 +810,15 @@ pub const SPECIES: &[Species] = &[
     sp!("dockbrute", "Rıhtım Canavarı", Tank, "harbor", 1.45, 1.35, 0.95, 1.7),
 ];
 
+/// V17: bölge başına iki imza yaratık kalır (oyuncu her bölgede az ama akılda kalan düşman görür); kalkanlar artık
+/// doğmaz, kayıt/ağ biçimi bozulmasın diye tabloda durur
+pub const RETIRED_SPECIES: &[&str] = &["shroom", "crawler", "ashwraith", "biker", "witch", "dockbrute"];
+
+/// Tür hâlâ doğuyor mu
+pub fn species_active(s: &Species) -> bool {
+    !RETIRED_SPECIES.contains(&s.id)
+}
+
 /// zombinin tür çarpanları (species 0: klasik zombi)
 pub fn species(s: u8) -> Option<&'static Species> {
     if s == 0 { None } else { SPECIES.get(s as usize - 1) }
@@ -975,7 +986,6 @@ pub const RECIPES: &[Recipe] = &[
     r!("potion_heal", 1, [("bandage", 1), ("resin", 2)], false),
     r!("w_knife", 1, [("scrap", 3), ("leather", 1), ("rope", 1)], false),
     r!("w_bat", 1, [("wood", 8), ("scrap", 2)], false),
-    r!("w_hatchet", 1, [("wood", 4), ("scrap", 4), ("rope", 1)], false),
     r!("t_axe_stone", 1, [("wood", 6), ("stone", 4), ("rope", 1)], false),
     r!("t_pick_stone", 1, [("wood", 6), ("stone", 6), ("rope", 1)], false),
     r!("helm_basic", 1, [("scrap", 4), ("leather", 1), ("cloth", 1)], false),
@@ -1051,6 +1061,7 @@ pub fn region_items(zone: crate::world::Zone) -> &'static [(&'static str, u32)] 
 
 /// V12.1'de oyundan kalkan malzemeler eski kayıtlarda bunlara dönüşür (1'e 1)
 pub const RETIRE_INTO: &[(&str, &str)] = &[
+    ("w_hatchet", "w_knife"),
     ("screw", "scrap"), ("nails", "scrap"), ("spring", "scrap"), ("copper", "scrap"), ("plastic", "scrap"),
     ("glue", "resin"), ("tape", "cloth"), ("tooth", "bone"), ("powder", "charcoal"),
 ];
@@ -1065,7 +1076,6 @@ pub const MERCHANT: &[(&str, u32, u32)] = &[
     ("rope", 8, 1),
     ("w_knife", 120, 1),
     ("w_bat", 60, 1),
-    ("w_hatchet", 90, 2),
     ("medkit", 60, 5),
     ("antidote", 35, 6),
     ("potion_heal", 80, 3),
@@ -1171,6 +1181,22 @@ pub struct VehicleDef {
     pub length: f32,
 }
 
+/// Kendi aracın: sürerken aşınma (her `VEH_WEAR_S` saniyede azami canın %1'i) ve patladıktan sonra yeniden çağırma
+/// beklemesi (oyun süresi, sn). Sıra: [motosiklet, araba].
+pub const VEH_WEAR_S: [f32; 2] = [30.0, 60.0];
+pub const VEH_RECALL_S: [f64; 2] = [30.0, 60.0];
+/// Sürücüye gelen hasarın araca giden payı (motosiklette sürücü açıkta)
+pub const VEH_ABSORB: [f32; 2] = [0.7, 1.0];
+
+/// Araç türü (VEHICLES indeksi) → kayıttaki can/bekleme yuvası (motosiklet 0, araba 1)
+pub fn veh_slot(kind: usize) -> Option<usize> {
+    match kind {
+        1 => Some(0),
+        2 => Some(1),
+        _ => None,
+    }
+}
+
 /// Araçlar. 0. kayıt (bisiklet) ve 3. kayıt (SUV) oyundan kaldırıldı: hiçbir yerde doğmaz, hileyle de gelmez;
 /// yalnız ağ/çizim indeksleri (motor 1, araba 2) değişmesin diye yer tutucu olarak durur.
 pub const REMOVED_VEHICLE: usize = 0;
@@ -1191,7 +1217,7 @@ pub const VEHICLES: &[VehicleDef] = &[
         seats: 1,
         speed_m: 8.5,
         fuel: true,
-        hp: 220.0,
+        hp: 200.0,
         radius: 20.0,
         length: 55.0,
     },

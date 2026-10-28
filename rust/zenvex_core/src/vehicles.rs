@@ -64,6 +64,16 @@ impl Game {
         self.player.anim_t += dt;
         let gate_open = self.progress.level >= crate::progress::CITY_LEVEL;
         let def = &VEHICLES[self.vehicles[vi].kind];
+        // aşınma: sürücü koltuğundayken (dursa da) her 30/60 sn'de azami canın %1'i; birikim kayıtta (in-bin sıfırlamaz)
+        let slot = if self.vehicles[vi].owned { data::veh_slot(self.vehicles[vi].kind) } else { None };
+        if let Some(s) = slot {
+            let w = &mut self.progress.veh_wear[s];
+            *w += dt;
+            while *w >= data::VEH_WEAR_S[s] {
+                *w -= data::VEH_WEAR_S[s];
+                self.vehicles[vi].hp -= def.hp * 0.01;
+            }
+        }
         let mlen = input.move_x.hypot(input.move_y).min(1.0);
         {
             let v = &mut self.vehicles[vi];
@@ -131,6 +141,9 @@ impl Game {
         self.player.x = x;
         self.player.y = y;
         self.player.dir = dir_from_vec(dx, dy);
+        if let Some(s) = slot {
+            self.progress.veh_hp[s] = v.hp.max(0.0);
+        }
         if v.hp <= 0.0 {
             v.wrecked = true;
             v.driver = false;
@@ -138,7 +151,15 @@ impl Game {
             self.player.vehicle = None;
             self.explode(vx, vy, m(3.0), 40.0);
             self.damage_player(20.0);
-            self.msg("Araç patladı!");
+            if let Some(s) = slot {
+                // patlayan kendi aracın: yeniden çağırma beklemesi (oyun süresi; çıkıp girmek kısaltmaz)
+                self.progress.veh_hp[s] = 0.0;
+                self.progress.veh_wear[s] = 0.0;
+                self.progress.veh_ready[s] = self.progress.play_time + data::VEH_RECALL_S[s];
+                self.msg(&format!("Araç patladı! {} sn sonra yeniden çağırabilirsin", data::VEH_RECALL_S[s] as i64));
+            } else {
+                self.msg("Araç patladı!");
+            }
         }
         // yerdeki eşyaları araçla da topla
         let _ = data::ITEMS.len();
@@ -146,5 +167,112 @@ impl Game {
 
     pub fn vehicle_dir(angle: f32) -> u8 {
         dir_from_vec(angle.sin(), angle.cos())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::data::{VEHICLES, VEH_RECALL_S};
+    use crate::game::{Game, Input};
+    use crate::Progress;
+
+    fn game() -> Game {
+        let mut p = Progress::default();
+        p.level = 20;
+        let mut g = Game::new(3, p, 0);
+        g.player.combat_t = 99.0;
+        g
+    }
+
+    fn drive(g: &mut Game, secs: f32) {
+        let n = (secs / 0.05) as usize;
+        for _ in 0..n {
+            g.progress.play_time += 0.05;
+            g.update_vehicle_drive(0.05, Input::default());
+        }
+    }
+
+    /// Araba 500, motor 200 can; sürerken aşınma: araba 60 sn'de %1, motor 30 sn'de %1; in-bin birikimi sıfırlamaz
+    #[test]
+    fn wear_while_driving_survives_dismount() {
+        let mut g = game();
+        assert_eq!(VEHICLES[2].hp, 500.0);
+        assert_eq!(VEHICLES[1].hp, 200.0);
+        g.summon_vehicle(2).unwrap();
+        g.player.x = g.vehicles[0].x;
+        g.player.y = g.vehicles[0].y;
+        g.toggle_vehicle().unwrap();
+        drive(&mut g, 45.0);
+        g.toggle_vehicle().unwrap(); // in
+        g.toggle_vehicle().unwrap(); // bin
+        drive(&mut g, 16.0);
+        assert!((g.vehicles[0].hp - 495.0).abs() < 0.01, "61 sn sürüşte %1 aşınma: {}", g.vehicles[0].hp);
+        assert!((g.progress.veh_hp[1] - 495.0).abs() < 0.01);
+        // motor: 30 sn'de %1 (2 can)
+        let mut g = game();
+        g.summon_vehicle(1).unwrap();
+        g.player.x = g.vehicles[0].x;
+        g.player.y = g.vehicles[0].y;
+        g.toggle_vehicle().unwrap();
+        drive(&mut g, 61.0);
+        assert!((g.vehicles[0].hp - 196.0).abs() < 0.01, "{}", g.vehicles[0].hp);
+    }
+
+    /// Tür değiştirmek ya da oyundan çıkıp girmek (kayıt + yeni oyun) canı yenilemez
+    #[test]
+    fn hp_is_saved_per_vehicle() {
+        let mut g = game();
+        g.summon_vehicle(2).unwrap();
+        g.player.x = g.vehicles[0].x;
+        g.player.y = g.vehicles[0].y;
+        g.toggle_vehicle().unwrap();
+        g.vehicles[0].hp = 300.0;
+        drive(&mut g, 0.1);
+        g.toggle_vehicle().unwrap();
+        g.summon_vehicle(1).unwrap();
+        assert_eq!(g.vehicles[0].hp, 200.0);
+        g.summon_vehicle(2).unwrap();
+        assert!((g.vehicles[0].hp - 300.0).abs() < 0.01, "tür değiştirince can yenilendi: {}", g.vehicles[0].hp);
+        // çık-gir: kayıttan yeni oyun
+        let save = serde_json::to_string(&g.progress).unwrap();
+        let p: Progress = serde_json::from_str(&save).unwrap();
+        let mut g2 = Game::new(3, p, 0);
+        g2.player.combat_t = 99.0;
+        g2.summon_vehicle(2).unwrap();
+        assert!((g2.vehicles[0].hp - 300.0).abs() < 0.01, "{}", g2.vehicles[0].hp);
+    }
+
+    /// Patlayınca araba 60, motor 30 sn (oyun süresi) çağrılamaz; sonra tam canla gelir; araçtayken hasarı araç alır
+    #[test]
+    fn explosion_starts_recall_cooldown() {
+        let mut g = game();
+        g.summon_vehicle(2).unwrap();
+        g.player.x = g.vehicles[0].x;
+        g.player.y = g.vehicles[0].y;
+        g.toggle_vehicle().unwrap();
+        // savaş bölgesinde gelen hasar araca gider
+        let (x, y) = (g.player.x, g.player.y);
+        if !g.world.zone(x, y).safe() {
+            let hp0 = g.player.hp;
+            g.damage_player(50.0);
+            assert_eq!(g.player.hp, hp0, "araba hasarın hepsini almalı");
+        }
+        g.vehicles[0].hp = 1.0;
+        g.player.god = true;
+        drive(&mut g, 0.1);
+        g.vehicles[0].hp = -1.0;
+        drive(&mut g, 0.05);
+        assert!(g.player.vehicle.is_none());
+        assert_eq!(g.progress.veh_hp[1], 0.0);
+        let e = g.summon_vehicle(2).unwrap_err();
+        assert!(e.contains("sn sonra"), "{e}");
+        // çıkıp girmek beklemeyi kısaltmaz (oyun süresi kayıtta)
+        let p: Progress = serde_json::from_str(&serde_json::to_string(&g.progress).unwrap()).unwrap();
+        let mut g = Game::new(3, p, 0);
+        g.player.combat_t = 99.0;
+        assert!(g.summon_vehicle(2).is_err());
+        g.progress.play_time += VEH_RECALL_S[1];
+        g.summon_vehicle(2).unwrap();
+        assert_eq!(g.vehicles[0].hp, 500.0);
     }
 }

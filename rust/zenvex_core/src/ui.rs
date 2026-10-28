@@ -98,7 +98,9 @@ impl Game {
         Ok("Parçalar geri verildi".into())
     }
 
-    /// Anahtar: kendi aracın yanına gelir (yoksa doğar; varsa türü güncellenip buraya taşınır, onarılmaz)
+    /// Anahtar: kendi aracın yanına gelir (yoksa doğar; varsa türü güncellenip buraya taşınır).
+    /// Can kayıttan gelir (her türün kendi canı; tür değiştirmek, in-bin ya da oyundan çıkıp girmek canı yenilemez).
+    /// Patlayan araç bekleme (motor 30, araba 60 sn oyun süresi) bitince tam canla yeniden çağrılır.
     pub(crate) fn summon_vehicle(&mut self, kind: usize) -> Result<String, String> {
         if self.player.dead || self.player.vehicle.is_some() || self.passenger {
             return Err("Şimdi olmaz".into());
@@ -106,27 +108,39 @@ impl Game {
         if !self.world.zone(self.player.x, self.player.y).safe() && self.player.combat_t < 3.0 {
             return Err("Savaşırken araç çağrılamaz".into());
         }
+        let def = &data::VEHICLES[kind];
+        let slot = data::veh_slot(kind).ok_or("Bu araç çağrılamaz")?;
+        let left = self.progress.veh_ready[slot] - self.progress.play_time;
+        if left > 0.0 {
+            return Err(format!("{} patladı: {} sn sonra yeniden çağrılabilir", def.name, left.ceil() as i64));
+        }
+        if self.progress.veh_hp[slot] <= 0.0 {
+            // bekleme bitti: yeni araç tam canla
+            self.progress.veh_hp[slot] = def.hp;
+            self.progress.veh_wear[slot] = 0.0;
+        }
+        let hp = self.progress.veh_hp[slot].min(def.hp);
         let (mut x, mut y) = (self.player.x + 90.0, self.player.y + 10.0);
         self.world.resolve(&mut x, &mut y, 40.0, self.progress.level >= crate::progress::CITY_LEVEL, &mut self.scratch);
-        let def = &data::VEHICLES[kind];
         match self.vehicles.iter().position(|v| v.owned) {
             Some(i) => {
+                // öteki türün canı kendi yuvasına yazılır (tür değiştirip can yenileme yok)
+                let (ok, oh, wrecked) = (self.vehicles[i].kind, self.vehicles[i].hp, self.vehicles[i].wrecked);
+                if let (Some(os), false) = (data::veh_slot(ok), wrecked) {
+                    self.progress.veh_hp[os] = oh.max(0.0);
+                }
                 let v = &mut self.vehicles[i];
-                if v.wrecked && v.kind == kind {
-                    return Err("Aracın parçalandı. Tamirci Viktor'a git, uzaktan çekip onarır".into());
-                }
-                if v.kind != kind {
-                    v.kind = kind;
-                    v.hp = def.hp;
-                    v.wrecked = false;
-                }
+                v.kind = kind;
+                v.hp = hp;
+                v.wrecked = false;
+                v.driver = false;
                 v.x = x;
                 v.y = y;
                 v.speed = 0.0;
             }
-            None => self.vehicles.push(Vehicle { kind, x, y, angle: 0.0, speed: 0.0, hp: def.hp, fuel: 100.0, driver: false, wrecked: false, owned: true }),
+            None => self.vehicles.push(Vehicle { kind, x, y, angle: 0.0, speed: 0.0, hp, fuel: 100.0, driver: false, wrecked: false, owned: true }),
         }
-        Ok(format!("{} yanına geldi", def.name))
+        Ok(format!("{} yanına geldi (can %{})", def.name, (hp / def.hp * 100.0).round() as i32))
     }
 
     pub(crate) fn npc_mechanic(&mut self) -> Result<String, String> {
@@ -153,6 +167,14 @@ impl Game {
             let v = &mut self.vehicles[i];
             v.hp = data::VEHICLES[v.kind].hp;
             v.fuel = 100.0;
+            if v.owned {
+                // tamir: can tam, patlama beklemesi biter
+                if let Some(s) = data::veh_slot(v.kind) {
+                    self.progress.veh_hp[s] = v.hp;
+                    self.progress.veh_ready[s] = 0.0;
+                    self.progress.veh_wear[s] = 0.0;
+                }
+            }
             if v.owned && v.wrecked {
                 v.x = px + crate::game::m(3.0);
                 v.y = py + crate::game::m(1.0);
@@ -251,6 +273,11 @@ impl Game {
                             let id = ITEMS[s.item as usize].id;
                             let mut v = item_json(id);
                             v["count"] = json!(s.count);
+                            if crate::inventory::durable(s.item as usize) {
+                                // dayanıklılık yüzdesi (0-100) ve onarım bedeli
+                                v["dur"] = json!((s.dur as f32 / 10.0).round() as i32);
+                                v["repair"] = json!(Self::repair_cost(s.item as usize, s.dur));
+                            }
                             if let Some((left, max)) = self.item_cd(id) {
                                 v["cd"] = json!(left);
                                 v["cdmax"] = json!(max);
@@ -263,7 +290,13 @@ impl Game {
                 let e = &g.eq;
                 let mut eq = serde_json::Map::new();
                 for k in crate::progress::Equipment::KEYS {
-                    eq.insert(k.into(), item_json(e.get(k).map_or("", |s| s.as_str())));
+                    let id = e.get(k).map_or("", |s| s.as_str());
+                    let mut v = item_json(id);
+                    if let Some(i) = data::item_index(id).filter(|&i| crate::inventory::durable(i)) {
+                        v["dur"] = json!((e.dur(k) as f32 / 10.0).round() as i32);
+                        v["repair"] = json!(Self::repair_cost(i, e.dur(k)));
+                    }
+                    eq.insert(k.into(), v);
                 }
                 // 4 bölme sekmesi: açık olanlar (aralık) + kapalı olanlar (hangi çanta gerekir)
                 const NEED: [&str; 4] = ["", "Basit Çanta", "Polis Çantası", "Askerî Çanta"];
@@ -281,6 +314,7 @@ impl Game {
                     "armor": g.armor(), "max_hp": g.max_hp(), "dmg": g.damage_mult(), "speed": g.move_mult(), "crit": g.crit_chance(),
                     "gold": g.gold, "gems": g.gems, "in_game_hp": self.player.hp,
                     "chest": self.near_chest().map_or(-1, |i| i as i64), "home": self.at_home(),
+                    "can_repair": self.near_bench() || self.near_npc(4),
                 })
             }
             // V12.1: el üretimi ("craft") ve tezgâh ("craft_bench") ayrı listeler; tezgâh tarifleri elde görünmez
@@ -352,7 +386,7 @@ impl Game {
                         if d.kind == ItemKind::Currency || d.kind == ItemKind::Cloak {
                             return None;
                         }
-                        Some(json!({ "slot": i, "item": item_json(d.id), "count": s.count, "price": self.sell_price(s.item as usize) }))
+                        Some(json!({ "slot": i, "item": item_json(d.id), "count": s.count, "price": self.sell_price_dur(s.item as usize, s.dur) }))
                     })
                     .collect();
                 json!({ "gold": g.gold, "near": self.near_merchant(), "buy": cj["buy"], "missing": cj["missing"], "next": cj["next"],
@@ -566,6 +600,8 @@ impl Game {
             "craft" => self.craft(int("i"), v["n"].as_u64().unwrap_or(1).clamp(1, 50) as u32),
             "buy" => self.buy(int("i"), v["n"].as_u64().unwrap_or(1).clamp(1, 240) as u32),
             "sell" => self.sell(int("slot"), v["n"].as_u64().map(|n| n as u32)),
+            // dayanıklılık onarımı (tezgâhta ya da Tamirci Viktor'un yanında): slot, kuşanılan yuva ya da hepsi
+            "repair" => self.repair(v["slot"].as_i64(), v["eq"].as_str(), v["all"].as_bool().unwrap_or(false)),
             "upgrade_skill" => self.progress.upgrade(int("id")).map(|_| "Yetenek geliştirildi".into()).map_err(String::from),
             "reset_skills" => self.progress.reset_skills().map(|_| "Yetenekler sıfırlandı".into()).map_err(String::from),
             "select_char" => self.select_char(int("i")),
@@ -1033,6 +1069,7 @@ impl Game {
         self.spawn_drop(s.item as usize, s.count as u32, x, y);
         if let Some(d) = self.drops.last_mut() {
             d.age = -1.5; // hemen geri toplanmasın
+            d.dur = s.dur;
         }
         Ok(if s.count > 1 { format!("{} ×{} yere bırakıldı", ITEMS[s.item as usize].name, s.count) } else { format!("{} yere bırakıldı", ITEMS[s.item as usize].name) })
     }
@@ -1085,6 +1122,73 @@ impl Game {
         self.caravan_buy(i, n)
     }
 
+    /// Yıpranmış eşya daha ucuza satılır: kalan canla orantılı (kırık eşya %20'si)
+    fn sell_price_dur(&self, item: usize, dur: u16) -> u32 {
+        let base = self.sell_price(item);
+        if !crate::inventory::durable(item) {
+            return base;
+        }
+        let k = 0.2 + 0.8 * dur as f32 / crate::inventory::DUR_FULL as f32;
+        ((base as f32) * k).floor().max(1.0) as u32
+    }
+
+    /// Onarım bedeli: değerinin yarısı × eksik can oranı (en az 1 altın)
+    pub(crate) fn repair_cost(item: usize, dur: u16) -> u32 {
+        let missing = crate::inventory::DUR_FULL.saturating_sub(dur) as f32 / crate::inventory::DUR_FULL as f32;
+        if missing <= 0.0 {
+            return 0;
+        }
+        ((ITEMS[item].value as f32) * 0.5 * missing).ceil().max(1.0) as u32
+    }
+
+    /// Onarım: tezgâh başında ya da Tamirci Viktor'un yanında. slot → çantadaki eşya, eq → kuşanılan yuva, all → hepsi.
+    fn repair(&mut self, slot: Option<i64>, eq: Option<&str>, all: bool) -> Result<String, String> {
+        if !self.near_bench() && !self.near_npc(4) {
+            return Err("Onarım için çalışma tezgâhına ya da Tamirci Viktor'a git".into());
+        }
+        // (kaynak, eşya, dayanıklılık): kaynak 0..n çanta slotu, n+k kuşanılan yuva k
+        let mut todo: Vec<(Option<usize>, Option<&'static str>, usize, u16)> = Vec::new();
+        for (i, s) in self.progress.inv.slots.iter().enumerate() {
+            if let Some(s) = s {
+                let pick = all || slot == Some(i as i64);
+                if pick && crate::inventory::durable(s.item as usize) && s.dur < crate::inventory::DUR_FULL {
+                    todo.push((Some(i), None, s.item as usize, s.dur));
+                }
+            }
+        }
+        for k in crate::progress::Equipment::KEYS {
+            let pick = all || eq == Some(k);
+            if !pick {
+                continue;
+            }
+            if let Some(i) = self.progress.eq.get(k).and_then(|id| data::item_index(id)) {
+                let d = self.progress.eq.dur(k);
+                if crate::inventory::durable(i) && d < crate::inventory::DUR_FULL {
+                    todo.push((None, Some(k), i, d));
+                }
+            }
+        }
+        if todo.is_empty() {
+            return Err("Onarılacak eşya yok".into());
+        }
+        let cost: u32 = todo.iter().map(|t| Self::repair_cost(t.2, t.3)).sum();
+        if self.progress.gold < cost {
+            return Err(format!("{cost} altın gerekli"));
+        }
+        self.progress.gold -= cost;
+        for (s, k, _, _) in &todo {
+            if let Some(i) = s {
+                if let Some(Some(sl)) = self.progress.inv.slots.get_mut(*i) {
+                    sl.dur = crate::inventory::DUR_FULL;
+                }
+            }
+            if let Some(k) = k {
+                self.progress.eq.set_dur(k, crate::inventory::DUR_FULL);
+            }
+        }
+        Ok(if todo.len() == 1 { format!("{} onarıldı (-{cost} altın)", ITEMS[todo[0].2].name) } else { format!("{} eşya onarıldı (-{cost} altın)", todo.len()) })
+    }
+
     fn sell(&mut self, slot: usize, n: Option<u32>) -> Result<String, String> {
         let s = self
             .progress
@@ -1096,7 +1200,7 @@ impl Game {
             .ok_or("Boş slot")?;
         let item = s.item as usize;
         let n = n.unwrap_or(s.count as u32).clamp(1, s.count as u32);
-        let price = self.sell_price(item) * n;
+        let price = self.sell_price_dur(item, s.dur) * n;
         if let Some(Some(sl)) = self.progress.inv.slots.get_mut(slot) {
             sl.count -= n as u16;
             if sl.count == 0 {

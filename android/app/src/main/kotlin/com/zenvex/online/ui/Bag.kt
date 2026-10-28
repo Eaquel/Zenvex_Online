@@ -121,6 +121,15 @@ fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String?
             }
             val n = item.optInt("count")
             if (n > 1) PT("$n", (size.value * 0.22f).sp, Color.White, Modifier.align(Alignment.BottomEnd).padding(end = 3.dp), outline = true)
+            // dayanıklılık çubuğu: yuvanın altında, kalan cana göre yeşil → sarı → kırmızı; kırıkta kırmızı çarpı
+            if (item.has("dur")) {
+                val d = item.optInt("dur", 100).coerceIn(0, 100)
+                Box(Modifier.align(Alignment.BottomCenter).padding(start = size * 0.12f, end = size * 0.12f, bottom = size * 0.07f)
+                    .fillMaxWidth().height((size.value * 0.07f).coerceAtLeast(3f).dp).background(Color(0xCC000000))) {
+                    Box(Modifier.fillMaxHeight().fillMaxWidth(d / 100f).background(durColor(d)))
+                }
+                if (d == 0) Icon("close", size * 0.42f, Color(0xDDFF4A3A))
+            }
         } else if (ghost != null) {
             // boş ekipman yuvası: soluk piksel siluet + küçük ad
             // koyu siluet: eşya varmış gibi görünmesin
@@ -391,6 +400,15 @@ internal fun BagView(
                         val count = item.optInt("count", 1)
                         val kind = item.optString("kind")
                         val s = sel; val cs = selChest
+                        // onarım: tezgâhta ya da Tamirci Viktor'un yanında (bedel eksik canla orantılı)
+                        if (item.optInt("dur", 100) < 100 && (s != null || selEq != null)) {
+                            val near = inv.optBoolean("can_repair")
+                            PxButton(if (near) "Onar · ${item.optInt("repair")} Altın" else "Onar (Tezgâh/Viktor)", Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                color = Color(0xFF8A6A3A), height = 34.dp, size = 12.sp, enabled = near, icon = "hammer") {
+                                val r = if (s != null) cmd("repair", arrayOf("slot" to s)) else cmd("repair", arrayOf("eq" to selEq!!))
+                                Toaster.show(r.msg, r.ok); refresh()
+                            }
+                        }
                         if (s != null) {
                             val equippable = kind in EQUIP_KINDS
                             val usable = kind == "Consumable" || item.optString("id") == "fuel"
@@ -405,7 +423,7 @@ internal fun BagView(
                                     Modifier.fillMaxWidth(), height = 38.dp, size = 14.sp) {
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
                                     // V16: balta/kazma kuşanılınca elde tutmanın faydası bir kez hatırlatılır
-                                    if (equippable && r.ok && isTool(item.optString("id"))) Toaster.show("Elinde tuttuğun balta ve kazma 1,6 kat güçlü vurur ve gerçek alet olarak görünür; çantada dururken eskisi gibi çalışmaya devam eder.")
+                                    if (equippable && r.ok && isTool(item.optString("id"))) Toaster.show("Balta ve kazma yalnız elindeyken ağaca ve kayaya güçlü vurur.")
                                 }
                                 if (usable && s >= pockets) PxButton("Cebe Koy", Modifier.fillMaxWidth(), color = Px.Blue, height = 32.dp, size = 12.sp) {
                                     val free = (0 until pockets).firstOrNull { slots!!.isNull(it) } ?: 0
@@ -553,10 +571,25 @@ fun PxItemDetail(item: JSONObject) {
         }
     }
     Spacer(Modifier.height(8.dp))
+    if (item.has("dur")) {
+        val d = item.optInt("dur", 100)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PT(if (d == 0) "Kırık · Onarılmalı" else "Dayanıklılık %$d", 13.sp, durColor(d))
+        }
+        PxBar(d / 100f, durColor(d), Modifier.fillMaxWidth(), 6.dp)
+        Spacer(Modifier.height(6.dp))
+    }
     PT(item.optString("desc"), 12.sp, Px.Text, maxLines = 6)
-    if (isTool(item.optString("id"))) PT("Alet çantada dururken de çalışır ama gerçek gücü elinde.", 11.sp, Px.Sub, maxLines = 3)
+    if (isTool(item.optString("id"))) PT("Alet yalnız elindeyken işe yarar; çantada dururken ağaca ve kayaya yumruk gücüyle vurursun.", 11.sp, Px.Sub, maxLines = 3)
     Spacer(Modifier.height(4.dp))
     PT("Değer: ${item.optInt("value")} Altın", 11.sp, Px.Clan)
+}
+
+/** Dayanıklılık rengi: %50 üstü yeşil, %20-50 sarı, altı kırmızı */
+fun durColor(d: Int): Color = when {
+    d > 50 -> Color(0xFF6AD86A)
+    d > 20 -> Color(0xFFFFC840)
+    else -> Color(0xFFFF4A3A)
 }
 
 /** Oyun içi cep tuşu (HUD): eşya + bekleme perdesi. */

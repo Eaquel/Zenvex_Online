@@ -155,7 +155,7 @@ mod tests {
         assert_eq!(m2(12), GUIDE.len());
     }
 
-    /// V16 öğreticisi: balta üret → kuşan → ağaç kes → kazma üret → kaya kır → El Baltası üret → kuşan
+    /// V16 öğreticisi: balta üret → kuşan → ağaç kes → kazma üret → kaya kır → bıçak üret → kuşan
     #[test]
     fn tool_tutorial_steps_in_order() {
         use crate::story::Ev;
@@ -185,10 +185,10 @@ mod tests {
         g.story_event(Ev::Mine);
         g.story_tick();
         assert_eq!(GUIDE[g.progress.story.guide].id, "g4f");
-        // son adım: El Baltası kuşan
+        // son adım: bıçağı kuşan
         g.progress.story.guide = at("g4g");
         g.progress.story.guide_on = false;
-        g.progress.eq.weapon = "w_hatchet".to_string();
+        g.progress.eq.weapon = "w_knife".to_string();
         g.story_tick();
         g.story_tick();
         assert_eq!(GUIDE[g.progress.story.guide].id, "g5");

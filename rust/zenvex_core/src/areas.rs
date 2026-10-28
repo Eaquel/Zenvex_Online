@@ -192,16 +192,19 @@ impl crate::game::Game {
                 let (hx, hy) = hub(i);
                 // V13: önce bölgenin kendi yaratıkları (temel türün seviye aralığıyla)
                 let ranges = creatures(i);
-                let mut mobs: Vec<Value> = crate::data::SPECIES
+                let active: Vec<&crate::data::Species> =
+                    crate::data::SPECIES.iter().filter(|s| s.area == a.id && crate::data::species_active(s)).collect();
+                let mut mobs: Vec<Value> = active
                     .iter()
-                    .filter(|s| s.area == a.id)
                     .map(|s| {
                         let (lo, hi) = ranges.iter().find(|r| r.0 == s.base).map(|r| (r.1, r.2)).unwrap_or(a.rec);
                         json!({ "name": s.name, "sprite": format!("z/{}/idle_0_0", s.id), "lo": lo, "hi": hi, "color": ZOMBIES[s.base as usize].color })
                     })
                     .collect();
+                // bölge türü aynı rolü üstlendiyse klasik görünüş o bölgede çıkmaz: listede de yok
                 mobs.extend(creatures(i)
                     .iter()
+                    .filter(|&&(k, _, _)| !active.iter().any(|s| s.base == k))
                     .map(|&(k, lo, hi)| {
                         let d = &ZOMBIES[k as usize];
                         json!({ "name": d.name, "sprite": format!("z/{}/idle_0_0", d.sprite), "lo": lo, "hi": hi, "color": d.color })

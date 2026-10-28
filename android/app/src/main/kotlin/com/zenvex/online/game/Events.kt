@@ -41,6 +41,9 @@ object Events {
         Store.refresh()
     }
 
+    /** etkinliklere katılım seviyesi: altında afiş yok, puan gönderilmez (yeni oyuncu önce oyunu öğrensin) */
+    const val MIN_LEVEL = 10
+
     fun refresh() = Account.eventCurrent { r -> r.onSuccess { current = it } }
 
     private fun points(kind: String, a: JSONObject, b: JSONObject): Int {
@@ -73,6 +76,8 @@ object Events {
         if (!current.optBoolean("active")) { if (++idle % 6 == 0) refresh(); return }
         if (b == null) return
         if (current.optLong("ends") < System.currentTimeMillis()) { refresh(); return }
+        // 10. seviye altı: sayaç tabanı ilerler, puan birikmez (seviye atlayınca geçmiş eylemler sayılmaz)
+        if (GameSession.ui("profile").optInt("level") < MIN_LEVEL) return
         pending += points(current.optString("kind"), ev, b)
         if (pending <= 0) return
         val send = pending

@@ -363,7 +363,7 @@ private val NEWS: List<List<Pair<String, String>>> = listOf(
     ),
     listOf(
         "3B Kahramanlar" to "Kahramanlar, silahlar ve araçlar artık gerçek 3B model: her yönden, her silahla canlı animasyonlarla çizilir. Tırpanın üç vuruşluk kombosu, balta ve kazma darbeleri, RPG'nin roket yüklemesi baştan yapıldı.",
-        "Balta Ve Kazma" to "Balta ve kazmayı elinde tut: ağaç ve kayalara 1,6 kat güçlü vurursun. Silahı sağdaki silah tuşuyla değiştirirsin; roketatar her atıştan sonra yeni roket takar.",
+        "Balta Ve Kazma" to "Balta ve kazma yalnız elindeyken işe yarar: taş alet 50, demir alet 100 vurur (yumruk 25). Roketatar her atıştan sonra yeni roket takar.",
         "Silah Ve Aletler" to "Sağdaki silah tuşu elindeki silahları sırayla değiştirir.",
         "Yeni Efektler" to "Kodla çizilen ateş topu, halka dalgaları, rün mührü aurası (Sv 10, 25, 40, 50), silüet gölgeler, toz ve lastik izi. Ayarlardan Efekt Kalitesi ve Çözünürlük ile cihazına göre ayarla.",
         "Görevler" to "Öğretici baştan yazıldı (balta, kazma, ilk silah) ve görevci artık Sv 40'a kadar ana görev zinciri veriyor: karakollar, bölge avları ve Titan.",

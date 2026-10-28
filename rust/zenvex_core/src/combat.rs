@@ -115,6 +115,8 @@ impl Game {
         // PvP: üslerde ve yüksek seviyeli bölgelerde düşman oyunculara (klan arkadaşı hariç)
         hit_any |= self.melee_players(base * mult, range, arc);
         if hit_any {
+            // silah her isabetli savuruşta binde 1 aşınır (1000 savuruş)
+            self.wear_eq("weapon", 1);
             if matches!(self.player.anim, A_CHOP | A_MINE) {
                 self.player.anim = A_PUNCH;
             }
@@ -124,6 +126,14 @@ impl Game {
                 y: py + fy * 30.0 - 60.0,
                 kind: 0,
             });
+            return;
+        }
+        // zombi yakındayken (kaçan vuruş) ağaca/kayaya vurulmaz: savaşırken yanındaki ağaç kıymık ve yaprak saçmasın
+        let near_foe = self
+            .zombies
+            .iter()
+            .any(|z| z.state != ZState::Dead && (z.x - px).hypot(z.y - py) < range + m(2.0));
+        if near_foe {
             return;
         }
         // statik hedef
@@ -160,7 +170,7 @@ impl Game {
         if let Some((i, _)) = best {
             // yumrukla ağaç/taş: elle çizilmiş balta ve kazma pozu (vuruş zamanlaması aynı anim_t'den)
             if matches!(self.player.anim, A_PUNCH | A_CHOP | A_MINE) {
-                // alet yoksa yumrukla vurur (elde görünmez balta yok); varsa çantadaki en iyi alet elde görünür
+                // alet elde değilse yumrukla vurur; elde tutulan balta/kazma ağaca ve kayaya gerçek alet olarak iner
                 let has_axe = self.progress.tool_tier("t_axe_") > 0.0;
                 let has_pick = self.progress.tool_tier("t_pick_") > 0.0;
                 self.player.anim = match self.world.statics[i].kind {
@@ -175,6 +185,18 @@ impl Game {
                 base * mult
             };
             self.hit_static(i, dmg);
+            // elde alet varsa ağaç/kaya vuruşunda binde 2 aşınır (taş baltayla ~50 ağaç)
+            if self.progress.eq.weapon.starts_with("t_") {
+                self.wear_eq("weapon", 2);
+            }
+        }
+    }
+
+    /// Kuşanılan eşyayı aşındırır; kırıldıysa oyuncuya söyler (kırık eşya onarılana dek etkisiz)
+    pub fn wear_eq(&mut self, key: &str, amount: u16) {
+        if self.progress.eq.wear(key, amount) {
+            let name = self.progress.eq.get(key).and_then(|id| crate::data::item_index(id)).map_or("Eşya", |i| crate::data::ITEMS[i].name);
+            self.msg(format!("{name} kırıldı! Tezgâhta ya da Tamirci Viktor'da onar"));
         }
     }
 
@@ -320,6 +342,8 @@ impl Game {
         let keep = self.player.inf_ammo;
         let mag = if keep { mag + 1 } else { mag };
         self.progress.set_mag(w.item, mag - 1);
+        // ateşli silah her atışta binde 1 aşınır
+        self.wear_eq("weapon", 1);
         self.player.atk_cd = 1.0 / (w.rate * (1.0 + b.atk_speed + if self.player.oath_t > 0.0 { 0.3 } else { 0.0 }));
         self.player.atk_period = self.player.atk_cd;
         self.player.combat_t = 0.0;

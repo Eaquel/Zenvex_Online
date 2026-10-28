@@ -70,7 +70,7 @@ impl Progress {
         let c = self.chests.get_mut(i).ok_or("Sandık yok")?;
         let s = self.inv.slots.get(slot).copied().flatten().ok_or("Boş slot")?;
         let want = n.unwrap_or(s.count as u32).clamp(1, s.count as u32);
-        let left = inventory::stack_into(&mut c.slots, s.item as usize, want);
+        let left = inventory::put_slot(&mut c.slots, Slot { count: want as u16, ..s });
         let put = want - left;
         if put == 0 {
             return Err("Sandık dolu");
@@ -84,7 +84,7 @@ impl Progress {
         let c = self.chests.get(i).ok_or("Sandık yok")?;
         let s = c.slots.get(cslot).copied().flatten().ok_or("Boş slot")?;
         let want = n.unwrap_or(s.count as u32).clamp(1, s.count as u32);
-        let left = self.inv.add(s.item as usize, want);
+        let left = self.inv.put(Slot { count: want as u16, ..s });
         let took = want - left;
         if took == 0 {
             return Err("Çantada yer yok");
@@ -130,8 +130,8 @@ impl Progress {
             Some(b) if b.item == a.item => {
                 let stack = ITEMS[a.item as usize].stack.max(1);
                 let put = stack.saturating_sub(b.count).min(a.count);
-                c.slots[to] = Some(Slot { item: b.item, count: b.count + put });
-                c.slots[from] = if a.count > put { Some(Slot { item: a.item, count: a.count - put }) } else { None };
+                c.slots[to] = Some(Slot { count: b.count + put, ..b });
+                c.slots[from] = if a.count > put { Some(Slot { count: a.count - put, ..a }) } else { None };
             }
             _ => c.slots.swap(from, to),
         }
@@ -145,8 +145,12 @@ fn slots_json(slots: &[Option<Slot>]) -> Vec<Value> {
         .map(|s| match s {
             Some(s) => {
                 let d = &ITEMS[s.item as usize];
-                json!({ "i": s.item, "id": d.id, "name": d.name, "kind": d.kind, "rarity": d.rarity as u8, "desc": d.desc,
-                        "armor": d.armor, "bonus": d.bonus, "value": d.value, "count": s.count })
+                let mut v = json!({ "i": s.item, "id": d.id, "name": d.name, "kind": d.kind, "rarity": d.rarity as u8, "desc": d.desc,
+                        "armor": d.armor, "bonus": d.bonus, "value": d.value, "count": s.count });
+                if crate::inventory::durable(s.item as usize) {
+                    v["dur"] = json!((s.dur as f32 / 10.0).round() as i32);
+                }
+                v
             }
             None => Value::Null,
         })

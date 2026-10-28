@@ -4,7 +4,7 @@ Selam test ekibi! Bu sürümde oyunun görüntüsü ve hissi baştan değişti. 
 
 ## 🎭 Gerçek 3B modeller
 - **4 kahraman:** Kael, Lyra, Vex, Morvath. Her yönden, her silahla canlı çizilir.
-- **18 silah** elinde gerçek model olarak görünür: pistol, AK-47, Uzi, keskin nişancı, RPG-7, bıçak, katana, El Baltası, Savaş Baltası, tokmak, tırpanlar, balyoz, fırtına baltası, testere kılıcı, boşluk pençesi…
+- **18 silah** elinde gerçek model olarak görünür: pistol, AK-47, Uzi, keskin nişancı, RPG-7, bıçak, katana, Savaş Baltası, tokmak, tırpanlar, balyoz, fırtına baltası, testere kılıcı, boşluk pençesi…
 - **Araçlar:** Hellhound (araba) ve Nightstalker (motosiklet): dönen tekerlekler, yol sarsıntısı, eyerde oturan sürücü.
 
 ## ⚔️ Yeni animasyonlar

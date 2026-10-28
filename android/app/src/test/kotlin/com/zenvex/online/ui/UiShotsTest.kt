@@ -364,10 +364,4 @@ class UiShotsTest {
         com.zenvex.online.game.Account.previewLogin(1234567L)
         paparazzi.snapshot { LobbyScreen({}, 0) }
     }
-
-    /** İlk açılış dil ekranı (cihaz dili seçili gelir) */
-    @Test fun languageScreen() {
-        org.junit.Assume.assumeTrue("libzenvex.so yok", runCatching { com.zenvex.online.game.Native.hashCode(); true }.getOrDefault(false))
-        paparazzi.snapshot { com.zenvex.online.ui.LanguageScreen { } }
-    }
 }

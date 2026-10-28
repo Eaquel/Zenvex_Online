@@ -28,7 +28,6 @@ import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Settings
 import com.zenvex.online.game.Account
 import com.zenvex.online.ui.GameScreen
-import com.zenvex.online.ui.LanguageScreen
 import com.zenvex.online.ui.LoadingScreen
 import com.zenvex.online.ui.LobbyScreen
 import com.zenvex.online.ui.Pal
@@ -80,8 +79,7 @@ class MainActivity : ComponentActivity() {
                 AnimatedContent(screen, transitionSpec = { fadeIn(tween(260)) togetherWith fadeOut(tween(200)) }, label = "screen") { s ->
                     when (s) {
                         // ilk açılış: önce dil (cihaz dili seçili gelir), sonra doğrudan lobi ve giriş
-                        Screen.Splash -> SplashScreen { screen = if (Settings.languageChosen(this@MainActivity)) Screen.Lobby else Screen.Language }
-                        Screen.Language -> LanguageScreen { screen = Screen.Lobby }
+                        Screen.Splash -> SplashScreen { screen = Screen.Lobby }
                         Screen.Lobby -> LobbyScreen(go, epoch)
                         Screen.Settings -> SettingsScreen(back = { go(settingsFrom) }, onReset = reset)
                         Screen.Loading -> LoadingScreen(back = { go(Screen.Lobby) }) { screen = Screen.Game }

@@ -77,15 +77,21 @@ impl Game {
         z
     }
 
-    /// bölgenin yaratık türü: zone tablosunun seçtiği davranışa uyan tür (%75), yoksa bölgenin rastgele bir türü (%40)
+    /// bölgenin yaratık türü: zone tablosunun seçtiği davranışa uyan bölge türü her zaman onun yerine geçer (aynı rolde
+    /// iki ayrı görünüş olmasın), yoksa yürüyen/koşan zombi %40 bölgenin rastgele bir türü olur
     fn pick_species(&mut self, x: f32, y: f32, kind: ZKind) -> u8 {
         let area = crate::areas::AREAS[crate::areas::area_at(x, y)].id;
-        let list: Vec<u8> = crate::data::SPECIES.iter().enumerate().filter(|(_, s)| s.area == area).map(|(i, _)| i as u8 + 1).collect();
+        let list: Vec<u8> = crate::data::SPECIES
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.area == area && crate::data::species_active(s))
+            .map(|(i, _)| i as u8 + 1)
+            .collect();
         if list.is_empty() {
             return 0;
         }
         let same: Vec<u8> = list.iter().copied().filter(|&s| crate::data::species(s).unwrap().base == kind).collect();
-        if !same.is_empty() && self.rng.chance(0.75) {
+        if !same.is_empty() {
             return same[self.rng.below(same.len() as u32) as usize];
         }
         if matches!(kind, ZKind::Walker | ZKind::Runner) && self.rng.chance(0.4) {
@@ -754,6 +760,11 @@ mod species_tests {
     fn species_spawn_and_net_roundtrip() {
         for s in SPECIES {
             assert!(crate::areas::AREAS.iter().any(|a| a.id == s.area), "{}", s.id);
+        }
+        // V17: her bölgede en çok iki imza yaratık doğar
+        for a in crate::areas::AREAS {
+            let n = SPECIES.iter().filter(|s| s.area == a.id && crate::data::species_active(s)).count();
+            assert!(n <= 2, "{}: {n} tür", a.id);
         }
         let mut g = Game::new(7, Progress::default(), 0);
         let z = g.make_species(2, 5, g.player.x + 300.0, g.player.y);

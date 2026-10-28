@@ -173,6 +173,8 @@ pub struct Equipment {
     pub necklace: String,
     /// V9
     pub pants: String,
+    /// V17: kuşanılan eşyaların aşınması (binde; 0 = yeni, 1000 = kırık), sıra KEYS ile aynı
+    pub wear: [u16; 8],
 }
 
 impl Equipment {
@@ -223,9 +225,43 @@ impl Equipment {
         })
     }
 
-    /// Kuşanılan eşyanın tanımı
+    /// Kuşanılan eşyanın tanımı (kırık eşya etkisiz: zırh, yüzük ve kolye kırılınca sayılmaz; çanta bölmeleri kalır)
     pub fn def(&self, key: &str) -> Option<&'static data::ItemDef> {
+        if key != "bag" && self.broken(key) {
+            return None;
+        }
         self.get(key).filter(|s| !s.is_empty()).and_then(|id| data::item_index(id)).map(|i| &ITEMS[i])
+    }
+
+    fn wear_idx(key: &str) -> Option<usize> {
+        Self::KEYS.iter().position(|k| *k == key)
+    }
+
+    /// Kuşanılan eşyanın dayanıklılığı (binde)
+    pub fn dur(&self, key: &str) -> u16 {
+        Self::wear_idx(key).map_or(crate::inventory::DUR_FULL, |i| crate::inventory::DUR_FULL.saturating_sub(self.wear[i]))
+    }
+
+    pub fn set_dur(&mut self, key: &str, dur: u16) {
+        if let Some(i) = Self::wear_idx(key) {
+            self.wear[i] = crate::inventory::DUR_FULL.saturating_sub(dur.min(crate::inventory::DUR_FULL));
+        }
+    }
+
+    /// Kuşanılan eşya kırık mı (dayanıklılık 0)
+    pub fn broken(&self, key: &str) -> bool {
+        self.get(key).is_some_and(|s| !s.is_empty()) && self.dur(key) == 0
+    }
+
+    /// Aşındırır; eşya bu vuruşla kırıldıysa true
+    pub fn wear(&mut self, key: &str, amount: u16) -> bool {
+        let durable = self.get(key).filter(|s| !s.is_empty()).and_then(|id| data::item_index(id)).is_some_and(crate::inventory::durable);
+        let Some(i) = Self::wear_idx(key) else { return false };
+        if !durable || self.wear[i] >= crate::inventory::DUR_FULL {
+            return false;
+        }
+        self.wear[i] = (self.wear[i] + amount).min(crate::inventory::DUR_FULL);
+        self.wear[i] >= crate::inventory::DUR_FULL
     }
 }
 
@@ -296,6 +332,15 @@ pub struct Progress {
     /// sırttaki kanat (kozmetik kimliği; boş = yok)
     #[serde(default)]
     pub wings: String,
+    /// kendi araçlarının canı [motosiklet, araba] (in/bin, oyundan çık/gir canı yenilemez); 0 = patladı
+    #[serde(default = "veh_hp_full")]
+    pub veh_hp: [f32; 2],
+    /// patlayan aracın yeniden çağrılabileceği an (oyun süresi `play_time`, sn): çevrimdışı süre saymaz
+    #[serde(default)]
+    pub veh_ready: [f64; 2],
+    /// sürüş aşınması birikimi (sn): in-bin sayacı sıfırlamaz
+    #[serde(default)]
+    pub veh_wear: [f32; 2],
     pub drone_targets: [bool; 3],
     // istatistikler
     pub kills: u32,
@@ -482,6 +527,9 @@ impl Default for Progress {
             skin_char: String::new(),
             skin_vehicle: String::new(),
             wings: String::new(),
+            veh_hp: veh_hp_full(),
+            veh_ready: [0.0; 2],
+            veh_wear: [0.0; 2],
             drone_targets: [true, true, true],
             kills: 0,
             kills_by: [0; 8],
@@ -651,6 +699,13 @@ impl Progress {
             .filter_map(|(a, b)| Some((crate::data::item_index(a)? as u16, crate::data::item_index(b)?)))
             .collect();
         let mut n = 0u32;
+        // kuşanılmış silah da dönüşür (El Baltası → Bıçak)
+        for (a, b) in crate::data::RETIRE_INTO {
+            if self.eq.weapon == *a {
+                self.eq.weapon = b.to_string();
+                n += 1;
+            }
+        }
         let mut fix = |slots: &mut Vec<Option<crate::inventory::Slot>>| {
             let mut add: Vec<(usize, u32)> = Vec::new();
             for s in slots.iter_mut() {
@@ -774,30 +829,17 @@ impl Progress {
             1.0
         }
     }
-    /// Çanta ve elde taşınan en iyi alet gücü (taban değer; yumruk 25)
-    fn tool_base(&self, prefix: &str) -> f32 {
-        let mut best = 25.0f32;
-        for s in self.inv.slots.iter().flatten() {
-            let d = &crate::data::ITEMS[s.item as usize];
-            if d.id.starts_with(prefix) {
-                best = best.max(d.armor);
-            }
-        }
-        if let Some(i) = crate::data::item_index(&self.eq.weapon).filter(|_| self.eq.weapon.starts_with(prefix)) {
-            best = best.max(crate::data::ITEMS[i].armor);
-        }
-        best
-    }
-
-    /// Ağaç (t_axe_) ya da kaya (t_pick_) vuruş gücü: en iyi alet (yumruk 25); elde tutulan alet 1,6 kat
+    /// Ağaç (t_axe_) ya da kaya (t_pick_) vuruş gücü: yalnız ELDE tutulan alet sayılır (taş 50, demir 100);
+    /// alet çantadayken ya da elde silah varken yumruk gücü (25)
     pub fn tool_power(&self, prefix: &str) -> f32 {
-        let held = if self.eq.weapon.starts_with(prefix) { 1.6 } else { 1.0 };
-        self.tool_base(prefix) * held
+        crate::data::item_index(&self.eq.weapon)
+            .filter(|_| self.eq.weapon.starts_with(prefix) && !self.eq.broken("weapon"))
+            .map_or(25.0, |i| crate::data::ITEMS[i].armor.max(25.0))
     }
 
     /// Alet kademesi: 0 yok, 1 taş, 2 demir — yumruk animasyonunda hangi aletin görüneceğini belirler
     pub fn tool_tier(&self, prefix: &str) -> f32 {
-        let b = self.tool_base(prefix);
+        let b = self.tool_power(prefix);
         if b >= 100.0 { 2.0 } else if b >= 50.0 { 1.0 } else { 0.0 }
     }
 
@@ -838,18 +880,24 @@ impl Progress {
         if key == "bag" {
             self.bag_change_ok(Some(def))?;
         }
+        let old_dur = self.eq.dur(key);
         let target = self.eq.get_mut(key).ok_or("Bu eşya giyilemez")?;
         let old = std::mem::replace(target, def.id.to_string());
+        self.eq.set_dur(key, s.dur);
         // yığından bir tane al (çanta/ekipman yığınlanmaz ama güvenli olsun)
         self.inv.take_n(slot, Some(1));
         self.relayout_inv();
-        if !old.is_empty() && self.inv.add_id(&old, 1) > 0 {
-            // yer kalmadıysa eski eşya son bölmeye eklenir (kaybolmaz)
-            let caps: Vec<usize> = self.inv.pages.iter().map(|&p| p as usize).collect();
-            let mut caps2 = caps.clone();
-            *caps2.last_mut().unwrap() += 1;
-            self.inv.layout(&caps2);
-            self.inv.add_id(&old, 1);
+        if !old.is_empty() {
+            // çıkan eşya canıyla çantaya döner (çıkar-giy canı yenilemez)
+            let back = crate::inventory::Slot { item: data::item_index(&old).unwrap_or(0) as u16, count: 1, dur: old_dur };
+            if self.inv.put(back) > 0 {
+                // yer kalmadıysa eski eşya son bölmeye eklenir (kaybolmaz)
+                let caps: Vec<usize> = self.inv.pages.iter().map(|&p| p as usize).collect();
+                let mut caps2 = caps.clone();
+                *caps2.last_mut().unwrap() += 1;
+                self.inv.layout(&caps2);
+                self.inv.put(back);
+            }
         }
         Ok(def.name)
     }
@@ -871,9 +919,11 @@ impl Progress {
         if room == 0 {
             return Err("Envanterde yer yok");
         }
+        let dur = self.eq.dur(which);
         *self.eq.get_mut(which).unwrap() = String::new();
+        self.eq.set_dur(which, crate::inventory::DUR_FULL);
         self.relayout_inv();
-        self.inv.add_id(&id, 1);
+        self.inv.put(crate::inventory::Slot { item: data::item_index(&id).unwrap_or(0) as u16, count: 1, dur });
         Ok(())
     }
 
@@ -1009,6 +1059,10 @@ impl Progress {
     }
 }
 
+fn veh_hp_full() -> [f32; 2] {
+    [crate::data::VEHICLES[1].hp, crate::data::VEHICLES[2].hp]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1025,6 +1079,13 @@ mod tests {
         assert_eq!(p.inv.count_id("screw") + p.inv.count_id("tape"), 0);
         assert_eq!(p.inv.count_id("scrap"), 7);
         assert_eq!(p.inv.count_id("cloth"), 3);
+        // V17: El Baltası (çantada ve elde) bıçağa döner
+        p.inv.add_id("w_hatchet", 1);
+        p.eq.weapon = "w_hatchet".into();
+        assert_eq!(p.retire_items(), 2);
+        assert_eq!(p.inv.count_id("w_hatchet"), 0);
+        assert_eq!(p.inv.count_id("w_knife"), 1);
+        assert_eq!(p.eq.weapon, "w_knife");
         // kalan tariflerde ve tüccarda kaldırılan eşya yok
         for r in crate::data::RECIPES {
             assert!(crate::data::item_in_game(r.out), "{}", r.out);

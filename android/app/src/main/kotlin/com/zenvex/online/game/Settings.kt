@@ -108,15 +108,13 @@ data class Settings(
                 sfx = p.getFloat("sfx", d.sfx),
                 ambient = p.getFloat("ambient", d.ambient),
                 uiSound = p.getFloat("uiSound", d.uiSound),
-                // ilk açılışta cihaz dili (destekleniyorsa), sonra oyuncunun seçtiği
-                language = p.getString("language", null) ?: I18n.deviceDefault(),
+                // oyuncu Ayarlar'dan dil seçmediyse her açılışta cihaz dili (destekleniyorsa; yoksa İngilizce)
+                language = (if (p.getBoolean("langChosen", false)) p.getString("language", null) else null) ?: I18n.deviceDefault(),
             )
             I18n.load(ctx, current.language)
         }
 
-        /** ilk açılışta dil ekranı bir kez gösterilir (cihaz dili seçili gelir); seçilince işaretlenir */
-        fun languageChosen(ctx: Context): Boolean = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("langChosen", false)
-
+        /** Dil ekranı yok: oyun cihaz dilini kullanır; oyuncu Ayarlar'dan dil değiştirince bu işaretlenir ve o dil kalır */
         fun markLanguageChosen(ctx: Context) {
             ctx.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().putBoolean("langChosen", true).apply()
         }
