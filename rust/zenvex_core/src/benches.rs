@@ -167,7 +167,7 @@ mod tests {
     }
 
     #[test]
-    fn hand_and_bench_craft_lists_are_separate() {
+    fn bench_list_includes_hand_recipes() {
         let mut g = Game::new(7, Progress::default(), 0);
         let hand = g.ui_json("craft");
         let bench = g.ui_json("craft_bench");
@@ -177,8 +177,9 @@ mod tests {
         };
         let (h, b) = (ids(&hand), ids(&bench));
         assert!(h.contains(&"bandage".to_string()) && h.contains(&"workbench".to_string()));
-        assert!(b.contains(&"medkit".to_string()) && !b.contains(&"bandage".to_string()));
-        assert!(h.iter().all(|x| !b.contains(x)), "el ve tezgâh listeleri ayrı olmalı");
+        // V18: tezgâh listesi elde yapılanları da içerir; el listesi tezgâh tariflerini içermez
+        assert!(b.contains(&"medkit".to_string()) && b.contains(&"bandage".to_string()));
+        assert!(!h.contains(&"medkit".to_string()), "el listesinde tezgâh tarifi olmamalı");
         // tezgâh tarifi elden üretilemez
         let i = crate::data::RECIPES.iter().position(|r| r.bench).unwrap();
         g.player.x = 150.0 * crate::world::TILE;

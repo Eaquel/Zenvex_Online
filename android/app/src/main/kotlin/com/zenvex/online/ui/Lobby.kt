@@ -87,8 +87,6 @@ fun LobbyScreen(go: (Screen) -> Unit, epoch: Int) {
         Column(Modifier.align(Alignment.TopStart).padding(start = 54.dp, top = 70.dp), horizontalAlignment = Alignment.Start) {
             // tek satır "Zenvex Online" eski iki satırlıdan geniş: oyuncu kartına değmesin
             CodeLogo(118.dp)
-            Spacer(Modifier.height(8.dp))
-            PT("Hayatta Kal. Güçlen. Üssünü Savun.", 17.sp, Color(0xFFFFE2B8), outline = true)
         }
         // ---- sol üst: profil (fotoğraf, ad, ID, etiketler) → dokununca profil düzenleme
         val pp = if (Account.loggedIn) Account.profile.value else JSONObject().put("name", prof.optString("name")).put("level", prof.optInt("level", 1))
@@ -364,7 +362,7 @@ private val NEWS: List<List<Pair<String, String>>> = listOf(
         "Klan" to "Klan seviyesi arttıkça üye sınırı, güçlendirmeler ve klan ödülleri açılır. Ele geçirilen üsler klana dakikada XP kazandırır.",
     ),
     listOf(
-        "Canlı NPC'ler Ve Kanatlar" to "Marco, Silas, Elena, Viktor, Jack, Aldric, Diana ve üs askerleri artık 3B: yaklaşınca sana döner ve konuşur. VIP 3, 6 ve 9'da sırtına takılan çırpan kanatlar (Karakterler ekranından takılır); Sezon Kartı 30'da Sezon 1 Kanatları.",
+        "Canlı NPC'ler" to "Marco, Silas, Elena, Viktor, Jack, Aldric, Diana ve üs askerleri artık 3B: yaklaşınca sana döner ve konuşur.",
         "Her Şeyin Canı Var" to "Silah, alet, zırh, yüzük ve kolye kullandıkça yıpranır (çantalar kırılmaz): yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.",
         "Araçların Canı" to "Araba 500, motosiklet 200 can. Sürerken araç hasarı üstlenir ve yavaşça aşınır; patlarsa araba 60, motosiklet 30 saniye sonra yeniden çağrılır.",
         "Daha Düzenli Ekran" to "Üstteki yazılar artık sırayla gelir, üst üste binmez. Altın ve elmas tek kapsülde, şarjör tuşu saldırı çemberinin yanında. Etkinlikler 10. seviyede açılır.",

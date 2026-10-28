@@ -47,22 +47,6 @@ private val GEM = Color(0xFF7FE0FF)
 private val GOLD = Color(0xFFFFC83A)
 private val VIP = Color(0xFFE6B4FF)
 
-/** VIP seviyelerinin açtıkları (puan eşiği → ayrıcalık); hepsi oyunda çalışır: çanta/satış Rust tarafında, elmas sunucuda, tema sohbette */
-internal val VIP_PERKS = listOf(
-    0 to "—",
-    50 to "Sohbette isminin yanında VIP rozeti",
-    150 to "Çanta +5 yuva",
-    350 to "Kor Kanatları, bronz sohbet teması, tüccara satış +%3",
-    700 to "Her gün 20 elmas",
-    1250 to "Çanta +10 yuva (toplam)",
-    2250 to "Ejder Kanatları, tüccara satış +%5 (toplam)",
-    3750 to "Gümüş sohbet teması",
-    6000 to "Her gün 40 elmas",
-    10000 to "Titan Kanatları, çanta +15 yuva (toplam)",
-    20000 to "Altın sohbet teması, her gün 80 elmas",
-    50000 to "Her gün 150 elmas, kişisel destek",
-)
-
 @Composable
 fun ShopScreen(close: () -> Unit, startTab: Int = 0) {
     var tick by remember { mutableIntStateOf(0) }
@@ -74,13 +58,7 @@ fun ShopScreen(close: () -> Unit, startTab: Int = 0) {
 internal fun ShopView(s: JSONObject?, loggedIn: Boolean, now: Long, startTab: Int, close: () -> Unit, refresh: () -> Unit) {
     var tab by remember { mutableIntStateOf(startTab) }
     val t = rememberTime()
-    ScreenFrame("MAĞAZA", "crate", close, right = {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            VipBadge(s?.optJSONObject("vip")?.optInt("level") ?: 0, 30.dp)
-            Spacer(Modifier.width(6.dp))
-            PT("${s?.optJSONObject("vip")?.optInt("points") ?: 0} VIP Puanı", 14.sp, VIP)
-        }
-    }, bg = if (UiArt.has(LocalContext.current, "shop_bg")) "shop_bg" else null) {
+    ScreenFrame("MAĞAZA", "crate", close, bg = if (UiArt.has(LocalContext.current, "shop_bg")) "shop_bg" else null) {
         if (!loggedIn) { PT("Mağaza İçin Hesabına Gir", 18.sp, Px.Sub); return@ScreenFrame }
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             // sol: sekmeler
@@ -88,14 +66,15 @@ internal fun ShopView(s: JSONObject?, loggedIn: Boolean, now: Long, startTab: In
                 val offers = s?.optJSONArray("offers")?.length() ?: 0
                 listOf(Triple("Öne Çıkan", "star", offers), Triple("Elmas", "gem", 0), Triple("Paketler", "crate", offers),
                     Triple("Kartlar", "calendar", if (s?.optJSONArray("cards")?.objs()?.any { it.optBoolean("claimable") } == true) 1 else 0),
-                    Triple("VIP", "crown", if (s?.optJSONObject("vip")?.optBoolean("daily") == true && Store.vipLevel() >= 4) 1 else 0),
                     Triple("Sezon Bileti", "pass", 0)).forEachIndexed { i, (n, ic, badge) ->
                     val on = i == tab
                     Row(Modifier.fillMaxWidth().height(46.dp).clip(RoundedCornerShape(4.dp))
                         .background(if (on) Brush.horizontalGradient(listOf(Color(0xFF6A4A16), Color(0xFF2A2012))) else Brush.horizontalGradient(listOf(Px.PanelDark, Px.PanelDark)))
                         .border(1.dp, if (on) GOLD.copy(alpha = 0.7f) else Color(0x33FFFFFF), RoundedCornerShape(4.dp))
                         .clickable { tab = i }.padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (UiArt.has(LocalContext.current, "shoptab_$i")) ArtImage("shoptab_$i", Modifier.size(26.dp)) else Icon(ic, 22.dp, if (on) GOLD else Px.Sub)
+                        // sekme görselleri docs/25 numarasıyla; VIP sekmesi kalktığı için Sezon Bileti (4) görseli shoptab_5
+                        val art = "shoptab_${if (i == 4) 5 else i}"
+                        if (UiArt.has(LocalContext.current, art)) ArtImage(art, Modifier.size(26.dp)) else Icon(ic, 22.dp, if (on) GOLD else Px.Sub)
                         Spacer(Modifier.width(6.dp))
                         PT(n, 15.sp, if (on) Color.White else Px.Sub, Modifier.weight(1f))
                         if (badge > 0) Box(Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(Color(0xFFE04040)
@@ -112,23 +91,11 @@ internal fun ShopView(s: JSONObject?, loggedIn: Boolean, now: Long, startTab: In
                     1 -> GemsTab(products, t)
                     2 -> PacksTab(s, products, now, t)
                     3 -> CardsTab(s, products, now, refresh)
-                    4 -> VipTab(s, refresh)
                     else -> PassTab(s, products, t)
                 }
             }
         }
     }
-}
-
-/** VIP rozeti: görsel (vip_badge_<n>) varsa o, yoksa renkli kalkan üstünde "V3" */
-@Composable
-fun VipBadge(level: Int, size: Dp) {
-    val ctx = LocalContext.current
-    val art = "vip_badge_$level"
-    if (UiArt.has(ctx, art)) { ArtImage(art, Modifier.size(size)); return }
-    val c = when { level >= 11 -> Color(0xFFFF5A3A); level >= 10 -> GOLD; level >= 7 -> Color(0xFFDCE4EE); level >= 4 -> Color(0xFFE0904A); else -> Color(0xFF9AA4AE) }
-    Box(Modifier.size(size).clip(RoundedCornerShape(size / 4)).background(Color(0xFF16121C)).border(2.dp, c, RoundedCornerShape(size / 4)),
-        contentAlignment = Alignment.Center) { PT(Store.vipName(level), (size.value * 0.36f).sp, c) }
 }
 
 /** Ürün kartı: parlak kenar, kayan ışık, köşede "İlk alım 2×" kurdelesi, altta fiyat tuşu */
@@ -208,7 +175,6 @@ private fun Featured(s: JSONObject, products: Map<String, JSONObject>, now: Long
         }
         Spacer(Modifier.height(8.dp))
     }
-    VipSummary(s)
 }
 
 @Composable
@@ -234,7 +200,7 @@ private fun GemsTab(products: Map<String, JSONObject>, t: Float) {
         }
         Spacer(Modifier.height(8.dp))
     }
-    PT("Her TL, VIP puanı kazandırır. Ödeme Google Play ile yapılır; içerik postana gelir.", 12.sp, Px.Sub, maxLines = 2)
+    PT("Ödeme Google Play ile yapılır; içerik postana gelir.", 12.sp, Px.Sub, maxLines = 2)
 }
 
 @Composable
@@ -289,49 +255,6 @@ private fun CardsTab(s: JSONObject, products: Map<String, JSONObject>, now: Long
         }
     }
     PT("Alınmayan günlük ödüller 3 güne kadar birikir. Kart bitmeden yeniden alırsan süresi uzar.", 12.sp, Px.Sub, maxLines = 2)
-}
-
-@Composable
-private fun VipSummary(s: JSONObject) {
-    val v = s.optJSONObject("vip") ?: return
-    val lv = v.optInt("level"); val pts = v.optInt("points"); val next = v.optInt("next")
-    val prev = VIP_PERKS.getOrNull(lv)?.first ?: 0
-    PxPanel(Modifier.fillMaxWidth()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            VipBadge(lv, 44.dp)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                PT(if (next > 0) "${Store.vipName(lv + 1)} İçin ${fmtL((next - pts).toLong())} Puan" else "En Yüksek VIP Seviyesi", 15.sp, VIP)
-                PxBar(if (next > 0) (pts - prev).toFloat() / (next - prev).coerceAtLeast(1) else 1f, VIP, Modifier.fillMaxWidth(), 10.dp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun VipTab(s: JSONObject, changed: () -> Unit) {
-    VipSummary(s)
-    val lv = Store.vipLevel()
-    if (lv >= 4 && s.optJSONObject("vip")?.optBoolean("daily") == true) {
-        Spacer(Modifier.height(6.dp))
-        PxButton("VIP Günlük Elmasını Al", Modifier.fillMaxWidth(), Px.Orange, icon = "gem") { Store.claimVip(changed) }
-    }
-    Spacer(Modifier.height(8.dp))
-    VIP_PERKS.forEachIndexed { i, (pts, perk) ->
-        if (i == 0) return@forEachIndexed
-        val on = lv >= i
-        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp).clip(RoundedCornerShape(3.dp))
-            .background(if (on) Color(0x553A2A4A) else Color(0x33000000)).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            VipBadge(i, 34.dp)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                PT(perk, 13.sp, if (on) Color.White else Px.Sub, maxLines = 2)
-                PT("${fmtL(pts.toLong())} puan", 11.sp, VIP.copy(alpha = 0.8f))
-            }
-            if (on) Icon("check", 20.dp, Px.Name)
-        }
-    }
-    PT("VIP ayrıcalıkları görünüm ve kolaylık sağlar; güç satılmaz. Her harcanan TL 1 VIP puanıdır.", 12.sp, Px.Sub, maxLines = 2)
 }
 
 @Composable

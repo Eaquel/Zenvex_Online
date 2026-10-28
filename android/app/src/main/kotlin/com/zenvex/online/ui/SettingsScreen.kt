@@ -242,7 +242,6 @@ fun Choice(label: String, options: List<String>, selected: Int, onSelect: (Int) 
 @Composable
 fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = false, onChange: (Float) -> Unit) {
     var w by remember { mutableIntStateOf(1) }
-    val density = LocalDensity.current
     val frac = ((value - min) / (max - min)).coerceIn(0f, 1f)
     fun pick(x: Float) {
         val f = (x / w).coerceIn(0f, 1f)
@@ -260,8 +259,10 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
             contentAlignment = Alignment.CenterStart,
         ) {
             PxBar(frac, Px.Clan, Modifier.fillMaxWidth(), 8.dp)
-            val knobX = with(density) { (w * frac).toDp() } - 6.dp
-            Box(Modifier.offset(x = knobX).size(12.dp, 20.dp).background(Color(0xFFE8E4D4)).border(2.dp, Px.Edge))
+            // düğme ölçülmüş genişliğe bağlı değil (ilk karede 0'a atlıyordu): doluluk oranındaki kutunun ucunda durur
+            Box(Modifier.fillMaxWidth(frac).height(20.dp)) {
+                Box(Modifier.align(Alignment.CenterEnd).offset(x = 6.dp).size(12.dp, 20.dp).background(Color(0xFFE8E4D4)).border(2.dp, Px.Edge))
+            }
         }
     }
 }

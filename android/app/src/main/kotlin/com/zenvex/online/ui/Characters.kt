@@ -181,8 +181,6 @@ private fun CharDetail(c: JSONObject, i: Int, changed: () -> Unit, modifier: Mod
         }
         PT(c.optString("desc"), 13.sp, Px.Sub, maxLines = 3)
         Spacer(Modifier.height(6.dp))
-        WingsRow(changed)
-        Spacer(Modifier.height(6.dp))
         // kart ilerlemesi
         val cards = c.optInt("cards"); val per = c.optInt("per_level", 25)
         val into = if (cards == 0) 0 else (cards - 1) % per
@@ -224,36 +222,6 @@ private fun CharDetail(c: JSONObject, i: Int, changed: () -> Unit, modifier: Mod
                 Spacer(Modifier.width(8.dp))
                 PT(perks!!.getString(k), 13.sp, if (on) Px.Text else Px.Sub, Modifier.weight(1f), maxLines = 2)
                 if (on) Icon("check", 16.dp, Px.Name) else Icon("lock", 14.dp, Px.Sub)
-            }
-        }
-    }
-}
-
-/** Nasıl kazanılır (kilitli kanat) */
-private val WING_HOW = mapOf("wings_ash" to "VIP 3", "wings_dragon" to "VIP 6", "wings_titan" to "VIP 9", "wings_s1" to "Sezon Kartı 30")
-private val WING_COL = mapOf("wings_ash" to Color(0xFFFF9A50), "wings_dragon" to Color(0xFFFF4A4A), "wings_titan" to Color(0xFFB07AFF), "wings_s1" to Color(0xFF6AA8FF))
-
-/** Sırta takılan 3B kanatlar: sahip olunanlar dokununca takılır/çıkarılır, kilitliler nasıl kazanılacağını yazar */
-@Composable
-private fun WingsRow(changed: () -> Unit) {
-    var tick by remember { mutableIntStateOf(0) }
-    val wings = remember(tick) { GameSession.ui("cosmetics").optJSONArray("items").objs().filter { it.optString("kind") == "wings" } }
-    if (wings.isEmpty()) return
-    PT("Kanatlar", 15.sp, Px.Clan)
-    Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        for (w in wings) {
-            val id = w.optString("id"); val owned = w.optBoolean("owned"); val on = w.optBoolean("equipped")
-            val col = WING_COL[id] ?: Px.Clan
-            Column(Modifier.weight(1f).heightIn(min = 64.dp).clip(RoundedCornerShape(6.dp))
-                .background(if (on) col.copy(alpha = 0.30f) else Px.Row)
-                .border(if (on) 2.dp else 1.dp, if (owned) col else Px.Sub.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
-                .clickable(enabled = owned) {
-                    val res = GameSession.cmd("equip_cosmetic", "id" to id); Toaster.show(res.msg, res.ok)
-                    com.zenvex.online.game.Skins.refresh(); tick++; changed()
-                }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(if (owned) "wings" else "lock", 22.dp, if (owned) col else Px.Sub)
-                PT(w.optString("name"), 11.sp, if (owned) Px.Text else Px.Sub, maxLines = 2)
-                PT(if (on) "Takılı" else if (owned) "Tak" else WING_HOW[id] ?: "", 11.sp, if (on) Px.Name else Px.Sub, maxLines = 1)
             }
         }
     }

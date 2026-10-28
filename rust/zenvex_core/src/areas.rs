@@ -241,7 +241,8 @@ impl crate::game::Game {
         if self.base_clock > 0.0 {
             (self.base_clock / (TITAN_SLOT * 1000.0)) as i64
         } else {
-            (self.time as f64 / TITAN_SLOT) as i64
+            // çevrimdışı: oyun süresiyle (oturumlar arası artar; her girişte 0. dilime dönüp Titan'ı yeniden doğurmaz)
+            (self.progress.play_time / TITAN_SLOT) as i64
         }
     }
 
@@ -270,10 +271,14 @@ impl crate::game::Game {
         let slot = self.titan_slot();
         if slot != self.titan.0 {
             let (a, x, y) = self.titan_spot(slot);
+            let first = self.titan.0 == i64::MIN;
             self.titan = (slot, a, x, y);
-            self.titan_dead = false;
+            // bu dilimde zaten öldürüldüyse (çıkıp yeniden girdiysek) yeniden doğmaz
+            self.titan_dead = self.progress.titan_killed == slot;
             self.zombies.retain(|z| !z.boss);
-            self.msg(format!("TİTAN {} bölgesinde uyandı! 15 dakika orada kalacak.", AREAS[a].name));
+            if !first {
+                self.msg(format!("TİTAN {} bölgesinde uyandı! 15 dakika orada kalacak.", AREAS[a].name));
+            }
         }
         let (_, _, bx, by) = self.titan;
         let alive = self.zombies.iter().any(|z| z.boss && z.state != crate::game::ZState::Dead);
@@ -288,7 +293,7 @@ impl crate::game::Game {
         if self.base_clock > 0.0 {
             (TITAN_SLOT - (self.base_clock / 1000.0) % TITAN_SLOT) as f32
         } else {
-            (TITAN_SLOT - self.time as f64 % TITAN_SLOT) as f32
+            (TITAN_SLOT - self.progress.play_time % TITAN_SLOT) as f32
         }
     }
 

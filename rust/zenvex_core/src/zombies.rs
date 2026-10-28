@@ -5,7 +5,8 @@ use crate::world::{self, Zone, TILE};
 use std::f32::consts::TAU;
 
 const ACTIVE_R: f32 = 1700.0;
-const MAX_ACTIVE: usize = 26;
+/// V18: her bölgede aynı anda en çok bu kadar zombi (eskiden 26; çok kalabalıktı)
+const MAX_ACTIVE: usize = 14;
 
 /// Bölge sınırı: yaratık doğduğu yerden bu kadar uzaklaşınca takibi bırakıp geri döner.
 const LEASH: f32 = 15.0 * crate::data::PX_PER_M;
@@ -125,7 +126,7 @@ impl Game {
         if self.spawn_t > 0.0 {
             return;
         }
-        self.spawn_t = 0.9;
+        self.spawn_t = 1.5;
         let alive = self
             .zombies
             .iter()

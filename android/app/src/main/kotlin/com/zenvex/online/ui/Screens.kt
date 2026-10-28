@@ -582,16 +582,11 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit, onPlayer: ((ui
         LazyColumn(Modifier.weight(1f).fillMaxWidth(), state) {
             items(lines) { l ->
                 val who = l.uid.takeIf { !l.mine && l.channel != "system" && it.isNotEmpty() }
-                // V15 VIP sohbet teması: V3 bronz, V7 gümüş, V10 altın şerit
-                val theme = vipChatTheme(l.vip)
-                Row(Modifier.padding(vertical = 2.dp).then(if (theme != null) Modifier.background(theme.copy(alpha = 0.16f)).drawBehind {
-                    drawRect(theme, size = androidx.compose.ui.geometry.Size(3.dp.toPx(), size.height))
-                }.padding(start = 6.dp) else Modifier).then(if (who != null) Modifier.clickable {
+                Row(Modifier.padding(vertical = 2.dp).then(if (who != null) Modifier.clickable {
                     if (onPlayer != null) onPlayer(who, l.name) else profileOf = l.name
                 } else Modifier), verticalAlignment = Alignment.CenterVertically) {
                     // gönderenin resmi ve çerçevesi (animasyonlu); sistem satırlarında yok
                     if (l.channel != "system" && l.avatar >= 0) { ProfileAvatar(l.avatar, l.frame, 30.dp); Spacer(Modifier.width(5.dp)) }
-                    if (l.vip > 0) { VipBadge(l.vip, 20.dp); Spacer(Modifier.width(3.dp)) }
                     if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
                     PT(l.name + ": ", 13.sp, if (l.mine) Px.Name else if (l.channel == "system") Px.Orange else Color(0xFF8CC8FF))
                     PT(l.text, 14.sp, maxLines = 6, outline = true)
@@ -622,13 +617,6 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit, onPlayer: ((ui
     profileOf?.let { PlayerProfileDialog(it) { profileOf = null } }
 }
 
-/** VIP sohbet teması rengi (V3 bronz, V7 gümüş, V10 ve üstü altın); yoksa null */
-internal fun vipChatTheme(vip: Int): Color? = when {
-    vip >= 10 -> Color(0xFFFFC83A)
-    vip >= 7 -> Color(0xFFC8D2DC)
-    vip >= 3 -> Color(0xFFCD7F32)
-    else -> null
-}
 
 // =========================================================================== takas
 /**

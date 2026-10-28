@@ -71,7 +71,7 @@ fun PassScreen(back: () -> Unit) {
         buy = { shop = true },
         claim = { tier, premium, gem -> Pass.claim(tier, premium, gem) { tick++ } })
     // V15: bilet gerçek parayla Mağaza'nın Sezon Bileti sekmesinden alınır
-    if (shop) com.zenvex.online.ui.ShopScreen({ shop = false; Pass.sync(); tick++ }, startTab = 5)
+    if (shop) com.zenvex.online.ui.ShopScreen({ shop = false; Pass.sync(); tick++ }, startTab = 4)
 }
 
 /** Süre yazısı: "12 Gün 4 Saat", "3 Saat 12 Dk", "8 Dk 20 Sn" */

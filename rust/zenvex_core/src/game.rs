@@ -545,6 +545,8 @@ impl Game {
         progress.ensure_dailies(day_index);
         // V12.1: oyundan kalkan ara malzemeler karşılığına dönüşür
         progress.retire_items();
+        // V18: VIP kalktı; kanatlar yalnız yöneticinin taktığıdır
+        progress.wings = progress.wings_grant.clone();
         let refund = progress.sell_off_retired();
         let _ = progress.quest_event(data::QuestKind::Level, 0);
         let (x, y) = world::camp_spawn();
@@ -771,15 +773,13 @@ impl Game {
         self.zombies.retain(|z| (z.x - x).hypot(z.y - y) > 900.0);
     }
 
+    /// V18: gece/gündüz döngüsü kalktı; her zaman gündüz (`day_t` yalnız eski kayıtlar ve hile için duruyor)
     pub fn light(&self) -> f32 {
-        // 0.25-0.75 gündüz; geceye yumuşak geçiş
-        let t = self.day_t.fract();
-        let d = -(t * TAU - std::f32::consts::FRAC_PI_2).sin(); // t=0.5 öğlen → 1
-        (0.42 + 0.58 * ((d + 0.35) / 1.35).clamp(0.0, 1.0)).clamp(0.4, 1.0)
+        1.0
     }
 
     pub fn is_night(&self) -> bool {
-        self.light() < 0.6
+        false
     }
 
     /// Eldeki silah (kırıksa yumruk: onarana dek iş görmez)

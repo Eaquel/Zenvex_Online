@@ -314,9 +314,6 @@ pub struct Progress {
     /// V15: karakter görevleri (gün, karakter başına ilerleme, alındı mı)
     #[serde(default)]
     pub char_daily: CharDaily,
-    /// V15: VIP seviyesi (0-11; sunucudaki harcamadan gelir, her oturumda istemci yazar)
-    #[serde(default)]
-    pub vip: u8,
     pub quests: QuestState,
     pub pass: PassState,
     pub cosmetics: Vec<String>,
@@ -332,6 +329,12 @@ pub struct Progress {
     /// sırttaki kanat (kozmetik kimliği; boş = yok)
     #[serde(default)]
     pub wings: String,
+    /// yöneticinin taktığı kanat (V18: oyuncu seçemez; her oyun açılışında `wings` buna eşitlenir)
+    #[serde(default)]
+    pub wings_grant: String,
+    /// Titan'ın öldürüldüğü son zaman dilimi (yeniden girince aynı dilimde yeniden doğmasın)
+    #[serde(default = "no_slot")]
+    pub titan_killed: i64,
     /// kendi araçlarının canı [motosiklet, araba] (in/bin, oyundan çık/gir canı yenilemez); 0 = patladı
     #[serde(default = "veh_hp_full")]
     pub veh_hp: [f32; 2],
@@ -516,7 +519,6 @@ impl Default for Progress {
             char_xp: [0; 4],
             char_cards: [1, 0, 0, 0],
             char_daily: CharDaily::default(),
-            vip: 0,
             quests: QuestState::default(),
             pass: PassState::default(),
             cosmetics: Vec::new(),
@@ -527,6 +529,8 @@ impl Default for Progress {
             skin_char: String::new(),
             skin_vehicle: String::new(),
             wings: String::new(),
+            wings_grant: String::new(),
+            titan_killed: i64::MIN,
             veh_hp: veh_hp_full(),
             veh_ready: [0.0; 2],
             veh_wear: [0.0; 2],
@@ -673,7 +677,7 @@ impl Progress {
 
     /// Ana çanta bölmesi: 20 slot, her 5 seviyede +2.
     pub fn inventory_cap(&self) -> usize {
-        BASE_SLOTS + 2 * (self.level / 5) as usize + data::vip_bag_slots(self.vip)
+        BASE_SLOTS + 2 * (self.level / 5) as usize
     }
 
     /// Bölme boyları: ana çanta + kuşanılan çantanın ek bölmeleri (en fazla 3).
@@ -850,8 +854,7 @@ impl Progress {
         0.06 * self.skill(10)
     }
     pub fn trade_bonus(&self) -> f32 {
-        let skill = if self.skills[11] > 0 { 0.15 } else { 0.0 };
-        skill + data::vip_sell_bonus(self.vip)
+        if self.skills[11] > 0 { 0.15 } else { 0.0 }
     }
     pub fn damage_resist(&self) -> f32 {
         self.bonus().dmg_taken
@@ -1059,6 +1062,10 @@ impl Progress {
     }
 }
 
+fn no_slot() -> i64 {
+    i64::MIN
+}
+
 fn veh_hp_full() -> [f32; 2] {
     [crate::data::VEHICLES[1].hp, crate::data::VEHICLES[2].hp]
 }
@@ -1102,17 +1109,6 @@ mod tests {
         let n = outs.len();
         outs.dedup();
         assert_eq!(outs.len(), n, "aynı eşyanın iki tarifi var");
-    }
-
-    #[test]
-    fn vip_adds_bag_slots() {
-        let mut p = Progress::default();
-        p.relayout_inv();
-        let base = p.inv_pages()[0];
-        p.vip = 5;
-        p.relayout_inv();
-        assert_eq!(p.inv_pages()[0], base + 10);
-        assert!(p.trade_bonus() > 0.0);
     }
 
     #[test]

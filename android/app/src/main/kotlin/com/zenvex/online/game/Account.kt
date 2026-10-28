@@ -255,8 +255,6 @@ object Account {
     fun vehicleOrders(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_vehicle_orders", auth()) { r -> done(arr(r)) }
     fun adminEventStart(kind: String, done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_start", auth().put("p_kind", kind)) { r -> done(txt(r)) }
     fun adminEventStop(done: (Result<String>) -> Unit) = Supa.rpc("zx_admin_event_stop", auth()) { r -> done(txt(r)) }
-    fun adminVip(target: Long, days: Int, done: (Result<String>) -> Unit) =
-        Supa.rpc("zx_admin_vip", auth().put("p_target", target).put("p_days", days)) { r -> done(txt(r)) }
     fun adminMail2(to: String, title: String, body: String, gold: Int, gems: Int, xp: Int, items: JSONArray, kind: String, done: (Result<Int>) -> Unit) =
         Supa.rpc("zx_admin_mail2", auth().put("p_to", to).put("p_title", title).put("p_body", body).put("p_gold", gold).put("p_gems", gems)
             .put("p_xp", xp).put("p_items", items).put("p_kind", kind)) { r -> done(obj(r).map { it.optInt("sent") }) }

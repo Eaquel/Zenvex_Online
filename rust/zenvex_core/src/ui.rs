@@ -318,12 +318,12 @@ impl Game {
                     "can_repair": self.near_bench() || self.near_npc(4),
                 })
             }
-            // V12.1: el üretimi ("craft") ve tezgâh ("craft_bench") ayrı listeler; tezgâh tarifleri elde görünmez
+            // V12.1: el üretimi ("craft") yalnız elde yapılanları, tezgâh ("craft_bench") V18'den beri hepsini (elde yapılanlar dahil) gösterir
             k if k == "craft" || k == "craft_bench" => {
                 let mode_bench = k == "craft_bench";
                 let bench = self.near_bench();
                 let mut groups: Vec<(&str, Vec<Value>)> = Vec::new();
-                for (i, r) in RECIPES.iter().enumerate().filter(|(_, r)| r.bench == mode_bench) {
+                for (i, r) in RECIPES.iter().enumerate().filter(|(_, r)| mode_bench || !r.bench) {
                     let inputs: Vec<Value> = r
                         .inputs
                         .iter()
@@ -451,6 +451,7 @@ impl Game {
             "cosmetics" => {
                 let list: Vec<Value> = COSMETICS
                     .iter()
+                    .filter(|c| c.kind != "wings")
                     .map(|c| {
                         let owned = g.cosmetics.iter().any(|o| o == c.id);
                         let equipped = g.frame == c.id || g.tag == c.id || g.wings == c.id || g.costume.iter().any(|x| x == c.id)
@@ -571,6 +572,24 @@ impl Game {
                         self.progress.gold = a["v"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32;
                         Ok("Yönetici altınını ayarladı".into())
                     }
+                    // V18: kanatları yalnız yönetici takar/çıkarır (kimlik boş = çıkar)
+                    "set_wings" => {
+                        let id = a["id"].as_str().unwrap_or("");
+                        if id.is_empty() {
+                            self.progress.wings_grant.clear();
+                            self.progress.wings.clear();
+                            Ok("Yönetici kanatlarını çıkardı".into())
+                        } else if COSMETICS.iter().any(|c| c.id == id && c.kind == "wings") {
+                            if !self.progress.cosmetics.iter().any(|c| c == id) {
+                                self.progress.cosmetics.push(id.to_string());
+                            }
+                            self.progress.wings_grant = id.to_string();
+                            self.progress.wings = id.to_string();
+                            Ok("Yönetici sana kanat taktı".into())
+                        } else {
+                            Ok(String::new())
+                        }
+                    }
                     _ => Ok(String::new()),
                 }
             }
@@ -619,17 +638,6 @@ impl Game {
                 self.progress.gold = self.progress.gold.saturating_sub(cost);
                 self.progress.gems += gems;
                 Ok(serde_json::json!({ "got": got, "gems": gems }).to_string())
-            }
-            // V15: VIP seviyesi (Mağaza durumundan); çanta yuvaları hemen yeniden dizilir
-            "vip_set" => {
-                self.progress.vip = (v["level"].as_u64().unwrap_or(0) as u8).min(11);
-                for &(lv, w) in data::VIP_WINGS {
-                    if self.progress.vip >= lv && !self.progress.cosmetics.iter().any(|c| c == w) {
-                        self.progress.cosmetics.push(w.to_string());
-                    }
-                }
-                self.progress.relayout_inv();
-                Ok(String::new())
             }
             // karakter görevi ödülü: o karakterin 1 kartı
             "char_daily_claim" => {
@@ -1289,6 +1297,9 @@ impl Game {
             .iter()
             .find(|c| c.id == id)
             .ok_or("Kozmetik yok")?;
+        if c.kind == "wings" {
+            return Err("Kanatları yalnız yönetici takabilir".into());
+        }
         if !p.cosmetics.iter().any(|o| o == id) {
             return Err("Bu kozmetiğe sahip değilsin".into());
         }

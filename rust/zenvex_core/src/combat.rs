@@ -746,6 +746,7 @@ impl Game {
             }
             ZKind::Titan => {
                 self.titan_dead = true;
+                self.progress.titan_killed = self.titan.0;
                 self.progress.boss_kills += 1;
                 done.extend(self.progress.quest_event(QuestKind::Boss, 1));
                 let rv = self.rng.below(3);

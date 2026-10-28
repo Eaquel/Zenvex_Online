@@ -440,13 +440,12 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawFrame(frame: St
 }
 
 // =========================================================================== etiketler
-/** Etiket rozeti: VIP parlayan altın yazı, sıralama rozetleri. */
+/** Etiket rozeti: sıralama rozetleri. */
 @Composable
 fun TagChip(tag: JSONObject) {
     val id = tag.optString("id")
     val t = rememberTime()
     val (bg, fg) = when {
-        id == "vip" -> Color(0xFF2A1E06) to Color(0xFFFFD34A)
         id == "lvl1" -> Color(0xFF3A2A06) to Color(0xFFFFE27A)
         id == "lvl2" -> Color(0xFF2A2E34) to Color(0xFFE6EEF6)
         id == "lvl3" -> Color(0xFF3A2414) to Color(0xFFE8A060)
@@ -454,14 +453,7 @@ fun TagChip(tag: JSONObject) {
         else -> Color(0xFF14243A) to Color(0xFF8CC8FF)
     }
     Box(Modifier.clip(RoundedCornerShape(3.dp)).background(bg).border(1.dp, fg.copy(alpha = 0.6f), RoundedCornerShape(3.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-        if (id == "vip") {
-            // parlayan altın VIP: dalgalanan ışıltı + yumuşak hale
-            val glow = 0.5f + 0.5f * sin(t * 3f)
-            Text("VIP", style = TextStyle(fontFamily = PixelFont, fontSize = 14.sp,
-                brush = Brush.linearGradient(listOf(Color(0xFFB8860B), Color(0xFFFFF3B0), Color(0xFFFFC83A)),
-                    start = Offset(-60f + 160f * ((t * 0.5f) % 1f), 0f), end = Offset(40f + 160f * ((t * 0.5f) % 1f), 20f)),
-                shadow = Shadow(Color(0xFFFFC83A).copy(alpha = glow), Offset.Zero, 10f + 8f * glow)))
-        } else PT(tag.optString("name"), 11.sp, fg)
+        PT(tag.optString("name"), 11.sp, fg)
     }
 }
 
@@ -483,14 +475,13 @@ fun ProfileBadge(p: JSONObject, guest: Boolean, modifier: Modifier = Modifier, o
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PT(p.optString("name").ifEmpty { "Misafir" }, 17.sp, Px.Name)
-                if (p.optBoolean("vip")) { Spacer(Modifier.width(6.dp)); TagChip(JSONObject().put("id", "vip")) }
             }
             if (guest) PT("Hesap Aç · İlerlemen Kaybolmasın", 11.sp, Px.Clan)
             else PT("ID: ${fmtId(p.optLong("id"))}  ·  Sv ${p.optInt("level", 1)}", 12.sp, Px.Sub)
             val tags = p.optJSONArray("tags")
             if (tags != null && tags.length() > 0) {
                 Spacer(Modifier.height(3.dp))
-                val first = (0 until tags.length()).map { tags.getJSONObject(it) }.firstOrNull { it.optString("id") != "vip" }
+                val first = (0 until tags.length()).map { tags.getJSONObject(it) }.firstOrNull { true }
                 if (first != null) TagChip(first)
             }
         }

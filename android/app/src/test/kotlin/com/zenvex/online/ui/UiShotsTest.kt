@@ -66,7 +66,6 @@ class UiShotsTest {
     @Test fun merchantSell() { val d = sample("merchant"); paparazzi.snapshot { MerchantView(d, 1, {}, {}, {}, {}, {}) } }
     @Test fun merchantOdds() { val d = sample("merchant"); paparazzi.snapshot { MerchantView(d, 2, {}, {}, {}, {}, {}) } }
     @Test fun characters() { val d = sample("characters"); paparazzi.snapshot { CharactersView(d, {}, {}) {} } }
-    @Test fun shopVip() { val d = sample("store"); paparazzi.snapshot { ShopView(d, true, d.optLong("now"), 4, {}) {} } }
 
     @Test
     fun skillTree() {

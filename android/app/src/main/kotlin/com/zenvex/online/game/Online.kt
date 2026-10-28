@@ -31,7 +31,7 @@ object Online {
     /** [avatar]/[frame]: gönderenin profil resmi ve çerçevesi (sohbette yanında çizilir; -1: bilinmiyor) */
     /** [uid]: gönderenin oyun kimliği ("a<hesap>"); sohbette adına dokununca oyuncu menüsü açılır */
     data class ChatLine(val channel: String, val name: String, val text: String, val tag: String, val mine: Boolean, val ts: Long,
-                        val avatar: Int = -1, val frame: String = "", val uid: String = "", val vip: Int = 0)
+                        val avatar: Int = -1, val frame: String = "", val uid: String = "")
 
     private fun myAvatar() = Account.profile.value.optInt("avatar", 1)
     private fun myFrame() = Account.profile.value.optString("frame").takeIf { it != "null" } ?: ""
@@ -279,7 +279,7 @@ object Online {
                 if (ch == "clan" && (p.optLong("cid") != (Account.clan.value?.id ?: -1L))) return
                 val g = p.optString("g").takeUnless { it == "null" } ?: ""
                 addLine(ChatLine(ch, p.optString("n", "?"), p.optString("m").take(140), g, false, System.currentTimeMillis(),
-                    p.optInt("av", -1), p.optString("fr"), p.optString("u"), p.optInt("v").coerceIn(0, 11)))
+                    p.optInt("av", -1), p.optString("fr"), p.optString("u")))
             }
             // fısıltı: yalnız alıcı görür (Genel sekmesinde [Fısıltı] etiketiyle)
             "w" -> if (p.optString("to") == me) addLine(ChatLine("global", p.optString("n", "?"), p.optString("m").take(140), "Fısıltı", false, System.currentTimeMillis(),
@@ -324,11 +324,9 @@ object Online {
         if (w > 0) return "${(w + 999) / 1000} Sn Bekle"
         lastSend = SystemClock.elapsedRealtime()
         val g = Account.clan.value?.name ?: tag
-        val vip = Store.vipLevel()
-        addLine(ChatLine(channelName, name, t, g, true, System.currentTimeMillis(), myAvatar(), myFrame(), uid, vip))
+        addLine(ChatLine(channelName, name, t, g, true, System.currentTimeMillis(), myAvatar(), myFrame(), uid))
         val c = channel ?: return null
         val m = JSONObject().put("u", uid).put("n", name).put("g", g).put("m", t).put("ch", channelName).put("av", myAvatar()).put("fr", myFrame())
-        if (vip > 0) m.put("v", vip)
         if (channelName == "clan") m.put("cid", Account.clan.value?.id ?: 0)
         c.send("c", m)
         if (channelName == "global") Account.postChat(serverId, t)

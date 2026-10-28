@@ -332,8 +332,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
         PxIcon("quest", size = 46.dp) { open(Overlay.Quests) }
         PxIcon("magic", size = 46.dp, badge = points, tint = Px.Clan) { open(Overlay.Skills) }
         PxIcon("profile", size = 46.dp, tint = Color(0xFFB277FF)) { open(Overlay.Chars) }
-        PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { open(Overlay.Crate) }
-        if (Account.admin.value) PxIcon("dev", size = 46.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
+        // Elmas Sandığı kaplamaları henüz hazır değil: tuş yalnız haber verir (ekran kodda duruyor)
+        PxIcon("crate", size = 46.dp, color = Color(0xCC1A2A44)) { Toaster.show("Koleksiyon Eşyaları Çok Yakında Geliyor") }
     }
     // etkinlik afişi: üst orta, bölge adının altında; 10. seviyeden önce yok, boss çubuğu ya da üs kartı varken gizli
     val evOn = level >= com.zenvex.online.game.Events.MIN_LEVEL && !com.zenvex.online.game.HudLayout.topBusy &&
@@ -344,6 +344,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     // sağ üst (radarın solunda): mağaza + posta + menü, altında altın ve elmas (+ → mağaza)
     Column(Modifier.align(Alignment.TopEnd).padding(end = 150.dp, top = 12.dp), horizontalAlignment = Alignment.End) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // yönetici paneli: üst orta etkinlik afişinin altında kalmasın diye sağ üst gruba alındı
+            if (Account.admin.value) PxIcon("dev", size = 44.dp, tint = Px.Orange, color = Color(0xCC3A2A1A)) { open(Overlay.Cheat) }
             ShopButton { open(Overlay.Shop) }
             PxIcon("mail", size = 44.dp, badge = Account.unread.intValue) { open(Overlay.Mail) }
             PxIcon("menu", size = 44.dp) { open(Overlay.Menu) }

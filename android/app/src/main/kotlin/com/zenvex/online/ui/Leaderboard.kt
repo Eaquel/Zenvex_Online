@@ -399,7 +399,6 @@ private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit
                             val clan = o.optString("clan").takeIf { it.isNotEmpty() && it != "null" }
                             if (clan != null) { PT("[$clan]", 13.sp, Px.Clan); Spacer(Modifier.width(4.dp)) }
                             PT(o.optString("name"), 16.sp, if (o.optBoolean("banned")) Px.Sub else if (rk <= 3) rankColor(rk) else Px.Text)
-                            if (o.optBoolean("vip")) { Spacer(Modifier.width(4.dp)); TagChip(JSONObject().put("id", "vip")) }
                             if (o.optBoolean("banned")) { Spacer(Modifier.width(6.dp)); BannedStamp(11f) }
                         }
                         val tt = o.optJSONObject("title")
@@ -463,7 +462,6 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     PT(o.optString("name"), 22.sp, if (banned) Px.Sub else Px.Name)
-                    if (o.optBoolean("vip")) { Spacer(Modifier.width(6.dp)); TagChip(JSONObject().put("id", "vip")) }
                 }
                 o.optJSONObject("title")?.let { Spacer(Modifier.height(3.dp)); TitleChip(it, 13f) }
                 o.optJSONObject("clan")?.let { c ->

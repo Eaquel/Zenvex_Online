@@ -85,7 +85,7 @@ object Store {
         if (!Account.loggedIn) { done?.invoke(); return }
         val lv = GameSession.hud()[Native.LEVEL].toInt().coerceAtLeast(1)
         Supa.rpc("zx_store_state", Account.authJson().put("p_server", GameSession.server.value.id).put("p_level", lv)) { r ->
-            r.onSuccess { s -> runCatching { JSONObject(s) }.getOrNull()?.let { state.value = it; applyVip(); if (ready && details.isEmpty()) loadDetails() } }
+            r.onSuccess { s -> runCatching { JSONObject(s) }.getOrNull()?.let { state.value = it; if (ready && details.isEmpty()) loadDetails() } }
             done?.invoke()
         }
     }
@@ -146,26 +146,10 @@ object Store {
         refresh(done)
     }
 
-    fun claimVip(done: () -> Unit) = Supa.rpc("zx_vip_daily", Account.authJson()) { r ->
-        r.onSuccess { Toaster.show("VIP günlük elmasın postana geldi"); Account.unread.intValue = Account.unread.intValue + 1 }
-            .onFailure { Toaster.show(it.message ?: "", false) }
-        refresh(done)
-    }
-
-    /** Yönetici: ödeme olmadan test satın alması (VIP puanı vermez) */
+    /** Yönetici: ödeme olmadan test satın alması  */
     fun adminTest(target: Long, product: String, done: (Result<String>) -> Unit) =
         Supa.rpc("zx_admin_test_purchase", Account.authJson().put("p_target", target).put("p_product", product)
             .put("p_server", GameSession.server.value.id), done)
-
-    /** VIP etkileri oyunda (çanta yuvası, satış payı): Mağaza durumu gelince ve oturum başlayınca */
-    fun applyVip() {
-        if (state.value == null || GameSession.handle == 0L) return
-        GameSession.cmdNoSave("vip_set", "level" to vipLevel())
-    }
-
-    /** VIP seviyesi (0-11; 11 = V10+) */
-    fun vipLevel(): Int = state.value?.optJSONObject("vip")?.optInt("level") ?: 0
-    fun vipName(level: Int): String = if (level >= 11) "V10+" else "V$level"
 
     private val DEFAULT_IDS = listOf("gems_60", "gems_220", "gems_600", "gems_1300", "gems_2800", "gems_6000", "pack_start", "pack_growth",
         "pack_war", "card_week", "card_month", "pass_vip", "pass_premium", "pass_upgrade")

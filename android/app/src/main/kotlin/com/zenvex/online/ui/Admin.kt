@@ -44,7 +44,7 @@ internal fun ts(ms: Long) = if (ms <= 0) "" else tsFmt.format(Date(ms))
 internal fun allItems(): JSONArray = GameSession.world().optJSONArray("items") ?: JSONArray()
 
 /**
- * Yönetici: oyuncu dosyası. Özet (yasak, VIP, mesaj, oyundan at, altın/elmas, yanına ışınlan), envanter (adetli silme + onay),
+ * Yönetici: oyuncu dosyası. Özet (yasak, mesaj, oyundan at, altın/elmas, yanına ışınlan), envanter (adetli silme + onay),
  * güvenlik (hile kayıtları, cihazlar, cihaz yasağı), son işlemler, sohbetler, özel mesajlar, hesap (sil / geri getir / anahtar).
  */
 @OptIn(ExperimentalLayoutApi::class)
@@ -178,7 +178,7 @@ fun AmountPicker(value: Int, max: Int, onChange: (Int) -> Unit) {
     if (max > 1) androidx.compose.material3.Slider(value.toFloat(), { onChange(it.toInt().coerceIn(1, max)) }, valueRange = 1f..max.toFloat())
 }
 
-/** Özet: yasak (süre + neden), VIP, mesaj, oyundan at, altın/elmas ayarla, yanına ışınlan. */
+/** Özet: yasak (süre + neden), mesaj, oyundan at, altın/elmas ayarla, yanına ışınlan. */
 @Composable
 private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Result<String>) -> Unit) {
     var reason by remember { mutableStateOf("") }
@@ -187,7 +187,6 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
     var msg by remember { mutableStateOf("") }
     var gold by remember { mutableStateOf("") }
     var gems by remember { mutableStateOf("") }
-    var vip by remember { mutableStateOf("30") }
     val st = d.optJSONObject("stats") ?: JSONObject()
     PT("Hesap Açılışı: ${d.optString("created_at").take(10)} · Son Görülme: ${d.optString("last_seen").take(16).replace('T', ' ')}", 12.sp, Px.Sub)
     if (st.length() > 0) PT("Oynama Süresi: ${st.optLong("time") / 3600} Saat", 12.sp, Px.Sub)
@@ -228,7 +227,7 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
         }
     }
     Spacer(Modifier.height(10.dp))
-    PT("Altın / Elmas / VIP", 15.sp, Px.Clan)
+    PT("Altın / Elmas", 15.sp, Px.Clan)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         Field(gold, { gold = it.filter(Char::isDigit).take(9) }, "Altın", Modifier.width(130.dp))
         PxButton("Altını Ayarla", color = Px.Dark, height = 38.dp, size = 12.sp, enabled = gold.isNotEmpty()) {
@@ -240,10 +239,13 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
         }
     }
     Spacer(Modifier.height(6.dp))
+    PT("Kanat (yalnız yönetici takar)", 15.sp, Px.Clan)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Field(vip, { vip = it.filter(Char::isDigit).take(4) }, "Gün", Modifier.width(90.dp))
-        PxButton("VIP Ver", color = Color(0xFFB08A2A), height = 38.dp, size = 12.sp) { Account.adminVip(target, vip.toIntOrNull() ?: 0, res) }
-        PxButton("VIP Kaldır", color = Px.Dark, height = 38.dp, size = 12.sp) { Account.adminVip(target, 0, res) }
+        for ((id, name) in listOf("wings_ash" to "Kor", "wings_dragon" to "Ejder", "wings_titan" to "Titan", "wings_s1" to "Sezon 1"))
+            PxButton(name, color = Color(0xFF3A4A8A), height = 38.dp, size = 12.sp) {
+                Account.adminAction(target, JSONObject().put("t", "set_wings").put("id", id), res)
+            }
+        PxButton("Kanadı Çıkar", color = Px.Dark, height = 38.dp, size = 12.sp) { Account.adminAction(target, JSONObject().put("t", "set_wings").put("id", ""), res) }
     }
 }
 

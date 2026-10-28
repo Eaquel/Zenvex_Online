@@ -293,28 +293,6 @@ pub const RETIRED_ITEMS: &[&str] = &["w_baton", "w_m4", "ammo_", "powder", "cloa
     // V17: El Baltası kalktı (Taş Balta ile karışıyordu); elde olan bıçağa döner (RETIRE_INTO)
     "w_hatchet"];
 
-/// V15 VIP: ek çanta yuvası (V2 +5, V5 +10, V9 +15)
-pub fn vip_bag_slots(vip: u8) -> usize {
-    match vip {
-        9.. => 15,
-        5.. => 10,
-        2.. => 5,
-        _ => 0,
-    }
-}
-
-/// VIP kanatları: V3 Kor, V6 Ejder, V9 Titan (seviyeye ulaşınca koleksiyona girer; sırta takılan 3B kanat)
-pub const VIP_WINGS: &[(u8, &str)] = &[(3, "wings_ash"), (6, "wings_dragon"), (9, "wings_titan")];
-
-/// V15 VIP: tüccara satışta ek pay (V3 +%3, V6 +%5)
-pub fn vip_sell_bonus(vip: u8) -> f32 {
-    match vip {
-        6.. => 0.05,
-        3.. => 0.03,
-        _ => 0.0,
-    }
-}
-
 /// V15: oyundan kalkan eşyanın altın karşılığı (değerinin 2 katı; değeri olmayan etkinlik kaskı ve pelerin sabit)
 pub fn retired_refund(id: &str) -> u32 {
     if id.starts_with("ev_") && id.ends_with("_helm") {
@@ -1482,7 +1460,7 @@ pub const PASS_REWARDS: &[(u32, &str, &str)] = &[
     (27, "gold:4000", "gem:140"),
     (28, "char_card:3", "ring_titan:1"),
     (29, "medkit:5", "gem:140"),
-    (30, "chest_military:3", "cos:wings_s1"),
+    (30, "chest_military:3", "gem:200"),
 ];
 
 /// Haftalık havuz: her hafta 4 tanesi seçilir.
@@ -1627,7 +1605,7 @@ pub const COSMETICS: &[Cosmetic] = &[
         name: "RPG: Altın",
         kind: "weapon_skin",
     },
-    // V15 sezon / VIP görünümleri (görselleri docs/22 Bölüm 10; gelene dek koleksiyonda görünür)
+    // V15 sezon görünümleri; kanatlar oyuncuya seçtirilmez, yalnız yönetici paneli takar (V18: VIP kaldırıldı)
     Cosmetic { id: "skin_w_bloodmoon", name: "Kanlı Ay Kılıcı", kind: "weapon_skin" },
     Cosmetic { id: "camo_s1", name: "Sezon 1 Kamuflajı", kind: "camo" },
     Cosmetic { id: "wings_s1", name: "Sezon 1 Kanatları", kind: "wings" },

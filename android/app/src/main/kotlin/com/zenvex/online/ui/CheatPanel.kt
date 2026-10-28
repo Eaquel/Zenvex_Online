@@ -122,7 +122,6 @@ private fun PlayersTab(report: (String, Boolean) -> Unit) {
             if (o.optBoolean("deleted")) PT("SİLİNDİ ", 12.sp, Color(0xFFFF6A5A))
             else if (o.optBoolean("delete_req")) PT("SİLME TALEBİ ", 12.sp, Px.Orange)
             if (!o.isNull("banned_until")) PT("YASAKLI ", 12.sp, Color(0xFFFF6A5A))
-            if (!o.isNull("vip_until")) PT("VIP ", 12.sp, Px.Clan)
             Icon("arrow", 18.dp, Px.Sub)
         }
     }
