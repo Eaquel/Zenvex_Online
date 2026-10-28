@@ -130,8 +130,32 @@ pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32,
             }
             let nx = warp_noise(seed, wx / 90.0, wy / 90.0) * 2.0 - 1.0;
             let ny = warp_noise(seed ^ 0x99, wx / 90.0, wy / 90.0) * 2.0 - 1.0;
-            let mut m = mat_at(wx + nx * warp, wy + ny * warp);
-            let mut m2 = mat_at(wx + nx * warp + 7.0, wy + ny * warp + 5.0);
+            // V19: karo malzemeleri karo merkezlerinden yumuşak (smoothstep) ağırlıkla karışır: kare basamaklar yerine
+            // yuvarlak, organik lekeler; iki büyük ölçekli bükme (90 ve 230 px) kenarı dalgalandırır, ince bükme kırar
+            let bx = warp_noise(seed ^ 0x3C1, wx / 230.0, wy / 230.0) * 2.0 - 1.0;
+            let by = warp_noise(seed ^ 0x7E2, wx / 230.0, wy / 230.0) * 2.0 - 1.0;
+            let (sx, sy) = (wx + nx * warp + bx * 38.0, wy + ny * warp + by * 38.0);
+            let (fx, fy) = (sx / TILE - 0.5, sy / TILE - 0.5);
+            let (ix, iy) = (fx.floor(), fy.floor());
+            let sm = |t: f32| t * t * (3.0 - 2.0 * t);
+            let (ux, uy) = (sm(fx - ix), sm(fy - iy));
+            let corners = [
+                (mat_at((ix + 0.5) * TILE, (iy + 0.5) * TILE), (1.0 - ux) * (1.0 - uy)),
+                (mat_at((ix + 1.5) * TILE, (iy + 0.5) * TILE), ux * (1.0 - uy)),
+                (mat_at((ix + 0.5) * TILE, (iy + 1.5) * TILE), (1.0 - ux) * uy),
+                (mat_at((ix + 1.5) * TILE, (iy + 1.5) * TILE), ux * uy),
+            ];
+            let mut acc: [(u8, f32); 4] = [(255, 0.0); 4];
+            for (mm, w) in corners {
+                if let Some(e) = acc.iter_mut().find(|e| e.0 == mm || e.0 == 255) {
+                    e.0 = mm;
+                    e.1 += w;
+                }
+            }
+            acc.sort_by(|a, b| b.1.total_cmp(&a.1));
+            let (mut m, mut m2) = (acc[0].0, if acc[1].0 == 255 { acc[0].0 } else { acc[1].0 });
+            // kenar bandı: en güçlü iki malzemenin farkı küçükse ikisi harmanlanır (genişlik ~ 10 px)
+            let edge = acc[0].1 - acc[1].1;
             // V13: bulunulan bölgenin dışı (sınırın ötesi) bölgenin boşluk dokusu
             if let Some(a) = tex.area {
                 if crate::areas::area_exact(wx + nx * warp * 1.4, wy + ny * warp * 1.4) != Some(a) {
@@ -153,10 +177,11 @@ pub fn render_scaled(world: &World, tex: &Textures, x0: f32, y0: f32, step: f32,
                 t[v * ts + u]
             };
             let mut c = sample(m);
-            if m2 != m {
+            if m2 != m && edge < 0.16 {
                 // yumuşak geçiş + kenarda hafif gölge (çim üstte, toprak altta hissi)
-                c = mix(c, sample(m2), 0.45);
-                c = shade(c, 0.9);
+                let k = 1.0 - edge / 0.16;
+                c = mix(c, sample(m2), 0.5 * k);
+                c = shade(c, 1.0 - 0.1 * k);
             }
             // büyük ölçekli ton dalgası
             let big = value_noise(seed ^ 0x123, wx / 700.0, wy / 700.0) * 0.6

@@ -960,6 +960,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         drawChests(c)
         drawParticles(c, under = true)
         fx3d.drawGround(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
+        // V19: sınır bulutu varlıkların altında: sınıra dayanan oyuncu ve zombiler bulutun içinde kaybolmaz (kenara 6
+        // karodan yakın ağaç/yapı olmadığı için hiçbir şey bulutun üstüne taşmaz)
+        drawBorderClouds(c)
         plates.clear()
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
         npcBoxes.clear(); benchBoxes.clear(); synchronized(playerBoxes) { playerBoxes.clear() }
@@ -981,7 +984,6 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 D_FLAG -> drawFlag(c, o)
             }
         }
-        drawBorderClouds(c)
         drawFx(c)
         drawParticles(c)
         fx3d.draw(c, camX, camY, scale, sw.toFloat(), sh.toFloat())
@@ -2481,6 +2483,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         Bitmap.createBitmap(px, n, n, Bitmap.Config.ARGB_8888)
     }
     private val cloudPaint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val bandMask = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
+    /** V19 bulut denizi dokusu (kusursuz döşenir); yoksa düz renk */
+    private val cloudTile: Bitmap? by lazy { com.zenvex.online.ui.UiArt.bitmap(context, "cloud_tile") }
     private val cloudBase = Paint().apply { style = Paint.Style.FILL }
     private val cloudDst = RectF()
 
@@ -2497,7 +2502,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val rs = areas[ai].rects
         if (rs.isEmpty()) return
         val ax0 = rs.minOf { it[0] }; val ay0 = rs.minOf { it[1] }; val ax1 = rs.maxOf { it[2] }; val ay1 = rs.maxOf { it[3] }
-        val feather = 260f
+        // kenar bulutları bölgenin içine az taşar (sınıra yürüyen oyuncu bulutun altında kaybolmasın)
+        val feather = 150f
+        val pxW = hud[Native.PX]; val pyW = hud[Native.PY]
         // görüşün dünya aralığı
         val vx0 = camX - viewW / 2 - 140f; val vx1 = camX + viewW / 2 + 140f
         val vy0 = camY - viewH / 2 - 140f; val vy1 = camY + viewH / 2 + 140f
@@ -2509,11 +2516,60 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // (dört dikdörtgenle: clipOutRect bazı ortamlarda desteklenmiyor)
         cloudBase.color = 0xFF8E92B0.toInt()
         val W0 = sw.toFloat(); val H0 = sh.toFloat()
-        if (t > 0f) c.drawRect(0f, 0f, W0, min(t, H0), cloudBase)
-        if (b < H0) c.drawRect(0f, max(b, 0f), W0, H0, cloudBase)
         val ty0 = max(t, 0f); val ty1 = min(b, H0)
-        if (l > 0f) c.drawRect(0f, ty0, min(l, W0), ty1, cloudBase)
-        if (r < W0) c.drawRect(max(r, 0f), ty0, W0, ty1, cloudBase)
+        val outs = arrayOf(floatArrayOf(0f, 0f, W0, min(t, H0)), floatArrayOf(0f, max(b, 0f), W0, H0),
+            floatArrayOf(0f, ty0, min(l, W0), ty1), floatArrayOf(max(r, 0f), ty0, W0, ty1))
+        // V19: bölge dışı kullanıcının bulut denizi dokusuyla (assets/ui/cloud_tile) döşenir, yavaşça süzülür
+        val tile = cloudTile
+        cloudPaint.colorFilter = null; cloudPaint.alpha = 255
+        for (o in outs) {
+            if (o[2] <= o[0] || o[3] <= o[1]) continue
+            if (tile == null) { c.drawRect(o[0], o[1], o[2], o[3], cloudBase); continue }
+            c.save(); c.clipRect(o[0], o[1], o[2], o[3])
+            val T = 360f
+            val ox = time * 7f; val oy = time * 2.5f
+            val gx0 = floor((camX - viewW / 2 - ox) / T).toInt(); val gx1 = floor((camX + viewW / 2 - ox) / T).toInt()
+            val gy0 = floor((camY - viewH / 2 - oy) / T).toInt(); val gy1 = floor((camY + viewH / 2 - oy) / T).toInt()
+            for (gj in gy0..gy1) for (gi in gx0..gx1) {
+                val x0 = wx(gi * T + ox); val y0 = wy(gj * T + oy)
+                cloudDst.set(x0, y0, x0 + T * scale + 1f, y0 + T * scale + 1f)
+                if (cloudDst.right < o[0] || cloudDst.left > o[2] || cloudDst.bottom < o[1] || cloudDst.top > o[3]) continue
+                c.drawBitmap(tile, null, cloudDst, cloudPaint)
+            }
+            c.restore()
+        }
+        // V19: kenar keskin bir çizgiyle kesilmesin: bulut dokusu bölgenin içine doğru ~3 karo boyunca dalgalı ve yumuşak
+        // söner (dört kenar bandı ayrı katmanda çizilir, içe doğru saydamlaşan degrade ile maskelenir)
+        if (tile != null) {
+            val F = 200f * scale
+            val wav = 22f * scale * sin(time * 0.5f)
+            val bands = arrayOf(
+                floatArrayOf(max(l, 0f), t, min(r, W0), t + F + wav, 0f, t, 0f, t + F + wav),
+                floatArrayOf(max(l, 0f), b - F - wav, min(r, W0), b, 0f, b, 0f, b - F - wav),
+                floatArrayOf(l, max(t, 0f), l + F + wav, min(b, H0), l, 0f, l + F + wav, 0f),
+                floatArrayOf(r - F - wav, max(t, 0f), r, min(b, H0), r, 0f, r - F - wav, 0f),
+            )
+            for (bd in bands) {
+                val bx0 = max(bd[0], 0f); val by0 = max(bd[1], 0f); val bx1 = min(bd[2], W0); val by1 = min(bd[3], H0)
+                if (bx1 <= bx0 || by1 <= by0) continue
+                val layer = c.saveLayer(bx0, by0, bx1, by1, null)
+                val T = 360f
+                val ox = time * 7f; val oy = time * 2.5f
+                val gx0 = floor((camX - viewW / 2 - ox) / T).toInt(); val gx1 = floor((camX + viewW / 2 - ox) / T).toInt()
+                val gy0 = floor((camY - viewH / 2 - oy) / T).toInt(); val gy1 = floor((camY + viewH / 2 - oy) / T).toInt()
+                for (gj in gy0..gy1) for (gi in gx0..gx1) {
+                    val x0 = wx(gi * T + ox); val y0 = wy(gj * T + oy)
+                    cloudDst.set(x0, y0, x0 + T * scale + 1f, y0 + T * scale + 1f)
+                    if (cloudDst.right < bx0 || cloudDst.left > bx1 || cloudDst.bottom < by0 || cloudDst.top > by1) continue
+                    c.drawBitmap(tile, null, cloudDst, cloudPaint)
+                }
+                // degrade: kenarda tam bulut, içeri doğru yumuşakça (kare değil, ease) söner
+                bandMask.shader = LinearGradient(bd[4], bd[5], bd[6], bd[7], intArrayOf(0xF0000000.toInt(), 0x80000000.toInt(), 0x00000000),
+                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+                c.drawRect(bx0, by0, bx1, by1, bandMask)
+                c.restoreToCount(layer)
+            }
+        }
         val i0 = floor(vx0 / G).toInt(); val i1 = floor(vx1 / G).toInt(); val j0 = floor(vy0 / G).toInt(); val j1 = floor(vy1 / G).toInt()
         for (j in j0..j1) for (i in i0..i1) {
             val h1 = cloudHash(i, j, 1); val h2 = cloudHash(i, j, 2); val h3 = cloudHash(i, j, 3)
@@ -2527,6 +2583,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 ((feather - depth) / feather).coerceIn(0f, 1f).let { it * it * 0.9f }
             }
             if (alpha < 0.02f) continue
+            // oyuncunun üstüne (gövdesinin çevresine) bölge içi kenar bulutu çizilmez
+            if (inside && hypot(wx0 - pxW, wy0 - (pyW - 50f)) < 150f) continue
             val sz = G * (2.0f + 1.1f * h3) * scale
             val sx = wx(wx0); val sy = wy(wy0)
             // gölge (alt, koyu) sonra ışıklı üst yüz: hacim hissi

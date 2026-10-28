@@ -125,21 +125,19 @@ mod tests {
 
     #[test]
     fn home_is_sealed() {
+        // V19: üssün çevre duvarı kalktı; dışarı çıkılamaz çünkü üs de ayrı bir karedir (görünmez sınır + bulut)
         let g = Game::new(7, Progress::default(), 0);
         let c = ((world::HOME_X0 + world::HOME_X1) as f32 / 2.0 * TILE, (world::HOME_Y0 + world::HOME_Y1) as f32 / 2.0 * TILE);
-        let mut scratch = Vec::new();
-        // dışarıdan merkeze doğru yürümek duvara takılır (dört yönden)
-        for (ox, oy) in [(0.0, -20.0), (0.0, 20.0), (-20.0, 0.0), (20.0, 0.0)] {
-            let (mut x, mut y) = (c.0 + ox * TILE, c.1 + oy * TILE);
-            for _ in 0..600 {
-                let (dx, dy) = (c.0 - x, c.1 - y);
-                let l = dx.hypot(dy).max(1.0);
-                let (mut nx, mut ny) = (x + dx / l * 5.0, y + dy / l * 5.0);
-                g.world.resolve(&mut nx, &mut ny, 14.0, true, &mut scratch);
-                x = nx;
-                y = ny;
+        for (dx, dy) in [(0.0f32, -1.0f32), (0.0, 1.0), (-1.0, 0.0), (1.0, 0.0)] {
+            let (mut x, mut y) = c;
+            for _ in 0..200 {
+                let (ox, oy) = (x, y);
+                x += dx * 30.0;
+                y += dy * 30.0;
+                areas::clamp(ox, oy, &mut x, &mut y);
             }
-            assert!((x - c.0).hypot(y - c.1) > 12.0 * TILE, "duvar delik ({ox},{oy}): {x},{y}");
+            assert_eq!(areas::area_at(x, y), areas::HOME, "üsten çıkıldı ({dx},{dy})");
+            assert_eq!(g.world.zone(x, y), world::Zone::Home, "kenar şeridi üs değil ({dx},{dy})");
         }
     }
 }
