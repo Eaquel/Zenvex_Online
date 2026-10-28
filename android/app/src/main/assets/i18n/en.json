@@ -1688,7 +1688,7 @@
 "Silah Ve Alet": "Weapons and Tools",
 "Silah menzili +%{0}": "Weapon range +{0}%",
 "Silah saldırı hızı +%{0}": "Weapon attack speed +{0}%",
-"Silah, alet, zırh, çanta, yüzük ve kolye kullandıkça yıpranır: yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.": "Weapons, tools, armour, bags, rings and necklaces wear with use: the bar under a slot shows what's left and tapping the item shows the percentage. Broken items don't work until repaired at a workbench or by Viktor the mechanic.",
+"Silah, alet, zırh, yüzük ve kolye kullandıkça yıpranır (çantalar kırılmaz): yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.": "Weapons, tools, armour, rings and necklaces wear with use (bags never break): the bar under a slot shows what's left and tapping the item shows the percentage. Broken items don't work until repaired at a workbench or by Viktor the mechanic.",
 "Silahın elinde. Artık zombi sürüsü seni o kadar korkutmaz.": "The weapon is in your hand. A zombie horde won't scare you as much now.",
 "Silahını Kuşan": "Equip Your Weapon",
 "Silahını Çanta'dan Kuşan'la elinde tut. Savaşta sağ joystick silahınla vurur; ateşli silahlarda mermi şarjörden gelir.": "Equip your weapon from the Bag. In combat the right joystick attacks with your weapon; firearms draw ammo from the magazine.",

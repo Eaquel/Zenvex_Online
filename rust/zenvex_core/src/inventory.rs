@@ -9,7 +9,7 @@ pub const POCKETS: usize = 4;
 /// Çanta bölmeleri: 0 = ana çanta (seviyeyle büyür), 1-3 = kuşanılan çantanın açtığı ek bölmeler.
 pub const PAGES: usize = 4;
 
-/// Dayanıklılık birimi: binde (1000 = %100). Tekil ekipmanın (silah, alet, zırh, çanta, yüzük, kolye) canı;
+/// Dayanıklılık birimi: binde (1000 = %100). Tekil ekipmanın (silah, alet, zırh, yüzük, kolye) canı;
 /// yığınlanan eşyada hep 1000.
 pub const DUR_FULL: u16 = 1000;
 
@@ -36,13 +36,13 @@ impl Slot {
     }
 }
 
-/// Eşyanın dayanıklılığı var mı: yığınlanmayan ekipman (araç anahtarının canı aracın kendisinde)
+/// Eşyanın dayanıklılığı var mı: yığınlanmayan ekipman (araç anahtarının canı aracın kendisinde; çantalar kırılmaz)
 pub fn durable(item: usize) -> bool {
     let d = &ITEMS[item];
     d.stack <= 1
         && matches!(
             d.kind,
-            ItemKind::Weapon | ItemKind::Helmet | ItemKind::Jacket | ItemKind::Boots | ItemKind::Bag | ItemKind::Pants | ItemKind::Ring | ItemKind::Necklace
+            ItemKind::Weapon | ItemKind::Helmet | ItemKind::Jacket | ItemKind::Boots | ItemKind::Pants | ItemKind::Ring | ItemKind::Necklace
         )
 }
 

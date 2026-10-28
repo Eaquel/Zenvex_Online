@@ -2,8 +2,9 @@
 
 ## Unreleased (V16 — 3D)
 
-- Lobby: the background is the game's own camp at night (rendered by the engine, slow pan, warm ember light) and your 3D
-  hero stands in it with the equipped weapon and wings; news tab lists this version's changes; info dialog fits small phones
+- Lobby: the live sunset city scene stays; the street now shows the game's own zombies (walker, runner, tank, dark,
+  dog sprites) walking toward the campfire and the game's own car (3D Hellhound) instead of generic silhouettes; news tab
+  lists this version's changes; info dialog fits small phones
 
 - Smoothness: ground chunks are built on a background thread in short strips (the game loop no longer waits for 256 px
   chunks when entering new ground); the ring around the view and two chunks ahead in the walking direction load early
@@ -21,8 +22,8 @@
 - Vehicles: car 500 HP, motorcycle 200 HP; while driving the car takes all damage, the motorcycle 70%; wear 1% per 60 s (car)
   / 30 s (motorcycle) of driving; at 0 HP it explodes and can be summoned again after 60 / 30 s of play time; HP, wear and
   cooldown are saved (dismounting, switching vehicles, quitting or re-joining cannot refresh them); the mechanic repairs
-- Durability for every weapon, tool, armour piece, bag, ring and necklace: a bar under each slot, "Durability %" in the item
-  panel; weapons wear per hit or shot, tools per gather hit, armour/jewellery per hit taken, the bag on death; broken items
+- Durability for every weapon, tool, armour piece, ring and necklace: a bar under each slot, "Durability %" in the item
+  panel; weapons wear per hit or shot, tools per gather hit, armour/jewellery per hit taken (bags never break); broken items
   stop working (weapon = fist) until repaired at a workbench or the mechanic; worn items sell for less; durability is kept
   when equipping, moving, storing in chests or dropping on the ground
 - Axes and pickaxes only work when held (stone 50, iron 100 per hit; fist 25)

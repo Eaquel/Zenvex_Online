@@ -81,13 +81,6 @@ class GameShotsTest {
 
     @Test fun g01_campSpawn() = shot("camp", { })
 
-    /**
-     * Lobi arka planı: oyunun kendi kampı alacakaranlıkta (kamp ateşi, çadırlar, NPC'ler), arayüzsüz, oyuncusuz.
-     * Çıktı: build/game-shots/lobby_camp.png → tools/promo/lobby_bg.py ile assets/ui/bg_lobby_camp.webp
-     */
-    @Test fun l01_lobbyCamp() = shot("lobby_camp", { cheat("level 6"); cheat("time 20.5") }, steps = 120, hud = false,
-        prep = { it.clean = true; it.hideMe = true; it.promoZoom = 12.5f })
-
     @Test fun g02_forestFight() = shot("fight", {
         cheat("level 6"); cheat("god"); cheat("tp deep"); cheat("spawn walker 4 4"); cheat("spawn runner 2 4")
     }, steps = 150, input = floatArrayOf(0f, 0f, 1f, 0f, 1f))

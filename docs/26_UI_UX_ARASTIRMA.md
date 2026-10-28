@@ -74,7 +74,7 @@ listesi (er, sürü, tank, keskin nişancı…) ve ayırt edici siluet [Fatshark
 **Ortak nokta.** Kırılan eşya yok olmasın, "kırık" durumda onarılabilsin; risk görünür olsun; onarım bedeli gelirle orantılı
 ve anlamlı olsun; boş angarya olmasın [Minecraft geri bildirim, 7 Days to Die, FFXIV/Engadget, Gloria Victis; F/P].
 
-**Karar.** Silah (isabet/atış), alet (toplama vuruşu), zırh/yüzük/kolye (alınan darbe), çanta (ölüm) aşınır. Kırık eşya
+**Karar.** Silah (isabet/atış), alet (toplama vuruşu), zırh/yüzük/kolye (alınan darbe) aşınır; çantalar kırılmaz. Kırık eşya
 etkisizdir ama kaybolmaz; tezgâhta ya da Tamirci Viktor'da onarılır; bedel = değerin yarısı × eksik oran. Yuvanın altında
 çubuk, eşyada yüzde. Çıkar-giy, sandık, yere bırakma, kayıt ve takas canı yenilemez. `inventory.rs Slot.dur`,
 `progress.rs Equipment.wear`, `ui.rs repair`, `Bag.kt PxSlot`.

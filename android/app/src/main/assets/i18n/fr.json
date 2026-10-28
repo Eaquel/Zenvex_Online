@@ -1688,7 +1688,7 @@
 "Silah Ve Alet": "Armes et outils",
 "Silah menzili +%{0}": "Portée de l'arme +{0} %",
 "Silah saldırı hızı +%{0}": "Vitesse d'attaque de l'arme +{0} %",
-"Silah, alet, zırh, çanta, yüzük ve kolye kullandıkça yıpranır: yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.": "Armes, outils, armures, sacs, anneaux et colliers s'usent : la barre sous la case montre ce qui reste et toucher l'objet affiche le pourcentage. Un objet cassé ne marche plus tant qu'il n'est pas réparé à un établi ou chez le mécanicien Viktor.",
+"Silah, alet, zırh, yüzük ve kolye kullandıkça yıpranır (çantalar kırılmaz): yuvanın altındaki çubuk kalan canı, eşyaya dokununca yüzdesi görünür. Kırık eşya onarılana dek işe yaramaz; tezgâhta ya da Tamirci Viktor'da onar.": "Armes, outils, armures, anneaux et colliers s'usent (les sacs ne cassent jamais) : la barre sous la case montre ce qui reste et toucher l'objet affiche le pourcentage. Un objet cassé ne marche plus tant qu'il n'est pas réparé à un établi ou chez le mécanicien Viktor.",
 "Silahın elinde. Artık zombi sürüsü seni o kadar korkutmaz.": "L'arme est en main. Une horde de zombies ne te fera plus autant peur.",
 "Silahını Kuşan": "Équipe Ton Arme",
 "Silahını Çanta'dan Kuşan'la elinde tut. Savaşta sağ joystick silahınla vurur; ateşli silahlarda mermi şarjörden gelir.": "Équipe ton arme depuis le Sac. En combat, le joystick droit attaque avec ton arme ; les armes à feu puisent les munitions dans le chargeur.",

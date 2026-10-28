@@ -21,6 +21,17 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import com.zenvex.online.game.Model3D
 import com.zenvex.online.game.Settings
 import kotlin.math.PI
 import kotlin.math.abs
@@ -73,15 +84,36 @@ fun LiveScene(
     val ts = rememberTimeState()
     val world = remember(kind) { buildWorld(kind) }
     val fx = Settings.current.fx
+    val ctx = LocalContext.current
+    // oyunun kendi zombileri (yan görünüm yürüme kareleri; sola, kamp ateşine doğru yürürler)
+    val zombies = remember {
+        SCENE_ZOMBIES.map { (id, _) -> (0 until 8).mapNotNull { runCatching { SpriteCache.get(ctx, "z/$id/walk_0_$it") }.getOrNull() } }
+    }
+    // oyunun kendi arabası (Hellhound, 3B model; hazır olunca belirir)
+    var car by remember { mutableStateOf<SceneCar?>(null) }
+    LaunchedEffect(Unit) {
+        if (!Model3D.sync) runCatching { Model3D.init(ctx) }
+        repeat(120) {
+            val f = Model3D.vehicle("scene_car", "hellhound", "", 112f, 0f, 0f, 0f, 0f, 70f, 3)
+            if (f != null) { car = SceneCar(f.bmp.asImageBitmap(), f.ax, f.ay, f.pxPerM); return@LaunchedEffect }
+            kotlinx.coroutines.delay(120)
+        }
+    }
     Box(modifier) {
         Canvas(Modifier.fillMaxSize()) {
             val t = still ?: ts.floatValue
-            drawScene(world, kind, t, fx)
+            drawScene(world, kind, t, fx, zombies, car)
             if (dim > 0f) drawRect(Color.Black.copy(alpha = dim))
         }
         content()
     }
 }
+
+/** sahnedeki zombi türleri (atlas önekleri) ve boy çarpanı */
+private val SCENE_ZOMBIES = listOf("walker" to 1f, "runner" to 1.02f, "tank" to 1.22f, "dark" to 1f, "dog" to 0.62f, "walker" to 1f, "runner" to 1.02f)
+
+/** 3B arabanın sahne karesi: görsel + ayak çapası + kare ölçeği (metre başına piksel) */
+private class SceneCar(val img: ImageBitmap, val ax: Float, val ay: Float, val pxPerM: Float)
 
 private class World(val stars: List<FloatArray>, val skylines: List<Skyline>, val fires: List<FloatArray>, val embers: List<FloatArray>, val walkers: List<FloatArray>, val clouds: List<FloatArray>)
 
@@ -113,7 +145,7 @@ private fun c(v: Long, a: Float = 1f) = Color(v).copy(alpha = a)
 
 private fun mix(a: Color, b: Color, k: Float) = Color(a.red + (b.red - a.red) * k, a.green + (b.green - a.green) * k, a.blue + (b.blue - a.blue) * k, a.alpha + (b.alpha - a.alpha) * k)
 
-private fun DrawScope.drawScene(w: World, k: SceneKind, t: Float, fx: Int) {
+private fun DrawScope.drawScene(w: World, k: SceneKind, t: Float, fx: Int, zombies: List<List<ImageBitmap>> = emptyList(), car: SceneCar? = null) {
     val W = size.width; val H = size.height
     if (W < 16f || H < 16f) return
     val horizonY = H * 0.66f
@@ -235,15 +267,24 @@ private fun DrawScope.drawScene(w: World, k: SceneKind, t: Float, fx: Int) {
     drawCircle(rg(listOf(c(0xFFFFE0A0, 0.65f * lf), Color.Transparent), Offset(lampX + W * 0.018f, lampTop - H * 0.15f), H * 0.12f), H * 0.12f,
         Offset(lampX + W * 0.018f, lampTop - H * 0.15f), blendMode = BlendMode.Plus)
 
-    // uzaktaki zombi silüetleri: sokakta yavaş sürünür
-    for (z in w.walkers) {
+    // uzaktaki zombiler: oyunun kendi zombileri sokakta yavaşça kamp ateşine (sola) yürür; uzaktakiler sisle solar.
+    // Görseller yüklenemediyse eski silüetler.
+    val dusk = ColorFilter.tint(mix(c(k.fog), Color(0xFF8A8494), 0.55f), BlendMode.Modulate)
+    for ((i, z) in w.walkers.withIndex()) {
         val span = 1.3f
-        val x = ((z[0] + t * 0.004f * z[3]) % span) - 0.15f
-        drawZombie(x * W, groundTop + H * 0.03f * z[1], H * 0.125f * z[1], t * z[3] + z[2], c(k.near))
+        val x = span - ((z[0] + t * 0.004f * z[3]) % span) - 0.15f
+        val y = groundTop + H * 0.03f * z[1]
+        val frames = zombies.getOrNull(i % zombies.size.coerceAtLeast(1)).orEmpty()
+        if (frames.isEmpty()) { drawZombie(x * W, y, H * 0.125f * z[1], t * z[3] + z[2], c(k.near)); continue }
+        val img = frames[((t * 7f * z[3] + z[2] * 3f).toInt() % frames.size + frames.size) % frames.size]
+        val hgt = H * 0.18f * z[1] * SCENE_ZOMBIES[i % SCENE_ZOMBIES.size].second
+        val wid = hgt * img.width / img.height.coerceAtLeast(1)
+        drawImage(img, IntOffset.Zero, IntSize(img.width, img.height), IntOffset((x * W - wid / 2).toInt(), (y - hgt).toInt()), IntSize(wid.toInt(), hgt.toInt()),
+            alpha = (0.55f + 0.35f * (z[1] - 0.7f) / 0.6f).coerceIn(0.5f, 0.95f), colorFilter = dusk, filterQuality = FilterQuality.None)
     }
 
-    // kamp ateşi + barikat (ön plan, sol alt)
-    drawForeground(k, t, W, H, groundTop, fx)
+    // kamp ateşi + barikat (ön plan, sol alt); araba enkazı yerine oyunun arabası
+    drawForeground(k, t, W, H, groundTop, fx, car)
 
     // ---- kor / kül yağmuru (additive)
     val n = when (fx) { 0 -> 22; 1 -> 45; 2 -> 70; else -> 90 }
@@ -325,7 +366,7 @@ private fun DrawScope.drawZombie(x: Float, y: Float, hgt: Float, ph: Float, col:
     drawLine(col, Offset(x + lean * 0.6f, bodyTop + hgt * 0.20f), Offset(x + hgt * 0.27f, bodyTop + hgt * 0.30f - sw * 0.4f), hgt * 0.05f)
 }
 
-private fun DrawScope.drawForeground(k: SceneKind, t: Float, W: Float, H: Float, groundTop: Float, fx: Int) {
+private fun DrawScope.drawForeground(k: SceneKind, t: Float, W: Float, H: Float, groundTop: Float, fx: Int, car: SceneCar? = null) {
     val dark = Color(0xFF07050A)
     // barikat: eğik tahta ve çuvallar (sağ alt), araba enkazı silueti (sol)
     val bx = W * 0.80f; val by = H * 0.98f
@@ -335,14 +376,31 @@ private fun DrawScope.drawForeground(k: SceneKind, t: Float, W: Float, H: Float,
         drawLine(dark, Offset(bx + i * W * 0.025f, by), Offset(bx + i * W * 0.025f + sin(ang) * len, by - cos(ang) * len), H * 0.012f)
     }
     drawRoundRect(dark, Offset(W * 0.74f, H * 0.90f), Size(W * 0.2f, H * 0.12f), CornerRadius(H * 0.02f))
-    // araba enkazı
+    // oyunun arabası (Hellhound): sol önde park etmiş, gün batımı tonunda, kamp ateşinin ışığı yanına vurur
     val cx = W * 0.07f; val cyy = groundTop + H * 0.12f
-    val car = Path().apply {
-        moveTo(cx, cyy); lineTo(cx, cyy - H * 0.06f); lineTo(cx + W * 0.025f, cyy - H * 0.10f); lineTo(cx + W * 0.085f, cyy - H * 0.11f)
-        lineTo(cx + W * 0.115f, cyy - H * 0.07f); lineTo(cx + W * 0.16f, cyy - H * 0.06f); lineTo(cx + W * 0.16f, cyy); close()
+    if (car != null) {
+        val wid = W * 0.21f
+        val k2 = wid / car.img.width.coerceAtLeast(1)
+        val hgt = car.img.height * k2
+        // lobide sol alt köşe oynanış penceresinin altında kalmasın: sokağın ortasında, ateşin sağında
+        val fx1 = W * 0.46f
+        // zemin gölgesi
+        drawOval(Color.Black.copy(alpha = 0.55f), Offset(fx1 - wid * 0.48f, cyy - H * 0.018f), Size(wid * 0.96f, H * 0.05f))
+        drawImage(car.img, IntOffset.Zero, IntSize(car.img.width, car.img.height),
+            IntOffset((fx1 - car.ax * k2).toInt(), (cyy - car.ay * k2).toInt()), IntSize(wid.toInt(), hgt.toInt()),
+            colorFilter = ColorFilter.tint(mix(c(k.fog), Color(0xFF9A8E9E), 0.6f), BlendMode.Modulate), filterQuality = FilterQuality.Medium)
+        // farlar: sönük, titrek
+        val fl = 0.5f + 0.5f * sin(t * 3.1f) * sin(t * 1.7f)
+        drawCircle(rg(listOf(Color(0xFFFFE6B0).copy(alpha = 0.22f + 0.08f * fl), Color.Transparent), Offset(fx1 + wid * 0.44f, cyy - hgt * 0.32f), H * 0.08f),
+            H * 0.08f, Offset(fx1 + wid * 0.44f, cyy - hgt * 0.32f), blendMode = BlendMode.Plus)
+    } else {
+        val wreck = Path().apply {
+            moveTo(cx, cyy); lineTo(cx, cyy - H * 0.06f); lineTo(cx + W * 0.025f, cyy - H * 0.10f); lineTo(cx + W * 0.085f, cyy - H * 0.11f)
+            lineTo(cx + W * 0.115f, cyy - H * 0.07f); lineTo(cx + W * 0.16f, cyy - H * 0.06f); lineTo(cx + W * 0.16f, cyy); close()
+        }
+        drawPath(wreck, dark)
+        drawCircle(dark, H * 0.035f, Offset(cx + W * 0.035f, cyy)); drawCircle(dark, H * 0.035f, Offset(cx + W * 0.125f, cyy))
     }
-    drawPath(car, dark)
-    drawCircle(dark, H * 0.035f, Offset(cx + W * 0.035f, cyy)); drawCircle(dark, H * 0.035f, Offset(cx + W * 0.125f, cyy))
     // kamp ateşi (alt orta-sol): alev dilleri + kor + ışık
     val fx0 = W * 0.30f; val fy0 = H * 0.93f
     val flick = 0.82f + 0.18f * sin(t * 13f) * sin(t * 7.3f)

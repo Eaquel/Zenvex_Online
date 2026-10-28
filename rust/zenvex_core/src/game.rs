@@ -1244,8 +1244,7 @@ impl Game {
         p.atk_active = false;
         self.progress.deaths += 1;
         self.events.push(Event::Died);
-        // ölümde çanta yıpranır (%2) ve elindeki silah sarsılır (%1)
-        self.wear_eq("bag", 20);
+        // ölümde elindeki silah sarsılır (%1); çantalar kırılmaz
         self.wear_eq("weapon", 10);
         if self.hardcore {
             // çantadaki her şey ölüm yerine düşer, altının yarısı gider
