@@ -47,12 +47,14 @@ data class Settings(
     val uiSound: Float = 0.7f,
     // Oyun
     val language: String = "tr",
+    /** ilk girişte gösterilen numaralı kontrol rehberi (gösterilince ya da kapatılınca false) */
+    val controlsGuide: Boolean = true,
 ) {
     val vegetationDensity: Float get() = when (vegetation) { 0 -> 0.3f; 1 -> 0.6f; else -> 1f }
     /** parçacık ve efekt çarpanı (yeni parçacık sayısı, tavan) */
-    val fxScale: Float get() = if (!particles) 0f else when (fx) { 0 -> 0.3f; 1 -> 0.6f; 2 -> 1f; else -> 1.35f }
+    val fxScale: Float get() = if (!particles) 0f else Thermal.fxK * when (fx) { 0 -> 0.3f; 1 -> 0.6f; 2 -> 1f; else -> 1.35f }
     val renderScale: Float get() = when (resolution) { 0 -> 0.67f; 1 -> 0.8f; else -> 1f }
-    val effectiveFps: Int get() = if (batterySaver) 30 else fpsLimit
+    val effectiveFps: Int get() = (if (batterySaver) 30 else fpsLimit).let { f -> Thermal.fpsCap.let { c -> if (c > 0) minOf(f, c) else f } }
     /** Sanal ekran yüksekliği (piksel sanat pikseli cinsinden) */
     val virtualHeight: Int get() = when (zoom) { 0 -> 230; 1 -> 290; else -> 360 }
 
@@ -109,6 +111,7 @@ data class Settings(
                 ambient = p.getFloat("ambient", d.ambient),
                 uiSound = p.getFloat("uiSound", d.uiSound),
                 // oyuncu Ayarlar'dan dil seçmediyse her açılışta cihaz dili (destekleniyorsa; yoksa İngilizce)
+                controlsGuide = p.getBoolean("controlsGuide", d.controlsGuide),
                 language = (if (p.getBoolean("langChosen", false)) p.getString("language", null) else null) ?: I18n.deviceDefault(),
             )
             I18n.load(ctx, current.language)
@@ -132,7 +135,7 @@ data class Settings(
                 .putFloat("runThreshold", s.runThreshold).putFloat("attackSensitivity", s.attackSensitivity)
                 .putFloat("attackDeadZone", s.attackDeadZone).putFloat("joystickSize", s.joystickSize)
                 .putFloat("joystickOpacity", s.joystickOpacity).putInt("haptics", s.haptics)
-                .putBoolean("leftHanded", s.leftHanded).putFloat("master", s.master)
+                .putBoolean("leftHanded", s.leftHanded).putBoolean("controlsGuide", s.controlsGuide).putFloat("master", s.master)
                 .putFloat("music", s.music).putFloat("sfx", s.sfx).putFloat("ambient", s.ambient)
                 .putFloat("uiSound", s.uiSound).putString("language", s.language)
                 .apply()

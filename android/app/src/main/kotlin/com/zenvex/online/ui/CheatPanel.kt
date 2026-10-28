@@ -260,15 +260,29 @@ private fun EventTab(report: (String, Boolean) -> Unit) {
 // =========================================================================== bakım
 @Composable
 private fun MaintTab(report: (String, Boolean) -> Unit) {
-    var mMsg by remember { mutableStateOf(Gate.maintenance.value?.optString("msg") ?: "") }
+    // çok dilli mesaj: her dil ayrı yazılır, oyuncu kendi dilini görür (dil yoksa İngilizce, sonra Türkçe)
+    val msgs = remember { androidx.compose.runtime.mutableStateMapOf<String, String>().apply { putAll(MaintMsg.parse(Gate.maintenance.value?.optString("msg") ?: "")) } }
+    var lang by remember { mutableStateOf("tr") }
     val on = Gate.maintenance.value != null
     Section("Bakım Modu", "Açıkken yönetici dışında kimse giremez; oyundakiler 15 sn içinde bakım ekranına düşer.")
     PT(if (on) "Durum: BAKIMDA" else "Durum: Açık", 15.sp, if (on) Px.Orange else Px.Name)
     Spacer(Modifier.height(6.dp))
-    Field(mMsg, { mMsg = it.take(200) }, "Bakım Mesajı (Oyuncular Görür)", Modifier.fillMaxWidth())
+    PT("Mesaj Dili", 13.sp, Px.Sub)
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for ((code, name) in com.zenvex.online.game.I18n.LANGS) {
+            val filled = !msgs[code].isNullOrBlank()
+            PxButton((if (filled) "✓ " else "") + code.uppercase(), Modifier.weight(1f), if (lang == code) Px.Green else if (filled) Px.Blue else Px.Dark, height = 34.dp, size = 12.sp) { lang = code }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    PT(com.zenvex.online.game.I18n.LANGS[lang] ?: lang, 12.sp, Px.Clan)
+    Field(msgs[lang] ?: "", { msgs[lang] = it.take(300) }, "Bakım Mesajı (Bu Dili Konuşan Oyuncular Görür)", Modifier.fillMaxWidth())
+    PT("Boş bırakılan dilde İngilizce, o da yoksa Türkçe gösterilir.", 11.sp, Px.Sub, maxLines = 2)
     Spacer(Modifier.height(6.dp))
     PxButton(if (on) "Bakımı Bitir" else "Bakımı Başlat", color = if (on) Px.Green else Px.Red, height = 44.dp, size = 15.sp) {
-        Account.adminMaintenance(!on, mMsg) { r -> r.onSuccess { Gate.poll(); report(if (!on) "Bakım Başladı" else "Bakım Bitti", true) }.onFailure { report(it.message ?: "", false) } }
+        val packed = MaintMsg.encode(msgs)
+        if (packed.length > 1900) { report("Mesajlar çok uzun (en çok ~1900 karakter)", false); return@PxButton }
+        Account.adminMaintenance(!on, packed) { r -> r.onSuccess { Gate.poll(); report(if (!on) "Bakım Başladı" else "Bakım Bitti", true) }.onFailure { report(it.message ?: "", false) } }
     }
 }
 

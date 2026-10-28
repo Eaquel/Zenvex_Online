@@ -93,6 +93,8 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
     // açılış patlaması: (düğüm, başlangıç zamanı)
     var burst by remember { mutableStateOf(-1 to 0f) }
     val haptic = LocalHapticFeedback.current
+    // yıldız tozu: (x, y, parlaklık) üçlüleri, birim cinsinden
+    val stars = remember { val r = java.util.Random(31); FloatArray(150 * 3) { i -> if (i % 3 == 2) r.nextFloat() else (r.nextFloat() - 0.5f) * 34f } }
     val time by produceState(0f) {
         val start = withFrameNanos { it }
         while (true) withFrameNanos { value = (it - start) / 1e9f }
@@ -122,6 +124,17 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
                 fun pos(n: JSONObject) = Offset(c.x + n.optDouble("x").toFloat() * unit, c.y + n.optDouble("y").toFloat() * unit)
                 // arka plan: merkez ışığı + 5/10/15 derinlik halkaları (anahtar düğüm kademeleri)
                 drawCircle(Brush.radialGradient(listOf(Color(0x332A2418), Color.Transparent), c, unit * 17f), unit * 17f, c)
+                // dal bulutsuları: her dal kendi renginde uzaktan parlar (yukarı hasar, sağ silah, aşağı can, sol çeviklik)
+                for ((bx, by, fc) in listOf(Triple(0f, -9f, SkillGlyphs.Damage), Triple(9f, 0f, SkillGlyphs.Weapon), Triple(0f, 9f, SkillGlyphs.Life), Triple(-9f, 0f, SkillGlyphs.Agility))) {
+                    val bc = Offset(c.x + bx * unit, c.y + by * unit)
+                    drawCircle(Brush.radialGradient(listOf(fc.copy(alpha = 0.16f), Color.Transparent), bc, unit * 9f), unit * 9f, bc)
+                }
+                // yıldız tozu: sabit dağılım, yavaş titrer (kaydırınca hafif paralaks)
+                for (sIdx in stars.indices step 3) {
+                    val sx = c.x * 0.85f + stars[sIdx] * unit * 1.15f; val sy = c.y * 0.85f + stars[sIdx + 1] * unit * 1.15f
+                    val tw = 0.35f + 0.65f * (0.5f + 0.5f * sin(time * (0.8f + stars[sIdx + 2] * 1.4f) + sIdx))
+                    drawCircle(Color.White.copy(alpha = 0.10f + 0.28f * tw * stars[sIdx + 2]), (0.5f + 1.1f * stars[sIdx + 2]).dp.toPx(), Offset(sx, sy))
+                }
                 for (d in listOf(5f, 10f, 15f)) drawCircle(Color(0x14F6E05A), unit * d, c, style = Stroke(1.dp.toPx(),
                     pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 8.dp.toPx()), time * 12f)))
                 // bağlantılar
@@ -135,13 +148,17 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
                         val oa = n.optBoolean("own"); val ob = o.optBoolean("own")
                         when {
                             oa && ob -> {
-                                drawLine(Color(0x40F6E05A), a, b, 10.dp.toPx() * zoom.coerceIn(0.6f, 1.2f), StrokeCap.Round)
-                                drawLine(Color(0xFFF6E05A), a, b, 3.5.dp.toPx(), StrokeCap.Round)
-                                // akan enerji zerreleri
+                                // enerji ışını: geniş yumuşak hale, altın gövde, beyaz öz; üstünde akan parlak zerreler
+                                val zk = zoom.coerceIn(0.6f, 1.2f)
+                                drawLine(Color(0x26F6E05A), a, b, 16.dp.toPx() * zk, StrokeCap.Round)
+                                drawLine(Color(0x70F6C42A), a, b, 7.dp.toPx() * zk, StrokeCap.Round)
+                                drawLine(Color(0xFFFFF2B0), a, b, 2.6.dp.toPx(), StrokeCap.Round)
                                 val ph = ((n.optInt("id") * 37 + o.optInt("id") * 11) % 100) / 100f
-                                for (k in 0..1) {
-                                    val f = (time * 0.6f + ph + k * 0.5f) % 1f
-                                    drawCircle(Color(0xFFFFF6C0), 2.6.dp.toPx(), Offset(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f))
+                                for (k in 0..2) {
+                                    val f = (time * 0.55f + ph + k / 3f) % 1f
+                                    val q = Offset(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f)
+                                    drawCircle(Color(0x55FFF6C0), 6.dp.toPx() * zk, q)
+                                    drawCircle(Color.White, 2.4.dp.toPx(), q)
                                 }
                             }
                             oa || ob -> {
@@ -159,28 +176,17 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
                     val p = pos(n)
                     val k = n.optInt("k")
                     val zs = zoom.coerceIn(0.6f, 1.5f)
-                    val r = (if (k == 2) 21.dp else if (k == 1) 16.dp else 12.dp).toPx() * zs
+                    val r = (if (k == 2) 23.dp else if (k == 1) 18.dp else 14.dp).toPx() * zs
                     val stat = if (n.optInt("id") == 0) "core" else n.optString("s")
                     val fam = SkillGlyphs.family(stat)
                     val own = n.optBoolean("own"); val av = n.optBoolean("av")
-                    val frame = when { own -> Color(0xFFF6E05A); av -> fam; else -> Color(0xFF4A4840) }
-                    val fillC = if (own) Color(0xFF2A2116) else Color(0xFF181713)
-                    if (own) drawCircle(Brush.radialGradient(listOf(fam.copy(alpha = 0.55f), Color.Transparent), p, r * 2.2f), r * 2.2f, p)
-                    if (av) drawCircle(fam.copy(alpha = 0.25f + 0.45f * pulse), r * (1.35f + 0.15f * pulse), p, style = Stroke(2.5.dp.toPx()))
-                    when (k) {
-                        2 -> with(SkillGlyphs) { keystoneFrame(p, r, fillC, frame, 3.dp.toPx(), if (own) time * 12f else 0f) }
-                        1 -> {
-                            drawCircle(fillC, r, p)
-                            drawCircle(frame, r, p, style = Stroke(2.5.dp.toPx()))
-                            drawCircle(frame.copy(alpha = 0.7f), r * 0.82f, p, style = Stroke(1.2.dp.toPx()))
-                        }
-                        else -> {
-                            drawCircle(fillC, r, p)
-                            drawCircle(frame, r, p, style = Stroke(2.dp.toPx()))
-                        }
+                    with(SkillGlyphs) { treeNode(p, r, k, own, av, fam, pulse, time) }
+                    // simge: koyu gölge + renkli çizim (açıkken beyaza yakın parlak, alınabilirken aile renginde, kilitliyken soluk)
+                    val gc = when { own -> Color(0xFFFFFFFF); av -> fam.copy(alpha = 0.95f); else -> Color(0xFF6A675C) }
+                    with(SkillGlyphs) {
+                        if (own || av) glyph(stat, Offset(p.x + r * 0.03f, p.y + r * 0.05f), r * 0.6f, Color(0xAA000000))
+                        glyph(stat, p, r * 0.6f, gc)
                     }
-                    val gc = when { own -> fam; av -> fam.copy(alpha = 0.85f); else -> Color(0xFF6A675C) }
-                    with(SkillGlyphs) { glyph(stat, p, r * 0.62f, gc) }
                     if (n.optInt("id") == sel) drawCircle(Color.White, r + 6.dp.toPx(), p, style = Stroke(2.dp.toPx(),
                         pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx()), time * 30f)))
                 }
@@ -230,11 +236,14 @@ internal fun TreeView(data: JSONObject, changed: () -> Unit) {
                 val stat = if (n.optInt("id") == 0) "core" else n.optString("s")
                 val fam = SkillGlyphs.family(stat)
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Canvas(Modifier.size(58.dp)) {
-                        val r = size.minDimension * 0.4f
-                        drawCircle(Brush.radialGradient(listOf(fam.copy(alpha = 0.5f), Color.Transparent), center, r * 1.4f), r * 1.4f, center)
-                        drawCircle(Color(0xFF181713), r, center); drawCircle(fam, r, center, style = Stroke(2.5.dp.toPx()))
-                        with(SkillGlyphs) { glyph(stat, center, r * 0.62f, fam) }
+                    Canvas(Modifier.size(64.dp)) {
+                        val r = size.minDimension * 0.32f
+                        val own = n.optBoolean("own"); val av = n.optBoolean("av")
+                        with(SkillGlyphs) {
+                            treeNode(center, r, k, own, av, fam, 0.5f, time)
+                            glyph(stat, Offset(center.x + r * 0.03f, center.y + r * 0.05f), r * 0.6f, Color(0xAA000000))
+                            glyph(stat, center, r * 0.6f, if (own) Color.White else fam)
+                        }
                     }
                     Spacer(Modifier.width(8.dp))
                     Column {

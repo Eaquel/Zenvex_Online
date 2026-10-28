@@ -479,6 +479,19 @@ impl Game {
         for (x, y) in self.story_targets() {
             push(x, y, 5.0, out);
         }
+        // V18: bulunulan bölgedeki kamp karakterleri (8) ve önemli yerler (9): nerede ne olduğu haritada belli olsun
+        let here = crate::areas::area_at(px, py);
+        for n in &self.npcs {
+            if matches!(n.kind, 1..=5 | 7 | 8) && crate::areas::area_at(n.x, n.y) == here {
+                push(n.x, n.y, 8.0, out);
+            }
+        }
+        for l in crate::world::LANDMARKS {
+            let (lx, ly) = l.pos();
+            if crate::areas::area_at(lx, ly) == here {
+                push(lx, ly, 9.0, out);
+            }
+        }
         let _ = (STATIC_NAMES.len(), ZOMBIES.len());
         k / 3
     }

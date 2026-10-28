@@ -2,6 +2,22 @@
 
 ## Unreleased (V16 — 3D)
 
+- V18: VIP system removed (shop tab, points, badge, chat theme, perks); wings can no longer be chosen by players and are
+  equipped or removed only by an admin (admin panel → Wings; needs the v18 admin migration)
+- Shop: 19 new generated images (tabs, tickets, cards, packs, gem piles, background)
+- 3D portraits (profile pictures, top-left player portrait, NPC conversation panel with the talking animation)
+- Vehicles: dust behind the vehicle (no longer drawn over the driver when heading down), trees fade harder while driving
+- Combat animations: third finisher for one-handed weapons, horizontal/reverse second move for hammer, pickaxe and storm axe,
+  fist combo (jab, cross, uppercut), animated wings with tip bend and ember/sparkle effects, drinking while walking/running,
+  brighter 3D characters, per-stage slash trails; no slash trail when chopping or mining
+- Regions are isolated: neighbour objects are not drawn and the border is a cloud sea; always daytime; fewer zombies (14 per area)
+- Titan no longer respawns on every join (kill is remembered per 15-minute slot)
+- Workbench lists hand recipes too; crate button says collection items are coming soon; admin button moved out from under the event banner
+- Map: camp characters and landmarks with labels, radar shows characters and places; first-run numbered controls guide (also in Settings)
+- Skill tree redrawn (metal bezels, gem sockets, energy beams, star-burst keystones, nebulae); new respawn icon
+- Admin: maintenance message per language; heat protection (frame and effect cap follows the device thermal status)
+- Settings: no scrolling (columns), slider knobs no longer jump to zero when switching tabs
+
 - Settings: no scrolling anywhere — tabs sit in one row on top and each tab's controls are laid out in columns so everything
   shows at once even on the smallest landscape phones (800×360 dp); the support form, account page, language list and legal
   texts are laid out the same way; the support message box is now a real multi-line field

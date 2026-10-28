@@ -58,7 +58,33 @@ fun GateHost() {
     when {
         ban != null -> BanScreen(ban)
         Gate.offline.value && !Demo.on -> NoConnectionScreen()
-        m != null && !Account.admin.value && !Account.adminDevice.value -> MaintenanceScreen(m.optString("msg"))
+        m != null && !Account.admin.value && !Account.adminDevice.value -> MaintenanceScreen(MaintMsg.pick(m.optString("msg"), com.zenvex.online.game.I18n.lang))
+    }
+}
+
+/**
+ * Bakım mesajı çok dillidir: yönetici her dil için ayrı metin yazar, sunucuda {"tr": "...", "en": "..."} JSON'u olarak durur
+ * (eski düz metin de çalışır). Oyuncu kendi dilini görür; yoksa İngilizce, o da yoksa Türkçe, o da yoksa ilk dolu metin.
+ */
+object MaintMsg {
+    fun parse(raw: String): Map<String, String> {
+        if (raw.isBlank()) return emptyMap()
+        if (!raw.trimStart().startsWith("{")) return mapOf("tr" to raw)
+        return runCatching {
+            val o = JSONObject(raw)
+            o.keys().asSequence().associateWith { o.optString(it) }.filterValues { it.isNotBlank() }
+        }.getOrDefault(mapOf("tr" to raw))
+    }
+
+    fun pick(raw: String, lang: String): String {
+        val m = parse(raw)
+        return m[lang] ?: m["en"] ?: m["tr"] ?: m.values.firstOrNull() ?: ""
+    }
+
+    fun encode(m: Map<String, String>): String {
+        val o = JSONObject()
+        for ((k, v) in m) if (v.isNotBlank()) o.put(k, v.trim())
+        return if (o.length() == 0) "" else o.toString()
     }
 }
 

@@ -126,6 +126,24 @@ class UiShotsTest {
         paparazzi.snapshot { WizardMapView(sample("areas"), itemNames(sample("world")), img, {}, initial = 6) {} }
     }
 
+    /** V18: kamp karakterleri ve önemli yerler etiketli (nerede ne olduğu belli) */
+    @Test
+    fun worldMapLabels() {
+        val bmp: android.graphics.Bitmap = android.graphics.BitmapFactory.decodeStream(javaClass.getResourceAsStream("/ui/map.png"))
+        val img = bmp.copy(android.graphics.Bitmap.Config.ARGB_8888, false).asImageBitmap()
+        val w = sample("world")
+        val me = sample("player")
+        val mx = me.getDouble("x").toFloat(); val my = me.getDouble("y").toFloat()
+        val npcs = org.json.JSONArray()
+            .put(org.json.JSONArray().put("Tüccar Marco").put("Tüccar").put(mx + 420.0).put(my - 260.0).put(1))
+            .put(org.json.JSONArray().put("Yaşlı Silas").put("Görevci").put(mx - 380.0).put(my - 120.0).put(2))
+            .put(org.json.JSONArray().put("Doktor Elena").put("Doktor").put(mx - 120.0).put(my + 360.0).put(3))
+            .put(org.json.JSONArray().put("Tamirci Viktor").put("Tamirci").put(mx + 90.0).put(my - 520.0).put(4))
+        w.put("npcs", npcs)
+        val marks = mapMarks(w, JSONObject()) + MapMark(mx + 900f, my - 1400f, 3, "Gizemli Ağaç")
+        paparazzi.snapshot { WorldMapView(img, null, w, mx, my, 3, marks, {}) }
+    }
+
     /** V8: keşfedilen devlet üsleri (devlet / başka klan / kendi klanın) */
     @Test
     fun worldMapBases() {

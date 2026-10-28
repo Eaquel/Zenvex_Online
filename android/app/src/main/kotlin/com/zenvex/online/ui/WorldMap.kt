@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,6 +87,8 @@ const val MK_QUEST = 3
 const val MK_PLACE = 4
 const val MK_BASE = 5
 const val MK_MERCHANT = 6
+/** kamp karakterleri (doktor, tüccar, görevci, tamirci, eğitmen, büyücü, komutan) */
+const val MK_NPC = 8
 
 /** Haritadaki ve lejanttaki işaret çizimi (aynı fırça: lejant haritayla birebir) */
 internal fun DrawScope.drawMarkIcon(kind: Int, p: Offset, t: Float, k: Float = 1f) {
@@ -117,6 +121,12 @@ internal fun DrawScope.drawMarkIcon(kind: Int, p: Offset, t: Float, k: Float = 1
             drawCircle(ink, 9f * d, p); drawCircle(Color(0xFFFFC83A), 7f * d, p)
             drawRect(Color(0xFF8A5A08), Offset(p.x - 4f * d, p.y - 8f * d), Size(8f * d, 3f * d))
             drawCircle(Color(0xFF8A5A08), 2.2f * d, Offset(p.x, p.y + 1f * d))
+        }
+        MK_NPC -> {
+            // karakter: yeşil yuvarlak içinde baş ve omuz
+            drawCircle(ink, 9.5f * d, p); drawCircle(Color(0xFF3FBF6A), 7.8f * d, p)
+            drawCircle(Color(0xFFF2F6EE), 2.5f * d, Offset(p.x, p.y - 2.2f * d))
+            drawArc(Color(0xFFF2F6EE), 200f, 140f, true, Offset(p.x - 4.4f * d, p.y + 0.6f * d), androidx.compose.ui.geometry.Size(8.8f * d, 7.4f * d))
         }
         MK_PLACE -> {
             // yer imi: elmas biçimli taş
@@ -238,6 +248,9 @@ fun mapMarks(w: JSONObject, quests: JSONObject): List<MapMark> {
         if (q.has("x")) out += MapMark(q.getDouble("x").toFloat(), q.getDouble("y").toFloat(), 3,
             if (q.optBoolean("ready")) "${q.optString("title")} · Teslim: ${q.optString("giver")}" else q.optString("title"))
     }
+    for (n in w.optJSONArray("npcs").let { it ?: JSONArray() }.let { a -> (0 until a.length()).map { a.getJSONArray(it) } }) {
+        out += MapMark(n.getDouble(2).toFloat(), n.getDouble(3).toFloat(), MK_NPC, n.getString(0), n.getString(1))
+    }
     for (l in w.optJSONArray("landmarks").let { it ?: JSONArray() }.let { a -> (0 until a.length()).map { a.getJSONArray(it) } }) {
         out += MapMark(l.getDouble(1).toFloat(), l.getDouble(2).toFloat(), 4, l.getString(0))
     }
@@ -267,6 +280,7 @@ internal fun WorldMapView(
     var picked by remember { mutableStateOf(initialPick) }
     val t = rememberTime()
     val ctx = androidx.compose.ui.platform.LocalContext.current
+    val label = remember { android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { textAlign = android.graphics.Paint.Align.CENTER; typeface = android.graphics.Typeface.DEFAULT_BOLD } }
     val badges = remember { listOf("map_gov", "map_clan", "map_war", "map_unknown").associateWith { UiArt.image(ctx, it) } }
     fun minZoom() = if (view.width == 0) 0.02f else min(view.width / (bx1 - bx0), view.height / (by1 - by0))
     fun clampCam() {
@@ -358,6 +372,8 @@ internal fun WorldMapView(
                     else -> drawMarkIcon(m.kind, p, t)
                 }
             }
+            // etiketler: karakter, yer, titan ve tüccar adları işaretin altında (çakışanlar atlanır)
+            drawMarkLabels(marks, ::at, label)
             val me = at(meX, meY)
             drawCircle(Color(0x553A8AFF), 16.dp.toPx() * (1f + 0.2f * sin(t * 3f)), me)
             drawCircle(Color.White, 8.dp.toPx(), me)
@@ -398,12 +414,36 @@ internal fun WorldMapView(
     }
 }
 
+/** Harita etiketleri: ad koyu çerçeveli beyaz yazı; önceki etiketle çakışan atlanır */
+private fun DrawScope.drawMarkLabels(marks: List<MapMark>, at: (Float, Float) -> Offset, paint: android.graphics.Paint) {
+    val d = density
+    paint.textSize = 11f * d
+    val placed = ArrayList<androidx.compose.ui.geometry.Rect>()
+    drawIntoCanvas { cv ->
+        for (m in marks.sortedBy { when (it.kind) { MK_TITAN -> 0; MK_NPC -> 1; MK_PLACE -> 2; MK_MERCHANT -> 3; else -> 9 } }) {
+            if (m.kind != MK_TITAN && m.kind != MK_NPC && m.kind != MK_PLACE && m.kind != MK_MERCHANT) continue
+            val text = m.label.ifEmpty { continue }
+            val p = at(m.x, m.y)
+            if (p.x < -60f || p.y < -20f || p.x > size.width + 60f || p.y > size.height + 20f) continue
+            val w = paint.measureText(text)
+            val r = androidx.compose.ui.geometry.Rect(p.x - w / 2 - 3 * d, p.y + 10 * d, p.x + w / 2 + 3 * d, p.y + 24 * d)
+            if (placed.any { it.overlaps(r) }) continue
+            placed += r
+            paint.style = android.graphics.Paint.Style.STROKE; paint.strokeWidth = 3f * d; paint.color = 0xE015140F.toInt()
+            cv.nativeCanvas.drawText(text, p.x, p.y + 21 * d, paint)
+            paint.style = android.graphics.Paint.Style.FILL; paint.color = 0xFFF4EEDC.toInt()
+            cv.nativeCanvas.drawText(text, p.x, p.y + 21 * d, paint)
+        }
+    }
+}
+
 /** Lejant: başlık şeridi + işaret satırları (simge haritadaki fırçayla çizilir, sağda bu bölgedeki adet) */
 @Composable
 private fun MapLegend(marks: List<MapMark>, open: Boolean, t: Float, modifier: Modifier, toggle: () -> Unit) {
     val rows = listOf(
         Triple(-1, "Sen", 1), Triple(MK_QUEST, "Görev Hedefi", marks.count { it.kind == MK_QUEST }),
         Triple(MK_TITAN, "Titan", marks.count { it.kind == MK_TITAN }), Triple(MK_MERCHANT, "Gezgin Tüccar", marks.count { it.kind == MK_MERCHANT }),
+        Triple(MK_NPC, "Karakter", marks.count { it.kind == MK_NPC }),
         Triple(MK_PLACE, "Önemli Yer", marks.count { it.kind == MK_PLACE }),
     )
     val bases = listOf("map_gov" to "Devlet Üssü", "map_clan" to "Klanının Üssü", "map_war" to "Rakip Klan Üssü")

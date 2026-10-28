@@ -118,6 +118,11 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                         Choice("Titreşim", listOf("Kapalı", "Hafif", "Güçlü"), s.haptics) { set(s.copy(haptics = it)) }
                         Toggle("Sol El Modu (Joystickleri Değiştir)", s.leftHanded) { set(s.copy(leftHanded = it)) }
                         Spacer(Modifier.weight(1f))
+                        PxButton("Kontrol Rehberini Göster", Modifier.fillMaxWidth(), color = Px.Blue, icon = "info", height = 34.dp, size = 13.sp) {
+                            com.zenvex.online.game.HudLayout.guideReplay = true
+                            Toaster.show("Oyuna dönünce gösterilir")
+                        }
+                        Spacer(Modifier.height(4.dp))
                         PxButton("Varsayılana Dön", Modifier.fillMaxWidth(), color = Px.Dark, icon = "refresh", height = 34.dp, size = 13.sp) {
                             val d = Settings()
                             set(s.copy(moveDynamic = d.moveDynamic, moveSensitivity = d.moveSensitivity, moveDeadZone = d.moveDeadZone,

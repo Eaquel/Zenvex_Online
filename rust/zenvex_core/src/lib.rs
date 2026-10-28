@@ -71,6 +71,7 @@ pub fn world_json(g: &Game) -> String {
         "merchants": w.merchants,
         "benches": w.benches,
         "camp": world::CAMP,
+        "npcs": g.npcs.iter().filter(|n| matches!(n.kind, 1..=5 | 7 | 8)).map(|n| { let (name, role) = story::npc_name(n.kind); json!([name, role, n.x, n.y, n.kind]) }).collect::<Vec<_>>(),
         "landmarks": world::LANDMARKS.iter().map(|l| { let (x, y) = l.pos(); json!([l.name, x, y, l.safe]) }).collect::<Vec<_>>(),
         "bases": bases::base_defs().iter().take(bases::BASE_N).map(|b| { let (x, y) = b.pos(); json!([b.id, b.name(), x, y, b.level]) }).collect::<Vec<_>>(),
         "base_half": bases::BASE_HALF * world::TILE,

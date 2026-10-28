@@ -60,11 +60,15 @@ enum class SceneKind(
 
 /** Saniye cinsinden zamanı bir State olarak tutar: yalnız çizim aşaması okur, kompozisyon yeniden kurulmaz. */
 @Composable
-fun rememberTimeState(): androidx.compose.runtime.MutableFloatState {
+fun rememberTimeState(minStep: Float = 0f): androidx.compose.runtime.MutableFloatState {
     val s = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(Unit) {
         val start = System.nanoTime()
-        while (true) androidx.compose.runtime.withFrameNanos { now -> s.floatValue = (now - start) / 1e9f }
+        while (true) androidx.compose.runtime.withFrameNanos { now ->
+            val t = (now - start) / 1e9f
+            // minStep > 0: en çok 1/minStep sıklığında güncellenir (lobi sahnesi 40 kare/sn: göz fark etmez, cihaz daha az ısınır)
+            if (t - s.floatValue >= minStep) s.floatValue = t
+        }
     }
     return s
 }
@@ -83,7 +87,7 @@ fun LiveScene(
     kind: SceneKind = SceneKind.LOBBY, modifier: Modifier = Modifier.fillMaxSize(), dim: Float = 0f, still: Float? = null,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
-    val ts = rememberTimeState()
+    val ts = rememberTimeState(1f / 40f)
     val world = remember(kind) { buildWorld(kind) }
     val fx = Settings.current.fx
     val ctx = LocalContext.current

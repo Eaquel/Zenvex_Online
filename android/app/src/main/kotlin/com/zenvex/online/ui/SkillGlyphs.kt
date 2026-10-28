@@ -2,6 +2,7 @@ package com.zenvex.online.ui
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -213,5 +214,68 @@ object SkillGlyphs {
             drawPath(pp, fill)
             drawPath(pp, edge, style = Stroke(width))
         }
+    }
+
+    private fun Color.lighten(f: Float) = Color(red + (1f - red) * f, green + (1f - green) * f, blue + (1f - blue) * f, alpha)
+    private fun Color.darken(f: Float) = Color(red * (1f - f), green * (1f - f), blue * (1f - f), alpha)
+
+    /**
+     * V18 düğüm gövdesi: gölge, metal çerçeve (açık: altın, alınabilir: aile renginde, kilitli: çelik), mücevher yuva, parlak yansıma.
+     * k: 0 küçük, 1 belirgin (çentikli halka), 2 anahtar (kıvılcımlı yıldız çerçeve, dönen ışık).
+     */
+    fun DrawScope.treeNode(p: Offset, r: Float, k: Int, own: Boolean, av: Boolean, fam: Color, pulse: Float, time: Float) {
+        val metal = when {
+            own -> listOf(Color(0xFFFFF4B8), Color(0xFFD9A22E), Color(0xFF7A5410), Color(0xFFF2CE5C), Color(0xFFFFF4B8))
+            av -> listOf(fam.lighten(0.6f), fam, fam.darken(0.55f), fam.lighten(0.2f), fam.lighten(0.6f))
+            else -> listOf(Color(0xFF7C7C84), Color(0xFF45454C), Color(0xFF26262B), Color(0xFF5E5E66), Color(0xFF7C7C84))
+        }
+        // gölge
+        drawCircle(Color(0xA0000000), r * 1.16f, Offset(p.x, p.y + r * 0.14f))
+        if (own) drawCircle(Brush.radialGradient(listOf(fam.copy(alpha = 0.6f), Color.Transparent), p, r * 2.6f), r * 2.6f, p)
+        if (av) drawCircle(fam.copy(alpha = 0.2f + 0.4f * pulse), r * (1.42f + 0.14f * pulse), p, style = Stroke(r * 0.12f))
+        when (k) {
+            2 -> {
+                // yıldız çerçeve: 8 sivri uç, çift katman; sahipse ışık dönerek uçlarda parlar
+                rotate(if (own) time * 10f else 0f, p) {
+                    val star = Path()
+                    for (i in 0 until 16) {
+                        val a = i * PI.toFloat() / 8 + PI.toFloat() / 16
+                        val rr = if (i % 2 == 0) r * 1.32f else r * 1.02f
+                        val x = p.x + cos(a) * rr; val y = p.y + sin(a) * rr
+                        if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
+                    }
+                    star.close()
+                    drawPath(star, Brush.sweepGradient(metal, p))
+                    drawPath(star, Color(0xFF0A0908), style = Stroke(r * 0.07f))
+                    for (i in 0 until 8) {
+                        val a = i * PI.toFloat() / 4 + PI.toFloat() / 8
+                        val q = Offset(p.x + cos(a) * r * 1.2f, p.y + sin(a) * r * 1.2f)
+                        drawCircle(if (own) Color(0xFFFFFFFF) else metal[0], r * 0.07f, q)
+                    }
+                }
+                drawCircle(Brush.sweepGradient(metal.reversed(), p), r * 0.96f, p)
+            }
+            1 -> {
+                drawCircle(Brush.sweepGradient(metal, p), r * 1.08f, p)
+                // çentikler: halkada 6 küçük kabartı
+                for (i in 0 until 6) {
+                    val a = i * PI.toFloat() / 3
+                    drawCircle(metal[1], r * 0.1f, Offset(p.x + cos(a) * r * 1.08f, p.y + sin(a) * r * 1.08f))
+                }
+            }
+            else -> drawCircle(Brush.sweepGradient(metal, p), r * 1.04f, p)
+        }
+        drawCircle(Color(0xFF0A0908), r * 0.84f, p)
+        // mücevher yuva
+        val inner = when {
+            own -> listOf(fam.lighten(0.45f), fam, fam.darken(0.6f))
+            av -> listOf(Color(0xFF2A261E), Color(0xFF16140F), Color(0xFF0C0B09))
+            else -> listOf(Color(0xFF1B1A17), Color(0xFF111010), Color(0xFF090908))
+        }
+        drawCircle(Brush.radialGradient(inner, Offset(p.x - r * 0.2f, p.y - r * 0.25f), r * 0.95f), r * 0.78f, p)
+        if (av) drawCircle(fam.copy(alpha = 0.35f), r * 0.78f, p, style = Stroke(r * 0.08f))
+        // üst-sol yansıma
+        drawArc(Color.White.copy(alpha = if (own) 0.45f else 0.18f), 200f, 70f, false, Offset(p.x - r * 0.62f, p.y - r * 0.62f), Size(r * 1.24f, r * 1.24f),
+            style = Stroke(r * 0.1f, cap = StrokeCap.Round))
     }
 }

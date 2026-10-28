@@ -81,6 +81,15 @@ object HudLayout {
     @Volatile var topBusy = false
     /** etkinlik afişi görünüyor (Compose yazar; duyuru afişi onun altına iner) */
     @Volatile var eventShown = false
+    /** alt orta cepler satırı ve çanta tuşunun ekran dikdörtgenleri (l, t, r, b; Compose yazar, kontrol rehberi okur) */
+    @Volatile var pocketRow = FloatArray(4)
+    @Volatile var bagBtn = FloatArray(4)
+    /** Ayarlar'dan rehberi yeniden göster */
+    @Volatile var guideReplay = false
+    /** kontrol rehberi: GameView istenip istenmediğini ve denetim konumlarını yazar (mx,my,r, ax,ay,r, takla, radar) */
+    @Volatile var guideWanted = false
+    @Volatile var guideTargets = FloatArray(12)
+    @Volatile var guideSurface = floatArrayOf(1f, 1f)
 }
 
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
@@ -985,6 +994,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             drawControls(c)
             drawBuild(c)
             drawTutorial(c)
+            publishGuideTargets()
         }
         // FPS ve ping: sağ alt köşede tek satır (sol alttaki seviye/koordinat yazılarıyla çakışmaz)
         if (!clean && (s.showFps || s.showPing)) {
@@ -3495,7 +3505,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 rect.set(cx + (q[0] - px) / range * r, cy + (q[1] - py) / range * r, cx + (q[2] - px) / range * r, cy + (q[3] - py) / range * r)
                 c.clipOutRect(rect)
             }
-            fill.color = 0xE60C0A12.toInt(); c.drawCircle(cx, cy, r, fill)
+            // bölge dışı bulut denizi (oyundaki sınırla aynı renk)
+            fill.color = 0xF2A8ACC8.toInt(); c.drawCircle(cx, cy, r, fill)
             c.restore()
         }
         // kenar karartması
@@ -3507,8 +3518,15 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val l = hypot(dx, dy)
             if (l > 1f) { if (t == 0) continue; dx /= l; dy /= l }
             if (t == 7 && l > 1f) continue
-            val col = when (t) { 0 -> 0xFFFF3A30.toInt(); 1 -> 0xFFFF1010.toInt(); 2 -> 0xFF60D0FF.toInt(); 3 -> 0xFFFFD34A.toInt(); 5 -> 0xFFFF9A2A.toInt(); 6 -> 0xFFC8B878.toInt(); 7 -> 0xFFFF7A50.toInt(); else -> 0xFF7FFFE0.toInt() }
+            val col = when (t) { 0 -> 0xFFFF3A30.toInt(); 1 -> 0xFFFF1010.toInt(); 2 -> 0xFF60D0FF.toInt(); 3 -> 0xFFFFD34A.toInt(); 5 -> 0xFFFF9A2A.toInt(); 6 -> 0xFFC8B878.toInt(); 7 -> 0xFFFF7A50.toInt(); 8 -> 0xFF5AE08A.toInt(); 9 -> 0xFFB0E0FF.toInt(); else -> 0xFF7FFFE0.toInt() }
             val sx = cx + dx * r * 0.96f; val sy = cy + dy * r * 0.96f
+            if (t == 9) {
+                // önemli yer: elmas
+                path.reset(); path.moveTo(sx, sy - 5.5f * d); path.lineTo(sx + 4.5f * d, sy); path.lineTo(sx, sy + 5.5f * d); path.lineTo(sx - 4.5f * d, sy); path.close()
+                fill.color = 0xFF15140F.toInt(); c.drawPath(path, fill)
+                stroke.color = col; stroke.strokeWidth = 1.6f * d; c.drawPath(path, stroke)
+                continue
+            }
             if (t == 6) {
                 fill.color = 0xFF000000.toInt(); c.drawRect(sx - 5 * d, sy - 5 * d, sx + 5 * d, sy + 5 * d, fill)
                 fill.color = col; c.drawRect(sx - 4 * d, sy - 4 * d, sx + 4 * d, sy + 4 * d, fill)
@@ -3710,6 +3728,26 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val label = if (dist <= 60) "${tgt.label} · $dist m" else "$dist m"
             pill(c, label, ex - kotlin.math.cos(ang) * 24 * d, ey - kotlin.math.sin(ang) * 18 * d + 4 * d, 0xFFFFF0C0.toInt(), 0.75f)
         }
+    }
+
+
+    // ------------------------------------------------------------------ kontrol rehberi (ilk giriş; çizimi Compose'ta: ui/ControlsGuide.kt)
+    /** Rehber istenen durumda mı: ilk girişte (1-2. seviye, ilk öğretici adımı) ya da Ayarlar'dan yeniden gösterme */
+    private fun controlsGuideWanted() = !clean && hud[Native.DEAD] < 0.5f &&
+        (HudLayout.guideReplay || (Settings.current.controlsGuide && hud[Native.LEVEL] < 3f && guideStep == "g1"))
+
+    /** Compose rehberinin işaretleyeceği denetimlerin konumu (GameView yüzey pikseli); yüzey boyutu ölçek için */
+    private fun publishGuideTargets() {
+        HudLayout.guideWanted = controlsGuideWanted()
+        if (!HudLayout.guideWanted) return
+        val mv = if (Settings.current.leftHanded) atkStick else moveStick
+        val at = if (Settings.current.leftHanded) moveStick else atkStick
+        HudLayout.guideSurface = floatArrayOf(sw.toFloat(), sh.toFloat())
+        HudLayout.guideTargets = floatArrayOf(
+            mv.homeX, mv.homeY, stickR, at.homeX, at.homeY, stickR,
+            btnAbility.r.centerX(), btnAbility.r.centerY(), btnAbility.r.width() / 2,
+            radarCx, radarCy, radarR,
+        )
     }
 
     // ------------------------------------------------------------------ kontroller

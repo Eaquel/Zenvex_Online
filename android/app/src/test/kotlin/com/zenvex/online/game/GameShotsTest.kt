@@ -215,6 +215,8 @@ class GameShotsTest {
     /** V18 bölge sınırı: komşu bölgenin nesneleri görünmez, sınırın ötesi bulut denizi */
     @Test fun e01_borderEast() = shot("border_east", { cheat("level 20"); cheat("tp 355 470") }, steps = 30)
     @Test fun e02_borderCorner() = shot("border_corner", { cheat("level 20"); cheat("tp 193 383") }, steps = 30)
+    /** V18 kontrol rehberi: ilk girişte numaralı işaretler ve açıklama paneli */
+    @Test fun e03_controlsGuide() = shot("controls_guide", { cheat("heal") }, steps = 40)
     @Test fun g10_vehicle() = shot("vehicle", { cheat("level 20"); cheat("tp desert"); cheat("vehicle 2") }, steps = 60)
     // ------------------------------------------------------------------ V16 3B kahramanlar, silahlar, araçlar
     private fun equip(item: String) {

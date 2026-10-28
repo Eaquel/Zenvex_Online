@@ -42,6 +42,8 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.mutableLongStateOf
 import kotlin.math.sin
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -357,7 +359,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     }
     // alt orta: hızlı eşyalar + çanta + sohbet çubuğu
     Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.onGloballyPositioned { r -> val b = r.boundsInRoot(); com.zenvex.online.game.HudLayout.pocketRow = floatArrayOf(b.left, b.top, b.right, b.bottom) },
+            horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             val slots = inv.optJSONArray("slots") ?: JSONArray()
             // cepler (çantada sol sütun): basınca kullanılır, bekleme süresi tuşun üstünde
             for (k in 0 until inv.optInt("pockets", 4)) {
@@ -369,7 +372,7 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
                     inv = GameSession.ui("inventory")
                 }
             }
-            Box {
+            Box(Modifier.onGloballyPositioned { r -> val b = r.boundsInRoot(); com.zenvex.online.game.HudLayout.bagBtn = floatArrayOf(b.left, b.top, b.right, b.bottom) }) {
                 PxIcon("bag", size = 54.dp, color = Color(0xCC4A3A26)) { open(Overlay.Bag) }
                 // öğretici: üretim ve cep adımlarında çantayı göster
                 val step = (0 until story.length()).map { story.getJSONObject(it) }
@@ -393,6 +396,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
             ArtImage("btn_chat", Modifier.padding(end = 4.dp).size(34.dp))
         }
     }
+    // ilk giriş kontrol rehberi: her şeyin üstünde
+    ControlsGuide()
 }
 
 /** Para gösterimi: 100.000'e kadar tam ("12.345"), sonra kısaltılmış ("123,4 B", "12,50 M", "1,25 Mr") */
@@ -515,7 +520,7 @@ private fun DeadDialog(respawned: () -> Unit, toLobby: () -> Unit) {
             PT(if (hard) "Hardcore: çantan ölüm yerinde kaldı. Koş, geri al!" else "Ekipmanın sende kalır. Bu bölgenin giriş meydanında doğarsın.",
                 14.sp, Px.Sub, Modifier.align(Alignment.CenterHorizontally), maxLines = 2)
             Spacer(Modifier.height(14.dp))
-            PxButton("Bölgede Yeniden Doğ", Modifier.fillMaxWidth(), Px.Green, icon = "flame") { GameSession.cmd("respawn"); respawned() }
+            PxButton("Bölgede Yeniden Doğ", Modifier.fillMaxWidth(), Px.Green, icon = "respawn") { GameSession.cmd("respawn"); respawned() }
             Spacer(Modifier.height(8.dp))
             PxButton("Lobiye Dön", Modifier.fillMaxWidth(), Px.Dark, icon = "exit") { GameSession.cmd("respawn"); toLobby() }
         }

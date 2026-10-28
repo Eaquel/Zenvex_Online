@@ -184,6 +184,21 @@ fun DrawScope.drawIcon(name: String, c: Color) {
             drawLine(c, p(0.4f, 0.14f), p(0.6f, 0.14f), w * 0.09f, StrokeCap.Round)
         }
         "info" -> { drawCircle(c, w * 0.42f, style = thin); drawLine(c, p(0.5f, 0.45f), p(0.5f, 0.72f), w * 0.1f, StrokeCap.Round); drawCircle(c, w * 0.06f, p(0.5f, 0.3f)) }
+        "respawn" -> {
+            // yeniden doğuş: yeşil dönüş oku içinde parlayan kalp ve kıvılcım (renkli, boyanmaz)
+            val ring = Brush.sweepGradient(listOf(Color(0xFF3CE08A), Color(0xFFB8FFD8), Color(0xFF2AB86A), Color(0xFF3CE08A)), p(0.5f, 0.5f))
+            drawArc(ring, 40f, 280f, false, p(0.1f, 0.1f), Size(w * 0.8f, w * 0.8f), style = Stroke(w * 0.085f, cap = StrokeCap.Round))
+            drawPath(path(0.82f, 0.05f, 0.95f, 0.30f, 0.66f, 0.30f), Color(0xFFB8FFD8))
+            val heart = Path().apply {
+                moveTo(0.5f * w, 0.74f * w)
+                cubicTo(0.2f * w, 0.54f * w, 0.28f * w, 0.28f * w, 0.5f * w, 0.42f * w)
+                cubicTo(0.72f * w, 0.28f * w, 0.8f * w, 0.54f * w, 0.5f * w, 0.74f * w); close()
+            }
+            drawPath(heart, Brush.verticalGradient(listOf(Color(0xFFFF8A8A), Color(0xFFD02030)), 0.3f * w, 0.75f * w))
+            drawPath(heart, Color(0xFF3A0810), style = Stroke(w * 0.035f, join = StrokeJoin.Round))
+            drawCircle(Color.White.copy(alpha = 0.75f), w * 0.04f, p(0.38f, 0.45f))
+            star(Color(0xFFFFF4B0), 0.2f, 0.2f, 0.11f, 0.04f)
+        }
         "flame" -> {
             val f = Path().apply {
                 moveTo(0.5f * w, 0.08f * w)
