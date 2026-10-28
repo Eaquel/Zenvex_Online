@@ -700,6 +700,9 @@ def build(src, name, kind, opt):
     parts = []
     if kind in ("char", "npc"):
         th = opt["height"]
+        # renkler kollar indirilmeden önceki (orijinalle örtüşen) konumdan pişirilir: indirilmiş kol orijinalde başka
+        # yerlere (gövde, kalça) en yakındı ve kollara yanlış, soluk lekeli renk geliyordu
+        rest = lv.copy()
         lv, b0, b1, w0, jp, palms = auto_rig(lv, lt, th, name, arms=kind == "char")
         meta["palm_r"], meta["palm_l"] = palms["r"], palms["l"]
         meta["bones"] = [{"name": b, "parent": p, "head": [float(x) for x in jp[i]]} for i, (b, p) in enumerate(zip(BONES, PARENT))]
@@ -786,14 +789,17 @@ def build(src, name, kind, opt):
             start += int(m.sum())
         meta["length"] = L
     ln = vertex_normals(lv, lt)
+    if kind not in ("char", "npc"):
+        rest = lv
+    rn = vertex_normals(rest, lt)
     res, size = BAKE[kind]
     vmap, idx, nuv = unwrap(lv, lt, res)
     # yeniden boyama için köşe öznitelikleri: dışbükeylik, göreli yükseklik, karanlık (kapüşon içi)
-    conv = smooth_vertex(lv, lt, vertex_convexity(lv, lt, ln), 1)
+    conv = smooth_vertex(rest, lt, vertex_convexity(rest, lt, rn), 1)
     zrel = (lv[:, 2] - lv[:, 2].min()) / max(np.ptp(lv[:, 2]), 1e-6)
-    dark = hood_inside(lv, lt, ln, opt["height"]) if opt.get("hood") else np.zeros(len(lv))
+    dark = hood_inside(rest, lt, rn, opt["height"]) if opt.get("hood") else np.zeros(len(lv))
     vattr = np.stack([conv, zrel, dark], 1)
-    img, nimg = bake(lv[vmap], ln[vmap], idx, nuv, samples, res, CAVITY[kind], normals=True, vattr=vattr[vmap])
+    img, nimg = bake(rest[vmap], rn[vmap], idx, nuv, samples, res, CAVITY[kind], normals=True, vattr=vattr[vmap])
     meta["parts"] = parts
     meta["tex"] = name + ".webp"
     os.makedirs(OUT, exist_ok=True)

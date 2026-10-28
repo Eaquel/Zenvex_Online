@@ -351,9 +351,20 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light, scale: f32) {
         for k in 0..3 {
             let bk = lum + (base[k] - lum) * light.sat;
             let v = bk * (l * light.tint[k] + g) + rim * 255.0 * light.rim_color[k] + spec;
-            out[k] = lift(v.clamp(0.0, 255.0) as u8);
+            out[k] = lift(shoulder(v).clamp(0.0, 255.0) as u8);
         }
         f.color[i] = out;
+    }
+}
+
+/// Parlaklık omzu: 185'in üstü yumuşakça sıkışır (açık metal ve beyaz kumaş 255'e patlayıp leke gibi düzleşmez)
+#[inline]
+fn shoulder(v: f32) -> f32 {
+    if v <= 185.0 {
+        v
+    } else {
+        let e = v - 185.0;
+        185.0 + e / (1.0 + e / 90.0)
     }
 }
 
