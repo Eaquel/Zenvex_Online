@@ -79,6 +79,18 @@ class GameShotsTest {
         }
     }
 
+    /** Kalabalık kıyası (yazılım tuvali; cihazdan yavaş ama göreli): 1000 yaratık, kare başına ms → konsol */
+    @Test fun p01_crowdPerf() = shot("crowd_perf", {
+        cheat("level 30"); cheat("god"); cheat("tp deep"); cheat("killall")
+        repeat(34) { cheat("spawn walker 30 20") }
+    }, steps = 5, prep = { v ->
+        val bmp = Bitmap.createBitmap(2340, 1080, Bitmap.Config.ARGB_8888)
+        v.previewFrames(Canvas(bmp), 2340, 1080, 10)
+        val t0 = System.nanoTime()
+        v.previewFrames(Canvas(bmp), 2340, 1080, 30)
+        println("PERF kalabalık: " + (System.nanoTime() - t0) / 30 / 1_000_000.0 + " ms/kare")
+    })
+
     @Test fun g01_campSpawn() = shot("camp", { })
 
     @Test fun g02_forestFight() = shot("fight", {

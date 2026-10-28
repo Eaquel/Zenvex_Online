@@ -196,8 +196,20 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val CH = 256
     private val chunkPx = IntArray(CH * CH)
     /** erişim sırası LRU; yalnız `chunks` kilidiyle. Atılan bitmap geri dönüştürülmez (donanım tuvali kareyi sonra çizer) */
+    // düşük bellekli cihazda (1-2 GB) daha az parça; parçalar donanım bitmap'i (yalnız GPU'da: Java yığını ve GPU'da çift kopya yok)
+    private val maxChunks = run {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+        if (am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192) 64 else 110
+    }
     private val chunks = object : LinkedHashMap<Long, Bitmap>(128, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Bitmap>): Boolean = size > 110
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Bitmap>): Boolean = size > maxChunks
+    }
+    /** Yazılım bitmap'ini GPU'ya taşır (Android 8+ donanım bitmap'i); olmazsa olduğu gibi */
+    private fun toGpu(b: Bitmap): Bitmap {
+        if (Model3D.sync) return b // testler: yazılım tuvaline çizilir
+        val h = runCatching { b.copy(Bitmap.Config.HARDWARE, false) }.getOrNull() ?: return b.also { it.prepareToDraw() }
+        b.recycle()
+        return h
     }
     private val groundQ = java.util.concurrent.LinkedBlockingDeque<Long>()
     private val groundPending = HashSet<Long>()
@@ -221,7 +233,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             System.arraycopy(strip, 0, out, y * CH, CH * rows)
             y += rows
         }
-        return Bitmap.createBitmap(out, 0, CH, CH, CH, Bitmap.Config.ARGB_8888).also { it.prepareToDraw() }
+        return toGpu(Bitmap.createBitmap(out, 0, CH, CH, CH, Bitmap.Config.ARGB_8888))
     }
 
     private fun startGroundWorker() {
@@ -454,6 +466,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 update(dt)
                 // atlas: kullanım saati; 5 sn'de bir 45 sn'dir görünmeyen yaratık sayfaları boşaltılır
                 atlas.tick(SystemClock.uptimeMillis())
+                Thermal.poll(SystemClock.uptimeMillis())
                 trimT += dt
                 if (trimT > 5f) { trimT = 0f; atlas.trim(45_000L) }
                 val c = try { holder.lockHardwareCanvas() } catch (_: Exception) { null }
@@ -979,6 +992,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // karodan yakın ağaç/yapı olmadığı için hiçbir şey bulutun üstüne taşmaz)
         drawBorderClouds(c)
         plates.clear()
+        crowdPrev = crowdNow; crowdNow = 0; platesNow = 0
         nearNpc = -1; nearNpcD = Float.MAX_VALUE
         npcBoxes.clear(); benchBoxes.clear(); synchronized(playerBoxes) { playerBoxes.clear() }
         val px = hud[Native.PX]; val py = hud[Native.PY]
@@ -1075,7 +1089,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 if (sync) {
                     val ok = synchronized(GameSession.lock) { Native.renderChunk(GameSession.handle, cx * CH.toFloat(), cy * CH.toFloat(), CH, chunkPx) }
                     if (ok != 0) {
-                        b = Bitmap.createBitmap(chunkPx, 0, CH, CH, CH, Bitmap.Config.ARGB_8888)
+                        b = toGpu(Bitmap.createBitmap(chunkPx, 0, CH, CH, CH, Bitmap.Config.ARGB_8888))
                         synchronized(chunks) { chunks[key] = b }
                         groundFill = chunkPx[CH * CH / 2 + CH / 2] or 0xFF000000.toInt()
                         groundReady = true
@@ -1225,6 +1239,28 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         atlas.draw(c, ws, 0f, 0f, len * m[4] / wl / ws.k, pixelPaint)
         c.restore()
     }
+
+    // ------------------------------------------------------------------ kalabalık için sprite arama önbelleği
+    // Yaratık başına her karede "z/ad/anim_yön_kare" metni kurulup haritada aranıyordu (10 bin yaratıkta kare başına
+    // 50 binden fazla String). Önek ve animasyon adı küçük tam sayıya çevrilir, sonuç (Sprite ya da yok) bir kez bulunur.
+    private val keyIds = HashMap<String, Int>()
+    private fun keyId(s: String): Int = keyIds.getOrPut(s) { keyIds.size }
+    private val spriteMemo = HashMap<Long, Any>()
+    private val noSprite = Any()
+    private val zPrefixes = HashMap<String, String>()
+    private fun zPrefix(name: String): String = zPrefixes.getOrPut(name) { "z/$name" }
+    private fun spriteAt(prefix: String, anim: String, dir: Int, f: Int): Sprite? {
+        val k = (keyId(prefix).toLong() shl 40) or (keyId(anim).toLong() shl 20) or ((dir and 0xFF).toLong() shl 12) or (f and 0xFFF).toLong()
+        val v = spriteMemo[k]
+        if (v != null) return v as? Sprite
+        val sp = atlas[spriteKey(prefix, anim, dir, f)]
+        spriteMemo[k] = sp ?: noSprite
+        return sp
+    }
+    /** önceki karede çizilen yaratık sayısı: kalabalıkta gölge ve plaka seyreltilir */
+    private var crowdPrev = 0
+    private var crowdNow = 0
+    private var platesNow = 0
 
     private fun spriteKey(prefix: String, anim: String, dir: Int, f: Int, suffix: String = ""): String {
         keyBuf.setLength(0)
@@ -2208,7 +2244,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // V13: Titan'ın Magma İskelet görseli (yürüme 8 yön, diğerleri 5 yön + ayna)
         val sid = if (species > 0) speciesId.getOrNull(species - 1) else if (kind == 7 && magmaArt) "magma" else null
         val name = sid ?: zombieSprite.getOrElse(kind) { "walker" }
-        val f = frameOf(atlas.anims("z/$name", atlas.zombieAnims), anim, t)
+        val zp = zPrefix(name)
+        crowdNow++
+        val f = frameOf(atlas.anims(zp, atlas.zombieAnims), anim, t)
         // piksel zombiler (köpek + V7 örgü iskeletli türler): tek görünüm (sola bakar), sağa bakarken aynalanır
         val pix = sid == null && zombiePixel.getOrPut(name) { !atlas.has("z/$name/idle_1_0") && atlas.has("z/$name/idle_0_0") }
         var zdir = if (pix) viewDir("z/$name", anim, dir, f) else dir
@@ -2218,13 +2256,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (anim == "death") {
                 zdir = when (dir) { 2, 3 -> 2; 5, 6 -> 2; else -> 0 }
                 zflip = dir == 5 || dir == 6
-            } else if (dir >= 5 && !atlas.has(spriteKey("z/$name", anim, dir, 0))) { zdir = 8 - dir; zflip = true }
+            } else if (dir >= 5 && spriteAt(zp, anim, dir, 0) == null) { zdir = 8 - dir; zflip = true }
         }
-        var sp = atlas[spriteKey("z/$name", anim, zdir, f)]
-        if (sp == null) sp = atlas[spriteKey("z/$name", "idle", zdir, 0)]
-        if (sp == null) sp = atlas[spriteKey("z/walker", anim, dir, f)]
+        var sp = spriteAt(zp, anim, zdir, f)
+        if (sp == null) sp = spriteAt(zp, "idle", zdir, 0)
+        if (sp == null) sp = spriteAt(zPrefix("walker"), anim, dir, f)
         if (sp == null) { placeholder(c, sx, sy, zombieColor.getOrElse(kind) { -1 }); return }
-        if (alpha > 0.3f && anim != "death") castShadow(c, sx, sy, sp.w * sp.k * scale * 0.5f, alpha) { p -> atlas.draw(c, sp, sx, sy, scale, p, zflip) }
+        if (alpha > 0.3f && anim != "death") {
+            // aşırı kalabalıkta (yüzlerce yaratık) eğik siluet gölgesi yerine yer lekesi: görüntü aynı kalır, çizim yarıya iner
+            if (crowdPrev > 300) groundBlob(c, sx, sy, sp.w * sp.k * scale * 0.28f, sp.w * sp.k * scale * 0.07f, 0.32f * alpha)
+            else castShadow(c, sx, sy, sp.w * sp.k * scale * 0.5f, alpha) { p -> atlas.draw(c, sp, sx, sy, scale, p, zflip) }
+        }
         // tür aurası: yuvarlak leke değil, ayaktan yükselen dilli alev/sis (toksik: zehir yeşili, karanlık: mor, boss: kor)
         if ((kind == 4 || kind == 3 || kind == 7) && alpha > 0.3f && Settings.current.particles) {
             val col = when (kind) { 4 -> 0xFFB070FF; 3 -> 0xFF9AFF40; else -> if (enraged) 0xFFFF4A30 else 0xFFFF8A30 }.toInt()
@@ -2243,10 +2285,17 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             else -> bmpPaint
         }
         atlas.draw(c, sp, sx, sy, scale, paint, zflip)
-        if (alpha > 0.35f && anim != "death") {
-            val boss = kind == 7
+        val boss0 = kind == 7
+        val elite0 = kind == 5 || kind == 6
+        // kalabalıkta plaka yalnız boss, seçkin, hasar almış ya da yakındaki yaratıklarda (en çok 90): yüzlerce isim ve can
+        // yazısı hem okunmaz hem kareyi yavaşlatır
+        val plateOk = crowdPrev <= 60 || boss0 || elite0 || (hp in 0f..0.999f) ||
+            (platesNow < 90 && abs(x - hud[Native.PX]) < 700f && abs(y - hud[Native.PY]) < 450f)
+        if (alpha > 0.35f && anim != "death" && plateOk) {
+            platesNow++
+            val boss = boss0
             // sıradan zombiler: yalnızca hasar aldıysa can barı; isim yalnızca seçkin (tank, gizemli) ve boss'ta
-            val elite = kind == 5 || kind == 6
+            val elite = elite0
             // yaratık plakası: adı üstte, can çubuğu altta; seviye rozeti ve "can / en çok" çubuğun içinde
             val cur = if (hp >= 0f && maxHp > 0) (hp * maxHp).roundToInt().coerceAtLeast(if (hp > 0f) 1 else 0) else -1
             val label = when {

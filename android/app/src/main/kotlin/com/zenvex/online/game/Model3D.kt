@@ -90,8 +90,10 @@ object Model3D {
         val app = ctx.applicationContext
         // düşük bellekli cihazda daha küçük önbellek
         val am = app.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
-        lowRam = am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192
-        budget = if (lowRam) 20L shl 20 else 40L shl 20
+        val mc = am?.memoryClass ?: 256
+        lowRam = am?.isLowRamDevice == true || mc < 192
+        // bol bellekli cihazda büyük kare önbelleği: dönüşlerde ve yürüyüşte aynı kare tekrar tekrar çizilmez (işlemci ısınmaz)
+        budget = when { lowRam -> 20L shl 20; mc >= 384 -> 72L shl 20; else -> 40L shl 20 }
         thread = Thread({ loop(app) }, "zx-3d").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
     }
 
