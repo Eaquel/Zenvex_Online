@@ -173,15 +173,67 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private val path = Path()
 
     // ------------------------------------------------------------------ zemin parçaları
+    // Zemin parçaları arka planda çizilir (zx-ground): parça başına 8 şerit, her şerit oyun kilidini kısa süre tutar; oyun
+    // döngüsü yeni parça beklemez (yeni bölgeye girerken eskiden kare başına 4 parça eşzamanlı çizilip takılma yapıyordu).
+    // Görünen parçalar önce, sonra görüşün bir parça çevresi ve gidiş yönündeki iki parça önceden hazırlanır.
     private val CH = 256
     private val chunkPx = IntArray(CH * CH)
+    /** erişim sırası LRU; yalnız `chunks` kilidiyle. Atılan bitmap geri dönüştürülmez (donanım tuvali kareyi sonra çizer) */
     private val chunks = object : LinkedHashMap<Long, Bitmap>(128, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Bitmap>): Boolean {
-            if (size > 140) { eldest.value.recycle(); return true }
-            return false
-        }
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Bitmap>): Boolean = size > 110
     }
+    private val groundQ = java.util.concurrent.LinkedBlockingDeque<Long>()
+    private val groundPending = HashSet<Long>()
+    @Volatile private var groundEpoch = 0
+    private var groundThread: Thread? = null
     private var groundReady = true
+    private var lastCamCX = 0f; private var lastCamCY = 0f
+
+    private fun chunkKey(cx: Int, cy: Int) = (cx.toLong() shl 32) or (cy.toLong() and 0xffffffffL)
+
+    /** Parçayı şeritler hâlinde çizer; dönem değiştiyse (bölge değişti) yarıda bırakır. null → dokular hazır değil */
+    private fun renderChunkStrips(key: Long, epoch: Int, out: IntArray, strip: IntArray): Bitmap? {
+        val cx = (key shr 32).toInt(); val cy = key.toInt()
+        val rows = strip.size / CH
+        var y = 0
+        while (y < CH) {
+            val ok = synchronized(GameSession.lock) {
+                if (epoch != groundEpoch) 0 else Native.renderRegion(GameSession.handle, cx * CH.toFloat(), cy * CH.toFloat() + y, 1f, CH, rows, strip)
+            }
+            if (ok == 0) return null
+            System.arraycopy(strip, 0, out, y * CH, CH * rows)
+            y += rows
+        }
+        return Bitmap.createBitmap(out, 0, CH, CH, CH, Bitmap.Config.ARGB_8888).also { it.prepareToDraw() }
+    }
+
+    private fun startGroundWorker() {
+        if (groundThread != null) return
+        groundThread = Thread({
+            val out = IntArray(CH * CH); val strip = IntArray(CH * 32)
+            while (true) {
+                val key = try { groundQ.takeFirst() } catch (_: InterruptedException) { return@Thread }
+                val epoch = groundEpoch
+                val b = try { renderChunkStrips(key, epoch, out, strip) } catch (_: Throwable) { null }
+                synchronized(chunks) {
+                    groundPending -= key
+                    if (b != null && epoch == groundEpoch) chunks[key] = b
+                }
+                if (b == null && epoch == groundEpoch) groundReady = false
+            }
+        }, "zx-ground").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
+    }
+
+    /** Parçayı kuyruğa ekler (önde: görünen, arkada: önceden yükleme); zaten varsa ya da sıradaysa bir şey yapmaz */
+    private fun requestChunk(key: Long, urgent: Boolean) {
+        synchronized(chunks) {
+            if (chunks.containsKey(key) || key in groundPending) return
+            groundPending += key
+        }
+        if (urgent) groundQ.addFirst(key) else groundQ.addLast(key)
+        // sıra uzarsa en eski önceden yükleme istekleri düşer (görüş çoktan değişmiştir)
+        while (groundQ.size > 24) groundQ.pollLast()?.let { k -> synchronized(chunks) { groundPending -= k } }
+    }
 
     // ------------------------------------------------------------------ kamera
     private var camX = 0f
@@ -998,25 +1050,41 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val y0 = floor((camY - viewH / 2) / CH).toInt() - 0
         val x1 = floor((camX + viewW / 2) / CH).toInt()
         val y1 = floor((camY + viewH / 2) / CH).toInt()
-        var budget = if (chunks.isEmpty()) 999 else 4
+        // ilk kare / bölge değişimi (ışınlanma, yükleme ekranı arkası): görünenler eşzamanlı, sonra hep arka planda
+        val sync = synchronized(chunks) { chunks.isEmpty() } || Model3D.sync
+        if (!sync) startGroundWorker()
         for (cy in y0..y1) for (cx in x0..x1) {
-            val key = (cx.toLong() shl 32) or (cy.toLong() and 0xffffffffL)
-            var b = chunks[key]
-            if (b == null && budget > 0) {
-                budget--
-                val ok = synchronized(GameSession.lock) { Native.renderChunk(GameSession.handle, cx * CH.toFloat(), cy * CH.toFloat(), CH, chunkPx) }
-                if (ok != 0) {
-                    b = Bitmap.createBitmap(CH, CH, Bitmap.Config.ARGB_8888)
-                    b.setPixels(chunkPx, 0, CH, 0, 0, CH, CH)
-                    chunks[key] = b
-                } else groundReady = false
+            val key = chunkKey(cx, cy)
+            var b = synchronized(chunks) { chunks[key] }
+            if (b == null) {
+                if (sync) {
+                    val ok = synchronized(GameSession.lock) { Native.renderChunk(GameSession.handle, cx * CH.toFloat(), cy * CH.toFloat(), CH, chunkPx) }
+                    if (ok != 0) {
+                        b = Bitmap.createBitmap(chunkPx, 0, CH, CH, CH, Bitmap.Config.ARGB_8888)
+                        synchronized(chunks) { chunks[key] = b }
+                        groundFill = chunkPx[CH * CH / 2 + CH / 2] or 0xFF000000.toInt()
+                    } else groundReady = false
+                } else requestChunk(key, true)
             }
             val l = wx(cx * CH.toFloat()); val t = wy(cy * CH.toFloat())
             rect.set(l, t, l + CH * scale + 1, t + CH * scale + 1)
             if (b != null) c.drawBitmap(b, null, rect, bmpPaint)
-            else { fill.color = 0xFF3E6A2A.toInt(); c.drawRect(rect, fill) }
+            else { fill.color = groundFill; c.drawRect(rect, fill) }
+        }
+        if (sync) return
+        // önceden yükleme: görüşün bir parça çevresi + gidiş yönünde iki parça ileri
+        val vx = camX - lastCamCX; val vy = camY - lastCamCY
+        lastCamCX = camX; lastCamCY = camY
+        for (cy in y0 - 1..y1 + 1) for (cx in x0 - 1..x1 + 1) if (cx < x0 || cx > x1 || cy < y0 || cy > y1) requestChunk(chunkKey(cx, cy), false)
+        if (kotlin.math.abs(vx) + kotlin.math.abs(vy) > 0.5f) {
+            val dx = if (vx > 0.5f) 1 else if (vx < -0.5f) -1 else 0
+            val dy = if (vy > 0.5f) 1 else if (vy < -0.5f) -1 else 0
+            for (cy in y0..y1) for (cx in x0..x1) requestChunk(chunkKey(cx + dx * 2, cy + dy * 2), false)
         }
     }
+
+    /** Hazır olmayan parçanın yerine bölgenin ortalama zemin tonu (yeşil kare göze batmasın) */
+    private var groundFill = 0xFF3E4A2E.toInt()
 
     private fun drawStatic(c: Canvas, o: Int, px: Float, py: Float) {
         val si = drawBuf[o + 1].toInt()
@@ -3522,7 +3590,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val sl = 150 * d; val sr = sw - 180 * d; val st = 118 * d; val sb = sh - 120 * d
         if (gx in m..(sw - m) && gy in m..(sh - m)) {
             groundRing(c, gx, gy, 46f * scale, gold)
-            if (dist > 3) {
+            // hedef oyuncunun dibindeyken (12 m) yazı yok: oyuncu adıyla çakışmasın, yerdeki halka yeter
+            if (dist > 12) {
                 val top = gy - 130 * scale - (4 + sin(time * 4f) * 4) * d
                 // hedefin üstü HUD'a denk geliyorsa yazı ve ok gösterilmez (yerdeki halka yeter)
                 if (top - 22 * d > st && gx in sl..sr) {
@@ -4010,5 +4079,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         }
     }
 
-    fun clearChunks() = synchronized(GameSession.lock) { chunks.values.forEach { it.recycle() }; chunks.clear() }
+    /** Bölge (dokular) değişti: parçalar atılır, yarıda kalan arka plan çizimleri dönemle geçersizleşir */
+    fun clearChunks() {
+        groundEpoch++
+        groundQ.clear()
+        synchronized(chunks) { chunks.clear(); groundPending.clear() }
+    }
 }

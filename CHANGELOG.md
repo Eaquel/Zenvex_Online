@@ -2,6 +2,13 @@
 
 ## Unreleased (V16 — 3D)
 
+- Smoothness: ground chunks are built on a background thread in short strips (the game loop no longer waits for 256 px
+  chunks when entering new ground); the ring around the view and two chunks ahead in the walking direction load early
+- Audio mix: per-sound levels and priorities, background sounds drop out in crowded fights so hits and explosions stay
+  audible, small pitch variation on repeated sounds, music ducks briefly under explosions, boss, level-up and quest jingles
+- Trade: gear keeps its durability, the confirm button waits 3 s after the other offer changes, and a trade cannot complete
+  if the other side changed the offer after you confirmed; clan depot send dialog fits small phones
+
 - Screen layout: one top-centre stack (zone name → boss bar / base card / event banner, only one at a time → announcement);
   announcements are queued instead of overlapping; the tutorial bubble waits while a banner shows; toasts moved above the
   pockets; gold and gems share one compact pill; correct banner titles (NEW QUEST / QUEST COMPLETE / QUEST READY)
