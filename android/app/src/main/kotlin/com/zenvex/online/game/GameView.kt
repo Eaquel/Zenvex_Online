@@ -233,7 +233,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     groundPending -= key
                     if (b != null && epoch == groundEpoch) chunks[key] = b
                 }
-                if (b == null && epoch == groundEpoch) groundReady = false
+                // dokular hazır değilken düşer; ilk başarılı parçada yeniden hazır (eskiden bir kez düşünce hiç düzelmiyordu:
+                // ayrıntılı bölge haritası hiç çizilmiyor, mini harita ve büyük harita eski düz renkli dünya haritasında kalıyordu)
+                if (epoch == groundEpoch) groundReady = b != null
             }
         }, "zx-ground").apply { isDaemon = true; priority = Thread.NORM_PRIORITY - 1; start() }
     }
@@ -1063,6 +1065,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                         b = Bitmap.createBitmap(chunkPx, 0, CH, CH, CH, Bitmap.Config.ARGB_8888)
                         synchronized(chunks) { chunks[key] = b }
                         groundFill = chunkPx[CH * CH / 2 + CH / 2] or 0xFF000000.toInt()
+                        groundReady = true
                     } else groundReady = false
                 } else requestChunk(key, true)
             }

@@ -197,7 +197,11 @@ fun WorldMapScreen(close: () -> Unit) {
         mapMarks(w, GameSession.ui("quests")) + baseMarks(GameSession.ui("bases")) + titanMark(ar) + merchantMarks(ar)
     }
     androidx.compose.runtime.LaunchedEffect(Unit) { com.zenvex.online.game.Bases.refresh() }
-    WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close, region = com.zenvex.online.game.RegionMap.snap)
+    // bölge haritası henüz çiziliyorsa hazır olunca hemen gösterilir (açılış anındaki değere takılı kalmaz)
+    val region by androidx.compose.runtime.produceState(com.zenvex.online.game.RegionMap.snap) {
+        while (true) { value = com.zenvex.online.game.RegionMap.snap; kotlinx.coroutines.delay(300) }
+    }
+    WorldMapView(img, fog, w, hud[Native.PX], hud[Native.PY], prof.optInt("level", 1), marks, close, region = region)
 }
 
 /** V12.1: Titan her 15 dakikada başka bir bölgede; bu dilimde öldürülmediyse yeri ve kalan süresi */
