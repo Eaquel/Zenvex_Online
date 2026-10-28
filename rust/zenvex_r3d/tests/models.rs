@@ -38,7 +38,7 @@ fn every_character_weapon_and_animation_renders() {
         for w in WEAPONS {
             for &anim in &anims {
                 for t in [0.0, 0.37, 0.81] {
-                    let r = ActorReq { ch, weapon: w, anim, t, period: 1.0, yaw: 135.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+                    let r = ActorReq { ch, weapon: w, anim, t, period: 1.0, yaw: 135.0, pitch: 22.0, scale: 60.0, ssaa: 1, flags: 0 };
                     let (img, p) = s.actor(&r).unwrap_or_else(|| panic!("{ch} {w} {anim}"));
                     assert!(img.w > 10 && img.h > 10 && img.w < 400 && img.h < 400, "{ch} {w} {anim} {t}: {}x{}", img.w, img.h);
                     assert!(img.ax.is_finite() && img.ay.is_finite() && p.tip[0].is_finite() && p.muzzle[1].is_finite());
@@ -54,12 +54,12 @@ fn melee_trail_and_muzzle_flash_are_reported() {
     let Some(mut s) = service() else { return };
     let trail = (0..16)
         .map(|i| {
-            let r = ActorReq { ch: "kael", weapon: "katana", anim: a::MELEE, t: i as f32 / 16.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+            let r = ActorReq { ch: "kael", weapon: "katana", anim: a::MELEE, t: i as f32 / 16.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: 1, flags: 0 };
             s.actor(&r).unwrap().1.trail
         })
         .fold(0f32, f32::max);
     assert!(trail > 0.5, "katana savuruşunda iz yok: {trail}");
-    let r = ActorReq { ch: "lyra", weapon: "ak47", anim: a::FIRE, t: 0.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+    let r = ActorReq { ch: "lyra", weapon: "ak47", anim: a::FIRE, t: 0.0, period: 1.0, yaw: 0.0, pitch: 22.0, scale: 60.0, ssaa: 1, flags: 0 };
     let (_, p) = s.actor(&r).unwrap();
     assert!(p.flash > 0.9 && p.weapon == 16, "namlu alevi: {} silah {}", p.flash, p.weapon);
 }
@@ -70,7 +70,7 @@ fn vehicles_render_with_rider_and_spinning_wheels() {
     for (name, rider) in [("hellhound", ""), ("nightstalker", "kael"), ("nightstalker", "vex")] {
         for yaw in [0.0, 45.0, 90.0, 200.0] {
             for wheel in [0.0, 45.0, 135.0] {
-                let r = VehicleReq { name, yaw, pitch: 22.0, scale: 50.0, wheel, bounce: 0.01, tilt: 2.0, rider, rider_t: 0.0, ssaa: false };
+                let r = VehicleReq { name, yaw, pitch: 22.0, scale: 50.0, wheel, bounce: 0.01, tilt: 2.0, rider, rider_t: 0.0, ssaa: 1 };
                 let (img, _) = s.vehicle(&r).unwrap();
                 assert!(img.w > 20 && img.h > 20 && img.w < 400 && img.h < 400, "{name} {yaw}: {}x{}", img.w, img.h);
             }
@@ -84,14 +84,14 @@ fn npcs_animate_and_wings_attach() {
     for ch in NPCS {
         for anim in [a::IDLE, a::WALK, a::TALK, a::AIM, a::SHOOT, a::DEATH, a::HURT] {
             for t in [0.0, 0.4, 1.3] {
-                let r = ActorReq { ch, weapon: "", anim, t, period: 0.4, yaw: 200.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+                let r = ActorReq { ch, weapon: "", anim, t, period: 0.4, yaw: 200.0, pitch: 22.0, scale: 60.0, ssaa: 1, flags: 0 };
                 let (img, _) = s.actor(&r).unwrap_or_else(|| panic!("{ch} {anim}"));
                 assert!(img.w > 10 && img.h > 10 && img.w < 400 && img.h < 400, "{ch} {anim}: {}x{}", img.w, img.h);
             }
         }
     }
     for w in WINGS {
-        let plain = ActorReq { ch: "kael", weapon: "", anim: a::IDLE, t: 0.0, period: 1.0, yaw: 180.0, pitch: 22.0, scale: 60.0, ssaa: false, flags: 0 };
+        let plain = ActorReq { ch: "kael", weapon: "", anim: a::IDLE, t: 0.0, period: 1.0, yaw: 180.0, pitch: 22.0, scale: 60.0, ssaa: 1, flags: 0 };
         let n0 = s.actor(&plain).unwrap().0.rgba.iter().filter(|c| c[3] > 0).count();
         let ch = format!("kael+{w}");
         for anim in [a::IDLE, a::RUN, a::MELEE] {

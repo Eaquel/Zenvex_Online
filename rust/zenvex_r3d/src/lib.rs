@@ -42,14 +42,15 @@ pub struct Settings {
     pub pitch: f32,
     /// metre başına çıktı pikseli
     pub scale: f32,
-    /// kenar yumuşatma (2× çizip yarıya indirir)
-    pub ssaa: bool,
+    /// kenar yumuşatma çarpanı: 1 yok, 2-3 → k× büyük çizip k×k kutu süzgeciyle küçültür (sonra hafif keskinleştirir)
+    pub ssaa: u8,
     pub outline_px: usize,
 }
 
 /// Parçaları tek z-tamponda çizer.
 pub fn render(items: &[Item], s: &Settings, light: &Light) -> Image {
-    let k = if s.ssaa { 2.0 } else { 1.0 };
+    let ks = s.ssaa.clamp(1, 3) as usize;
+    let k = ks as f32;
     let scale = s.scale * k;
     let cam0 = Camera::new(s.yaw, s.pitch, scale, 0.0, 0.0);
     // sınırlar
@@ -71,10 +72,8 @@ pub fn render(items: &[Item], s: &Settings, light: &Light) -> Image {
     let oy = (-y0 + pad).ceil();
     let mut w = (x1 - x0 + 2.0 * pad).ceil() as usize + 1;
     let mut h = (y1 - y0 + 2.0 * pad).ceil() as usize + 1;
-    if s.ssaa {
-        w += w & 1;
-        h += h & 1;
-    }
+    w = w.div_ceil(ks) * ks;
+    h = h.div_ceil(ks) * ks;
     let cam = Camera { cx: ox, cy: oy, ..cam0 };
     let mut f = Frame::new(w, h);
     let mut svs: Vec<Vec<SVert>> = Vec::with_capacity(items.len());
@@ -95,10 +94,12 @@ pub fn render(items: &[Item], s: &Settings, light: &Light) -> Image {
         layers.push(Layer { verts: &svs[li], tris, tex: it.model.tex.as_ref(), glow: it.glow, id: it.id });
     }
     raster::shade(&mut f, &layers, light);
-    raster::outline(&mut f, s.outline_px * if s.ssaa { 2 } else { 1 }, [12, 11, 16, 255], 0.10, 0.62);
-    if s.ssaa {
-        let rgba = raster::downsample2(&f);
-        Image { w: w / 2, h: h / 2, rgba, ax: ox / 2.0, ay: oy / 2.0 }
+    raster::outline(&mut f, s.outline_px * ks, [12, 11, 16, 255], 0.10, 0.62);
+    if ks > 1 {
+        let mut rgba = raster::downsample(&f, ks);
+        // kutu süzgeci doku ayrıntısını biraz yumuşatır: iç piksellere hafif keskinleştirme (kenar ve kontur değişmez)
+        raster::sharpen(&mut rgba, w / ks, h / ks, 0.45);
+        Image { w: w / ks, h: h / ks, rgba, ax: ox / k, ay: oy / k }
     } else {
         Image { w, h, rgba: f.color, ax: ox, ay: oy }
     }

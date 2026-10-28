@@ -22,7 +22,7 @@ fn main() {
         let (ch, anim, yaw) = (f[0], f[1].parse::<u8>().unwrap(), f[2].parse::<f32>().unwrap());
         let mut row = Vec::new();
         for t in f[3].split(',') {
-            let r = ActorReq { ch, weapon: f.get(4).copied().unwrap_or(""), anim, t: t.parse().unwrap(), period: 0.4, yaw, pitch: 22.0, scale: 90.0, ssaa: true, flags: 0 };
+            let r = ActorReq { ch, weapon: f.get(4).copied().unwrap_or(""), anim, t: t.parse().unwrap(), period: 0.4, yaw, pitch: 22.0, scale: 90.0, ssaa: 2, flags: 0 };
             row.push(s.actor(&r).unwrap_or_else(|| panic!("{ch}")).0);
         }
         rows.push(row);

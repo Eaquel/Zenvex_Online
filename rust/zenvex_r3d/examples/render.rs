@@ -36,7 +36,7 @@ fn main() {
     let mut imgs = Vec::new();
     let t0 = std::time::Instant::now();
     for d in 0..8 {
-        let s = Settings { yaw: d as f32 * 45.0, pitch: 22.0, scale: 120.0, ssaa: false, outline_px: 1 };
+        let s = Settings { yaw: d as f32 * 45.0, pitch: 22.0, scale: 120.0, ssaa: 1, outline_px: 1 };
         let mut items = vec![Item { model: &m, pos: &p, nrm: &n, range: None, id: 1, glow: 0.0 }];
         if let Some(wm) = &w {
             items.push(Item { model: wm, pos: &wpv, nrm: &wn, range: None, id: 2, glow: 0.0 });
@@ -46,7 +46,7 @@ fn main() {
     println!("8 kare: {:?}", t0.elapsed());
     let t1 = std::time::Instant::now();
     for _ in 0..50 {
-        let s = Settings { yaw: 30.0, pitch: 22.0, scale: 120.0, ssaa: false, outline_px: 1 };
+        let s = Settings { yaw: 30.0, pitch: 22.0, scale: 120.0, ssaa: 1, outline_px: 1 };
         let mut items = vec![Item { model: &m, pos: &p, nrm: &n, range: None, id: 1, glow: 0.0 }];
         if let Some(wm) = &w {
             items.push(Item { model: wm, pos: &wpv, nrm: &wn, range: None, id: 2, glow: 0.0 });

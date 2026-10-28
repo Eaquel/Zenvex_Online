@@ -63,7 +63,7 @@ fn main() {
             z1 = z1.max(q.z);
         }
         let ext = (x1 - x0).max(z1 - z0).max(0.05);
-        let s = Settings { yaw: 0.0, pitch: 0.0, scale: 300.0 / ext, ssaa: true, outline_px: 1 };
+        let s = Settings { yaw: 0.0, pitch: 0.0, scale: 300.0 / ext, ssaa: 2, outline_px: 1 };
         let items = [Item { model: &m, pos: &p, nrm: &n, range: None, id: 1, glow: glow(name) }];
         let img = render(&items, &s, &light);
         let mut im = image::RgbaImage::new(img.w as u32, img.h as u32);

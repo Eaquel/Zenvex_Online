@@ -101,7 +101,7 @@ fn main() {
                     items.push(Item { model: wm, pos: &mp, nrm: &mn, range: Some((pd.start as usize, pd.count as usize)), id: 3, glow: 0.0 });
                 }
             }
-            let s = Settings { yaw, pitch: 22.0, scale: 95.0, ssaa: false, outline_px: 1 };
+            let s = Settings { yaw, pitch: 22.0, scale: 95.0, ssaa: 1, outline_px: 1 };
             row.push(render(&items, &s, &light));
             n += 1;
         }

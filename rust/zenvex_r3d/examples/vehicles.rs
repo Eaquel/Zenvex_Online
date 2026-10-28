@@ -20,7 +20,7 @@ fn main() {
     let mut imgs = Vec::new();
     let t0 = std::time::Instant::now();
     for d in 0..8 {
-        let r = VehicleReq { name, yaw: d as f32 * 45.0, pitch: 22.0, scale: 70.0, wheel: 0.0, bounce: 0.0, tilt: 0.0, rider, rider_t: 0.0, ssaa: true };
+        let r = VehicleReq { name, yaw: d as f32 * 45.0, pitch: 22.0, scale: 70.0, wheel: 0.0, bounce: 0.0, tilt: 0.0, rider, rider_t: 0.0, ssaa: 2 };
         imgs.push(sv.vehicle(&r).unwrap().0);
     }
     for f in 0..8 {
@@ -34,7 +34,7 @@ fn main() {
             tilt: -4.0 + f as f32,
             rider,
             rider_t: f as f32 * 0.087,
-            ssaa: true,
+            ssaa: 2,
         };
         imgs.push(sv.vehicle(&r).unwrap().0);
     }

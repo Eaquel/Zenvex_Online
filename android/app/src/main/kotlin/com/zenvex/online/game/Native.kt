@@ -64,8 +64,8 @@ object Native {
     // ---- 3B çizici (rust/zenvex_r3d): yalnız Model3D iş parçacığından
     /** Model yükler (.zxm baytları + doku ARGB); 1 = başarılı */
     external fun r3dLoad(name: String, zxm: ByteArray, tw: Int, th: Int, argb: IntArray): Int
-    /** Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa]; info: [w, h, ax, ay, nokta…]; dönüş piksel sayısı, eksi = dizi küçük */
+    /** Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa (çarpan 1-3), flags]; info: [w, h, ax, ay, nokta…]; dönüş piksel sayısı, eksi = dizi küçük */
     external fun r3dActor(ch: String, weapon: String, p: FloatArray, out: IntArray, info: FloatArray): Int
-    /** Araç karesi. p: [yaw, pitch, scale, wheel, bounce, tilt, rider_t, ssaa] */
+    /** Araç karesi. p: [yaw, pitch, scale, wheel, bounce, tilt, rider_t, ssaa (1-3)] */
     external fun r3dVehicle(name: String, rider: String, p: FloatArray, out: IntArray, info: FloatArray): Int
 }

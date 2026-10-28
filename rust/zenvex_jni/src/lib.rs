@@ -508,7 +508,7 @@ fn put_image(env: &mut JNIEnv, img: &zenvex_r3d::Image, pts: &zenvex_r3d::servic
     n as jint
 }
 
-/// Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa, flags]; dönüş: piksel sayısı (eksi: dizi küçük)
+/// Karakter karesi. p: [anim, t, period, yaw, pitch, scale, ssaa (kenar yumuşatma çarpanı 1-3), flags]; dönüş: piksel sayısı (eksi: dizi küçük)
 #[no_mangle]
 pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
     mut env: JNIEnv<'l>,
@@ -534,7 +534,7 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
         yaw: a[3],
         pitch: a[4],
         scale: a[5],
-        ssaa: a[6] > 0.5,
+        ssaa: (a[6].round() as i32).clamp(1, 3) as u8,
         flags: a[7] as u32,
     };
     match r3d(|s| s.actor(&req)) {
@@ -543,7 +543,7 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dActor<'l>(
     }
 }
 
-/// Araç karesi. p: [yaw, pitch, scale, wheel, bounce, tilt, rider_t, ssaa]
+/// Araç karesi. p: [yaw, pitch, scale, wheel, bounce, tilt, rider_t, ssaa (1-3)]
 #[no_mangle]
 pub extern "system" fn Java_com_zenvex_online_game_Native_r3dVehicle<'l>(
     mut env: JNIEnv<'l>,
@@ -570,7 +570,7 @@ pub extern "system" fn Java_com_zenvex_online_game_Native_r3dVehicle<'l>(
         tilt: a[5],
         rider: &rider,
         rider_t: a[6],
-        ssaa: a[7] > 0.5,
+        ssaa: (a[7].round() as i32).clamp(1, 3) as u8,
     };
     match r3d(|s| s.vehicle(&req)) {
         Some((img, pts)) => put_image(&mut env, &img, &pts, &out, &info),

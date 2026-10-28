@@ -74,7 +74,8 @@ pub struct ActorReq<'a> {
     pub yaw: f32,
     pub pitch: f32,
     pub scale: f32,
-    pub ssaa: bool,
+    /// kenar yumuşatma çarpanı (1-3)
+    pub ssaa: u8,
     /// durum bayrakları: anim::F_EMPTY (roketatar boş), anim::F_IRON (demir alet)
     pub flags: u32,
 }
@@ -93,7 +94,8 @@ pub struct VehicleReq<'a> {
     /// sürücü (motosiklette görünür) — boş ise yok
     pub rider: &'a str,
     pub rider_t: f32,
-    pub ssaa: bool,
+    /// kenar yumuşatma çarpanı (1-3)
+    pub ssaa: u8,
 }
 
 #[derive(Default)]

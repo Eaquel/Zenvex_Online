@@ -49,6 +49,12 @@ pub struct Light {
     pub rim: f32,
     pub rim_color: [f32; 3],
     pub tint: [f32; 3],
+    /// gökyüzü/yer ışığı: yukarı bakan yüzeyler aydınlanır, aşağı bakanlar kararır
+    pub sky: f32,
+    /// parlama gücü (0..1)
+    pub spec: f32,
+    /// doygunluk çarpanı
+    pub sat: f32,
 }
 
 impl Default for Light {
@@ -56,11 +62,15 @@ impl Default for Light {
         Light {
             dir: v3(-0.45, 0.62, 0.64).norm(),
             // V18: karakterler karanlık görünüyordu: gölge tarafı ve ortam ışığı yükseltildi (+ çıkışta hafif gama)
-            ambient: 0.58,
-            diffuse: 0.78,
-            rim: 0.30,
+            // V19: biraz daha kontrast (gölge tarafı ~%73, ışık tarafı ~%130), kenar ışığı güçlü: arka plandan ayrışır
+            ambient: 0.55,
+            diffuse: 0.76,
+            rim: 0.42,
             rim_color: [0.85, 0.92, 1.0],
             tint: [1.0, 1.0, 1.0],
+            sky: 0.07,
+            spec: 0.16,
+            sat: 1.12,
         }
     }
 }
@@ -192,7 +202,7 @@ pub fn rasterize(f: &mut Frame, layer: usize, verts: &[SVert], tris: &[[u16; 3]]
 /// Geçiş 2: görünen pikselleri gölgelendir
 pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
     // üçgen başına doku ayrıntı seviyesi (piksel başına düşen doku pikseli → mip)
-    let lods: Vec<Vec<u8>> = layers
+    let lods: Vec<Vec<f32>> = layers
         .iter()
         .map(|ly| {
             let s = ly.tex.map(|t| t.size()).unwrap_or(1.0);
@@ -202,7 +212,7 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
                     let (a, b, c) = (&ly.verts[t[0] as usize], &ly.verts[t[1] as usize], &ly.verts[t[2] as usize]);
                     let area = ((b.s.x - a.s.x) * (c.s.y - a.s.y) - (b.s.y - a.s.y) * (c.s.x - a.s.x)).abs().max(1e-6);
                     let uva = ((b.uv[0] - a.uv[0]) * (c.uv[1] - a.uv[1]) - (b.uv[1] - a.uv[1]) * (c.uv[0] - a.uv[0])).abs();
-                    (0.5 * (uva * s * s / area).max(1e-6).log2()).clamp(0.0, 15.0) as u8
+                    (0.5 * (uva * s * s / area).max(1e-6).log2()).clamp(0.0, 15.0)
                 })
                 .collect()
         })
@@ -227,25 +237,41 @@ pub fn shade(f: &mut Frame, layers: &[Layer], light: &Light) {
         }
         let base = match ly.tex {
             Some(tx) => {
-                let lod = lods[li][ti] as usize;
+                // üç doğrusal: komşu iki mip seviyesinin çift doğrusal örnekleri harmanlanır (en yakın örnek kumlu/lekeli görünüyordu)
+                let lod = lods[li][ti];
                 let u = a.uv[0] * w0 + b.uv[0] * w1 + c.uv[0] * w2;
                 let v = a.uv[1] * w0 + b.uv[1] * w1 + c.uv[1] * w2;
-                if lod == 0 {
-                    tx.sample(0, u, v)
+                let l0 = lod.floor();
+                let fr = lod - l0;
+                let s0 = tx.sample(l0 as usize, u, v);
+                if fr < 0.05 {
+                    s0
                 } else {
-                    tx.nearest(lod, u, v)
+                    let s1 = tx.sample(l0 as usize + 1, u, v);
+                    [s0[0] + (s1[0] - s0[0]) * fr, s0[1] + (s1[1] - s0[1]) * fr, s0[2] + (s1[2] - s0[2]) * fr]
                 }
             }
             None => [180.0, 180.0, 180.0],
         };
         let ndl = n.dot(light.dir);
-        let l = light.ambient + light.diffuse * band(ndl);
+        // V19: yarı bantlı ışık (cel bandı + yumuşak yarım Lambert) ve gökyüzü/yer ışığı: hacim okunur, düz ve soluk görünmez
+        let half = (0.5 + 0.5 * ndl).clamp(0.0, 1.0);
+        let l = light.ambient + light.diffuse * (0.5 * band(ndl) + 0.5 * half * half) + light.sky * n.y;
         let e = 1.0 - n.z.clamp(0.0, 1.0);
         let rim = e * e * e * light.rim * smooth(-0.2, 0.4, ndl + 0.3);
+        // hafif parlama (Blinn): deri, metal ve kumaş kıvrımlarında ışık noktaları
+        let hv = (light.dir + v3(0.0, 0.0, 1.0)).norm();
+        let sp = n.dot(hv).max(0.0);
+        let sp = sp * sp;
+        let sp = sp * sp;
+        let spec = light.spec * sp * sp * sp * 255.0;
+        // doygunluk: doku renkleri ışık çarpanıyla grileşmesin
+        let lum = 0.3 * base[0] + 0.59 * base[1] + 0.11 * base[2];
         let g = ly.glow;
         let mut out = [0u8, 0, 0, 255];
         for k in 0..3 {
-            let v = base[k] * (l * light.tint[k] + g) + rim * 255.0 * light.rim_color[k];
+            let bk = lum + (base[k] - lum) * light.sat;
+            let v = bk * (l * light.tint[k] + g) + rim * 255.0 * light.rim_color[k] + spec;
             out[k] = lift(v.clamp(0.0, 255.0) as u8);
         }
         f.color[i] = out;
@@ -314,25 +340,50 @@ pub fn outline(f: &mut Frame, px: usize, color: [u8; 4], crease_m: f32, crease_d
     }
 }
 
-/// 2×2 kutu süzgeciyle yarıya indirir (kenar yumuşatma). Renkler alfa ağırlıklı.
-pub fn downsample2(src: &Frame) -> Vec<[u8; 4]> {
-    let (w, h) = (src.w / 2, src.h / 2);
+/// k×k kutu süzgeciyle küçültür (kenar yumuşatma). Renkler alfa ağırlıklı.
+pub fn downsample(src: &Frame, k: usize) -> Vec<[u8; 4]> {
+    let (w, h) = (src.w / k, src.h / k);
+    let n = (k * k) as u32;
     let mut out = vec![[0u8; 4]; w * h];
     for y in 0..h {
         for x in 0..w {
             let mut acc = [0u32; 4];
-            for (dx, dy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                let c = src.color[(y * 2 + dy) * src.w + x * 2 + dx];
-                let a = c[3] as u32;
-                acc[0] += c[0] as u32 * a;
-                acc[1] += c[1] as u32 * a;
-                acc[2] += c[2] as u32 * a;
-                acc[3] += a;
+            for dy in 0..k {
+                let row = (y * k + dy) * src.w + x * k;
+                for c in &src.color[row..row + k] {
+                    let a = c[3] as u32;
+                    acc[0] += c[0] as u32 * a;
+                    acc[1] += c[1] as u32 * a;
+                    acc[2] += c[2] as u32 * a;
+                    acc[3] += a;
+                }
             }
             if let (Some(r), Some(g), Some(b)) = (acc[0].checked_div(acc[3]), acc[1].checked_div(acc[3]), acc[2].checked_div(acc[3])) {
-                out[y * w + x] = [r as u8, g as u8, b as u8, (acc[3] / 4) as u8];
+                out[y * w + x] = [r as u8, g as u8, b as u8, (acc[3] / n) as u8];
             }
         }
     }
     out
+}
+
+/// Keskinleştirme (unsharp): yalnız dört komşusu da tam opak iç pikseller; c + amt·(c − komşu ortalaması)
+pub fn sharpen(px: &mut [[u8; 4]], w: usize, h: usize, amt: f32) {
+    if w < 3 || h < 3 {
+        return;
+    }
+    let src = px.to_vec();
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let i = y * w + x;
+            let (l, r, u, d) = (src[i - 1], src[i + 1], src[i - w], src[i + w]);
+            if src[i][3] < 255 || l[3] < 255 || r[3] < 255 || u[3] < 255 || d[3] < 255 {
+                continue;
+            }
+            for k in 0..3 {
+                let c = src[i][k] as f32;
+                let avg = (l[k] as f32 + r[k] as f32 + u[k] as f32 + d[k] as f32) * 0.25;
+                px[i][k] = (c + amt * (c - avg)).clamp(0.0, 255.0) as u8;
+            }
+        }
+    }
 }

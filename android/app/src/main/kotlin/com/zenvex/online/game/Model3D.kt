@@ -200,12 +200,19 @@ object Model3D {
     /** Aktör artık görünmüyor (uzak oyuncu ayrıldı): son karesini bırak */
     fun forget(actor: String) = synchronized(cache) { last.remove(actor) }
 
+    /**
+     * Kenar yumuşatma çarpanı (3B Karakter Kalitesi): Düşük 1×, Orta 2×, Yüksek 3× (k×k çizilip süzülür).
+     * Büyük vitrin çizimlerinde (> 200 px/m) 2× yeter: çizgiler zaten ince, 3× iç tampon gereksiz büyür.
+     */
+    fun aa(quality: Int, sc: Float = 0f): Int = if (sc > 200f) 2 else (quality + 1).coerceIn(1, 3)
+
     /** Yön (derece) 32 basamağa */
     fun yawBucket(deg: Float): Int = ((deg / 11.25f).roundToInt() % 32 + 32) % 32
 
     /** Ekran ölçeği (metre başına piksel) basamağa; çok büyük yakınlaştırmada üst sınır (hız) */
     fun scaleBucket(pxPerM: Float, quality: Int): Float {
-        val cap = when (quality) { 0 -> 90f; 1 -> 120f; 2 -> 160f; else -> 230f }
+        // 3: vitrin (karakter ekranı, lobi, portre) — kutu boyunda çizilir; eskiden 230'da kesilip büyütülüyordu (bulanık)
+        val cap = when (quality) { 0 -> 90f; 1 -> 120f; 2 -> 160f; else -> 380f }
         return ((pxPerM.coerceIn(30f, cap) / 6f).roundToInt() * 6f)
     }
 
@@ -260,9 +267,9 @@ object Model3D {
         val tq = quantize(anim, t, ch0, stages)
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)
-        val ssaa = quality >= 2
+        val ssaa = aa(quality, sc)
         fun key(tt: Float) = "a|$ch|$weapon|$anim|$tt|$yb|$sc|$ssaa|$flags"
-        fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, if (ssaa) 1f else 0f, flags.toFloat())
+        fun params(tt: Float) = floatArrayOf(anim.toFloat(), tt, 1f, yb * 11.25f, 22f, sc, ssaa.toFloat(), flags.toFloat())
         val fr = request(key(tq), actor, false, ch, weapon, params(tq))
         // döngüde sıradaki iki kare (yürürken/koşarken ilk turda takılma olmasın)
         val (cycle, steps) = loopOf(anim, ch0)
@@ -282,8 +289,8 @@ object Model3D {
         val wq = ((wheel / 45f).roundToInt() % 8) * 45f
         val bq = (bounce / 0.012f).roundToInt().coerceIn(-1, 1) * 0.012f
         val tq = (tilt / 2f).roundToInt().coerceIn(-2, 2) * 2f
-        val ssaa = quality >= 2
+        val ssaa = aa(quality, sc)
         val key = "v|$name|$rider|$yb|$sc|$wq|$bq|$tq|$ssaa"
-        return request(key, actor, true, name, rider, floatArrayOf(yb * 11.25f, 22f, sc, wq, bq, tq, 0f, if (ssaa) 1f else 0f))
+        return request(key, actor, true, name, rider, floatArrayOf(yb * 11.25f, 22f, sc, wq, bq, tq, 0f, ssaa.toFloat()))
     }
 }

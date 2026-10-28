@@ -121,16 +121,6 @@ impl Texture {
         o
     }
 
-    /// En yakın örnek (küçültmede mip zaten süzülmüş)
-    #[inline]
-    pub fn nearest(&self, lod: usize, u: f32, v: f32) -> [f32; 3] {
-        let (w, h, px) = &self.levels[lod.min(self.levels.len() - 1)];
-        let x = ((u.clamp(0.0, 0.99999)) * *w as f32) as usize;
-        let y = ((v.clamp(0.0, 0.99999)) * *h as f32) as usize;
-        let c = px[y * *w + x];
-        [c[0] as f32, c[1] as f32, c[2] as f32]
-    }
-
     pub fn size(&self) -> f32 {
         self.levels[0].0 as f32
     }
