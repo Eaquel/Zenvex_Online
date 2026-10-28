@@ -60,6 +60,13 @@ import org.json.JSONObject
 /** Arkasında oyunun her zaman görüneceği katmanlar (yan menü, NPC konuşması, sohbet, ölüm ekranı) */
 private val SEE_THROUGH = setOf(Overlay.None, Overlay.Menu, Overlay.Npc, Overlay.Chat, Overlay.Dead, Overlay.Player)
 
+/** Oyunu tamamen örten (opak, tam ekran) pencereler */
+private val FULL_OVERLAYS = setOf(
+    Overlay.Settings, Overlay.Bag, Overlay.Craft, Overlay.CraftBench, Overlay.Merchant, Overlay.Map, Overlay.Quests, Overlay.Pass,
+    Overlay.Crate, Overlay.Event, Overlay.Skills, Overlay.Me, Overlay.Mail, Overlay.Clan, Overlay.Top, Overlay.Cheat, Overlay.Garage,
+    Overlay.PlayerProfile, Overlay.WizardMap, Overlay.Shop, Overlay.Chars,
+)
+
 internal enum class Overlay {
     None, Menu, Settings, Bag, Craft, Merchant, Chat, Map, Dead, Trade,
     Quests, Pass, Crate, Event, Skills, Me, Mail, Clan, Top, Cheat, Dog, Npc, Garage, Player, PlayerProfile, WizardMap, CraftBench, Shop, Chars,
@@ -106,6 +113,9 @@ fun GameScreen(toLobby: () -> Unit) {
     }
     // çevrimiçi dünya menüde de durmaz (yalnız bağlantı koparsa oturum dünyayı durdurur)
     view.paused = false
+    // tam ekran pencere oyunu tamamen örtüyorsa sahne çizilmez (dünya 20 Hz işlemeye devam eder): görünmeyen sahneyi
+    // saniyede 60 kez çizmek boşa GPU/işlemci ve ısı demekti. Saydam arka plan ayarında oyun görünür, çizim sürer.
+    view.covered = overlay in FULL_OVERLAYS && !com.zenvex.online.game.Settings.current.uiTransparent
     // oturum düştü (başka cihaz, bakım, yasak, bağlantı): lobiye dön, nedeni lobide gösterilir
     val kicked = com.zenvex.online.game.Session.kicked.value
     LaunchedEffect(kicked) { if (kicked != null) toLobby() }
@@ -324,13 +334,21 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
     // seviye atlayınca mağaza durumu yenilenir: seviye paketi teklifi (5/10/25) o an açılır
     LaunchedEffect(level) { if (level > 0) com.zenvex.online.game.Store.refresh() }
     LaunchedEffect(Unit) {
+        // ham metin değişmediyse çözümlenmez ve durum yeniden atanmaz: HUD her 400 ms'de baştan oluşturulmaz
+        var lastInv = ""; var lastProf = ""; var lastQuests = ""
         while (true) {
-            inv = GameSession.ui("inventory")
-            val prof = GameSession.ui("profile")
-            level = prof.optInt("level")
-            points = prof.optInt("points")
-            gold = prof.optLong("gold"); gems = prof.optLong("gems")
-            story = GameSession.ui("quests").optJSONArray("story") ?: JSONArray()
+            val ri = GameSession.uiRaw("inventory")
+            if (ri != lastInv) { lastInv = ri; inv = runCatching { JSONObject(ri) }.getOrDefault(JSONObject()) }
+            val rp = GameSession.uiRaw("profile")
+            if (rp != lastProf) {
+                lastProf = rp
+                val prof = runCatching { JSONObject(rp) }.getOrDefault(JSONObject())
+                level = prof.optInt("level")
+                points = prof.optInt("points")
+                gold = prof.optLong("gold"); gems = prof.optLong("gems")
+            }
+            val rq = GameSession.uiRaw("quests")
+            if (rq != lastQuests) { lastQuests = rq; story = runCatching { JSONObject(rq) }.getOrDefault(JSONObject()).optJSONArray("story") ?: JSONArray() }
             delay(400)
         }
     }

@@ -103,6 +103,8 @@ private const val MAX_PARTICLES = 1600
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
+    /** tam ekran pencere oyunu örtüyor: dünya işler, sahne çizilmez (20 Hz) */
+    @Volatile var covered = false
     @Volatile var localName: String = ""
     @Volatile var localClan: String = ""
     @Volatile var serverTitle: String = ""
@@ -469,7 +471,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 Thermal.poll(SystemClock.uptimeMillis())
                 trimT += dt
                 if (trimT > 5f) { trimT = 0f; atlas.trim(45_000L) }
-                val c = try { holder.lockHardwareCanvas() } catch (_: Exception) { null }
+                val c = if (covered) null else try { holder.lockHardwareCanvas() } catch (_: Exception) { null }
                 if (c != null) {
                     try { render(c, dt) } finally { holder.unlockCanvasAndPost(c) }
                 }
@@ -477,7 +479,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 android.util.Log.e("zenvex", "kare hatası", e)
             }
             if (appliedRes != Settings.current.resolution) post { applyResolution() }
-            val target = 1_000_000_000L / Settings.current.effectiveFps
+            val target = 1_000_000_000L / (if (covered) 20 else Settings.current.effectiveFps)
             val spent = SystemClock.elapsedRealtimeNanos() - now
             if (spent < target) Thread.sleep((target - spent) / 1_000_000L, ((target - spent) % 1_000_000L).toInt())
         }

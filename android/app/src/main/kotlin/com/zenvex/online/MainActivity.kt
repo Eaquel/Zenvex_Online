@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
         super.onPause()
         com.zenvex.online.game.Notifier.foreground = false
         GameSession.save(cloud = true)
+        GameSession.flush()
         Audio.pauseMusic()
     }
 

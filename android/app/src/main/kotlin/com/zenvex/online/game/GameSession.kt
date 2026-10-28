@@ -133,14 +133,25 @@ object GameSession {
      * Sunucu kaydı reddederse oyun sunucudaki son geçerli kayda döner.
      */
     /** [done]: yalnız bulut kaydı denendiğinde, sunucu kabul ettiyse true (satın alma gibi akışlar önce kaydı bekler). */
+    private val writer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "zx-save").apply { isDaemon = true } }
+    private val pendingWrite = java.util.concurrent.atomic.AtomicReference<Pair<File, String>?>(null)
+
+    /** Bekleyen dosya yazımını bitirir (uygulama arka plana geçerken; en çok 1 sn beklenir) */
+    fun flush() { runCatching { writer.submit {}.get(1, java.util.concurrent.TimeUnit.SECONDS) } }
+
     fun save(cloud: Boolean = false, done: ((Boolean) -> Unit)? = null) {
         if (handle == 0L) { done?.invoke(false); return }
         val snap = snapshot()
         val f = saveFile(server.value.id)
-        runCatching {
-            val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.writeText(snap.data)
-            tmp.renameTo(f)
+        // dosya yazımı arka planda (arayüz iş parçacığında disk beklenmez); art arda kayıtlarda yalnız en sonuncusu yazılır
+        pendingWrite.set(f to snap.data)
+        writer.execute {
+            val job = pendingWrite.getAndSet(null) ?: return@execute
+            runCatching {
+                val tmp = File(job.first.parentFile, job.first.name + ".tmp")
+                tmp.writeText(job.second)
+                tmp.renameTo(job.first)
+            }
         }
         val now = System.currentTimeMillis()
         if (Session.state.value != Session.State.Off && (cloud || now - lastCloud > 30_000)) {
@@ -183,7 +194,10 @@ object GameSession {
     }
 
     fun ui(kind: String): JSONObject =
-        runCatching { JSONObject(synchronized(lock) { Native.uiJson(handle, kind) }) }.getOrDefault(JSONObject())
+        runCatching { JSONObject(uiRaw(kind)) }.getOrDefault(JSONObject())
+
+    /** Ham JSON metni (değişmediyse çözümlemeyi atlamak için) */
+    fun uiRaw(kind: String): String = runCatching { synchronized(lock) { Native.uiJson(handle, kind) } }.getOrDefault("{}")
 
     data class Reply(val ok: Boolean, val msg: String)
 
