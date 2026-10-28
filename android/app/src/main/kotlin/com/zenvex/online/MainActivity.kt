@@ -93,6 +93,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Sistem belleği azalınca: görünmeyen yaratık sayfaları ve 3B kare önbelleği boşaltılır (1 GB cihazlarda öldürülmeyelim) */
+    @Suppress("DEPRECATION")
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) {
+            runCatching { com.zenvex.online.game.Atlas.get(this).trim(if (level >= android.content.ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN) 0L else 10_000L) }
+            com.zenvex.online.game.Model3D.dropCache()
+            com.zenvex.online.ui.SpriteCache.clear()
+        }
+    }
+
     override fun onPause() {
         super.onPause()
         com.zenvex.online.game.Notifier.foreground = false

@@ -236,6 +236,7 @@ object SpriteCache {
     private val cache = object : LinkedHashMap<String, ImageBitmap?>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ImageBitmap?>) = size > 220
     }
+    fun clear() = synchronized(cache) { cache.clear() }
     fun get(ctx: android.content.Context, key: String): ImageBitmap? = synchronized(cache) {
         if (cache.containsKey(key)) return cache[key]
         // eşya simgesi yoksa aynı adlı dünya nesnesi (ör. kurulabilir tezgâh: s/workbench)

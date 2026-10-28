@@ -219,6 +219,9 @@ object Model3D {
     /** Aktör artık görünmüyor (uzak oyuncu ayrıldı): son karesini bırak */
     fun forget(actor: String) = synchronized(cache) { last.remove(actor) }
 
+    /** Sistem belleği azaldı: kare önbelleği boşaltılır (görünen aktörlerin son karesi kalır, yeniden çizilir) */
+    fun dropCache() = synchronized(cache) { cache.clear(); bytes = 0L }
+
     /**
      * Kenar yumuşatma çarpanı (3B Karakter Kalitesi): Düşük 1×, Orta 2×, Yüksek 3× (k×k çizilip süzülür).
      * Büyük vitrin çizimlerinde (> 200 px/m) 2× yeter: çizgiler zaten ince, 3× iç tampon gereksiz büyür.

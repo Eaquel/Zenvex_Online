@@ -15,6 +15,9 @@ class Sprite(val page: Int, val src: Rect, val ax: Float, val ay: Float, val k: 
     val h get() = src.height()
 }
 
+/** Hep bellekte kalan atlas grupları (oyunun her yerinde çizilir) */
+private val KEEP = setOf("world", "props", "items", "npc6", "npcs", "vehicles", "regions", "fx", "fx7")
+
 /**
  * tools/assetgen/pack.py çıktısı (assets/v2). Sayfalar gruplar halinde tembel yüklenir;
  * kahraman/zombi sayfaları sadece gerektiğinde belleğe girer.
@@ -23,7 +26,10 @@ class Atlas private constructor(ctx: Context) {
     private val am = ctx.assets
     private val manifest = JSONObject(am.open("v2/manifest.json").bufferedReader().readText())
     private val pageFiles: List<String>
-    private val pages = HashMap<Int, Bitmap>()
+    private val pages = java.util.concurrent.ConcurrentHashMap<Int, Bitmap>()
+    /** sayfanın son kullanıldığı an (ms, [tick] ile ilerler); [trim] uzun süre kullanılmayanları boşaltır */
+    private var lastUse = LongArray(0)
+    @Volatile private var now = 0L
     private val pageGroup = HashMap<Int, String>()
     private val groups = HashMap<String, IntArray>()
     private val sprites = HashMap<String, Sprite>()
@@ -43,6 +49,7 @@ class Atlas private constructor(ctx: Context) {
     init {
         val pf = manifest.getJSONArray("pages")
         pageFiles = List(pf.length()) { pf.getString(it) }
+        lastUse = LongArray(pageFiles.size)
         val g = manifest.getJSONObject("groups")
         for (k in g.keys()) {
             val a = g.getJSONArray(k)
@@ -84,10 +91,30 @@ class Atlas private constructor(ctx: Context) {
     fun has(key: String) = sprites.containsKey(key)
 
     /** Sayfayı (gerekirse yükleyerek) döndürür. */
-    fun page(i: Int): Bitmap? = pages[i] ?: synchronized(pages) {
-        pages[i] ?: runCatching {
-            am.open("v2/" + pageFiles[i]).use { BitmapFactory.decodeStream(it, null, opts) }
-        }.getOrNull()?.also { pages[i] = it }
+    fun page(i: Int): Bitmap? {
+        if (i in lastUse.indices) lastUse[i] = now
+        return pages[i] ?: synchronized(pages) {
+            pages[i] ?: runCatching {
+                am.open("v2/" + pageFiles[i]).use { BitmapFactory.decodeStream(it, null, opts) }
+            }.getOrNull()?.also { pages[i] = it }
+        }
+    }
+
+    /** Oyun döngüsü her karede çağırır (sayfa kullanım saati) */
+    fun tick(ms: Long) { now = ms }
+
+    /**
+     * [idleMs] süredir çizilmeyen yaratık/kahraman sayfalarını GPU belleğinden boşaltır (görünürse yeniden yüklenir).
+     * Eskiden hiç boşaltılmıyordu: bölgeler gezildikçe karşılaşılan her yaratığın sayfası birikiyordu (tümü ~277 MB).
+     * Dünya, eşya, NPC, araç, bölge ve efekt sayfaları hep kalır.
+     */
+    fun trim(idleMs: Long) {
+        synchronized(pages) {
+            for ((i, b) in pages) {
+                if (pageGroup[i] in KEEP) continue
+                if (now - lastUse.getOrElse(i) { 0L } > idleMs) { pages.remove(i); b.recycle() }
+            }
+        }
     }
 
     fun preload(group: String) { groups[group]?.forEach { page(it) } }

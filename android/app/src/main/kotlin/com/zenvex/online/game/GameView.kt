@@ -97,6 +97,9 @@ object HudLayout {
     @Volatile var tutDiana = false
 }
 
+/** ekrandaki 2B parçacık üst sınırı (toz, kıvılcım, duman, parça) */
+private const val MAX_PARTICLES = 1600
+
 class GameView(context: Context, private val ui: GameUi) : SurfaceView(context), SurfaceHolder.Callback {
     private val atlas = Atlas.get(context)
     @Volatile var paused = false
@@ -320,10 +323,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private class Tracer(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val color: Int, var life: Float, val width: Float)
     private val floaters = ArrayList<Floater>()
     /** Yeni parçacıklar efekt yoğunluğuna göre seyreltilir (düşük kalitede gerçekten az parçacık) */
-    private class PList : ArrayList<Particle>() {
+    private class PList : ArrayList<Particle>(1024) {
         override fun add(element: Particle): Boolean {
             val k = Settings.current.fxScale
             if (k < 1f && Math.random() > k) return false
+            // üst sınır: kalabalık çatışmada liste sınırsız büyümesin (ekranda zaten seçilmez; çizim ve güncelleme sabit kalır)
+            if (size >= MAX_PARTICLES) return false
             return super.add(element)
         }
     }
@@ -432,6 +437,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         place(btnRide, -30f, 24 * d)
     }
 
+    private var trimT = 0f
+
     private fun loop() {
         var last = SystemClock.elapsedRealtimeNanos()
         var fpsAcc = 0f
@@ -445,6 +452,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (fpsAcc >= 0.5f) { fps = fpsN / fpsAcc; fpsAcc = 0f; fpsN = 0 }
             try {
                 update(dt)
+                // atlas: kullanım saati; 5 sn'de bir 45 sn'dir görünmeyen yaratık sayfaları boşaltılır
+                atlas.tick(SystemClock.uptimeMillis())
+                trimT += dt
+                if (trimT > 5f) { trimT = 0f; atlas.trim(45_000L) }
                 val c = try { holder.lockHardwareCanvas() } catch (_: Exception) { null }
                 if (c != null) {
                     try { render(c, dt) } finally { holder.unlockCanvasAndPost(c) }
@@ -540,9 +551,10 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         vignetteRed = max(0f, vignetteRed - dt * 1.6f)
         val fit = floaters.iterator()
         while (fit.hasNext()) { val f = fit.next(); f.life -= dt; f.y -= 42f * dt; if (f.life <= 0) fit.remove() }
-        val pit = particles.iterator()
-        while (pit.hasNext()) {
-            val p = pit.next()
+        // tek geçişte sıkıştırarak silme (iterator.remove ArrayList'te her silişte diziyi kaydırıyordu: binlerce parçacıkta O(n²))
+        var pw = 0
+        for (pi in 0 until particles.size) {
+            val p = particles[pi]
             p.life -= dt
             p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt
             when (p.kind) {
@@ -551,8 +563,9 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 6 -> { p.vx += sin(time * 7f + p.seed * 9f) * 90f * dt; p.vz *= 1f - 0.8f * dt }       // alev: yalpalar
                 else -> { p.vx *= 0.97f; p.vy *= 0.97f }
             }
-            if (p.life <= 0) pit.remove()
+            if (p.life > 0) particles[pw++] = p
         }
+        if (pw < particles.size) particles.subList(pw, particles.size).clear()
         flashes.removeAll { it.life -= dt; it.life <= 0 }
         tracers.removeAll { it.life -= dt; it.life <= 0 }
         chestPollT -= dt
@@ -1276,7 +1289,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
             val paint = when {
                 flash == 1f -> flashPaint
-                flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+                flash == 2f -> { tintPaint.colorFilter = pdf(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
                 skin.isNotEmpty() -> skinPaint(skin, prefix.startsWith("h/"))
                 prefix.startsWith("h/") -> pixelPaint
                 else -> bmpPaint
@@ -1491,7 +1504,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val skin = when { who == -1f -> Skins.char; who >= 0f -> Online.lastSkins.getOrNull(who.toInt()) ?: ""; else -> "" }
         val paint = when {
             flash == 1f -> flashPaint
-            flash == 2f -> { tintPaint.colorFilter = PorterDuffColorFilter(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            flash == 2f -> { tintPaint.colorFilter = pdf(0x66FFD34A, PorterDuff.Mode.SRC_ATOP); tintPaint }
             skin.isNotEmpty() -> skinPaint(skin, false)
             else -> bmpPaint
         }
@@ -2225,7 +2238,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val paint = when {
             flash > 0 -> flashPaint
             alpha < 0.99f -> { alphaPaint.alpha = (alpha * 255).toInt().coerceIn(0, 255); alphaPaint }
-            enraged -> { tintPaint.colorFilter = PorterDuffColorFilter(0x55FF2010, PorterDuff.Mode.SRC_ATOP); tintPaint }
+            enraged -> { tintPaint.colorFilter = pdf(0x55FF2010, PorterDuff.Mode.SRC_ATOP); tintPaint }
             pix -> pixelPaint
             else -> bmpPaint
         }
@@ -2263,7 +2276,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val col = rarityColor(rarity)
         // gölge + parıltı halkası
         groundBlob(c, sx, sy, sz * 0.4f, 4 * density, 0.3f)
-        fill.shader = RadialGradient(sx, sy - sz * 0.5f + bob, sz * 0.9f, (col and 0x00FFFFFF) or 0x70000000, 0, Shader.TileMode.CLAMP)
+        fill.shader = radial(sx, sy - sz * 0.5f + bob, sz * 0.9f, (col and 0x00FFFFFF) or 0x70000000, 0)
         c.drawCircle(sx, sy - sz * 0.5f + bob, sz * 0.9f, fill); fill.shader = null
         if (rarity >= 2) {
             stroke.color = col; stroke.strokeWidth = 2 * density; stroke.alpha = (160 + 90 * sin(age * 5f)).toInt().coerceIn(0, 255)
@@ -2288,8 +2301,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             0, 2 -> {
                 val len = 46f * scale
                 stroke.strokeWidth = 2.6f * density
-                stroke.shader = LinearGradient(sx, sy, sx - dx * len, sy - dy * len,
-                    if (kind == 0) 0xFFFFF0A0.toInt() else 0xFF80F0FF.toInt(), 0, Shader.TileMode.CLAMP)
+                stroke.shader = linear(sx, sy, sx - dx * len, sy - dy * len, if (kind == 0) 0xFFFFF0A0.toInt() else 0xFF80F0FF.toInt(), 0)
                 c.drawLine(sx, sy, sx - dx * len, sy - dy * len, stroke)
                 stroke.shader = null
             }
@@ -2324,7 +2336,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 flashes += Light(x, y - 70f, 150f, 0xFFFF9A40.toInt(), 0.05f, 0.05f)
             }
             3 -> {
-                fill.shader = RadialGradient(sx, sy, 14 * scale, 0xFFB0FF50.toInt(), 0x0040A010, Shader.TileMode.CLAMP)
+                fill.shader = radial(sx, sy, 14 * scale, 0xFFB0FF50.toInt(), 0x0040A010)
                 c.drawCircle(sx, sy, 14 * scale, fill); fill.shader = null
             }
         }
@@ -2354,7 +2366,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (sp == null) { placeholder(c, sx, sy, 0xFFB03030.toInt()); return }
             // kendi aracın: Elmas Sandığı araç kaplaması
             val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
-            val paint = if (wreck) { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
+            val paint = if (wreck) { tintPaint.colorFilter = pdf(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
                 else if (mine) skinPaint(Skins.vehicle, false) else bmpPaint
             if (mine && speed > 40 && Settings.current.particles) {
                 val tc = Skins.trail(Skins.vehicle)
@@ -2446,7 +2458,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.restore()
         val mine = driver >= 0 && hypot(x - hud[Native.PX], y - hud[Native.PY]) < 8f && Skins.vehicle.isNotEmpty()
         val paint = when {
-            wreck -> { tintPaint.colorFilter = PorterDuffColorFilter(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
+            wreck -> { tintPaint.colorFilter = pdf(0x90201810.toInt(), PorterDuff.Mode.SRC_ATOP); tintPaint }
             mine -> skinPaint(Skins.vehicle, false)
             else -> bmpPaint
         }
@@ -2567,8 +2579,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                     c.drawBitmap(tile, null, cloudDst, cloudPaint)
                 }
                 // degrade: kenarda tam bulut, içeri doğru yumuşakça (kare değil, ease) söner
-                bandMask.shader = LinearGradient(bd[4], bd[5], bd[6], bd[7], intArrayOf(0xF0000000.toInt(), 0x80000000.toInt(), 0x00000000),
-                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+                g3[0] = 0xF0000000.toInt(); g3[1] = 0x80000000.toInt(); g3[2] = 0
+                bandMask.shader = linear(bd[4], bd[5], bd[6], bd[7], g3, pos3b)
                 c.drawRect(bx0, by0, bx1, by1, bandMask)
                 c.restoreToCount(layer)
             }
@@ -2593,11 +2605,11 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             // gölge (alt, koyu) sonra ışıklı üst yüz: hacim hissi
             cloudPaint.colorFilter = null
             cloudPaint.alpha = (alpha * 150).toInt()
-            cloudPaint.colorFilter = PorterDuffColorFilter(0xFF4A4E70.toInt(), PorterDuff.Mode.SRC_IN)
+            cloudPaint.colorFilter = pdf(0xFF4A4E70.toInt(), PorterDuff.Mode.SRC_IN)
             cloudDst.set(sx - sz / 2, sy - sz * 0.38f + sz * 0.08f, sx + sz / 2, sy + sz * 0.38f + sz * 0.08f)
             c.drawBitmap(puffBmp, null, cloudDst, cloudPaint)
             cloudPaint.alpha = (alpha * 255).toInt()
-            cloudPaint.colorFilter = PorterDuffColorFilter(if (h1 > 0.5f) 0xFFF4F4FF.toInt() else 0xFFE2E6F8.toInt(), PorterDuff.Mode.SRC_IN)
+            cloudPaint.colorFilter = pdf(if (h1 > 0.5f) 0xFFF4F4FF.toInt() else 0xFFE2E6F8.toInt(), PorterDuff.Mode.SRC_IN)
             cloudDst.set(sx - sz * 0.46f, sy - sz * 0.40f - sz * 0.04f, sx + sz * 0.46f, sy + sz * 0.34f - sz * 0.04f)
             c.drawBitmap(puffBmp, null, cloudDst, cloudPaint)
         }
@@ -2801,8 +2813,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val fade = min(1f, lifeF * 3f)
         when (kind) {
             0 -> { // zehir birikintisi
-                fill.shader = RadialGradient(sx, sy, r, intArrayOf(alphaC(0xFF8AE030.toInt(), 0.75f * fade), alphaC(0xFF5AA020.toInt(), 0.5f * fade), 0),
-                    floatArrayOf(0f, 0.7f, 1f), Shader.TileMode.CLAMP)
+                g3[0] = alphaC(0xFF8AE030.toInt(), 0.75f * fade); g3[1] = alphaC(0xFF5AA020.toInt(), 0.5f * fade); g3[2] = 0
+                fill.shader = radial(sx, sy, r, g3, pos3a)
                 c.save(); c.scale(1f, 0.6f, sx, sy); c.drawCircle(sx, sy, r, fill); c.restore(); fill.shader = null
                 if (Settings.current.particles && Math.random() < 0.15) particles += Particle(x + (Math.random().toFloat() - 0.5f) * r / scale, y + (Math.random().toFloat() - 0.5f) * r / scale * 0.5f, 0f, 0f, 0f, 30f, 0.8f, 0.8f, 0xFFB0FF60.toInt(), 3f, 3)
             }
@@ -2811,7 +2823,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 for (k in 0..4) {
                     val a = age * 0.6f + k * 1.3f
                     val cx = sx + cos(a) * r * 0.35f; val cy = sy - 40 * scale + sin(a * 1.3f) * r * 0.2f
-                    fill.shader = RadialGradient(cx, cy, r * 0.7f, alphaC(0xFF90E040.toInt(), 0.35f * fade), 0, Shader.TileMode.CLAMP)
+                    fill.shader = radial(cx, cy, r * 0.7f, alphaC(0xFF90E040.toInt(), 0.35f * fade), 0)
                     c.drawCircle(cx, cy, r * 0.7f, fill)
                 }
                 fill.shader = null
@@ -2821,7 +2833,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 stroke.color = alphaC(0xFF60FF90.toInt(), 0.8f * fade); stroke.strokeWidth = 3 * density
                 c.save(); c.scale(1f, 0.55f, sx, sy)
                 c.drawCircle(sx, sy, r, stroke)
-                fill.shader = RadialGradient(sx, sy, r, alphaC(0xFF60FF90.toInt(), 0.25f * fade), 0, Shader.TileMode.CLAMP)
+                fill.shader = radial(sx, sy, r, alphaC(0xFF60FF90.toInt(), 0.25f * fade), 0)
                 c.drawCircle(sx, sy, r, fill); fill.shader = null
                 c.restore()
                 if (Settings.current.particles && Math.random() < 0.3) particles += Particle(x + (Math.random().toFloat() - 0.5f) * r / scale * 1.4f, y + (Math.random().toFloat() - 0.5f) * r / scale * 0.6f, 10f, 0f, 0f, 70f, 1f, 1f, 0xFF80FFA0.toInt(), 4f, 3)
@@ -2837,8 +2849,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             }
             5 -> { // patlama
                 val k = 1f - lifeF
-                fill.shader = RadialGradient(sx, sy - 30 * scale, r * (0.4f + k), intArrayOf(alphaC(0xFFFFF0C0.toInt(), lifeF), alphaC(0xFFFF8020.toInt(), lifeF * 0.8f), 0),
-                    floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+                g3[0] = alphaC(0xFFFFF0C0.toInt(), lifeF); g3[1] = alphaC(0xFFFF8020.toInt(), lifeF * 0.8f); g3[2] = 0
+                fill.shader = radial(sx, sy - 30 * scale, r * (0.4f + k), g3, pos3b)
                 c.drawCircle(sx, sy - 30 * scale, r * (0.4f + k), fill); fill.shader = null
                 fill.color = alphaC(0xFF1A1410.toInt(), 0.5f * lifeF)
                 c.save(); c.scale(1f, 0.5f, sx, sy); c.drawCircle(sx, sy, r * 0.9f, fill); c.restore()
@@ -2847,6 +2859,52 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     private fun alphaC(c: Int, a: Float): Int = (c and 0x00FFFFFF) or ((a.coerceIn(0f, 1f) * ((c ushr 24) and 255)).toInt() shl 24)
+
+    // ------------------------------------------------------------------ önbellekli gradyan ve renk süzgeçleri
+    // Eskiden her karede (her yaratık, ışık, düğme için) yeni RadialGradient/LinearGradient/PorterDuffColorFilter nesnesi
+    // üretiliyordu: saniyede binlerce nesne → sık GC duraklaması (takılma) ve fazladan işlemci (ısınma). Gradyanlar birim
+    // boyutta bir kez kurulur ve yalnız yerel matrisle konumlanır; alfa 8'lik basamaklara yuvarlanır (göze fark yok).
+    private class ShaderLru : LinkedHashMap<Long, Shader>(128, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Shader>) = size > 192
+    }
+    private val radialCache = ShaderLru()
+    private val linearCache = ShaderLru()
+    private val shaderM = android.graphics.Matrix()
+    private val g2 = IntArray(2)
+    private val g3 = IntArray(3)
+    private val pos3a = floatArrayOf(0f, 0.7f, 1f)
+    private val pos3b = floatArrayOf(0f, 0.45f, 1f)
+    private val pos3c = floatArrayOf(0f, 0.6f, 1f)
+    private val pos3d = floatArrayOf(0f, 0.55f, 1f)
+    private fun qa(c: Int): Int {
+        val a = (c ushr 24) and 0xFF
+        return (c and 0xFFFFFF) or ((((a + 4) / 8) * 8).coerceAtMost(255) shl 24)
+    }
+    private fun shaderKey(cols: IntArray, pos: FloatArray?): Long {
+        var h = 1125899906842597L
+        for (c in cols) h = 31 * h + qa(c)
+        if (pos != null) for (p in pos) h = 31 * h + p.toRawBits()
+        return h * 31 + cols.size
+    }
+    private fun radial(cx: Float, cy: Float, r: Float, c0: Int, c1: Int): Shader { g2[0] = c0; g2[1] = c1; return radial(cx, cy, r, g2, null) }
+    private fun radial(cx: Float, cy: Float, r: Float, cols: IntArray, pos: FloatArray?): Shader {
+        val s = radialCache.getOrPut(shaderKey(cols, pos)) { RadialGradient(0f, 0f, 1f, IntArray(cols.size) { qa(cols[it]) }, pos?.copyOf(), Shader.TileMode.CLAMP) }
+        val rr = max(r, 0.01f)
+        shaderM.setScale(rr, rr); shaderM.postTranslate(cx, cy); s.setLocalMatrix(shaderM)
+        return s
+    }
+    private fun linear(x0: Float, y0: Float, x1: Float, y1: Float, c0: Int, c1: Int): Shader { g2[0] = c0; g2[1] = c1; return linear(x0, y0, x1, y1, g2, null) }
+    private fun linear(x0: Float, y0: Float, x1: Float, y1: Float, cols: IntArray, pos: FloatArray?): Shader {
+        val s = linearCache.getOrPut(shaderKey(cols, pos)) { LinearGradient(0f, 0f, 1f, 0f, IntArray(cols.size) { qa(cols[it]) }, pos?.copyOf(), Shader.TileMode.CLAMP) }
+        val dx = x1 - x0; val dy = y1 - y0
+        val len = max(hypot(dx, dy), 0.01f)
+        shaderM.setScale(len, len); shaderM.postRotate(Math.toDegrees(atan2(dy, dx).toDouble()).toFloat()); shaderM.postTranslate(x0, y0)
+        s.setLocalMatrix(shaderM)
+        return s
+    }
+    private val filterCache = HashMap<Long, android.graphics.ColorFilter>()
+    private fun pdf(color: Int, mode: PorterDuff.Mode): android.graphics.ColorFilter =
+        filterCache.getOrPut((color.toLong() shl 8) or mode.ordinal.toLong()) { PorterDuffColorFilter(color, mode) }
 
     // ------------------------------------------------------------------ sprite efektleri
     private class Fx(val name: String, var x: Float, var y: Float, val size: Float, val rot: Float, val follow: Boolean, val dur: Float, val frame: Int) {
@@ -3141,7 +3199,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         lc.drawColor(Color.rgb(r, g, b), PorterDuff.Mode.SRC)
         fun glow(x: Float, y: Float, rad: Float, col: Int, k: Float) {
             val lx = wx(x) / 4; val ly = wy(y) / 4; val lr = rad * scale / 4
-            lightPaint.shader = RadialGradient(lx, ly, lr, alphaC(col, k), 0, Shader.TileMode.CLAMP)
+            lightPaint.shader = radial(lx, ly, lr, alphaC(col, k), 0)
             lightPaint.xfermode = addMode
             lc.drawCircle(lx, ly, lr, lightPaint)
         }
@@ -3256,7 +3314,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val col = if (p.boss) 0xFFFF4A3A.toInt() else 0xFFD8403C.toInt()
         rect.set(left, by - bh / 2, left + bw * p.hp.coerceIn(0f, 1f), by + bh / 2)
         if (rect.width() > 0) {
-            fill.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, lighten(col, 1.4f), col, Shader.TileMode.CLAMP)
+            fill.shader = linear(0f, rect.top, 0f, rect.bottom, lighten(col, 1.4f), col)
             c.drawRoundRect(rect, 2 * d, 2 * d, fill); fill.shader = null
         }
         if (p.hpCur >= 0) drawText(c, "${fmtShort(p.hpCur)} / ${fmtShort(p.hpMax)}", p.x + 7 * d, by + bh * 0.36f, bh * 0.92f, 0xFFFFFFFF.toInt(), center = true)
@@ -3323,10 +3381,12 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         c.drawText(t, x, y, textStroke)
         // metal geçiş + kayan ışık bandı
         val u = left + ((time * 0.45f + rank * 0.3f) % 1.6f) * (tw + 80 * d) - 40 * d
-        text.shader = LinearGradient(0f, top, 0f, y, intArrayOf(hi, mid, lo), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        g3[0] = hi; g3[1] = mid; g3[2] = lo
+        text.shader = linear(0f, top, 0f, y, g3, pos3d)
         text.textAlign = Paint.Align.CENTER
         c.drawText(t, x, y, text)
-        text.shader = LinearGradient(u - 18 * d, top, u + 18 * d, y, intArrayOf(0x00FFFFFF, 0xB0FFFFFF.toInt(), 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+        g3[0] = 0x00FFFFFF; g3[1] = 0xB0FFFFFF.toInt(); g3[2] = 0x00FFFFFF
+        text.shader = linear(u - 18 * d, top, u + 18 * d, y, g3, null)
         c.drawText(t, x, y, text)
         text.shader = null; text.textAlign = Paint.Align.LEFT
         // 1.: küçük piksel taç
@@ -3395,7 +3455,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         rect.set(cx - w / 2 - 1.5f * density, y - h / 2 - 1.5f * density, cx + w / 2 + 1.5f * density, y + h / 2 + 1.5f * density)
         fill.color = 0xC0101418.toInt(); c.drawRoundRect(rect, h, h, fill)
         rect.set(cx - w / 2, y - h / 2, cx - w / 2 + w * v.coerceIn(0f, 1f), y + h / 2)
-        fill.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, lighten(color, 1.35f), color, Shader.TileMode.CLAMP)
+        fill.shader = linear(0f, rect.top, 0f, rect.bottom, lighten(color, 1.35f), color)
         c.drawRoundRect(rect, h / 2, h / 2, fill); fill.shader = null
     }
 
@@ -3417,7 +3477,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         if (whiteFlash > 0.01f) { fill.color = alphaC(0xFFE8F0FF.toInt(), whiteFlash * 0.6f); c.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), fill) }
         val vr = max(vignetteRed, low * 0.6f)
         if (vr > 0.01f) {
-            fill.shader = RadialGradient(sw / 2f, sh / 2f, max(sw, sh) * 0.7f, intArrayOf(0, 0, alphaC(0xFFB00010.toInt(), vr)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            g3[0] = 0; g3[1] = 0; g3[2] = alphaC(0xFFB00010.toInt(), vr)
+            fill.shader = radial(sw / 2f, sh / 2f, max(sw, sh) * 0.7f, g3, pos3c)
             c.drawRect(0f, 0f, sw.toFloat(), sh.toFloat(), fill); fill.shader = null
         }
         // ---- sol üst: portre + barlar
@@ -3425,7 +3486,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val pr = 30 * d
         val ch = hud[Native.CHARACTER].toInt()
         val pcx = px0 + pr; val pcy = py0 + pr
-        fill.shader = RadialGradient(pcx, pcy, pr, 0xFF2E4A70.toInt(), 0xFF101828.toInt(), Shader.TileMode.CLAMP)
+        fill.shader = radial(pcx, pcy, pr, 0xFF2E4A70.toInt(), 0xFF101828.toInt())
         c.drawCircle(pcx, pcy, pr, fill); fill.shader = null
         val ps = portraitCache.getOrPut(ch) { atlas["l/" + heroIds.getOrElse(ch) { "kaan" } + "/0_0"] ?: atlas["h/" + heroIds.getOrElse(ch) { "kaan" } + "/idle_0_0"] }
         // V18: 3B model portresi (hazırsa); yoksa eski atlas görseli
@@ -3514,7 +3575,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             val k = (bannerT / BANNER_DUR).coerceIn(0f, 1f)
             val a = if (k > 0.85f) (1f - k) / 0.15f else if (k < 0.2f) k / 0.2f else 1f
             val y = max(sh * 0.26f, slotBottom + 46 * d)
-            fill.shader = LinearGradient(sw * 0.2f, 0f, sw * 0.8f, 0f, intArrayOf(0, alphaC(0xCC0A0E16.toInt(), a), 0), null, Shader.TileMode.CLAMP)
+            g3[0] = 0; g3[1] = alphaC(0xCC0A0E16.toInt(), a); g3[2] = 0
+            fill.shader = linear(sw * 0.2f, 0f, sw * 0.8f, 0f, g3, null)
             c.drawRect(0f, y - 44 * d, sw.toFloat(), y + 26 * d, fill); fill.shader = null
             drawText(c, banner, sw / 2f, y, 30 * d * (if (k > 0.85f) 1f + (k - 0.85f) else 1f), alphaC(bannerColor, a), true, fontDisplay)
             drawText(c, bannerSub, sw / 2f, y + 19 * d, 14 * d, alphaC(0xFFEEF2F0.toInt(), a), true)
@@ -3526,7 +3588,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         rect.set(x - 2 * d, y - 2 * d, x + w + 2 * d, y + h + 2 * d)
         fill.color = 0xD0101418.toInt(); c.drawRoundRect(rect, h, h, fill)
         rect.set(x, y, x + w * v.coerceIn(0f, 1f), y + h)
-        fill.shader = LinearGradient(0f, y, 0f, y + h, lighten(color, 1.4f), color, Shader.TileMode.CLAMP)
+        fill.shader = linear(0f, y, 0f, y + h, lighten(color, 1.4f), color)
         c.drawRoundRect(rect, h / 2, h / 2, fill); fill.shader = null
         fill.color = 0x30FFFFFF; c.drawRoundRect(x, y, x + w * v.coerceIn(0f, 1f), y + h * 0.45f, h / 2, h / 2, fill)
         if (over > 0) {
@@ -3590,7 +3652,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             c.restore()
         }
         // kenar karartması
-        fill.shader = RadialGradient(cx, cy, r, intArrayOf(0, 0, 0x90000000.toInt()), floatArrayOf(0f, 0.7f, 1f), Shader.TileMode.CLAMP)
+        g3[0] = 0; g3[1] = 0; g3[2] = 0x90000000.toInt()
+        fill.shader = radial(cx, cy, r, g3, pos3a)
         c.drawCircle(cx, cy, r, fill); fill.shader = null
         for (i in 0 until radarN) {
             val x = radarBuf[i * 3]; val y = radarBuf[i * 3 + 1]; val t = radarBuf[i * 3 + 2].toInt()
@@ -3820,13 +3883,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         for (st in listOf(moveStick, atkStick)) {
             val isAtk = st === atkStick
             if (isAtk && inVehicleNow()) continue // araçta saldırı yok
-            fill.shader = RadialGradient(st.cx, st.cy, stickR, intArrayOf(alphaC(0xFF000000.toInt(), 0.1f * op), alphaC(0xFF000000.toInt(), 0.35f * op)), null, Shader.TileMode.CLAMP)
+            fill.shader = radial(st.cx, st.cy, stickR, alphaC(0xFF000000.toInt(), 0.1f * op), alphaC(0xFF000000.toInt(), 0.35f * op))
             c.drawCircle(st.cx, st.cy, stickR, fill); fill.shader = null
             stroke.color = alphaC(if (isAtk) 0xFFFF7A5A.toInt() else 0xFFFFFFFF.toInt(), 0.55f * op); stroke.strokeWidth = 2.5f * density
             c.drawCircle(st.cx, st.cy, stickR, stroke)
             val kr = stickR * 0.45f
-            fill.shader = RadialGradient(st.x - kr * 0.3f, st.y - kr * 0.3f, kr * 1.4f,
-                alphaC(if (isAtk) 0xFFFF9A7A.toInt() else 0xFFF4F6F8.toInt(), 0.95f * op), alphaC(if (isAtk) 0xFFB03A28.toInt() else 0xFF8A96A4.toInt(), 0.9f * op), Shader.TileMode.CLAMP)
+            fill.shader = radial(st.x - kr * 0.3f, st.y - kr * 0.3f, kr * 1.4f,
+                alphaC(if (isAtk) 0xFFFF9A7A.toInt() else 0xFFF4F6F8.toInt(), 0.95f * op), alphaC(if (isAtk) 0xFFB03A28.toInt() else 0xFF8A96A4.toInt(), 0.9f * op))
             c.drawCircle(st.x, st.y, kr, fill); fill.shader = null
             if (isAtk) {
                 // saldırı topuzu: katana izi tuş görseli (yoksa vektör kılıç)
@@ -3887,7 +3950,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val reloading = hud[Native.RELOADING] > 0
         val mag = hud[Native.MAG].toInt(); val empty = mag <= 0 && !reloading
         fill.color = 0x59000000; c.drawCircle(cx, cy + 2 * d, r, fill)
-        fill.shader = RadialGradient(cx - r * 0.3f, cy - r * 0.4f, r * 1.5f, alphaC(0xFF4A5A6A.toInt(), 0.92f), alphaC(0xFF141A22.toInt(), 0.92f), Shader.TileMode.CLAMP)
+        fill.shader = radial(cx - r * 0.3f, cy - r * 0.4f, r * 1.5f, alphaC(0xFF4A5A6A.toInt(), 0.92f), alphaC(0xFF141A22.toInt(), 0.92f))
         c.drawCircle(cx, cy, r, fill); fill.shader = null
         stroke.color = if (empty) 0xFFFF5A4A.toInt() else 0xFF8A949E.toInt(); stroke.strokeWidth = 3f * d
         c.drawCircle(cx, cy, r, stroke)
@@ -3942,7 +4005,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 c.drawCircle(cx, cy, r * 0.8f, fill)
             }
         } else {
-            fill.shader = RadialGradient(cx - r * 0.3f, cy - r * 0.4f, r * 1.5f, alphaC(lighten(color, 1.6f), op), alphaC(color, op), Shader.TileMode.CLAMP)
+            fill.shader = radial(cx - r * 0.3f, cy - r * 0.4f, r * 1.5f, alphaC(lighten(color, 1.6f), op), alphaC(color, op))
             c.drawCircle(cx, cy, r, fill); fill.shader = null
             stroke.color = alphaC(0xFFFFFFFF.toInt(), 0.35f * op + b.flash * 0.5f); stroke.strokeWidth = 2 * density
             c.drawCircle(cx, cy, r, stroke)
