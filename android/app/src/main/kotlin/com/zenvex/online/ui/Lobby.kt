@@ -209,7 +209,7 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
     var newKey by remember { mutableStateOf("") }
     val ctx = LocalContext.current
     Dim {
-        PxPanel(Modifier.width(440.dp).clickable(remember { MutableInteractionSource() }, null) {}, pad = 14.dp) {
+        PxPanel(Modifier.width(620.dp).verticalScroll(rememberScrollState()).clickable(remember { MutableInteractionSource() }, null) {}, pad = 14.dp) {
             if (newKey.isNotEmpty()) {
                 PT("Hesabın hazır!", 22.sp, Px.Name)
                 Spacer(Modifier.height(6.dp))
@@ -226,62 +226,70 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                 }
                 return@PxPanel
             }
-            // Google ile tek dokunuşla giriş (yoksa hesap açılır)
-            PxButton(if (busy) "Bekle…" else "Google ile devam et", Modifier.fillMaxWidth(), Color(0xFFE8E4D4), icon = "user",
-                textColor = Color(0xFF1E1D19), enabled = !busy) {
-                val act = ctx as? android.app.Activity ?: return@PxButton
-                busy = true; err = ""
-                com.zenvex.online.net.GoogleSignIn.start(act, link = false) { e ->
-                    if (e != null) { busy = false; err = e } else {
-                        GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
-                        GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
-                    }
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            PxTabs(listOf("Yeni hesap", "Giriş yap"), mode) { mode = it; err = "" }
-            Spacer(Modifier.height(10.dp))
-            if (mode == 0) {
-                PT("Oyuncu adın", 14.sp, Px.Sub)
-                Field(nick, { if (it.length <= 16) nick = it }, "İsim (3-16)", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(10.dp))
-                PxButton(if (busy) "Bekle…" else "Hesap Aç", Modifier.fillMaxWidth(), enabled = !busy) {
-                    busy = true; err = ""
-                    Account.register(nick) { e ->
-                        busy = false
-                        if (e != null) err = e else {
-                            newKey = Account.key
-                            GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
-                            GameSession.cmd("set_name", "name" to Account.name.value)
-                            GameSession.save(cloud = true)
+            // V19: yatay telefonda (360 dp yükseklik) tek sütun sığmıyordu, Giriş Yap ve Kapat ekranın altına kayıyordu:
+            // iki sütun — solda Google, sekmeler ve bilgi; sağda alanlar ve düğme
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.weight(1f)) {
+                    // Google ile tek dokunuşla giriş (yoksa hesap açılır)
+                    PxButton(if (busy) "Bekle…" else "Google ile devam et", Modifier.fillMaxWidth(), Color(0xFFE8E4D4), icon = "user",
+                        textColor = Color(0xFF1E1D19), enabled = !busy, height = 42.dp, size = 15.sp) {
+                        val act = ctx as? android.app.Activity ?: return@PxButton
+                        busy = true; err = ""
+                        com.zenvex.online.net.GoogleSignIn.start(act, link = false) { e ->
+                            if (e != null) { busy = false; err = e } else {
+                                GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
+                                GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
+                            }
                         }
                     }
-                }
-            } else {
-                PT("Zenvex ID", 14.sp, Px.Sub)
-                Field(idText, { idText = it.filter { c -> c.isDigit() }.take(12) }, "örn: 0000001", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(6.dp))
-                PT("Hesap anahtarı", 14.sp, Px.Sub)
-                Field(keyText, { keyText = it.take(16) }, "12 harfli anahtar", Modifier.fillMaxWidth())
-                Spacer(Modifier.height(10.dp))
-                PxButton(if (busy) "Bekle…" else "Giriş Yap", Modifier.fillMaxWidth(), enabled = !busy) {
-                    val id = idText.toLongOrNull() ?: run { err = "ID'yi yaz"; return@PxButton }
-                    busy = true; err = ""
-                    Account.login(id, keyText) { e ->
-                        if (e != null) { busy = false; err = e } else {
-                            GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
-                            GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
-                        }
+                    Spacer(Modifier.height(8.dp))
+                    PxTabs(listOf("Yeni hesap", "Giriş yap"), mode) { mode = it; err = "" }
+                    Spacer(Modifier.height(8.dp))
+                    PT(if (first) "Zenvex tamamen çevrimiçi bir oyundur: ilerlemen sunucuda saklanır, her telefondan devam edersin."
+                        else if (mode == 0) "Yeni hesap açınca sana bir Zenvex ID ve anahtar verilir; telefon değişirse onlarla girersin."
+                        else "Başka telefonda açtığın hesaba ID ve anahtarla gir.", 12.sp, Px.Sub, maxLines = 4)
+                    if (!first) {
+                        Spacer(Modifier.height(8.dp))
+                        PxButton("Kapat", Modifier.fillMaxWidth(), Px.Dark, size = 14.sp, height = 36.dp) { close() }
                     }
                 }
-            }
-            if (err.isNotEmpty()) { Spacer(Modifier.height(6.dp)); PT(err, 14.sp, Color(0xFFFF7A6A), maxLines = 3) }
-            if (first) {
-                Spacer(Modifier.height(8.dp))
-                PT("Zenvex tamamen çevrimiçi bir oyundur: ilerlemen sunucuda saklanır, her telefondan devam edersin.", 12.sp, Px.Sub, maxLines = 3)
-            } else {
-                Spacer(Modifier.height(8.dp))
-                PxButton("Kapat", Modifier.fillMaxWidth(), Px.Dark, size = 15.sp, height = 38.dp) { close() }
+                Column(Modifier.weight(1f)) {
+                    if (mode == 0) {
+                        PT("Oyuncu adın", 13.sp, Px.Sub)
+                        Field(nick, { if (it.length <= 16) nick = it }, "İsim (3-16)", Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        PxButton(if (busy) "Bekle…" else "Hesap Aç", Modifier.fillMaxWidth(), enabled = !busy, height = 42.dp, size = 16.sp) {
+                            busy = true; err = ""
+                            Account.register(nick) { e ->
+                                busy = false
+                                if (e != null) err = e else {
+                                    newKey = Account.key
+                                    GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
+                                    GameSession.cmd("set_name", "name" to Account.name.value)
+                                    GameSession.save(cloud = true)
+                                }
+                            }
+                        }
+                    } else {
+                        PT("Zenvex ID", 13.sp, Px.Sub)
+                        Field(idText, { idText = it.filter { c -> c.isDigit() }.take(12) }, "örn: 0000001", Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(4.dp))
+                        PT("Hesap anahtarı", 13.sp, Px.Sub)
+                        Field(keyText, { keyText = it.take(16) }, "12 harfli anahtar", Modifier.fillMaxWidth())
+                        Spacer(Modifier.height(8.dp))
+                        PxButton(if (busy) "Bekle…" else "Giriş Yap", Modifier.fillMaxWidth(), enabled = !busy, height = 42.dp, size = 16.sp) {
+                            val id = idText.toLongOrNull() ?: run { err = "ID'yi yaz"; return@PxButton }
+                            busy = true; err = ""
+                            Account.login(id, keyText) { e ->
+                                if (e != null) { busy = false; err = e } else {
+                                    GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
+                                    GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
+                                }
+                            }
+                        }
+                    }
+                    if (err.isNotEmpty()) { Spacer(Modifier.height(6.dp)); PT(err, 13.sp, Color(0xFFFF7A6A), maxLines = 3) }
+                }
             }
         }
     }

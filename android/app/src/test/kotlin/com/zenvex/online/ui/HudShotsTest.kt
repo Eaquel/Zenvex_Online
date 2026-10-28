@@ -62,6 +62,9 @@ class HudShotsTest {
         com.zenvex.online.game.HudLayout.tutMsg = ""
     }
 
+    /** Hesap penceresi (yeni hesap / giriş): küçük yatay telefonda düğmeler ekranda kalmalı */
+    @Test fun accountNewSmallPhone() { paparazzi.snapshot { AccountDialog(false) {} } }
+
     /** Klan deposundan gönder penceresi: alanlar ve Gönder tuşu küçük ekranda görünmeli */
     @Test fun clanSendSmallPhone() {
         val c = org.json.JSONObject().put("members", org.json.JSONArray((1..9).map { org.json.JSONObject().put("id", it).put("name", "Üye $it") }))
