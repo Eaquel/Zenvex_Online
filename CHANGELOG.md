@@ -2,6 +2,16 @@
 
 ## Unreleased (V16 — 3D)
 
+- V19: 3D characters look sharper up close and from afar: textures use trilinear filtering (no more grainy patches),
+  High quality renders with 3× anti-aliasing plus light sharpening, lighting has more contrast (soft shadow side, sky light,
+  specular glints, stronger rim light, richer colours); showcase renders (character screen, lobby) are no longer upscaled
+- V19: menus restyled: bevelled panels, tabs with icons and a gold underline, segmented choices in a recessed track,
+  animated switches, section headers with an accent bar, highlighted title strip; 77 new strings translated
+- V19: repository cleanup: old prompt documents, archive, audit reference images, one-off tool scripts and unused
+  backgrounds removed
+- V19: personal base without ice ground or zombies; border decorations removed (only soft cloud bands); chests reduced to
+  Wood, Iron and Military; admin panel rewritten; quest markers use the tap hand and every early quest points at its target
+
 - Quests rewritten: the tutorial now teaches every system step by step (equip armor, set up a workbench, move items to
   pockets and use them, sell to Marco, teleport to the personal base and back with Aldric, minimap, skill tree, mail, chat)
   and Silas's chain adds the motorcycle build (frame, wheels, engine, order at Viktor); saves move to the new order by quest id
