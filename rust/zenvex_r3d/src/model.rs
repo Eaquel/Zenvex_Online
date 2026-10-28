@@ -66,7 +66,7 @@ pub struct Texture {
 
 impl Texture {
     pub fn from_rgba(w: usize, h: usize, rgba: &[u8]) -> Texture {
-        let base: Vec<[u8; 4]> = rgba.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect();
+        let base: Vec<[u8; 4]> = rgba.as_chunks::<4>().0.to_vec();
         let mut levels = vec![(w, h, base)];
         loop {
             let (pw, ph, prev) = levels.last().unwrap();

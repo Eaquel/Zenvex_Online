@@ -3753,7 +3753,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         ringAt?.let { (x, y, r) -> hintRing(c, x, y, r) }
         // V19: balon Compose katmanında, her şeyin (kontrol rehberi dahil) üstünde çizilir (ui/GuideBubble); burada yalnız yayınlanır
         val show = msg != null && bannerT <= 0f
-        HudLayout.tutMsg = if (show) msg!! else ""
+        HudLayout.tutMsg = if (show) msg else ""
         HudLayout.tutAlpha = if (show) (tutT / 0.35f).coerceIn(0f, 1f) * ((9.5f - tutT) / 0.6f).coerceIn(0f, 1f) else 0f
         HudLayout.tutTop = (slotBottom + 6 * density) / sh.coerceAtLeast(1)
         HudLayout.tutDiana = guideStep == "g8" || guideStep == "g9" || (guideOffer && guideGiver == 8)

@@ -368,7 +368,7 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
             }
         }
     }
-    if (wrongPlace) TutLayer(emptyList(), if (craftWant!!.second) "Görevin istediği eşya tezgâhta yapılır: bu ekranı kapat, haritada işaretli tezgâha git ve ona dokun."
+    if (wrongPlace) TutLayer(emptyList(), if (craftWant.second) "Görevin istediği eşya tezgâhta yapılır: bu ekranı kapat, haritada işaretli tezgâha git ve ona dokun."
         else "Görevin istediği eşya el üretiminde: bu ekranı kapat, çantadaki Üret düğmesine bas.", cardStart = 200, cardEnd = 280)
     // öğretici: sekme → tarif → Üret düğmesi sırasıyla parlar
     if (tutWant != null) {

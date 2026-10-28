@@ -6,6 +6,11 @@ import android.os.Build
 import android.provider.Settings as SysSettings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -277,13 +282,18 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
 private fun ColumnScope.LegalSection() {
     val ctx = LocalContext.current
     var page by remember { mutableIntStateOf(0) }
+    var reader by remember { mutableStateOf<Int?>(null) }
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         PxButton("Gizlilik Politikası", height = 30.dp, size = 12.sp, color = if (page == 0) Px.Green else Px.Dark) { page = 0 }
         PxButton("Kullanım Şartları", height = 30.dp, size = 12.sp, color = if (page == 1) Px.Green else Px.Dark) { page = 1 }
         PxButton("Hakkında", height = 30.dp, size = 12.sp, color = if (page == 2) Px.Green else Px.Dark) { page = 2 }
-        PxButton("Web'de Aç", height = 30.dp, size = 12.sp, color = Px.Blue) {
-            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(LEGAL_URL + if (page == 1) "?p=terms" else "?p=privacy"))) }
-        }
+        // V19: Supabase'in varsayılan alan adı HTML'i düz metne çevirdiği için tarayıcıda kod gibi görünüyordu: metin
+        // uygulama içinde biçimli tam ekran okuyucuda açılır; herkese açık bağlantı (mağaza, Google) paylaşılabilir
+        PxButton("Tam Ekran Oku", height = 30.dp, size = 12.sp, color = Px.Blue, icon = "eye") { reader = if (page == 1) 1 else 0 }
+    }
+    reader?.let { r ->
+        LegalReader(if (r == 1) "Kullanım Şartları" else "Gizlilik Politikası", if (r == 1) TERMS else PRIVACY,
+            LEGAL_URL + if (r == 1) "?p=terms" else "?p=privacy") { reader = null }
     }
     Spacer(Modifier.height(6.dp))
     when (page) {
@@ -419,4 +429,42 @@ private fun ColumnScope.AccountSettings(inGame: Boolean, onReset: () -> Unit) {
         }
     }
     if (dialog) AccountDialog { dialog = false }
+}
+
+
+/** Yasal metin okuyucusu: tam ekran, başlıklar ve paragraflar biçimli, kaydırılır; herkese açık bağlantı paylaşılabilir */
+@Composable
+private fun LegalReader(title: String, paras: List<String>, url: String, close: () -> Unit) {
+    val ctx = LocalContext.current
+    Dim {
+        Column(Modifier.fillMaxWidth(0.86f).fillMaxHeight(0.92f).clip(RoundedCornerShape(10.dp)).background(Color(0xF7F4EFE2))
+            .border(2.dp, Color(0xFF8A7A5A), RoundedCornerShape(10.dp)).clickable(remember { MutableInteractionSource() }, null) {}) {
+            Row(Modifier.fillMaxWidth().background(Color(0xFF2B2A24)).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon("shield", 20.dp, Px.Clan)
+                Spacer(Modifier.width(8.dp))
+                Column(Modifier.weight(1f)) {
+                    PT("Zenvex Online", 11.sp, Px.Sub)
+                    PT(title, 17.sp, Px.Text)
+                }
+                PxButton("Bağlantıyı Paylaş", height = 32.dp, size = 12.sp, color = Px.Dark, icon = "globe") {
+                    runCatching {
+                        ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url), null))
+                    }
+                }
+                Spacer(Modifier.width(6.dp))
+                PxButton("Kapat", height = 32.dp, size = 12.sp, color = Px.Red) { close() }
+            }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 16.dp)) {
+                for (p in paras) {
+                    // "1. Toplanan Veriler" gibi başlık satırları kalın ve büyük; maddeler girintili
+                    val heading = p.length < 60 && (p.firstOrNull()?.isDigit() == true || p == p.uppercase())
+                    when {
+                        heading -> PT(p, 15.sp, Color(0xFF6A4A1A), Modifier.padding(top = 10.dp, bottom = 4.dp), maxLines = 2)
+                        p.startsWith("-") || p.startsWith("•") -> PT(p, 13.sp, Color(0xFF2B2A24), Modifier.padding(start = 14.dp, bottom = 4.dp), maxLines = 30)
+                        else -> PT(p, 13.sp, Color(0xFF2B2A24), Modifier.padding(bottom = 8.dp), maxLines = 40)
+                    }
+                }
+            }
+        }
+    }
 }

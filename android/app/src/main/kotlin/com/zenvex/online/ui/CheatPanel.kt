@@ -223,8 +223,8 @@ private fun HomePage(go: (AdminPage) -> Unit, report: (String, Boolean) -> Unit)
         StatTile("Sunucu", if (maint) "Bakımda" else "Açık", if (maint) Px.Orange else Px.Name, "gear", Modifier.weight(1f)) { go(AdminPage.Maint) }
         val e = ev
         val active = e?.optBoolean("active") == true
-        StatTile("Etkinlik", if (active) e!!.optString("title") else "Yok", if (active) AdminGold else Px.Sub, "flame", Modifier.weight(1f),
-            if (active) "${fmtLeft(e!!.optLong("ends") - System.currentTimeMillis())} · ${e.optInt("players")} Katılımcı" else "Başlatmak İçin Dokun") { go(AdminPage.Events) }
+        StatTile("Etkinlik", if (active) e.optString("title") else "Yok", if (active) AdminGold else Px.Sub, "flame", Modifier.weight(1f),
+            if (active) "${fmtLeft(e.optLong("ends") - System.currentTimeMillis())} · ${e.optInt("players")} Katılımcı" else "Başlatmak İçin Dokun") { go(AdminPage.Events) }
         StatTile("Bulunduğun Bölge", me.optString("area"), Px.Text, "map", Modifier.weight(1f), "${me.optInt("zombies")} Yaratık Çevrede") { go(AdminPage.World) }
     }
     Spacer(Modifier.height(8.dp))
