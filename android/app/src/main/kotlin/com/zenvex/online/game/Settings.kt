@@ -75,7 +75,11 @@ data class Settings(
 
         fun load(ctx: Context) {
             val p = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
-            val d = Settings()
+            // ilk kurulumda düşük bellekli cihaz (1-2 GB) "Orta" ön ayarla başlar (2× kenar yumuşatma, %80 çözünürlük): akıcı
+            // ve serin kalır; oyuncu Ayarlar'dan yükseltebilir. Kayıtlı ayarı olan ve güçlü cihazlarda değişiklik yok.
+            val am = ctx.getSystemService(Context.ACTIVITY_SERVICE) as? android.app.ActivityManager
+            val low = am?.isLowRamDevice == true || (am?.memoryClass ?: 256) < 192
+            val d = if (!p.contains("preset") && low) Settings().withPreset(1) else Settings()
             current = Settings(
                 preset = p.getInt("preset", d.preset),
                 fpsLimit = p.getInt("fpsLimit", d.fpsLimit),
