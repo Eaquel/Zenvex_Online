@@ -332,6 +332,9 @@ pub struct Progress {
     /// yöneticinin taktığı kanat (V18: oyuncu seçemez; her oyun açılışında `wings` buna eşitlenir)
     #[serde(default)]
     pub wings_grant: String,
+    /// V20 araç yuvası: takılan araç eşyası ("veh_moto" / "veh_car"; boş = yok). Çantadaki tuşla binilir.
+    #[serde(default)]
+    pub veh_eq: String,
     /// Titan'ın öldürüldüğü son zaman dilimi (yeniden girince aynı dilimde yeniden doğmasın)
     #[serde(default = "no_slot")]
     pub titan_killed: i64,
@@ -530,6 +533,7 @@ impl Default for Progress {
             skin_vehicle: String::new(),
             wings: String::new(),
             wings_grant: String::new(),
+            veh_eq: String::new(),
             titan_killed: i64::MIN,
             veh_hp: veh_hp_full(),
             veh_ready: [0.0; 2],
@@ -903,6 +907,23 @@ impl Progress {
             }
         }
         Ok(def.name)
+    }
+
+    /// V20: eldeki silah/alet boş cebe girer (canıyla); cebe dokununca yeniden ele alınır (use → kuşan)
+    pub fn stash_weapon(&mut self, pocket: usize) -> Result<&'static str, &'static str> {
+        if pocket >= crate::inventory::POCKETS {
+            return Err("Geçersiz cep");
+        }
+        if self.inv.slots.get(pocket).copied().flatten().is_some() {
+            return Err("Bu cep dolu");
+        }
+        let id = self.eq.weapon.clone();
+        let i = data::item_index(&id).filter(|_| !id.is_empty()).ok_or("Elin zaten boş")?;
+        let dur = self.eq.dur("weapon");
+        self.eq.weapon.clear();
+        self.eq.set_dur("weapon", crate::inventory::DUR_FULL);
+        self.inv.slots[pocket] = Some(crate::inventory::Slot { item: i as u16, count: 1, dur });
+        Ok(ITEMS[i].name)
     }
 
     pub fn unequip(&mut self, which: &str) -> Result<(), &'static str> {

@@ -241,7 +241,8 @@ fun GameScreen(toLobby: () -> Unit) {
             Overlay.Merchant -> MerchantScreen(close) { overlay = Overlay.Shop }
             Overlay.Quests -> QuestsScreen(close)
             Overlay.Pass -> PassScreen(close)
-            Overlay.Crate -> CrateScreen(close)
+            // Elmas Sandığı henüz kapalı: hiçbir yoldan açılmaz (ekran kodda duruyor; açılınca bu satır CrateScreen(close) olur)
+            Overlay.Crate -> LaunchedEffect(Unit) { Toaster.show("Koleksiyon Eşyaları Çok Yakında Geliyor"); close() }
             Overlay.Event -> EventDialog(close)
             Overlay.Skills -> TreeScreen(close)
             Overlay.Dog -> DogDialog(close)
@@ -403,7 +404,15 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
                 val o = slots.optJSONObject(k)
                 Box {
                     PocketButton(o, k) {
-                        if (o == null) { open(Overlay.Bag); return@PocketButton }
+                        if (o == null) {
+                            // V20: boş cebe dokununca eldeki silah/alet cebe girer (el boşalır); cebe yeniden dokununca ele alınır
+                            val held = inv.optJSONObject("eq")?.optJSONObject("weapon")?.optString("id").orEmpty()
+                            if (held.isEmpty()) { open(Overlay.Bag); return@PocketButton }
+                            val r = GameSession.cmd("pocket_stash", "slot" to k)
+                            Toaster.show(r.msg, r.ok)
+                            inv = GameSession.ui("inventory")
+                            return@PocketButton
+                        }
                         val r = GameSession.cmd("use", "slot" to k)
                         if (r.msg.isNotEmpty() && !r.msg.startsWith("Bekleme")) Toaster.show(r.msg, r.ok)
                         inv = GameSession.ui("inventory")
@@ -428,6 +437,8 @@ internal fun BoxScope.Hud(open: (Overlay) -> Unit) {
                     TutTap("Çantayı Aç")
                 }
             }
+            // V20: çantanın sağında yuvarlak araç tuşu: yuvadaki araca bin / in
+            VehRideButton(50.dp) { Toaster.show("Çantada arabanı ya da motosikletini ceplerin altındaki araç yuvasına sürükle"); open(Overlay.Bag) }
         }
         Spacer(Modifier.height(6.dp))
         Box {
@@ -549,7 +560,8 @@ private fun SideMenu(close: () -> Unit, open: (Overlay) -> Unit, toLobby: () -> 
             val items = listOf(
                 Triple("Devam Et", "play", Overlay.None), Triple("Klan", "people", Overlay.Clan),
                 Triple("Profil", "profile", Overlay.Me), Triple("Sıralama", "trophy", Overlay.Top),
-                Triple("Battle Pass", "crown", Overlay.Pass), Triple("Elmas Sandığı", "gem", Overlay.Crate),
+                // Elmas Sandığı henüz kapalı (HUD tuşu da "çok yakında" der): menüden de açılmaz; yerine Görevler
+                Triple("Battle Pass", "crown", Overlay.Pass), Triple("Görevler", "quest", Overlay.Quests),
                 Triple("Karakterler", "profile", Overlay.Chars), Triple("Mağaza", "crate", Overlay.Shop),
                 Triple("Ayarlar", "gear", Overlay.Settings),
             )

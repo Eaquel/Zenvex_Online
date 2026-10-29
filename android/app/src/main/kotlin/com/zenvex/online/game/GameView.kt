@@ -332,6 +332,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         var x: Float, var y: Float, var z: Float, var vx: Float, var vy: Float, var vz: Float,
         var life: Float, val max: Float, val color: Int, val size: Float, val kind: Int,
         val seed: Float = Math.random().toFloat(),
+        /** varlıkların altına çizilir (araç ekranda aşağı giderken arkasında kalan duman ve parçalar) */
+        val under: Boolean = false,
     )
     private class Light(val x: Float, val y: Float, val r: Float, val color: Int, var life: Float, val max: Float)
     private class Tracer(val x1: Float, val y1: Float, val x2: Float, val y2: Float, val color: Int, var life: Float, val width: Float)
@@ -2472,7 +2474,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
                 val bx = -sin(fxDir * PI.toFloat() / 4); val by = -cos(fxDir * PI.toFloat() / 4)
                 val back = if (kind >= 2) 120f else 55f
                 particles += Particle(x + bx * back, y + by * back * 0.7f, if (kind >= 2) 22f else 18f, bx * 55f, by * 30f, 36f, 0.55f, 0.55f,
-                    0xFF9AA2AA.toInt(), 4.2f, 1)
+                    0xFF9AA2AA.toInt(), 4.2f, 1, under = by < -0.05f)
             }
         }
         if (driver >= 0 && !wreck && 1f - hud[Native.LIGHT] > 0.05f)
@@ -2480,7 +2482,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     // ------------------------------------------------------------------ 3B araçlar
-    private class VehState(var wheel: Float = 0f, var lastSpeed: Float = 0f, var tilt: Float = 0f, var acc: Float = 0f)
+    private class VehState(var wheel: Float = 0f, var lastSpeed: Float = 0f, var tilt: Float = 0f, var acc: Float = 0f,
+                           var lastYaw: Float = Float.NaN, var turn: Int = 0)
     private val vehState = HashMap<String, VehState>()
 
     /**
@@ -2504,7 +2507,13 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val bounce = if (wreck || speed < 5f) 0f else sin(time * 23f + x * 0.01f) * 0.012f * (speed / 500f).coerceIn(0f, 1f)
         val rider = if (kind == 1 && driver >= 0) Model3D.CHARS.getOrElse(driver) { "" } else ""
         val pxPerM = 62.5f * scale
-        val fr = Model3D.vehicle(id, name, rider, angle, st.wheel, bounce, st.tilt, 0f, pxPerM, Settings.current.model3d) ?: return false
+        // dönüş yönü (önceden çizim için): açı farkı −180..180
+        if (!st.lastYaw.isNaN()) {
+            val d = ((angle - st.lastYaw) % 360f + 540f) % 360f - 180f
+            st.turn = when { d > 0.5f -> 1; d < -0.5f -> -1; else -> st.turn.let { if (abs(d) < 0.05f) 0 else it } }
+        }
+        st.lastYaw = angle
+        val fr = Model3D.vehicle(id, name, rider, angle, st.wheel, bounce, st.tilt, 0f, pxPerM, Settings.current.model3d, st.turn) ?: return false
         val k = pxPerM / fr.pxPerM
         // gölge: kare siluetinin kendisi (şasi, tekerlek, sürücü); altında aracın boyuna yönünde koyu temas lekesi
         val L = if (kind == 1) 2.3f else 4.4f; val W = if (kind == 1) 0.8f else 2.1f
@@ -2523,7 +2532,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             mine -> skinPaint(Skins.vehicle, false)
             else -> bmpPaint
         }
-        drawFrame3d(c, fr, sx, sy, k, paint)
+        // yol sarsıntısı: karenin dikey kayması (3B karede değil; önbellek dostu)
+        drawFrame3d(c, fr, sx, sy - bounce * pxPerM, k, paint)
         if (hp < 0.999f && !wreck) bar(c, sx, sy - fr.ay * k - 6 * density, 56 * density, hp, 0xFF60D0FF.toInt())
         if (driver >= 0 && speed > 20 && !wreck) surfaceFx(x, y, dir, speed, kind)
         // Hellhound sert hızlanınca egzozdan nitro alevi
@@ -2739,7 +2749,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             if (surf != 0 && Math.random() < 0.55) {
                 val shade = if (surf == 3) 0xFFD8E4F4.toInt() else dust
                 particles += Particle(ox, oy, 5f, bx * (30f + 90f * r1) + by * r3 * 160f, by * (20f + 40f * r1) - bx * r3 * 90f, 90f + 120f * r1,
-                    0.5f + 0.3f * r1, 0.8f, shade, 2.4f + 1.4f * r1, 0)
+                    0.5f + 0.3f * r1, 0.8f, shade, 2.4f + 1.4f * r1, 0, under = by < -0.05f)
             }
         }
     }
@@ -3099,7 +3109,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     private fun drawParticles(c: Canvas, under: Boolean = false) {
         val u = scale * density
         for (p in particles) {
-            if ((p.kind == 8) != under) continue
+            if ((p.kind == 8 || p.under) != under) continue
             val k = (p.life / p.max).coerceIn(0f, 1f)
             val sx = wx(p.x); val sy = wy(p.y) - p.z * scale
             if (sx < -120 || sx > sw + 120 || sy < -160 || sy > sh + 120) continue

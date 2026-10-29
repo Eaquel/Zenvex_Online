@@ -121,7 +121,9 @@ fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String?
         contentAlignment = Alignment.Center,
     ) {
         if (item != null) {
-            SpriteImage("i/${item.optString("id")}", Modifier.padding(size * 0.17f).fillMaxSize())
+            // V20: araba ve motosiklet anahtar simgesiyle değil kendi görüntüsüyle
+            if (item.optString("id").startsWith("veh_")) VehicleImage(item.optString("id"), Modifier.padding(size * 0.1f).fillMaxSize())
+            else SpriteImage("i/${item.optString("id")}", Modifier.padding(size * 0.17f).fillMaxSize())
             val cd = item.optDouble("cd", 0.0).toFloat()
             val max = item.optDouble("cdmax", 0.0).toFloat()
             if (cd > 0f && max > 0f) {
@@ -153,6 +155,7 @@ fun PxSlot(item: JSONObject?, size: Dp, selected: Boolean = false, hint: String?
 private const val TAB = 100000
 private const val CHEST = 200000
 private const val EQ = 300000
+private const val VEH = 400000
 
 private class DragState {
     var from by mutableStateOf(-1)
@@ -198,6 +201,7 @@ internal fun BagView(
     var sel by remember { mutableStateOf<Int?>(null) }
     var selEq by remember { mutableStateOf<String?>(null) }
     var selChest by remember { mutableStateOf<Int?>(null) }
+    var selVeh by remember { mutableStateOf(false) }
     var page by remember { mutableIntStateOf(0) }
     var showChest by remember { mutableStateOf(true) }
     var ask by remember { mutableStateOf<AmountAsk?>(null) }
@@ -226,6 +230,21 @@ internal fun BagView(
     }
 
     fun drop(from: Int, to: Int?) {
+        // V20 araç yuvası: araba/motosiklet yuvaya sürüklenince takılır, yuvadan çantaya sürüklenince çıkarılır
+        if (from == VEH) {
+            if (to == VEH) return
+            val r = cmd("veh_unequip", arrayOf())
+            if (!r.ok) Toaster.show(r.msg, false) else Audio.play("pickup", 0.6f, 1.2f, bus = Audio.Bus.Ui)
+            selVeh = false
+            return
+        }
+        if (to == VEH) {
+            if (from >= CHEST) return
+            val r = cmd("veh_equip", arrayOf("slot" to from))
+            if (!r.ok) Toaster.show(r.msg, false) else { Audio.play("pickup", 0.6f, 1.2f, bus = Audio.Bus.Ui); Toaster.show(r.msg) }
+            sel = null
+            return
+        }
         // V15: kuşanılan eşya ekipman alanının dışına (çantaya ya da boşluğa) sürüklenince çıkarılır
         if (from >= EQ) {
             if (to != null && to >= EQ) return
@@ -268,7 +287,7 @@ internal fun BagView(
         })
 
     fun slotMod(i: Int, s: JSONObject?) = dragMod(i, s).clickable(quiet, null) {
-        if (s != null) { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); sel = i; selEq = null; selChest = null }
+        if (s != null) { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); sel = i; selEq = null; selChest = null; selVeh = false }
     }
 
     // kapalı bölme seçiliyse ana çantaya dön
@@ -361,16 +380,23 @@ internal fun BagView(
                         }
                     }
                 }
-                // ---- cepler: oyunda hızlı kullanım tuşları
+                // ---- cepler: oyunda hızlı kullanım tuşları; altında araç yuvası (araba/motosiklet sürüklenir)
                 PxPanel(Modifier.width(70.dp).fillMaxHeight(), color = BagPanel, pad = 6.dp) {
                     PT("Cepler", 12.sp, Px.Clan, Modifier.align(Alignment.CenterHorizontally))
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(3.dp))
                     for (i in 0 until pockets) {
                         val s = slots?.optJSONObject(i)
-                        PxSlot(s, 54.dp, sel == i, hint = "${i + 1}", glow = drag.item != null && drag.target() == i,
+                        PxSlot(s, 48.dp, sel == i, hint = "${i + 1}", glow = drag.item != null && drag.target() == i,
                             modifier = slotMod(i, s).align(Alignment.CenterHorizontally).scale(if (drag.from == i) 0.9f else 1f))
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(3.dp))
                     }
+                    Spacer(Modifier.weight(1f))
+                    val veh = inv.optJSONObject("veh")?.takeIf { it.optString("id").isNotEmpty() }
+                    val vehDrop = drag.item != null && drag.target() == VEH && drag.item?.optString("id")?.startsWith("veh_") == true
+                    VehSlot(veh, 48.dp, selVeh, vehDrop, dragMod(VEH, veh).align(Alignment.CenterHorizontally).clickable(quiet, null) {
+                        if (veh != null) { Audio.play("click", 0.6f, bus = Audio.Bus.Ui); selVeh = true; sel = null; selEq = null; selChest = null }
+                        else Toaster.show("Arabanı ya da motosikletini basılı tutup buraya sürükle")
+                    })
                 }
                 // ---- bölme ızgarası + kenarda bölme sekmeleri
                 PxPanel(Modifier.weight(1f).fillMaxHeight(), color = BagPanel2, pad = 8.dp) {
@@ -403,7 +429,7 @@ internal fun BagView(
                 // ---- ayrıntı ve eylemler
                 PxPanel(Modifier.width(196.dp).fillMaxHeight(), color = BagPanel, pad = 8.dp) {
                     val item: JSONObject? = sel?.let { slots?.optJSONObject(it) } ?: selEq?.let { (inv.optJSONObject("eq") ?: JSONObject()).optJSONObject(it) }
-                        ?: selChest?.let { chestSlots?.optJSONObject(it) }
+                        ?: selChest?.let { chestSlots?.optJSONObject(it) } ?: if (selVeh) inv.optJSONObject("veh")?.takeIf { it.optString("id").isNotEmpty() } else null
                     if (item == null) {
                         PT("Bir Eşya Seç", 14.sp, Px.Sub, Modifier.align(Alignment.CenterHorizontally).padding(top = 20.dp))
                         Spacer(Modifier.height(8.dp))
@@ -428,6 +454,7 @@ internal fun BagView(
                             val usable = kind == "Consumable" || item.optString("id") == "fuel"
                             val placeable = kind == "Chest" && inGame
                             val key = item.optString("id").startsWith("veh_") && inGame
+                            val vehItem = item.optString("id").startsWith("veh_")
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 // V15 (R8b): tezgâh → inşa modu (yeri parmakla seç, ✓ ile kur)
                                 if (kind == "Bench" && onBuild != null) PxButton("Kur", Modifier.fillMaxWidth().tutRect(tutR, "act"), icon = "hammer", height = 38.dp, size = 14.sp) {
@@ -438,6 +465,9 @@ internal fun BagView(
                                     val r = cmd("use", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
                                     // V16: balta/kazma kuşanılınca elde tutmanın faydası bir kez hatırlatılır
                                     if (equippable && r.ok && isTool(item.optString("id"))) Toaster.show("Balta ve kazma yalnız elindeyken ağaca ve kayaya güçlü vurur.")
+                                }
+                                if (vehItem) PxButton("Araç Yuvasına Tak", Modifier.fillMaxWidth(), color = Px.Blue, height = 32.dp, size = 12.sp, icon = "check") {
+                                    val r = cmd("veh_equip", arrayOf("slot" to s)); Toaster.show(r.msg, r.ok); sel = null; refresh()
                                 }
                                 if (usable && s >= pockets) PxButton("Cebe Koy", Modifier.fillMaxWidth().tutRect(tutR, "act"), color = Px.Blue, height = 32.dp, size = 12.sp) {
                                     val free = (0 until pockets).firstOrNull { slots!!.isNull(it) } ?: 0
@@ -461,6 +491,14 @@ internal fun BagView(
                             PxButton("Çantaya Al", Modifier.fillMaxWidth(), color = Px.Green, height = 38.dp, size = 14.sp) {
                                 if (count > 1) ask = AmountAsk("take", cs, count, count, "Çantaya Al")
                                 else { done(cmd("chest_take", arrayOf("chest" to ci, "cslot" to cs))); selChest = null }
+                            }
+                        } else if (selVeh) {
+                            if (inGame) PxButton("Bin", Modifier.fillMaxWidth(), color = Px.Green, height = 38.dp, size = 14.sp, icon = "check") {
+                                val r = cmd("veh_ride", arrayOf()); Toaster.show(r.msg, r.ok); selVeh = false; refresh(); if (r.ok) back()
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            PxButton("Çantaya Al", Modifier.fillMaxWidth(), color = Px.Dark, height = 34.dp, size = 13.sp) {
+                                val r = cmd("veh_unequip", arrayOf()); Toaster.show(r.msg, r.ok); selVeh = false; refresh()
                             }
                         } else if (selEq != null) {
                             PxButton("Çıkar", Modifier.fillMaxWidth(), color = Px.Dark, height = 38.dp, size = 14.sp) {

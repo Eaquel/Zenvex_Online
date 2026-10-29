@@ -90,8 +90,13 @@ impl Game {
                 if da < -PI {
                     da += TAU;
                 }
+                // V20: yumuşak direksiyon: azami dönüş hızı aynı, ama hedefe yaklaştıkça orantılı yavaşlar (sabit hızla
+                // dönüp hedefte aniden durmuyor; joystick titremesinde gövde sağa sola sekmiyor)
                 let turn = 3.2 * dt * (0.4 + 0.6 * (v.speed / m(def.speed_m)).min(1.0));
-                v.angle += da.clamp(-turn, turn);
+                let ease = da * (1.0 - (-9.0 * dt).exp());
+                v.angle += if da.abs() < 0.02 { da } else { ease.clamp(-turn, turn) };
+                // açı sınırsız büyümesin (çizimde yön basamakları için −π..π)
+                v.angle = (v.angle + PI).rem_euclid(TAU) - PI;
                 let tgt_speed = m(def.speed_m) * mlen * if da.abs() > 1.6 { 0.3 } else { 1.0 };
                 v.speed += (tgt_speed - v.speed) * (1.0 - (-2.2 * dt).exp());
             } else {
@@ -168,6 +173,77 @@ impl Game {
         let _ = data::ITEMS.len();
     }
 
+    /// Araç eşyasının türü (1 motosiklet, 2 araba)
+    pub fn veh_kind_of(id: &str) -> Option<usize> {
+        match id {
+            "veh_moto" => Some(1),
+            "veh_car" => Some(2),
+            _ => None,
+        }
+    }
+
+    /// V20 araç yuvası: çantadaki araba/motosiklet yuvaya takılır (yuvadaki varsa çantadaki yerine geçer)
+    pub fn veh_equip(&mut self, slot: usize) -> Result<String, String> {
+        let s = self.progress.inv.slots.get(slot).copied().flatten().ok_or("Boş yuva")?;
+        let d = &data::ITEMS[s.item as usize];
+        Self::veh_kind_of(d.id).ok_or("Araç yuvasına yalnız araba ya da motosiklet takılır")?;
+        let prev = std::mem::replace(&mut self.progress.veh_eq, d.id.to_string());
+        self.progress.inv.slots[slot] = data::item_index(&prev).map(|i| crate::inventory::Slot::new(i as u16, 1));
+        Ok(format!("{} araç yuvasına takıldı", d.name))
+    }
+
+    /// Yuvadaki aracı çantaya geri al
+    pub fn veh_unequip(&mut self) -> Result<String, String> {
+        let id = self.progress.veh_eq.clone();
+        let i = data::item_index(&id).ok_or("Araç yuvası boş")?;
+        if !self.progress.inv.can_fit(i, 1) {
+            return Err("Çanta dolu".into());
+        }
+        self.progress.inv.add(i, 1);
+        self.progress.veh_eq.clear();
+        Ok("Araç çantaya alındı".into())
+    }
+
+    /// Çantanın yanındaki araç tuşu: araçtaysan iner; değilse yuvadaki aracı yanına getirip biner (patladıysa bekleme
+    /// süresini söyler)
+    pub fn veh_ride(&mut self) -> Result<String, String> {
+        if self.player.vehicle.is_some() {
+            return self.toggle_vehicle();
+        }
+        let kind = Self::veh_kind_of(&self.progress.veh_eq).ok_or("Önce çantadan bir aracı araç yuvasına sürükle")?;
+        let (px, py) = (self.player.x, self.player.y);
+        let near = |g: &Game| g.vehicles.iter().position(|v| v.owned && !v.wrecked && !v.driver && v.kind == kind && (v.x - px).hyp(v.y - py) < 260.0);
+        if near(self).is_none() {
+            self.summon_vehicle(kind)?;
+        }
+        let i = near(self).ok_or("Araç yanına gelemedi")?;
+        // araç oyuncunun yanına yanaşır (en yakın araç seçimi 70 px içinde)
+        let (mut x, mut y) = (px, py);
+        self.world.resolve(&mut x, &mut y, 40.0, self.progress.level >= crate::progress::CITY_LEVEL, &mut self.scratch);
+        self.vehicles[i].x = x;
+        self.vehicles[i].y = y;
+        self.vehicles[i].speed = 0.0;
+        self.toggle_vehicle()
+    }
+
+    /// Araç türünün canı (%) ve patladıysa kalan bekleme (sn)
+    pub fn veh_status(&self, kind: usize) -> (i32, f64) {
+        let Some(s) = data::veh_slot(kind) else { return (0, 0.0) };
+        let max = VEHICLES[kind].hp;
+        let live = self.vehicles.iter().find(|v| v.owned && v.kind == kind && !v.wrecked).map(|v| v.hp);
+        let hp = (live.unwrap_or(self.progress.veh_hp[s]) / max * 100.0).clamp(0.0, 100.0).round() as i32;
+        let left = (self.progress.veh_ready[s] - self.progress.play_time).max(0.0);
+        (if left > 0.0 { 0 } else { hp.max(if self.progress.veh_hp[s] <= 0.0 { 100 } else { 0 }) }, left)
+    }
+
+    /// Araç yuvası ve tuşu için durum: takılı araç, canı (%), patladıysa kalan bekleme, araçta mı
+    pub fn veh_json(&self) -> serde_json::Value {
+        let id = self.progress.veh_eq.as_str();
+        let (hp, cd) = Self::veh_kind_of(id).map_or((0, 0.0), |k| self.veh_status(k));
+        serde_json::json!({ "id": id, "hp": hp, "cd": cd.ceil() as i64, "cdmax": data::VEH_RECALL_S[1],
+                            "riding": self.player.vehicle.is_some() })
+    }
+
     pub fn vehicle_dir(angle: f32) -> u8 {
         dir_from_vec(angle.sin(), angle.cos())
     }
@@ -187,6 +263,40 @@ mod tests {
         let mut g = Game::new(3, p, 0);
         g.player.combat_t = 99.0;
         g
+    }
+
+    /// V20 araç yuvası: çantadan takılır, tuşla binilip inilir; patlayınca 60 sn sonra yeniden binilir; geri alınır
+    #[test]
+    fn vehicle_slot_ride_and_recall() {
+        use crate::data::ITEMS;
+        let mut g = game();
+        g.progress.inv.add_id("veh_moto", 1);
+        let s = g.progress.inv.slots.iter().position(|s| s.is_some_and(|s| ITEMS[s.item as usize].id == "veh_moto")).unwrap();
+        assert!(g.veh_ride().is_err(), "yuva boşken binilmez");
+        g.veh_equip(s).unwrap();
+        assert_eq!(g.progress.veh_eq, "veh_moto");
+        assert_eq!(g.progress.inv.count_id("veh_moto"), 0);
+        g.veh_ride().unwrap();
+        assert!(g.player.vehicle.is_some(), "tuşla binilmeli");
+        assert_eq!(g.veh_json()["riding"], true);
+        g.veh_ride().unwrap();
+        assert!(g.player.vehicle.is_none(), "tekrar basınca inilmeli");
+        // patlat: 60 sn beklemeden binilmez, sonra binilir
+        g.veh_ride().unwrap();
+        g.player.god = true;
+        g.vehicles[0].hp = -1.0;
+        drive(&mut g, 0.05);
+        assert!(g.player.vehicle.is_none());
+        let e = g.veh_ride().unwrap_err();
+        assert!(e.contains("sn sonra"), "{e}");
+        assert!(g.veh_json()["cd"].as_i64().unwrap() > 50);
+        g.progress.play_time += VEH_RECALL_S[0];
+        g.veh_ride().unwrap();
+        assert!(g.player.vehicle.is_some());
+        g.veh_ride().unwrap();
+        g.veh_unequip().unwrap();
+        assert_eq!(g.progress.inv.count_id("veh_moto"), 1);
+        assert!(g.progress.veh_eq.is_empty());
     }
 
     fn drive(g: &mut Game, secs: f32) {

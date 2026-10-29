@@ -325,18 +325,26 @@ object Model3D {
         return fr
     }
 
-    /** Araç karesi */
-    fun vehicle(actor: String, name: String, rider: String, yaw: Float, wheel: Float, bounce: Float, tilt: Float, riderT: Float, pxPerM: Float, quality: Int): Frame? {
+    /**
+     * Araç karesi. V20: dönüşte akıcılık için yön başına az kare: sarsıntı çizimde 2B kaydırmadır (eskiden anahtardaydı
+     * ve her karede değiştiği için dönerken neredeyse hiç kare önbellekte olmuyor, eski yön gösterilip sıçrıyordu),
+     * tekerlek 4 evre, eğim 3 basamak. [turn]: dönüş yönü (−1/0/1); o yöndeki komşu yönler önceden çizilir.
+     */
+    fun vehicle(actor: String, name: String, rider: String, yaw: Float, wheel: Float, @Suppress("UNUSED_PARAMETER") bounce: Float, tilt: Float,
+                riderT: Float, pxPerM: Float, quality: Int, turn: Int = 0): Frame? {
         if (!ready) return null
         if (name !in names) { ensure(name); return null }
         val yb = yawBucket(yaw)
         val sc = scaleBucket(pxPerM, quality)
-        // tekerlek 45° (jant simetrisiyle akıcı görünür), sarsıntı 3, eğim 2° basamak: araç başına sınırlı kare
-        val wq = ((wheel / 45f).roundToInt() % 8) * 45f
-        val bq = (bounce / 0.012f).roundToInt().coerceIn(-1, 1) * 0.012f
-        val tq = (tilt / 2f).roundToInt().coerceIn(-2, 2) * 2f
+        val wq = ((wheel / 90f).roundToInt() % 4) * 90f
+        val tq = (tilt / 3f).roundToInt().coerceIn(-1, 1) * 3f
         val ssaa = aa(quality, sc)
-        val key = "v|$name|$rider|$yb|$sc|$wq|$bq|$tq|$ssaa"
-        return request(key, actor, true, name, rider, floatArrayOf(yb * 11.25f, 22f, sc, wq, bq, tq, 0f, ssaa.toFloat()))
+        fun key(b: Int) = "v|$name|$rider|$b|$sc|$wq|$tq|$ssaa"
+        fun params(b: Int) = floatArrayOf(b * 11.25f, 22f, sc, wq, 0f, tq, 0f, ssaa.toFloat())
+        val fr = request(key(yb), actor, true, name, rider, params(yb))
+        // dönerken gidilen yöndeki iki yön, düz giderken iki yan yön önceden (önbellekte hazır olsun)
+        val ahead = if (turn != 0) listOf(turn, turn * 2) else listOf(1, -1)
+        for (d in ahead) { val b = ((yb + d) % 32 + 32) % 32; prefetch(key(b), true, name, rider, params(b)) }
+        return fr
     }
 }

@@ -217,8 +217,8 @@ pub const ITEMS: &[ItemDef] = &[
     item!("v_frame_moto", "Motosiklet Gövdesi", Material, Rare, 1, 150, "Araç parçası: motosikletin gövdesi. Parçaları Tamirci Viktor'a götür, aracını o yapar."),
     item!("v_frame_car", "Araba Gövdesi", Material, Epic, 1, 400, "Araç parçası: arabanın gövdesi. Parçaları Tamirci Viktor'a götür, aracını o yapar."),
     // V11 araç anahtarları: kullanınca aracın yanına gelir (eskisi kaybolur); dünyada artık sahipsiz araç yok
-    item!("veh_moto", "Motosiklet Anahtarı", Tool, Epic, 1, 0, "Kullanınca motosikletin yanına gelir. 200 can; sürerken 30 sn'de %1 aşınır, hasarın %70'ini o alır. Patlarsa 30 sn sonra yeniden çağrılır."),
-    item!("veh_car", "Araba Anahtarı", Tool, Legendary, 1, 0, "Kullanınca araban yanına gelir. 500 can; sürerken 60 sn'de %1 aşınır, hasarın hepsini o alır. Patlarsa 60 sn sonra yeniden çağrılır."),
+    item!("veh_moto", "Motosiklet", Tool, Epic, 1, 0, "Kullanınca motosikletin yanına gelir; araç yuvasına takarsan çantanın yanındaki tuşla binersin. 200 can; sürerken 30 sn'de %1 aşınır, hasarın %70'ini o alır. Patlarsa 60 sn sonra yeniden binilir."),
+    item!("veh_car", "Araba", Tool, Legendary, 1, 0, "Kullanınca araban yanına gelir; araç yuvasına takarsan çantanın yanındaki tuşla binersin. 500 can; sürerken 60 sn'de %1 aşınır, hasarın hepsini o alır. Patlarsa 60 sn sonra yeniden binilir."),
     // V11 etkinlik silahları (3. sıra ödülü; kaskların yerine)
     item!("ev_blood_weapon", "Kan Ayı Orağı", Weapon, Seasonal, 1, 0, "Kan Ayı etkinliğinde 3. sırada bitirerek elde edilir. Geniş kızıl kesik, birden çok düşmana vurur. Sınırlı sürelidir (30 gün), takas edilemez."),
     item!("ev_titan_weapon", "Titan Kırıcı Balyoz", Weapon, Seasonal, 1, 0, "Titan Avı etkinliğinde 3. sırada bitirerek elde edilir. Yavaş ama sersemleten ağır darbe. Sınırlı sürelidir (30 gün), takas edilemez."),
@@ -1163,7 +1163,7 @@ pub struct VehicleDef {
 /// Kendi aracın: sürerken aşınma (her `VEH_WEAR_S` saniyede azami canın %1'i) ve patladıktan sonra yeniden çağırma
 /// beklemesi (oyun süresi, sn). Sıra: [motosiklet, araba].
 pub const VEH_WEAR_S: [f32; 2] = [30.0, 60.0];
-pub const VEH_RECALL_S: [f64; 2] = [30.0, 60.0];
+pub const VEH_RECALL_S: [f64; 2] = [60.0, 60.0];
 /// Sürücüye gelen hasarın araca giden payı (motosiklette sürücü açıkta)
 pub const VEH_ABSORB: [f32; 2] = [0.7, 1.0];
 

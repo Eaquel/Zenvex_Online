@@ -264,9 +264,10 @@ impl Inventory {
         idx < POCKETS
     }
 
-    /// Cebe konabilir mi (tüketilebilir ve benzin)
+    /// Cebe konabilir mi: tüketilebilir, benzin; V20: silah ve alet de (boş cebe dokununca eldeki cebe girer, cebe
+    /// dokununca yeniden ele alınır)
     pub fn pocket_ok(item: usize) -> bool {
-        ITEMS[item].kind == ItemKind::Consumable || ITEMS[item].id == "fuel"
+        matches!(ITEMS[item].kind, ItemKind::Consumable | ItemKind::Weapon) || ITEMS[item].id == "fuel"
     }
 
     /// Sürükle-bırak: aynı eşyaysa yığını birleştirir, değilse yer değiştirir.
@@ -281,7 +282,7 @@ impl Inventory {
         let a = self.slots[from].ok_or("Boş slot")?;
         let b = self.slots[to];
         if Self::is_pocket(to) && !Self::pocket_ok(a.item as usize) {
-            return Err("Cebe yalnız iksir, yiyecek ve ilk yardım konur");
+            return Err("Cebe yalnız iksir, yiyecek, ilk yardım, silah ve alet konur");
         }
         if let Some(b) = b {
             if b.item == a.item {
@@ -292,7 +293,7 @@ impl Inventory {
                 return Ok(());
             }
             if Self::is_pocket(from) && !Self::pocket_ok(b.item as usize) {
-                return Err("Cebe yalnız iksir, yiyecek ve ilk yardım konur");
+                return Err("Cebe yalnız iksir, yiyecek, ilk yardım, silah ve alet konur");
             }
         }
         self.slots.swap(from, to);

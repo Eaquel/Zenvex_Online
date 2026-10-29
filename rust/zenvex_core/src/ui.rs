@@ -268,6 +268,7 @@ impl Game {
                 })
             }
             "bases" => self.bases_json(),
+            "vehicle" => self.veh_json(),
             "base_near" => self.base_near_json(),
             "fog" => {
                 let n = crate::progress::FOG_N;
@@ -294,11 +295,35 @@ impl Game {
                                 v["cd"] = json!(left);
                                 v["cdmax"] = json!(max);
                             }
+                            // V20: araç eşyası anahtar değil aracın kendisi: canı ve patladıysa bekleme
+                            if let Some(k) = Self::veh_kind_of(id) {
+                                let (hp, cd) = self.veh_status(k);
+                                v["dur"] = json!(hp);
+                                v["veh"] = json!(true);
+                                if cd > 0.0 {
+                                    v["cd"] = json!(cd);
+                                    v["cdmax"] = json!(data::VEH_RECALL_S[1]);
+                                }
+                            }
                             v
                         }
                         None => Value::Null,
                     })
                     .collect();
+                let veh = {
+                    let id = g.veh_eq.as_str();
+                    let mut v = item_json(id);
+                    if let Some(k) = Self::veh_kind_of(id) {
+                        let (hp, cd) = self.veh_status(k);
+                        v["dur"] = json!(hp);
+                        v["veh"] = json!(true);
+                        if cd > 0.0 {
+                            v["cd"] = json!(cd);
+                            v["cdmax"] = json!(data::VEH_RECALL_S[1]);
+                        }
+                    }
+                    v
+                };
                 let e = &g.eq;
                 let mut eq = serde_json::Map::new();
                 for k in crate::progress::Equipment::KEYS {
@@ -322,7 +347,7 @@ impl Game {
                 let used = g.inv.slots.iter().skip(crate::inventory::POCKETS).filter(|s| s.is_some()).count();
                 json!({
                     "slots": slots, "cap": g.inv.slots.len().saturating_sub(crate::inventory::POCKETS), "used": used,
-                    "pockets": crate::inventory::POCKETS, "pages": pages, "eq": eq,
+                    "pockets": crate::inventory::POCKETS, "pages": pages, "eq": eq, "veh": veh,
                     "armor": g.armor(), "max_hp": g.max_hp(), "dmg": g.damage_mult(), "speed": g.move_mult(), "crit": g.crit_chance(),
                     "gold": g.gold, "gems": g.gems, "in_game_hp": self.player.hp,
                     "chest": self.near_chest().map_or(-1, |i| i as i64), "home": self.at_home(),
@@ -504,6 +529,10 @@ impl Game {
             "equip" => self.progress.equip_slot(int("slot")).map(|n| format!("{n} kuşanıldı")).map_err(String::from),
             "unequip" => self.progress.unequip(v["slot"].as_str().unwrap_or("")).map(|_| "Çıkarıldı".into()).map_err(String::from),
             "use" => self.use_slot(int("slot")),
+            "veh_equip" => self.veh_equip(int("slot")),
+            "pocket_stash" => self.progress.stash_weapon(int("slot")).map(|n| format!("{n} cebe kondu")).map_err(String::from),
+            "veh_unequip" => self.veh_unequip(),
+            "veh_ride" => self.veh_ride(),
             "drop" => self.drop_slot(int("slot"), v["n"].as_u64().map(|n| n as u32)),
             "split" => self
                 .progress
