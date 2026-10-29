@@ -81,6 +81,16 @@ android {
     androidResources {
         noCompress += listOf("png", "wav", "webp", "ogg")
     }
+    // yasal metinlerin tek kaynağı (zx-legal web sayfaları da aynı dosyayı okur): assets/legal.json olarak paketlenir
+    sourceSets.getByName("main").assets.srcDir(rootProject.file("../supabase/functions/zx-legal/content"))
+}
+
+// yayın derlemesinde künye/aydınlatma bilgileri doldurulmamışsa uyar (mağazaya bu hâliyle çıkılmamalı)
+val legalJson = rootProject.file("../supabase/functions/zx-legal/content/legal.json")
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        if (legalJson.readText().contains("[DOLDURULACAK")) logger.warn("UYARI: legal.json içindeki [DOLDURULACAK: …] künye bilgileri doldurulmadı; mağaza yayınından önce doldurun.")
+    }
 }
 
 // Rust kütüphanesini (libzenvex.so) cargo-ndk ile derleyip jniLibs'e koyar.

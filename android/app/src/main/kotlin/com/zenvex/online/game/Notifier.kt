@@ -24,12 +24,21 @@ import java.util.concurrent.TimeUnit
 /**
  * Cihaz bildirimleri: posta/hediye, özel mesaj, etkinlik duyurusu, arkadaşlık isteği, klan daveti.
  * Arka plandaki işçi 15 dakikada bir sunucuya sorar (zx_notify); oyun açıkken bildirim gösterilmez (oyunda rozetler var).
+ * Her tür Ayarlar > Bildirimler'den ayrı kapatılır. Etkinlik duyurusu ticari elektronik iletidir (6563): yalnız oyuncu
+ * açıkça onay verdiyse gönderilir (varsayılan kapalı) ve her bildirimde tek dokunuşla ret düğmesi bulunur.
  */
 object Notifier {
     const val CH_MAIL = "posta"
     const val CH_DM = "mesaj"
     const val CH_EVENT = "etkinlik"
     @Volatile var foreground = false
+
+    /** Bildirim türleri (Ayarlar > Bildirimler): posta/hediye, özel mesaj, arkadaşlık ve klan */
+    const val K_MAIL = "n_mail"
+    const val K_DM = "n_dm"
+    const val K_SOCIAL = "n_social"
+    fun enabled(ctx: Context, k: String) = ctx.getSharedPreferences(Legal.PREFS, Context.MODE_PRIVATE).getBoolean(k, true)
+    fun setEnabled(ctx: Context, k: String, on: Boolean) = ctx.getSharedPreferences(Legal.PREFS, Context.MODE_PRIVATE).edit().putBoolean(k, on).apply()
 
     fun channels(ctx: Context) {
         if (Build.VERSION.SDK_INT < 26) return
@@ -66,7 +75,7 @@ object Notifier {
     }
 
     fun show(ctx: Context, o: JSONObject) {
-        val mails = o.optJSONArray("mails")
+        val mails = if (enabled(ctx, K_MAIL)) o.optJSONArray("mails") else null
         for (i in 0 until (mails?.length() ?: 0)) {
             val m = mails!!.getJSONObject(i)
             val gift = m.optInt("gems") > 0 || m.optInt("gold") > 0 || m.optInt("items") > 0
@@ -79,24 +88,26 @@ object Notifier {
             post(ctx, CH_MAIL, 1000 + (m.optLong("id") % 100000).toInt(), title,
                 m.optString("title") + (if (parts.isNotEmpty()) " · " + parts.joinToString(", ") else "") + " — " + m.optString("sender"))
         }
-        val dms = o.optJSONArray("dms")
+        val dms = if (enabled(ctx, K_DM)) o.optJSONArray("dms") else null
         for (i in 0 until (dms?.length() ?: 0)) {
             val d = dms!!.getJSONObject(i)
             val n = d.optInt("n")
             post(ctx, CH_DM, 3000 + d.optString("from").hashCode() % 1000, d.optString("from") + if (n > 1) " ($n Mesaj)" else "", d.optString("text"))
         }
-        o.optJSONObject("event")?.let { e ->
-            post(ctx, CH_EVENT, 5000, "Etkinlik Başladı: " + e.optString("title"), "İki hafta sürecek! İlk 100'e özel ödüller seni bekliyor. Hemen gir!")
+        // ticari ileti: yalnız onay varsa; gönderen belli, ret yolu bildirimin içinde
+        if (Legal.promoAllowed(ctx)) o.optJSONObject("event")?.let { e ->
+            post(ctx, CH_EVENT, 5000, "Yeni Etkinlik: " + e.optString("title"),
+                "Zenvex Online'da yeni bir etkinlik başladı; ayrıntılar oyunda. Bu duyuruları almak istemiyorsan \"Bu Duyuruları Kapat\"a dokun.", promo = true)
         }
-        if (o.optInt("friends") > 0) post(ctx, CH_DM, 6000, "Arkadaşlık İsteği", "${o.optInt("friends")} yeni arkadaşlık isteğin var.")
-        if (o.optInt("invites") > 0) post(ctx, CH_MAIL, 6001, "Klan Daveti", "Bir klan seni aralarına çağırıyor.")
+        if (enabled(ctx, K_SOCIAL) && o.optInt("friends") > 0) post(ctx, CH_DM, 6000, "Arkadaşlık İsteği", "${o.optInt("friends")} yeni arkadaşlık isteğin var.")
+        if (enabled(ctx, K_SOCIAL) && o.optInt("invites") > 0) post(ctx, CH_MAIL, 6001, "Klan Daveti", "Bir klan seni aralarına çağırıyor.")
     }
 
-    private fun post(ctx: Context, ch: String, id: Int, title: String, text: String) {
+    private fun post(ctx: Context, ch: String, id: Int, title: String, text: String, promo: Boolean = false) {
         if (!NotificationManagerCompat.from(ctx).areNotificationsEnabled()) return
         val pi = PendingIntent.getActivity(ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, ch)
+        val b = NotificationCompat.Builder(ctx, ch)
             .setSmallIcon(R.drawable.ic_notify)
             .setColor(0xFFFFB347.toInt())
             .setContentTitle(title)
@@ -104,8 +115,30 @@ object Notifier {
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
             .setContentIntent(pi)
-            .build()
-        runCatching { NotificationManagerCompat.from(ctx).notify(id, n) }
+        if (promo) {
+            val off = PendingIntent.getBroadcast(ctx, 1, Intent(ctx, PromoOptOut::class.java).putExtra("id", id), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+            b.addAction(0, "Bu Duyuruları Kapat", off)
+        }
+        runCatching { NotificationManagerCompat.from(ctx).notify(id, b.build()) }
+    }
+
+    /** Bildirimdeki "Bu Duyuruları Kapat": ticari ileti onayı geri alınır ve sunucuya kaydedilir (6563 m.8: kolay ret). */
+    class PromoOptOut : android.content.BroadcastReceiver() {
+        override fun onReceive(ctx: Context, intent: Intent) {
+            ctx.getSharedPreferences(Legal.PREFS, Context.MODE_PRIVATE).edit().putBoolean(Legal.KEY_PROMO, false).apply()
+            Legal.promo.value = false
+            runCatching { NotificationManagerCompat.from(ctx).cancel(intent.getIntExtra("id", 5000)) }
+            val ap = ctx.getSharedPreferences("account", Context.MODE_PRIVATE)
+            val key = ap.getString("key", "").orEmpty(); val acc = ap.getLong("id", -1L)
+            if (key.isEmpty() || acc < 0) return
+            val pending = goAsync()
+            Thread {
+                runCatching {
+                    Supa.rpcSync("zx_consent", JSONObject().put("p_id", acc).put("p_key", key).put("p_kind", "promo").put("p_version", 0).put("p_granted", false))
+                }
+                pending.finish()
+            }.start()
+        }
     }
 
     class Worker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx, params) {

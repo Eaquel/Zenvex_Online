@@ -55,8 +55,6 @@ import com.zenvex.online.game.GameSession
 import com.zenvex.online.game.Settings
 import kotlin.math.roundToInt
 
-private const val LEGAL_URL = "https://blvstsvmvmdydyrnecpo.supabase.co/functions/v1/zx-legal"
-
 /** Ayarlar: sekmeler üstte, içerik tek alanda çok sütunlu; hiçbir sekmede kaydırma yok (en küçük yatay ekran 800×360 dp'ye göre). */
 @Composable
 fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Unit = {}, initialTab: Int = 0) {
@@ -167,7 +165,7 @@ fun SettingsScreen(back: () -> Unit, inGame: Boolean = false, onReset: () -> Uni
                 4 -> AccountSettings(inGame, onReset)
                 5 -> SupportSection()
                 6 -> LanguageSection(s.language) { Settings.markLanguageChosen(ctx); set(s.copy(language = it)) }
-                else -> LegalSection()
+                else -> LegalPanel()
             }
         }
     }
@@ -185,10 +183,8 @@ private fun RowScope.Col(weight: Float = 1f, content: @Composable ColumnScope.()
 private fun notifEnabled(ctx: android.content.Context) = runCatching { androidx.core.app.NotificationManagerCompat.from(ctx).areNotificationsEnabled() }.getOrDefault(true)
 
 @Composable
-private fun NotificationSettings() {
+private fun ColumnScope.NotificationSettings() {
     val ctx = LocalContext.current
-    PT("Ödül postaları, etkinlik duyuruları, arkadaşlık istekleri ve klan davetleri için bildirim alırsın.", 13.sp, Px.Text, maxLines = 3)
-    Spacer(Modifier.height(10.dp))
     // izin durumu: sistem ayarlarından dönünce de güncellenir
     var allowed by remember { mutableStateOf(notifEnabled(ctx)) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
@@ -197,17 +193,38 @@ private fun NotificationSettings() {
             kotlinx.coroutines.delay(1000)
         }
     }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (allowed) "check" else "mail", 26.dp, if (allowed) Px.Name else Px.Sub)
-        Spacer(Modifier.width(8.dp))
-        PT(if (allowed) "Bildirimler Açık" else "Bildirimler Kapalı", 16.sp, if (allowed) Px.Name else Color(0xFFFF7A6A))
-    }
-    Spacer(Modifier.height(8.dp))
-    PxButton(if (allowed) "Bildirim Ayarlarını Düzenle" else "Bildirim İzinlerini Aç",
-        color = if (allowed) Px.Dark else Px.Blue, icon = "mail", height = 40.dp, size = 15.sp) {
-        val i = if (Build.VERSION.SDK_INT >= 26) Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName)
-        else Intent(SysSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))
-        runCatching { ctx.startActivity(i) }
+    val N = com.zenvex.online.game.Notifier
+    var mail by remember { mutableStateOf(N.enabled(ctx, N.K_MAIL)) }
+    var dm by remember { mutableStateOf(N.enabled(ctx, N.K_DM)) }
+    var social by remember { mutableStateOf(N.enabled(ctx, N.K_SOCIAL)) }
+    val promo = com.zenvex.online.game.Legal.promo.value
+    Cols {
+        Col {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (allowed) "check" else "mail", 26.dp, if (allowed) Px.Name else Px.Sub)
+                Spacer(Modifier.width(8.dp))
+                PT(if (allowed) "Bildirimler Açık" else "Bildirimler Kapalı", 16.sp, if (allowed) Px.Name else Color(0xFFFF7A6A))
+            }
+            Spacer(Modifier.height(6.dp))
+            PxButton(if (allowed) "Bildirim Ayarlarını Düzenle" else "Bildirim İzinlerini Aç",
+                color = if (allowed) Px.Dark else Px.Blue, icon = "mail", height = 40.dp, size = 14.sp) {
+                val i = if (Build.VERSION.SDK_INT >= 26) Intent(SysSettings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(SysSettings.EXTRA_APP_PACKAGE, ctx.packageName)
+                else Intent(SysSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))
+                runCatching { ctx.startActivity(i) }
+            }
+            Spacer(Modifier.height(6.dp))
+            Head("Hizmet Bildirimleri")
+            Toggle("Posta ve hediyeler", mail) { mail = it; N.setEnabled(ctx, N.K_MAIL, it) }
+            Toggle("Özel mesajlar", dm) { dm = it; N.setEnabled(ctx, N.K_DM, it) }
+            Toggle("Arkadaşlık istekleri ve klan davetleri", social) { social = it; N.setEnabled(ctx, N.K_SOCIAL, it) }
+        }
+        Col {
+            Head("Etkinlik Ve Kampanya Duyuruları")
+            Toggle("Yeni etkinlik, sezon ve kampanyalardan haberdar olmak istiyorum", promo) { com.zenvex.online.game.Legal.setPromo(it) }
+            PT("İsteğe bağlıdır (ticari elektronik ileti, 6563 sayılı Kanun). Onayını istediğin an buradan ya da bildirimdeki \"Bu Duyuruları Kapat\" ile ücretsiz geri alabilirsin. SMS veya e-posta gönderilmez.",
+                11.sp, Px.Sub, maxLines = 6)
+            LegalLink("promo")
+        }
     }
 }
 
@@ -309,76 +326,6 @@ fun Slider(label: String, value: Float, min: Float, max: Float, pct: Boolean = f
     }
 }
 
-/** Yasal: gizlilik, kullanım şartları, hakkında (hesap silme talebi, sürüm). Metin sütunlara bölünür, kaydırma yok. */
-@Composable
-private fun ColumnScope.LegalSection() {
-    val ctx = LocalContext.current
-    var page by remember { mutableIntStateOf(0) }
-    var reader by remember { mutableStateOf<Int?>(null) }
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        PxButton("Gizlilik Politikası", height = 30.dp, size = 12.sp, color = if (page == 0) Px.Green else Px.Dark) { page = 0 }
-        PxButton("Kullanım Şartları", height = 30.dp, size = 12.sp, color = if (page == 1) Px.Green else Px.Dark) { page = 1 }
-        PxButton("Hakkında", height = 30.dp, size = 12.sp, color = if (page == 2) Px.Green else Px.Dark) { page = 2 }
-        // V19: Supabase'in varsayılan alan adı HTML'i düz metne çevirdiği için tarayıcıda kod gibi görünüyordu: metin
-        // uygulama içinde biçimli tam ekran okuyucuda açılır; herkese açık bağlantı (mağaza, Google) paylaşılabilir
-        PxButton("Tam Ekran Oku", height = 30.dp, size = 12.sp, color = Px.Blue, icon = "eye") { reader = if (page == 1) 1 else 0 }
-    }
-    reader?.let { r ->
-        LegalReader(if (r == 1) "Kullanım Şartları" else "Gizlilik Politikası", if (r == 1) TERMS else PRIVACY,
-            LEGAL_URL + if (r == 1) "?p=terms" else "?p=privacy") { reader = null }
-    }
-    Spacer(Modifier.height(6.dp))
-    when (page) {
-        0, 1 -> {
-            val paras = if (page == 0) PRIVACY else TERMS
-            // paragraflar sütunlara uzunluklarına göre dengeli dağıtılır
-            val total = paras.sumOf { it.length }.coerceAtLeast(1)
-            val groups = List(3) { ArrayList<String>() }
-            var acc = 0
-            for (p in paras) { groups[((acc + p.length / 2) * 3 / total).coerceIn(0, 2)] += p; acc += p.length }
-            Cols { for (g in groups) Col { for (p in g) PT(p, 10.sp, Px.Text, Modifier.padding(bottom = 4.dp), maxLines = 20) } }
-        }
-        else -> Cols {
-            Col {
-                PT("Zenvex Online", 20.sp, Px.Orange)
-                PT("Sürüm: ${appVersion()}", 12.sp, Px.Sub)
-                Spacer(Modifier.height(6.dp))
-                PT("Oyun çekirdeği Rust, Android arayüzü Kotlin ile yazıldı. Çevrimiçi altyapı: Supabase (AB, Frankfurt).", 12.sp, maxLines = 4)
-            }
-            Col {
-                PT("Yazı tipleri: Outfit, Big Shoulders, Pixelify Sans (SIL Open Font License).", 12.sp, maxLines = 3)
-                if (Account.loggedIn) {
-                    Spacer(Modifier.height(10.dp))
-                    var ask by remember { mutableStateOf(false) }
-                    PxButton(if (ask) "Emin Misin? Hesabın 30 Gün İçinde Silinir" else "Hesabımın Silinmesini İste", Modifier.fillMaxWidth(), color = Px.Red, height = 40.dp, size = 12.sp) {
-                        if (!ask) { ask = true; return@PxButton }
-                        Account.requestDelete { e -> Toaster.show(e ?: "Silme Talebin Alındı", e == null) }
-                        ask = false
-                    }
-                }
-            }
-        }
-    }
-}
-
-private val PRIVACY = listOf(
-    "Son güncelleme: 20 Ekim 2026. Bu politika Zenvex Online'ın hangi verileri neden işlediğini açıklar.",
-    "Toplanan veriler: Zenvex kimliği, oyuncu adı ve şifrelenmiş hesap anahtarı. Google ile girişte Google hesap kimliğin, e-postan ve adın (yalnız hesabını tanımak için; Google şifren oyuna ulaşmaz). Oyun verileri: seviye, envanter, ilerleme, klan üyeliği, posta, sohbet ve özel mesajlar.",
-    "Çevrimiçi oyunda konumun, adın ve ekipmanın yalnız oyun süresince aynı sunucudaki oyuncularla paylaşılır.",
-    "Kullanım amacı: oyunu çalıştırmak (giriş, bulut kaydı, sıralama, klan, sohbet, çok oyunculu oynanış) ve kural ihlallerini önlemek. Sohbet ve işlem kayıtları yöneticiler tarafından kötüye kullanım incelemesi için görülebilir. Reklam ya da profil çıkarma yapılmaz, veriler satılmaz.",
-    "Saklama: Supabase (AB, Frankfurt). Hesap anahtarın cihaz yedeklerine alınmaz.",
-    "Hakların: hesabının ve verilerinin silinmesini bu ekrandan isteyebilirsin; talep 30 gün içinde yerine getirilir.",
-    "Oyun 13 yaşın altındaki çocuklara yönelik değildir.",
-)
-
-private val TERMS = listOf(
-    "Zenvex Online'ı oynayarak aşağıdaki kuralları kabul edersin.",
-    "Hile, açık istismarı, değiştirilmiş uygulama kullanımı ve diğer oyunculara taciz yasaktır; ihlalde hesap süreli ya da kalıcı yasaklanabilir.",
-    "Oyun içi eşya, altın ve elmasın gerçek parayla değeri yoktur; oyun dışında alınıp satılamaz. Hesaba bağlı ödüller takas edilemez.",
-    "Sohbette küfür, hakaret, kişisel bilgi paylaşımı ve reklam yasaktır; klan yöneticileri üyelerini susturabilir.",
-    "Oyun \"olduğu gibi\" sunulur; bakım ve güncellemeler sırasında kesinti olabilir.",
-)
-
 /** Zenvex hesabı: ID, anahtar, isim, Google bağlantısı, başka hesaba giriş; iki sütun. */
 @Composable
 private fun ColumnScope.AccountSettings(inGame: Boolean, onReset: () -> Unit) {
@@ -461,42 +408,4 @@ private fun ColumnScope.AccountSettings(inGame: Boolean, onReset: () -> Unit) {
         }
     }
     if (dialog) AccountDialog { dialog = false }
-}
-
-
-/** Yasal metin okuyucusu: tam ekran, başlıklar ve paragraflar biçimli, kaydırılır; herkese açık bağlantı paylaşılabilir */
-@Composable
-private fun LegalReader(title: String, paras: List<String>, url: String, close: () -> Unit) {
-    val ctx = LocalContext.current
-    Dim {
-        Column(Modifier.fillMaxWidth(0.86f).fillMaxHeight(0.92f).clip(RoundedCornerShape(10.dp)).background(Color(0xF7F4EFE2))
-            .border(2.dp, Color(0xFF8A7A5A), RoundedCornerShape(10.dp)).clickable(remember { MutableInteractionSource() }, null) {}) {
-            Row(Modifier.fillMaxWidth().background(Color(0xFF2B2A24)).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon("shield", 20.dp, Px.Clan)
-                Spacer(Modifier.width(8.dp))
-                Column(Modifier.weight(1f)) {
-                    PT("Zenvex Online", 11.sp, Px.Sub)
-                    PT(title, 17.sp, Px.Text)
-                }
-                PxButton("Bağlantıyı Paylaş", height = 32.dp, size = 12.sp, color = Px.Dark, icon = "globe") {
-                    runCatching {
-                        ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, url), null))
-                    }
-                }
-                Spacer(Modifier.width(6.dp))
-                PxButton("Kapat", height = 32.dp, size = 12.sp, color = Px.Red) { close() }
-            }
-            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 28.dp, vertical = 16.dp)) {
-                for (p in paras) {
-                    // "1. Toplanan Veriler" gibi başlık satırları kalın ve büyük; maddeler girintili
-                    val heading = p.length < 60 && (p.firstOrNull()?.isDigit() == true || p == p.uppercase())
-                    when {
-                        heading -> PT(p, 15.sp, Color(0xFF6A4A1A), Modifier.padding(top = 10.dp, bottom = 4.dp), maxLines = 2)
-                        p.startsWith("-") || p.startsWith("•") -> PT(p, 13.sp, Color(0xFF2B2A24), Modifier.padding(start = 14.dp, bottom = 4.dp), maxLines = 30)
-                        else -> PT(p, 13.sp, Color(0xFF2B2A24), Modifier.padding(bottom = 8.dp), maxLines = 40)
-                    }
-                }
-            }
-        }
-    }
 }

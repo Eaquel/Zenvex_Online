@@ -200,7 +200,7 @@ private fun GemsTab(products: Map<String, JSONObject>, t: Float) {
         }
         Spacer(Modifier.height(8.dp))
     }
-    PT("Ödeme Google Play ile yapılır; içerik postana gelir.", 12.sp, Px.Sub, maxLines = 2)
+    PT("Ödeme Google Play ile yapılır; fiyatlara vergiler dahildir, içerik postana gelir. Tüm ürünler tek seferliktir, otomatik yenilenmez.", 12.sp, Px.Sub, maxLines = 2)
 }
 
 @Composable
@@ -254,7 +254,7 @@ private fun CardsTab(s: JSONObject, products: Map<String, JSONObject>, now: Long
             }
         }
     }
-    PT("Alınmayan günlük ödüller 3 güne kadar birikir. Kart bitmeden yeniden alırsan süresi uzar.", 12.sp, Px.Sub, maxLines = 2)
+    PT("Kartlar tek seferlik satın almadır: abonelik değildir, otomatik yenilenmez. Alınmayan günlük ödüller 3 güne kadar birikir; kart bitmeden yeniden alırsan süresi uzar.", 12.sp, Px.Sub, maxLines = 2)
 }
 
 @Composable

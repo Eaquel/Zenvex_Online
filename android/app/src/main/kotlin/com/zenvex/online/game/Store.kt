@@ -92,8 +92,31 @@ object Store {
 
     fun price(id: String, fallbackTry: Double): String = prices[id] ?: "₺" + "%.2f".format(fallbackTry).replace('.', ',')
 
+    /**
+     * Satın alma onay penceresinde bekleyen ürün. Mesafeli Sözleşmeler Yönetmeliği m.5: ödeme ekranından önce ürünün
+     * içeriği, vergiler dahil fiyatı, tek seferlik olduğu, teslimi ve cayma hakkı istisnası gösterilir ve onaylatılır.
+     */
+    val confirm = mutableStateOf<String?>(null)
+
+    /** Mağazadaki ürün bilgisi (başlık, içerik, meta) */
+    fun product(id: String): JSONObject? {
+        val arr = state.value?.optJSONArray("products") ?: return null
+        return (0 until arr.length()).map { arr.getJSONObject(it) }.firstOrNull { it.optString("id") == id }
+    }
+
+    /** Satın Al düğmesi: önce ön bilgilendirme ve onay penceresi açılır; ödeme ekranı ancak onaydan sonra gelir. */
     fun buy(id: String) {
         if (!Account.loggedIn) { Toaster.show("Satın almak için hesabına gir", false); return }
+        if (activity?.get() == null || client == null || !ready || details[id] == null) {
+            Toaster.show("Google Play ödeme sistemi şu an kullanılamıyor. Uygulamayı Play Store'dan kurduğundan emin ol.", false)
+            return
+        }
+        confirm.value = id
+    }
+
+    /** Onay penceresinde "Siparişi Onayla": Google Play ödeme ekranı açılır. */
+    fun launch(id: String) {
+        confirm.value = null
         val a = activity?.get()
         val d = details[id]
         val c = client

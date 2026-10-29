@@ -74,6 +74,7 @@ class HudShotsTest {
 
     /** Ayarlar: her sekme küçük ekranda kaydırmadan tek alanda sığmalı */
     private fun settingsTab(i: Int) {
+        com.zenvex.online.game.Legal.init(paparazzi.context)
         Demo.on = true
         com.zenvex.online.game.GameSession.initPreview(paparazzi.context)
         com.zenvex.online.game.Account.previewLogin(1234567L)
@@ -94,4 +95,41 @@ class HudShotsTest {
     @Test fun settingsSupport() = settingsTab(5)
     @Test fun settingsLanguage() = settingsTab(6)
     @Test fun settingsLegal() = settingsTab(7)
+
+    // ------------------------------------------------------------------ yasal pencereler (küçük yatay telefon)
+    private fun legal() {
+        com.zenvex.online.game.Legal.init(paparazzi.context)
+        com.zenvex.online.game.Legal.noticeSeen.value = true
+        com.zenvex.online.game.Legal.termsNeeded.value = false
+        com.zenvex.online.game.Store.confirm.value = null
+        com.zenvex.online.game.Legal.open.value = null
+    }
+    private fun bg(content: @androidx.compose.runtime.Composable () -> Unit) =
+        paparazzi.snapshot { Box(Modifier.fillMaxSize().background(Color(0xFF2E3A26))) { content() } }
+
+    /** İlk açılış KVKK aydınlatması */
+    @Test fun legalNotice() { legal(); com.zenvex.online.game.Legal.noticeSeen.value = false; bg { LegalHost() } }
+
+    /** Güncellenen Kullanım Şartları'nın yeniden onayı */
+    @Test fun legalTermsUpdate() {
+        legal(); com.zenvex.online.game.Account.previewLogin(1234567L); com.zenvex.online.game.Legal.termsNeeded.value = true
+        bg { LegalHost() }
+    }
+
+    /** Satın alma öncesi bilgilendirme ve onay (aylık kart) */
+    @Test fun legalPurchaseConfirm() {
+        legal()
+        com.zenvex.online.game.Store.state.value = org.json.JSONObject(javaClass.getResource("/ui/store.json")!!.readText())
+        com.zenvex.online.game.Store.confirm.value = "card_month"
+        bg { LegalHost() }
+    }
+
+    /** Tam ekran yasal metin okuyucu */
+    @Test fun legalReader() { legal(); com.zenvex.online.game.Legal.open.value = "presale"; bg { LegalHost() } }
+
+    /** Profil fotoğrafı yükleme bildirimi */
+    @Test fun legalPhotoNotice() { legal(); bg { PhotoNoticeDialog({}) {} } }
+
+    /** Profilden şikâyet (hukuka aykırı içerik / telif) */
+    @Test fun legalReport() { legal(); bg { ReportDialog(1000002L, "Veli") {} } }
 }

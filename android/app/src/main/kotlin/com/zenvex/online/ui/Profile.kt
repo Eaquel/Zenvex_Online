@@ -513,10 +513,13 @@ fun ProfileEditor(close: () -> Unit, rename: () -> Unit) {
             }
         }.start()
     }
+    var notice by remember { mutableStateOf(false) }
+    if (notice) PhotoNoticeDialog({ notice = false }) {
+        if (!busy) pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+    }
     ProfileEditorView(p, close, rename,
-        pickPhoto = {
-            if (!busy) pick.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
-        },
+        // önce hak sahipliği ve herkese açıklık bildirimi
+        pickPhoto = { if (!busy) notice = true },
         clearPhoto = { Account.setPhoto("") { e -> if (e != null) Toaster.show(e, false) else Toaster.show("Profil Fotoğrafı Kaldırıldı") } },
         setTitle = { k -> Account.setTitle(k) { e -> if (e != null) Toaster.show(e, false) else Toaster.show(if (k.isEmpty()) "Unvan Kaldırıldı" else "Unvan Seçildi") } },
     ) { avatar, frame ->

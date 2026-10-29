@@ -17,7 +17,8 @@ import java.io.ByteArrayOutputStream
 object Support {
     const val MAX_PHOTOS = 10
     const val MAX_BYTES = 10 * 1024 * 1024
-    val TOPICS = listOf("Hata", "Ödeme", "Hesap", "Öneri", "Diğer")
+    /** "KVKK": veri sahibi başvurusu (KVKK m.11/13, 30 gün içinde yanıt); "İtiraz": yaptırıma itiraz */
+    val TOPICS = listOf("Hata", "Ödeme", "Hesap", "KVKK", "İtiraz", "Öneri", "Diğer")
 
     /** Arka planda gönderir; [progress] (yüklenen, toplam), [done] hata mesajı ya da null. Ana iş parçacığında çağrılır. */
     fun send(ctx: Context, topic: String, body: String, photos: List<Uri>, progress: (Int, Int) -> Unit, done: (String?) -> Unit) {

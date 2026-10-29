@@ -426,9 +426,11 @@ fun PlayerProfileDialog(key: String, close: () -> Unit) {
     LaunchedEffect(key, reload) { Account.viewProfile(key) { r -> r.onSuccess { p = it }.onFailure { err = it.message ?: "Profil Bulunamadı" } } }
     val o = p
     val mine = o != null && o.optLong("id") == Account.id.value
-    PlayerProfileView(o, err, mine, close, { edit = true }) {
+    var reporting by remember { mutableStateOf(false) }
+    PlayerProfileView(o, err, mine, close, { edit = true }, report = { reporting = true }) {
         Account.friendRequest(it) { r -> r.onSuccess { m -> Toaster.show(m) }.onFailure { e -> Toaster.show(e.message ?: "", false) } }
     }
+    if (reporting && o != null) ReportDialog(o.optLong("id"), o.optString("name")) { reporting = false }
     var renaming by remember { mutableStateOf(false) }
     if (edit) ProfileEditor({ edit = false; reload++ }) { renaming = true }
     if (renaming) RenameDialog { renaming = false; reload++ }
@@ -436,7 +438,7 @@ fun PlayerProfileDialog(key: String, close: () -> Unit) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close: () -> Unit, edit: () -> Unit, addFriend: (String) -> Unit) {
+internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close: () -> Unit, edit: () -> Unit, report: () -> Unit = {}, addFriend: (String) -> Unit) {
     // geniş pencere: istatistikler 4'lü iki sıra, unvanlar ekranın altına kaymaz
     PxDialog(if (mine) "Profilim" else "Oyuncu Profili", close, width = 820.dp) {
         if (o == null || o.length() == 0) { PT(if (o != null) "Profil Bulunamadı" else err.ifEmpty { "Yükleniyor…" }, 15.sp, Px.Sub, maxLines = 2); return@PxDialog }
@@ -457,7 +459,12 @@ internal fun PlayerProfileView(o: JSONObject?, err: String, mine: Boolean, close
                 // tuş sabit yerde (avatarın altında): unvan sayısı arttıkça aşağı kaymaz
                 Spacer(Modifier.height(8.dp))
                 if (mine) PxButton("Profili Düzenle", Modifier.fillMaxWidth(), icon = "profile", height = 40.dp, size = 14.sp) { edit() }
-                else if (!banned) PxButton("Arkadaş Ekle", Modifier.fillMaxWidth(), icon = "people", color = Px.Blue, height = 40.dp, size = 14.sp) { addFriend(o.optString("name")) }
+                else {
+                    if (!banned) PxButton("Arkadaş Ekle", Modifier.fillMaxWidth(), icon = "people", color = Px.Blue, height = 40.dp, size = 14.sp) { addFriend(o.optString("name")) }
+                    // profil fotoğrafı ve ad için hukuka aykırı içerik / telif bildirimi buradan da yapılır
+                    Spacer(Modifier.height(4.dp))
+                    PxButton("Şikâyet Et", Modifier.fillMaxWidth(), icon = "info", color = Px.Red, height = 32.dp, size = 12.sp) { report() }
+                }
             }
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

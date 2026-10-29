@@ -3,6 +3,8 @@
 //     → zx_support_photo_path yolu onaylar (talep sahibi, sıra, süre), fotoğraf servis anahtarıyla yüklenir. En çok 10 MB.
 //   { "op": "sign", "id", "key", "ticket" }
 //     → yönetici için talebin fotoğraflarına 1 saatlik imzalı bağlantılar.
+//   { "op": "purge" } (yalnız servis anahtarıyla: Authorization: Bearer <service_role>)
+//     → saklama süresi (2 yıl) dolmuş ya da hesabı anonimleşmiş taleplerin fotoğraflarını depodan siler (KVKK).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -33,8 +35,24 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: "Geçersiz istek" }, 400);
   }
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const sb = createClient(Deno.env.get("SUPABASE_URL")!, service);
+
+  if (b.op === "purge") {
+    if (req.headers.get("Authorization") !== `Bearer ${service}`) return json({ error: "Yetkisiz" }, 401);
+    const { data: list, error } = await sb.rpc("zx_support_purge_list");
+    if (error) return json({ error: error.message }, 500);
+    let removed = 0;
+    for (const t of (list ?? []) as { ticket: number; paths: string[] }[]) {
+      const rm = await sb.storage.from("support").remove(t.paths);
+      if (rm.error) continue;
+      removed += t.paths.length;
+      await sb.rpc("zx_support_purge_done", { p_ticket: t.ticket });
+    }
+    return json({ ok: true, removed });
+  }
+
   if (!b.id || !b.key || !b.ticket) return json({ error: "Eksik bilgi" }, 400);
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
   if (b.op === "photo") {
     const ext = (b.ext ?? "").toLowerCase();

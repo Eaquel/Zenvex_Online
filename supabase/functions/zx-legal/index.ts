@@ -1,64 +1,61 @@
-// Zenvex Online herkese açık sayfalar: ana sayfa (?p=home), gizlilik politikası (?p=privacy), kullanım şartları (?p=terms).
-// Google OAuth izin ekranı ve Play Store için gereken bağlantılar. Supabase varsayılan alan adında HTML'i düz metne
-// çevirdiği için sayfalar okunaklı düz metin olarak sunulur.
+// Zenvex Online herkese açık yasal sayfalar. Metinlerin TEK kaynağı content/legal.json: uygulama aynı dosyayı paketler,
+// böylece oyun içi ve web metinleri birebir aynıdır. Sayfalar: ?p=home | privacy | terms | presale | sales | content |
+// imprint | promo. Supabase varsayılan alan adında HTML'i düz metne çevirdiği için sayfalar okunaklı düz metin olarak sunulur.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import legal from "./content/legal.json" with { type: "json" };
 
 const BASE = "https://blvstsvmvmdydyrnecpo.supabase.co/functions/v1/zx-legal";
 
-const pages: Record<string, string> = {
-  home: `ZENVEX ONLINE
-=============
+type Page = { id: string; title: string; paras: string[] };
+const data = legal as { version: number; updated: string; operator: Record<string, string>; notice: string[]; pages: Page[] };
 
-Zenvex Online; kıyamet sonrası bir şehirde geçen, çevrimiçi bir 2.5D piksel sanat zombi hayatta kalma oyunudur.
-Kapüşonlu savaşçıyla zombilerle savaş, malzeme topla, üret, köpeğini eğit ve diğer oyuncularla birlikte hayatta kal.
+function fill(s: string): string {
+  return s.replace(/\{\{([A-Z_]+)\}\}/g, (_, k: string) => {
+    if (k === "TARIH") return data.updated;
+    if (k === "URL") return BASE;
+    return data.operator[k] ?? "";
+  });
+}
 
-HESAP
-Oyuna misafir olarak, Zenvex kimliği ve anahtarıyla ya da Google hesabınla girebilirsin.
+function render(p: Page): string {
+  const title = `ZENVEX ONLINE — ${p.title.toLocaleUpperCase("tr")}`;
+  const out = [title, "=".repeat(title.length), ""];
+  for (const raw of p.paras) {
+    const s = fill(raw);
+    // "1. Başlık" satırları büyük harfle ve öncesinde boşlukla
+    if (/^\d+\.\s/.test(s) && s.length < 60) out.push("", s.toLocaleUpperCase("tr"));
+    else out.push(s.startsWith("-") ? "  " + s : s);
+  }
+  out.push("", `Metin sürümü: ${data.version}`, "");
+  return out.join("\n");
+}
 
-BAĞLANTILAR
-Gizlilik politikası:  ${BASE}?p=privacy
-Kullanım şartları:    ${BASE}?p=terms
-`,
-  privacy: `ZENVEX ONLINE — GİZLİLİK POLİTİKASI
-==================================
-Son güncelleme: 20 Ekim 2026
-
-Bu politika Zenvex Online mobil oyununun ("oyun") hangi verileri neden işlediğini açıklar.
-
-1. TOPLANAN VERİLER
-- Hesap bilgileri: Zenvex kimliği, oyuncu adı ve şifrelenmiş (bcrypt) hesap anahtarı.
-- Google ile giriş yaparsan: Google hesap kimliğin ("sub"), e-posta adresin ve adın. Yalnızca hesabını tanımak
-  için kullanılır; Google şifren oyuna hiçbir zaman ulaşmaz.
-- Oyun verileri: seviye, envanter, ilerleme, klan üyeliği, oyun içi posta ve sohbet mesajları.
-- Çevrimiçi oyun: aynı sunucudaki oyuncularla paylaşılan konum, ad ve ekipman bilgisi (yalnızca oyun süresince).
-
-2. KULLANIM AMACI
-Veriler yalnızca oyunu çalıştırmak için kullanılır: giriş, ilerlemenin bulutta saklanması, sıralama, klan, sohbet ve
-çok oyunculu oynanış. Reklam ya da profil çıkarma için kullanılmaz, üçüncü kişilere satılmaz.
-
-3. SAKLAMA VE HİZMET SAĞLAYICILAR
-Veriler Supabase (AB, Frankfurt) sunucularında saklanır. Google ile girişte kimlik doğrulaması Google tarafından yapılır.
-
-4. HAKLARIN VE SİLME
-Hesabının ve verilerinin silinmesini oyun içinden (Ayarlar > Hesap) ya da oyunun mağaza sayfasındaki geliştirici
-iletişim adresinden isteyebilirsin. Talep 30 gün içinde yerine getirilir.
-
-5. ÇOCUKLAR
-Oyun 13 yaşın altındaki çocuklara yönelik değildir ve bilerek bu yaş grubundan veri toplanmaz.
-`,
-  terms: `ZENVEX ONLINE — KULLANIM ŞARTLARI
-================================
-
-Zenvex Online'ı oynayarak şu kuralları kabul edersin:
-- Hile, açık istismarı ve diğer oyunculara taciz yasaktır; ihlalde hesap askıya alınabilir.
-- Oyun içi eşya ve altının gerçek parayla değeri yoktur ve oyun dışında alınıp satılamaz.
-- Oyun "olduğu gibi" sunulur; sunucu bakımı ve güncellemeler sırasında kesinti olabilir.
-`,
-};
+function home(): string {
+  const lines = [
+    "ZENVEX ONLINE",
+    "=============",
+    "",
+    "Zenvex Online; kıyamet sonrası bir şehirde geçen, çevrimiçi bir 2.5D piksel sanat zombi hayatta kalma oyunudur.",
+    "Kapüşonlu savaşçıyla zombilerle savaş, malzeme topla, üret, köpeğini eğit ve diğer oyuncularla birlikte hayatta kal.",
+    "",
+    "YASAL METİNLER",
+  ];
+  for (const p of data.pages) lines.push(`- ${p.title}: ${BASE}?p=${p.id}`);
+  lines.push("", "İLETİŞİM", fill("{{UNVAN}} · {{ADRES}} · {{EPOSTA}}"), "");
+  return lines.join("\n");
+}
 
 Deno.serve((req: Request) => {
-  const p = new URL(req.url).searchParams.get("p") ?? "home";
-  return new Response(pages[p] ?? pages.home, {
+  const url = new URL(req.url);
+  const id = url.searchParams.get("p") ?? "home";
+  // uygulama ve araçlar için ham veri: ?format=json
+  if (url.searchParams.get("format") === "json") {
+    return new Response(JSON.stringify(data), {
+      headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=600" },
+    });
+  }
+  const page = data.pages.find((p) => p.id === id);
+  return new Response(page ? render(page) : home(), {
     headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=600" },
   });
 });

@@ -207,6 +207,9 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var err by remember { mutableStateOf("") }
     var newKey by remember { mutableStateOf("") }
+    // Kullanım Şartları onayı: hesap açmadan, Google ile ya da ID ile girmeden önce zorunlu
+    var terms by remember { mutableStateOf(false) }
+    val needTerms = { if (!terms) err = "Devam etmek için Kullanım Şartları'nı onayla"; terms }
     val ctx = LocalContext.current
     Dim {
         PxPanel(Modifier.width(620.dp).verticalScroll(rememberScrollState()).clickable(remember { MutableInteractionSource() }, null) {}, pad = 14.dp) {
@@ -234,9 +237,11 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                     PxButton(if (busy) "Bekle…" else "Google ile devam et", Modifier.fillMaxWidth(), Color(0xFFE8E4D4), icon = "user",
                         textColor = Color(0xFF1E1D19), enabled = !busy, height = 42.dp, size = 15.sp) {
                         val act = ctx as? android.app.Activity ?: return@PxButton
+                        if (!needTerms()) return@PxButton
                         busy = true; err = ""
                         com.zenvex.online.net.GoogleSignIn.start(act, link = false) { e ->
                             if (e != null) { busy = false; err = e } else {
+                                com.zenvex.online.game.Legal.acceptTerms()
                                 GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
                                 GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
                             }
@@ -248,6 +253,8 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                     PT(if (first) "Zenvex tamamen çevrimiçi bir oyundur: ilerlemen sunucuda saklanır, her telefondan devam edersin."
                         else if (mode == 0) "Yeni hesap açınca sana bir Zenvex ID ve anahtar verilir; telefon değişirse onlarla girersin."
                         else "Başka telefonda açtığın hesaba ID ve anahtarla gir.", 12.sp, Px.Sub, maxLines = 4)
+                    Spacer(Modifier.height(4.dp))
+                    AccountTerms(terms) { terms = it; if (it) err = "" }
                     if (!first) {
                         Spacer(Modifier.height(8.dp))
                         PxButton("Kapat", Modifier.fillMaxWidth(), Px.Dark, size = 14.sp, height = 36.dp) { close() }
@@ -259,10 +266,12 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                         Field(nick, { if (it.length <= 16) nick = it }, "İsim (3-16)", Modifier.fillMaxWidth())
                         Spacer(Modifier.height(8.dp))
                         PxButton(if (busy) "Bekle…" else "Hesap Aç", Modifier.fillMaxWidth(), enabled = !busy, height = 42.dp, size = 16.sp) {
+                            if (!needTerms()) return@PxButton
                             busy = true; err = ""
                             Account.register(nick) { e ->
                                 busy = false
                                 if (e != null) err = e else {
+                                    com.zenvex.online.game.Legal.acceptTerms()
                                     newKey = Account.key
                                     GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
                                     GameSession.cmd("set_name", "name" to Account.name.value)
@@ -279,9 +288,11 @@ fun AccountDialog(first: Boolean = false, close: () -> Unit) {
                         Spacer(Modifier.height(8.dp))
                         PxButton(if (busy) "Bekle…" else "Giriş Yap", Modifier.fillMaxWidth(), enabled = !busy, height = 42.dp, size = 16.sp) {
                             val id = idText.toLongOrNull() ?: run { err = "ID'yi yaz"; return@PxButton }
+                            if (!needTerms()) return@PxButton
                             busy = true; err = ""
                             Account.login(id, keyText) { e ->
                                 if (e != null) { busy = false; err = e } else {
+                                    com.zenvex.online.game.Legal.acceptTerms()
                                     GameSession.prefs().edit().putBoolean("guest_ok", true).apply()
                                     GameSession.reload { busy = false; Toaster.show("Hoş geldin ${Account.name.value}!"); close() }
                                 }

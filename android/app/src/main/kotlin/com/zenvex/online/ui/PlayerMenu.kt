@@ -34,8 +34,12 @@ import com.zenvex.online.game.Account
 import com.zenvex.online.game.Online
 import org.json.JSONObject
 
-/** Şikâyet nedenleri (sunucuya metin olarak gider) */
-private val REPORT_REASONS = listOf("Hile", "Küfür / Hakaret", "Spam / Reklam", "Uygunsuz İsim", "Dolandırıcılık", "Diğer")
+/**
+ * Şikâyet nedenleri (sunucuya metin olarak gider). Son dördü hukuka aykırı içerik bildirimidir (5651 m.9, 5846 Ek m.4):
+ * yöneticiler 24 saat içinde yanıtlar, telif ihlalinde içerik en geç 3 gün içinde kaldırılır.
+ */
+internal val REPORT_REASONS = listOf("Hile", "Küfür / Hakaret", "Spam / Reklam", "Uygunsuz İsim", "Dolandırıcılık",
+    "Uygunsuz Profil Fotoğrafı", "Telif Hakkı İhlali", "Kişisel Veri Paylaşımı", "Hukuka Aykırı İçerik", "Diğer")
 
 /**
  * Oyunda başka bir oyuncuya dokununca: solda oyuncu kartı (resim, çerçeve, ad, seviye, klan, unvan), sağda eylemler:

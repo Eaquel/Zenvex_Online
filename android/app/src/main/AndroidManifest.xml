@@ -28,5 +28,9 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <!-- etkinlik duyurusundaki "Bu Duyuruları Kapat" (ticari ileti onayını geri alır) -->
+        <receiver
+            android:name=".game.Notifier$PromoOptOut"
+            android:exported="false" />
     </application>
 </manifest>

@@ -2,6 +2,25 @@
 
 ## Unreleased (V16 — 3D)
 
+- V19 legal compliance (Turkey: KVKK, 6502 / Distance Contracts Regulation, 6563, 5651, 5846):
+  - one source for all legal texts (supabase/functions/zx-legal/content/legal.json): the app and the public web pages
+    show the same KVKK privacy notice, Terms of Use, pre-contract information form, distance sales contract, illegal
+    content / copyright notice procedure, commercial message consent text and imprint; operator details are placeholders
+    to be filled in before release
+  - first launch shows the KVKK notice; the device ID is not sent before it is acknowledged; accounts must accept the
+    Terms of Use (and accept again when they change); acceptance is stored on the server with version, time and IP
+  - purchases open a confirmation window first: contents, price incl. taxes, one-time (no auto-renewal), delivery,
+    no right of withdrawal for instantly delivered digital content, required checkbox and "Confirm order · payment
+    required"; a receipt mail with order number, product, amount and date is kept; Settings > Legal > My Purchases
+  - event notifications are commercial messages: off by default, sent only with opt-in, with a one-tap opt-out button;
+    mail, private message and friend/clan notifications can each be turned off
+  - Settings > Legal: My Data (KVKK Art. 11 summary, shareable), cancel a deletion request; Support topics "KVKK" and
+    "Appeal"; new report reasons (copyright, inappropriate profile photo, personal data, illegal content), report button
+    on player profiles, rights notice before uploading a profile photo
+  - server: 5651 traffic log (IP + time on sign-up, session, chat, DM, photo upload; kept 1 year), daily retention purge
+    (chat/DM 180 days, mail 1 year, logs 2 years), accounts anonymized 30 days after a deletion request (purchase
+    records kept anonymously), expired support photos removed (pg_cron or the "Veri Saklama Temizliği" workflow)
+
 - V19 performance pass (no quality loss):
   - map fix: the detailed region map was never built (a "ground ready" flag fell once on the first frames and never
     recovered), so the minimap and the big map kept showing the old flat-colour world map

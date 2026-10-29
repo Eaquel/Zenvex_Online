@@ -98,7 +98,8 @@ object Account {
     /** Bakım durumu: {"on":bool,"msg":".."} (giriş gerekmez) */
     fun status(done: (Result<JSONObject>) -> Unit) {
         // V13: yönetici hesabının girdiği cihaz "yönetici cihazı"dır; bakımda da girebilir (sunucu cihaz kimliğinden bilir)
-        val dev = appCtx?.let { runCatching { Guard.deviceId(it) }.getOrNull() }.orEmpty()
+        // KVKK m.10: aydınlatma metni görülmeden cihaz kimliği gönderilmez
+        val dev = if (!Legal.noticeSeen.value) "" else appCtx?.let { runCatching { Guard.deviceId(it) }.getOrNull() }.orEmpty()
         Supa.rpc("zx_status", JSONObject().put("p_device", dev)) { r ->
             done(obj(r).map { o ->
                 adminDevice.value = o.optBoolean("admin_device")
@@ -214,6 +215,11 @@ object Account {
     fun removeMail(mailId: Long, done: (String?) -> Unit) = Supa.rpc("zx_mail_remove", auth().put("p_mail", mailId)) { r -> done(r.exceptionOrNull()?.message) }
 
     fun requestDelete(done: (String?) -> Unit) = Supa.rpc("zx_request_delete", auth()) { r -> done(r.exceptionOrNull()?.message) }
+    fun cancelDelete(done: (String?) -> Unit) = Supa.rpc("zx_delete_cancel", auth()) { r -> done(r.exceptionOrNull()?.message) }
+    /** KVKK m.11: sunucudaki verilerimin özeti */
+    fun myData(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_my_data", auth()) { r -> done(obj(r)) }
+    fun myPurchases(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_my_purchases", auth()) { r -> done(arr(r)) }
+    fun consentState(done: (Result<JSONObject>) -> Unit) = Supa.rpc("zx_consent_state", auth()) { r -> done(obj(r)) }
 
     // ------------------------------------------------------------------ yönetici işlem kuyruğu (oyuncu tarafı)
     fun actionsPull(done: (Result<JSONArray>) -> Unit) = Supa.rpc("zx_actions_pull", auth()) { r -> done(arr(r)) }

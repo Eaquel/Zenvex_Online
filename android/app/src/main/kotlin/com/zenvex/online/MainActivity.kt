@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
         com.zenvex.online.game.Integrity.check(this)
         Settings.load(this)
         com.zenvex.online.game.Thermal.init(this)
+        com.zenvex.online.game.Legal.init(this)
         Account.init(this)
         if (Account.loggedIn) runCatching { com.zenvex.online.game.Notifier.schedule(this) }
         GameSession.init(this)
@@ -88,6 +89,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 com.zenvex.online.ui.GateHost()
+                com.zenvex.online.ui.LegalHost()
                 ToastHost()
             }
         }

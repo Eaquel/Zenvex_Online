@@ -70,6 +70,7 @@ object Session {
     /** Oturumu açar; başarıda sunucudaki kayıt (boş olabilir) [done]'a gelir, hatada mesaj. */
     fun start(ctx: Context, server: String, done: (data: String?, err: String?) -> Unit) {
         if (!Account.loggedIn) { done(null, "Önce hesabına gir"); return }
+        if (!Legal.noticeSeen.value || Legal.termsNeeded.value) { done(null, "Önce bilgilendirme metnini ve Kullanım Şartları'nı onayla"); return }
         state.value = State.Starting
         kicked.value = null
         Supa.bg {

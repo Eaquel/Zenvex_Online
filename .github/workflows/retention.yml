@@ -1,0 +1,31 @@
+# KVKK saklama süreleri: her gün süresi dolan verileri siler / anonimleştirir (zx_retention_purge) ve süresi dolan
+# destek fotoğraflarını depodan kaldırır (zx-support "purge"). Veritabanında pg_cron açıksa SQL kısmı orada da çalışır;
+# iki kez çalışması zararsızdır. Gerekli gizli değer: SUPABASE_SERVICE_ROLE_KEY (Settings → Secrets → Actions).
+name: Veri Saklama Temizliği
+
+on:
+  schedule:
+    - cron: "41 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SB_URL: https://blvstsvmvmdydyrnecpo.supabase.co
+      SB_SERVICE: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Gizli anahtar var mı
+        run: |
+          if [ -z "$SB_SERVICE" ]; then echo "::warning::SUPABASE_SERVICE_ROLE_KEY tanımlı değil; temizlik atlandı"; exit 0; fi
+      - name: Süresi dolan verileri sil ve hesapları anonimleştir
+        if: env.SB_SERVICE != ''
+        run: |
+          curl -fsS -X POST "$SB_URL/rest/v1/rpc/zx_retention_purge" \
+            -H "apikey: $SB_SERVICE" -H "Authorization: Bearer $SB_SERVICE" -H "Content-Type: application/json" -d '{}'
+      - name: Süresi dolan destek fotoğraflarını sil
+        if: env.SB_SERVICE != ''
+        run: |
+          curl -fsS -X POST "$SB_URL/functions/v1/zx-support" \
+            -H "Authorization: Bearer $SB_SERVICE" -H "Content-Type: application/json" -d '{"op":"purge"}'
