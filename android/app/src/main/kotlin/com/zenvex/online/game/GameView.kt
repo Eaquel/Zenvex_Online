@@ -1657,13 +1657,21 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
             for ((i, m) in chestMarks.withIndex()) {
                 val sx = wx(m.x); val sy = wy(m.y)
                 if (sx < -200 || sy < -200 || sx > sw + 200 || sy > sh + 300) continue
-                // V8 sandık görselleri (ahşap / demir / askerî); yanındayken kapağı açık
-                val base = when (m.id) { "chest_wood" -> "s/chest_wood"; "chest_iron" -> "s/chest_iron"; else -> "s/chest_mil" }
-                val sp = atlas[if (i == nearChest) base + "_open" else base] ?: atlas[base]
-                    ?: itemSprites.getOrNull(itemIds.indexOf(m.id))
+                // V20: üsteki sandık üretim ekranındaki görseliyle (ahşap / demir / askerî) aynı; büyütülür, piksel keskin.
+                // Yanındayken hafifçe zıplar ve altında altın ışık (dünyadaki ganimet sandıklarından ayrı görünür)
+                val icon = atlas["i/" + m.id]
+                val sp = icon ?: atlas[when (m.id) { "chest_wood" -> "s/chest_wood"; "chest_iron" -> "s/chest_iron"; else -> "s/chest_mil" }]
                 if (sp != null) {
-                    castShadow(c, sx, sy, 56 * scale) { p -> atlas.draw(c, sp, sx, sy, scale, p) }
-                    atlas.draw(c, sp, sx, sy, scale, pixelPaint)
+                    val k = if (icon == null) 1f else when (m.id) { "chest_wood" -> 1.7f; "chest_iron" -> 1.85f; else -> 2f }
+                    val near = i == nearChest
+                    val lift = if (near) (2f + 2f * sin(time * 6f)) * scale else 0f
+                    if (near) {
+                        fill.color = 0x55FFD34A
+                        rect.set(sx - 40 * scale, sy - 9 * scale, sx + 40 * scale, sy + 9 * scale)
+                        c.drawOval(rect, fill)
+                    }
+                    castShadow(c, sx, sy, 56 * scale) { p -> atlas.draw(c, sp, sx, sy, scale * k, p) }
+                    atlas.draw(c, sp, sx, sy - lift, scale * k, pixelPaint)
                 }
                 if (i == nearChest) drawText(c, "Sandık ${m.used}/${m.cap}", sx - 34 * density, sy - 70 * scale, 12 * density, 0xFFFFD34A.toInt())
             }

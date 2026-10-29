@@ -67,7 +67,7 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
             for (i in 0 until inc.length()) {
                 val f = inc.getJSONObject(i)
                 Row(Modifier.fillMaxWidth().background(Color(0x40B08A2A)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ProfileAvatar(f.optInt("avatar"), "", 30.dp)
+                    ProfileAvatar(f.optInt("avatar"), "", 30.dp, account = f.optLong("id", -1))
                     Spacer(Modifier.width(6.dp))
                     PT("${f.optString("name")} · Sv ${f.optInt("level")}", 14.sp, modifier = Modifier.weight(1f))
                     PxButton("Kabul", height = 30.dp, size = 12.sp) { Account.friendRespond(f.optLong("id"), true, res) }
@@ -81,7 +81,7 @@ fun FriendsPanel(modifier: Modifier = Modifier) {
             for (i in 0 until fr.length()) {
                 val f = fr.getJSONObject(i)
                 Row(Modifier.fillMaxWidth().background(Px.Row).clickable { open = f }.padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    ProfileAvatar(f.optInt("avatar"), f.optString("frame"), 30.dp)
+                    ProfileAvatar(f.optInt("avatar"), f.optString("frame"), 30.dp, account = f.optLong("id", -1))
                     Spacer(Modifier.width(6.dp))
                     Box(Modifier.size(8.dp).clip(CircleShape).background(if (f.optBoolean("online")) Px.Name else Px.Sub))
                     Spacer(Modifier.width(6.dp))
@@ -117,7 +117,7 @@ private fun DmThread(f: JSONObject, modifier: Modifier, back: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PxIcon("back", size = 34.dp) { back() }
             Spacer(Modifier.width(8.dp))
-            ProfileAvatar(f.optInt("avatar"), f.optString("frame"), 30.dp)
+            ProfileAvatar(f.optInt("avatar"), f.optString("frame"), 30.dp, account = f.optLong("id", -1))
             Spacer(Modifier.width(6.dp))
             PT(f.optString("name"), 16.sp, Px.Name, Modifier.weight(1f))
             PxIcon("trash", size = 34.dp, tint = Color(0xFFE07060)) { confirm = true }

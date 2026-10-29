@@ -216,7 +216,7 @@ internal fun BagView(
     var rootPos by remember { mutableStateOf(Offset.Zero) }
     val quiet = remember { MutableInteractionSource() }
     // öğretici: etkin rehber adımı ve işaretlenecek denetimlerin ekran konumları
-    val tutR = remember { HashMap<String, Rect>() }
+    val tutR = remember { androidx.compose.runtime.mutableStateMapOf<String, Rect>() }
     val tstep = remember(inv) { Tut.step() }
     val craftHand = remember(inv) { Tut.craftWant()?.takeIf { !it.second } != null }
 

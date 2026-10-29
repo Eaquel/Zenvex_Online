@@ -345,7 +345,7 @@ internal fun WorldMapView(
                     IntSize((img.width * k).toInt(), (img.height * k).toInt()), filterQuality = FilterQuality.None)
             }
             // bulutlar: doku katmanı, keşif maskesiyle kesilir (yumuşak kenar: maske büyütülürken süzülür)
-            if (fog != null) drawClouds(fog, ox, oy, mapPx * z, t)
+            if (fog != null) drawClouds(fog, ox, oy, mapPx * z, t, cloudSea, z)
             // bölge dışı: karanlık (başka harita), sınırda büyülü mor çizgi
             if (area != null) {
                 val hole = androidx.compose.ui.graphics.Path().apply {
@@ -354,7 +354,7 @@ internal fun WorldMapView(
                 clipPath(hole, androidx.compose.ui.graphics.ClipOp.Difference) {
                     if (cloudSea == null) drawRect(Color(0xF00C0A12)) else {
                         // dünya ölçeğinde 360 px'lik döşeme (oyundaki sınırla aynı boyut), yavaşça süzülür
-                        val tw = (360f * z).coerceAtLeast(24f)
+                        val tw = maxOf(360f * z, 240.dp.toPx())
                         val sx0 = (ox + t * 7f * z) % tw - tw; val sy0 = (oy + t * 2.5f * z) % tw - tw
                         var yy = sy0
                         while (yy < size.height) {
@@ -501,17 +501,20 @@ private fun MapLegend(marks: List<MapMark>, open: Boolean, t: Float, modifier: M
     }
 }
 
-private fun DrawScope.drawClouds(fog: ImageBitmap, ox: Float, oy: Float, side: Float, t: Float) {
+private fun DrawScope.drawClouds(fog: ImageBitmap, ox: Float, oy: Float, side: Float, t: Float, sea: ImageBitmap?, z: Float) {
     drawContext.canvas.saveLayer(androidx.compose.ui.geometry.Rect(0f, 0f, size.width, size.height), androidx.compose.ui.graphics.Paint())
-    // doku: ekran boyunca kayan bulut
-    val tile = 220.dp.toPx()
-    val sx = (ox * 0.5f + t * 6f) % tile - tile; val sy = (oy * 0.5f) % tile - tile
+    // V20: oyundaki sınırla aynı bulut denizi dokusu, dünya ölçeğinde (360 px karo) ve haritayla birlikte kayar; eskiden
+    // ekrana sabit, bulanık gri bir gürültü dokusuydu
+    val tex = sea ?: cloudTex
+    // haritada uzaktan bakılır: karo ekranda en az 240 dp (küçük karo tekrar eden bir desen gibi görünüyordu)
+    val tile = if (sea != null) maxOf(360f * z, 240.dp.toPx()) else 220.dp.toPx()
+    val sx = (ox + t * 7f * z) % tile - tile; val sy = (oy + t * 2.5f * z) % tile - tile
     var y = sy
     while (y < size.height) {
         var x = sx
         while (x < size.width) {
-            drawImage(cloudTex, IntOffset.Zero, IntSize(cloudTex.width, cloudTex.height), IntOffset(x.toInt(), y.toInt()),
-                IntSize(tile.toInt() + 1, tile.toInt() + 1), filterQuality = FilterQuality.High)
+            drawImage(tex, IntOffset.Zero, IntSize(tex.width, tex.height), IntOffset(x.toInt(), y.toInt()),
+                IntSize(tile.toInt() + 1, tile.toInt() + 1), filterQuality = FilterQuality.Low)
             x += tile
         }
         y += tile

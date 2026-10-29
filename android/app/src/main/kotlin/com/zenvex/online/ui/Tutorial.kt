@@ -68,8 +68,14 @@ object Tut {
  */
 class TutTarget(val rect: Rect?, val label: String, val below: Boolean = false, val tap: Boolean = true)
 
-/** Bir bileşenin kök koordinatındaki dikdörtgenini [map] içine yazar */
-fun Modifier.tutRect(map: MutableMap<String, Rect>, key: String): Modifier = onGloballyPositioned { map[key] = it.boundsInRoot() }
+/**
+ * Bir bileşenin kök koordinatındaki dikdörtgenini [map] içine yazar. [map] durum haritası olmalı (mutableStateMapOf):
+ * yeni sekme/tarif ilk kez yerleşince işaret hemen çizilsin (düz HashMap'te başka bir yere dokunana dek görünmüyordu).
+ */
+fun Modifier.tutRect(map: MutableMap<String, Rect>, key: String): Modifier = onGloballyPositioned {
+    val b = it.boundsInRoot()
+    if (map[key] != b) map[key] = b
+}
 
 /**
  * Hedeflerin çevresine nabız gibi atan altın çerçeve ve ok çizer; [text] varsa sol üstte açıklama kartı gösterir.

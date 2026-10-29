@@ -159,6 +159,20 @@ class Atlas private constructor(ctx: Context) {
         } else c.drawBitmap(bmp, sp.src, dst, paint)
     }
 
+    /**
+     * Yazılımsal tuvale çizim (ekran dışı resimler, ör. bölge haritası): asıl sayfalar GPU'da (HARDWARE) olduğundan
+     * yazılımsal tuvale çizilemez (Android hata verir); sayfanın yazılımsal kopyası kullanılır.
+     */
+    fun drawSoft(c: Canvas, sp: Sprite, x: Float, y: Float, scale0: Float, paint: Paint?) = synchronized(softPages) {
+        val bmp = softPages[sp.page] ?: runCatching { am.open("v2/" + pageFiles[sp.page]).use { BitmapFactory.decodeStream(it, null, softOpts) } }
+            .getOrNull()?.also { softPages[sp.page] = it } ?: return@synchronized
+        val scale = scale0 * sp.k
+        val l = x - sp.ax * scale
+        val t = y - sp.ay * scale
+        dst.set(l, t, l + sp.w * scale, t + sp.h * scale)
+        c.drawBitmap(bmp, sp.src, dst, paint)
+    }
+
     /** Görseli bir kutuya sığdırarak çizer (arayüz ikonları). */
     fun drawFit(c: Canvas, sp: Sprite, box: RectF, paint: Paint?) {
         val bmp = page(sp.page) ?: return

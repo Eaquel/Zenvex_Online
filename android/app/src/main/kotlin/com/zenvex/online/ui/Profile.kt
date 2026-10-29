@@ -79,6 +79,48 @@ val AVATARS = listOf(
 /** Sunucudaki base64 WebP profil fotoğraflarının çözülmüş hali (aynı fotoğraf her satırda yeniden çözülmesin). */
 object PhotoCache {
     private val cache = android.util.LruCache<Int, ImageBitmap>(64)
+
+    // ---- hesap kimliğiyle fotoğraf: sohbet, arkadaş, klan, sıralama listeleri yalnız resim numarasını taşır; fotoğraf
+    // buradan (zx_photos, toplu) alınır ve 3 dakikada bir tazelenir. Kendi fotoğrafın değişince hemen güncellenir.
+    private val byId = androidx.compose.runtime.mutableStateMapOf<Long, String>()
+    private val fetchedAt = HashMap<Long, Long>()
+    private val queue = LinkedHashSet<Long>()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private var scheduled = false
+
+    /** Hesabın fotoğrafı ("" = yok ya da henüz gelmedi; gelince çağıran ekran yeniden çizilir) */
+    fun of(id: Long): String {
+        if (id < 0) return ""
+        val now = android.os.SystemClock.elapsedRealtime()
+        if ((fetchedAt[id] ?: -1L) < 0 || now - fetchedAt[id]!! > 180_000) request(id)
+        return byId[id].orEmpty()
+    }
+
+    fun put(id: Long, b64: String) {
+        if (id < 0) return
+        byId[id] = b64.takeIf { it != "null" }.orEmpty()
+        fetchedAt[id] = android.os.SystemClock.elapsedRealtime()
+    }
+
+    private fun request(id: Long) {
+        fetchedAt[id] = android.os.SystemClock.elapsedRealtime()
+        queue += id
+        if (scheduled) return
+        scheduled = true
+        main.postDelayed({
+            scheduled = false
+            val ids = queue.take(50); queue.removeAll(ids.toSet())
+            if (ids.isEmpty()) return@postDelayed
+            com.zenvex.online.net.Supa.rpc("zx_photos", org.json.JSONObject().put("p_ids", org.json.JSONArray(ids))) { r ->
+                r.onSuccess { s ->
+                    val o = runCatching { org.json.JSONObject(s) }.getOrNull() ?: return@onSuccess
+                    for (i in ids) byId[i] = o.optString(i.toString())
+                }.onFailure { for (i in ids) fetchedAt[i] = android.os.SystemClock.elapsedRealtime() - 150_000 }
+                if (queue.isNotEmpty()) request(queue.first())
+            }
+        }, 150)
+    }
+
     fun get(b64: String): ImageBitmap? {
         if (b64.isEmpty() || b64 == "null") return null
         cache.get(b64.hashCode())?.let { return it }
@@ -139,12 +181,16 @@ fun frameUnlocked(id: String, p: JSONObject): Boolean {
  * Profil fotoğrafı + efektli çerçeve (çizim tamamen kodla, bkz. drawFrame). NPC resimleri yüz merkezli kırpılır.
  */
 @Composable
-fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Modifier, photo: String = "") {
+fun ProfileAvatar(avatar: Int, frame: String, size: Dp, modifier: Modifier = Modifier, photo: String = "", account: Long = -1) {
     val ctx = LocalContext.current
+    // fotoğraf verilmediyse hesap kimliğinden (listeler, sohbet); kendi hesabında her zaman güncel profil
+    val ph = photo.takeIf { it.isNotEmpty() && it != "null" }
+        ?: if (account >= 0 && account == Account.id.value) Account.profile.value.optString("photo").takeIf { it != "null" }.orEmpty()
+        else PhotoCache.of(account)
     // kaldırılan resimler (kahraman, asker, köpek, zombi) Tüccar olarak görünür
     val def = AVATARS.getOrNull(avatar)?.takeIf { it.pick } ?: AVATARS[1]
     val img = remember(def.key) { SpriteCache.get(ctx, def.key) }
-    val pic = remember(photo) { PhotoCache.get(photo) }
+    val pic = remember(ph) { PhotoCache.get(ph) }
     val port = if (def.model.isNotEmpty() && pic == null) rememberPortrait(def.model) else null
     val t = rememberTime()
     // çizilmiş çerçeve görseli (assets/ui/frame_<id>.png, tools/pixel/frame_import.py) varsa o; yoksa kodla
@@ -477,7 +523,7 @@ fun TagRow(tags: JSONArray?, modifier: Modifier = Modifier) {
 @Composable
 fun ProfileBadge(p: JSONObject, guest: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Row(modifier.pxPanel(Color(0xE01E1D19)).clickable { onClick() }.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        ProfileAvatar(p.optInt("avatar"), p.optString("frame"), 58.dp, photo = p.optString("photo"))
+        ProfileAvatar(p.optInt("avatar"), p.optString("frame"), 58.dp, photo = p.optString("photo"), account = if (guest) -1 else p.optLong("id", -1))
         Spacer(Modifier.width(8.dp))
         Column {
             Row(verticalAlignment = Alignment.CenterVertically) {

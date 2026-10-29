@@ -117,6 +117,9 @@ class GameShotsTest {
     @Test fun g09_harbor() = shot("harbor", { cheat("level 45"); cheat("tp harbor"); cheat("spawn dark 3 3") }, steps = 90)
 
     /** V15: kare bölgenin kenarı (Başlangıç Ormanı'nın doğusu): ötesi boşluk, yürünmez */
+    /** Gizemli Ağaç (görev noktası) ve çevresi */
+    @Test fun g31_mysteryTree() = shot("mystery_tree", { cheat("level 8"); cheat("tp 232 264") }, steps = 40)
+
     @Test fun g12_border() = shot("border", { cheat("level 12"); cheat("tp 268 300") }, steps = 90, input = floatArrayOf(1f, 0f, 0f, 0f, 0f))
 
     /** V12.1: tezgâh eşyası kampın dışına kurulur (kalan süre), tezgâh ekranında yalnız tezgâh tarifleri */
@@ -178,6 +181,24 @@ class GameShotsTest {
         }, overlay = {
             val hud = GameSession.hud()
             com.zenvex.online.ui.WorldMapView(null, null, GameSession.world(), hud[Native.PX], hud[Native.PY], 8, emptyList(), {}, region = snap)
+        })
+    }
+
+    /** Büyük harita gerçek oyundaki gibi: keşif bulutu ve bölge dışı bulut denizi */
+    @Test fun g17b_regionMapFog() {
+        var snap: RegionMap.Snap? = null
+        shot("region_map_fog", { cheat("level 8"); cheat("tp camp") }, steps = 30, hud = false, after = {
+            val w = GameSession.world()
+            val areas = com.zenvex.online.ui.mapAreas(w)
+            val names = w.getJSONArray("names")
+            val atlas = Atlas.get(paparazzi.context)
+            val statics = Array(names.length()) { atlas["s/" + names.getString(it)] }
+            val hud = GameSession.hud()
+            snap = RegionMap.buildNow(com.zenvex.online.ui.areaIndexAt(areas, hud[Native.PX], hud[Native.PY]), areas[com.zenvex.online.ui.areaIndexAt(areas, hud[Native.PX], hud[Native.PY])], statics)
+        }, overlay = {
+            val hud = GameSession.hud()
+            com.zenvex.online.ui.WorldMapView(null, com.zenvex.online.ui.fogMask(GameSession.ui("fog")), GameSession.world(), hud[Native.PX], hud[Native.PY], 8,
+                emptyList(), {}, region = snap)
         })
     }
 

@@ -212,12 +212,13 @@ fun Bar(value: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 
 fun Color.lighten(k: Float) = Color((red * k).coerceAtMost(1f), (green * k).coerceAtMost(1f), (blue * k).coerceAtMost(1f), alpha)
 
 @Composable
-fun Tabs(items: List<Pair<String, String>>, selected: Int, modifier: Modifier = Modifier, onSelect: (Int) -> Unit) {
+fun Tabs(items: List<Pair<String, String>>, selected: Int, modifier: Modifier = Modifier,
+         rects: MutableMap<String, androidx.compose.ui.geometry.Rect>? = null, onSelect: (Int) -> Unit) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         items.forEachIndexed { i, (icon, label) ->
             val on = i == selected
             Row(
-                Modifier.clip(RoundedCornerShape(3.dp)).background(if (on) Px.Panel else Px.PanelDark).pxBevel(light = if (on) 0.10f else 0.04f)
+                (if (rects != null) Modifier.tutRect(rects, "tab$i") else Modifier).clip(RoundedCornerShape(3.dp)).background(if (on) Px.Panel else Px.PanelDark).pxBevel(light = if (on) 0.10f else 0.04f)
                     .drawBehind { if (on) drawRect(Px.Clan, Offset(0f, size.height - 3.dp.toPx()), Size(size.width, 3.dp.toPx())) }
                     .border(2.dp, Px.Edge, RoundedCornerShape(3.dp))
                     .clickable { Audio.play("click", bus = Audio.Bus.Ui); onSelect(i) }

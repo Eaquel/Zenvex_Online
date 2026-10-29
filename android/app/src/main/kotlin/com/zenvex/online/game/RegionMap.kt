@@ -41,6 +41,8 @@ object RegionMap {
                 if (s != null) snap = s else retryAt = System.currentTimeMillis() + 3000
             } catch (e: Throwable) {
                 Log.w("zenvex", "bölge haritası çizilemedi", e)
+                // her karede yeni iş parçacığı açılmasın
+                retryAt = System.currentTimeMillis() + 5000
             } finally {
                 building = -1
             }
@@ -67,19 +69,38 @@ object RegionMap {
             System.arraycopy(band, 0, px, y * w, w * bh)
             y += bh
         }
-        val bmp = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888).copy(Bitmap.Config.ARGB_8888, true)
-        val c = Canvas(bmp)
+        val ground = Bitmap.createBitmap(px, w, h, Bitmap.Config.ARGB_8888)
         // nesneler: oyundaki görselleriyle, y'ye göre sıralı (öndeki arkadakini örter)
         val buf = FloatArray(MAX_STATICS * 4)
         val n = synchronized(GameSession.lock) {
             if (GameSession.handle == 0L) 0 else Native.regionStatics(GameSession.handle, x0, y0, x1, y1, buf)
         }
         val order = (0 until n).sortedBy { buf[it * 4 + 2] }
-        val atlas = Atlas.peek() ?: return Snap(ai, bmp, x0, y0, step)
+        val atlas = Atlas.peek() ?: return Snap(ai, ground, x0, y0, step)
         val paint = Paint().apply { isFilterBitmap = true }
+        // Atlas sayfaları GPU'da (HARDWARE): yazılımsal tuvale çizilemez (eskiden burada hata alınıyor, harita hiç
+        // oluşmuyor, mini harita ve büyük harita eski düz renkli dünya haritasında kalıyordu). Android 9+ resim GPU'da
+        // kaydedilip donanımla çizilir; olmazsa sayfaların yazılımsal kopyalarıyla.
+        if (android.os.Build.VERSION.SDK_INT >= 28) {
+            val hw = runCatching {
+                val pic = android.graphics.Picture()
+                val pc = pic.beginRecording(w, h)
+                pc.drawBitmap(ground, 0f, 0f, null)
+                for (i in order) {
+                    val sp = statics.getOrNull(buf[i * 4].toInt()) ?: continue
+                    atlas.draw(pc, sp, (buf[i * 4 + 1] - x0) / step, (buf[i * 4 + 2] - y0) / step, 1f / step, paint)
+                }
+                pic.endRecording()
+                Bitmap.createBitmap(pic, w, h, Bitmap.Config.HARDWARE)
+            }.getOrNull()
+            if (hw != null) { ground.recycle(); return Snap(ai, hw, x0, y0, step) }
+        }
+        val bmp = ground.copy(Bitmap.Config.ARGB_8888, true)
+        ground.recycle()
+        val c = Canvas(bmp)
         for (i in order) {
             val sp = statics.getOrNull(buf[i * 4].toInt()) ?: continue
-            atlas.draw(c, sp, (buf[i * 4 + 1] - x0) / step, (buf[i * 4 + 2] - y0) / step, 1f / step, paint)
+            atlas.drawSoft(c, sp, (buf[i * 4 + 1] - x0) / step, (buf[i * 4 + 2] - y0) / step, 1f / step, paint)
         }
         return Snap(ai, bmp, x0, y0, step)
     }

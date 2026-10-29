@@ -292,8 +292,9 @@ V6_PROPS = {"crate": ("crate", 0.9), "crate_mil": ("milbox", 1.0), "campfire": (
 # NPC'ler: (görsel, boy m)
 # V7 piksel yer işaretleri: (görsel, genişlik m, çapa x/y oranı)
 V7 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v7")
-V7_PROPS = {"med_tent": ("med_tent", 3.4, (0.5, 0.93)), "mystery_tree": ("mystery_tree", 6.0, (0.53, 0.97)),
-            "gas_station": ("gas_station", 4.6, (0.56, 0.92))}
+V7_PROPS = {"med_tent": ("med_tent", 3.4, (0.5, 0.93)), "gas_station": ("gas_station", 4.6, (0.56, 0.92))}
+# V20: Gizemli Ağaç eski basık piksel çizimi yerine güncel ağaç setindeki sonbahar meşesinin büyük hâli
+SPRITE_ALIAS = {"s/mystery_tree": ("s/oak_autumn", 1.55)}
 V6_NPCS = {"merchant": 1.85, "soldier": 1.75, "quest": 1.72, "doctor": 1.75, "mechanic": 1.78, "trainer": 1.8}
 # V8 kullanıcı görselleri (tools/pixel/v8_objects.py → art/v8): (dosya, genişlik m, çapa x/y oranı)
 V8 = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "art", "v8")
@@ -557,6 +558,9 @@ def main():
     if fx:
         P.pack_group("fx", fx)
     pages = P.save(OUT)
+    for k, (src, mul) in SPRITE_ALIAS.items():
+        if src in P.sprites:
+            e = list(P.sprites[src]); e[7] = round(e[7] * mul, 5); P.sprites[k] = e
     manifest = {"pages": pages, "groups": P.groups, "sprites": P.sprites, "attach": attach, "fx": fxmeta,
                 "anims": {"hero": HERO_ANIMS, "zombie": ZOMBIE_ANIMS}}
     json.dump(manifest, open(os.path.join(OUT, "manifest.json"), "w"), separators=(",", ":"))

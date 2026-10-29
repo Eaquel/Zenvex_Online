@@ -58,10 +58,21 @@ private val AREA_COLOR = mapOf(
 /** Büyücü haritası (oyunda): bölgeler Rust'tan, eşya adları dünya tablosundan; ışınlanma komutu `wizard_tp`. */
 @Composable
 fun WizardMapScreen(close: () -> Unit) {
-    val data = remember { GameSession.ui("areas") }
+    // bekleme süresi ve altın canlı: veri yarım saniyede bir yenilenir (eskiden açılışta bir kez okunuyor, süre donuyordu)
+    var tick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(500); tick++ } }
+    val data = remember(tick) { GameSession.ui("areas") }
+    // öğretici "Işınlan": önce Kişisel Üssüm, oradan Başlangıç Ormanı işaretlenir
+    val tut = remember(tick) {
+        if (Tut.step() != "g6c") null else {
+            val a = data.optJSONArray("areas")
+            val hereId = a?.optJSONObject(data.optInt("here", 0))?.optString("id")
+            if (hereId == "home") "forest" else "home"
+        }
+    }
     val items = remember { itemNames(GameSession.world()) }
     val img = remember { WorldMapImage.get() }
-    WizardMapView(data, items, img, close) { id ->
+    WizardMapView(data, items, img, close, tutTarget = tut) { id ->
         val r = GameSession.cmd("wizard_tp", "to" to id)
         Toaster.show(r.msg, r.ok)
         if (r.ok) close()
@@ -115,7 +126,8 @@ private val STARS = java.util.Random(11).let { r -> List(70) { floatArrayOf(r.ne
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int>>, worldImg: ImageBitmap?, close: () -> Unit, initial: Int = -1,
-                           teleport: (String) -> Unit) {
+                           tutTarget: String? = null, teleport: (String) -> Unit) {
+    val tutR = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     val ctx = LocalContext.current
     val areas = remember(data) { data.optJSONArray("areas") ?: JSONArray() }
     val ids = remember(areas) { List(areas.length()) { areas.getJSONObject(it).optString("id") } }
@@ -230,6 +242,12 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                         }
                     }
                 }
+                // öğretici: gidilecek adanın kutusu
+                (if (tutTarget == null) -1 else ids.indexOf(tutTarget)).takeIf { it >= 0 }?.let { i ->
+                    val c = center(i)
+                    androidx.compose.foundation.layout.Box(Modifier.offset { IntOffset((c.x - s / 2).toInt(), (c.y - s * 0.45f).toInt()) }
+                        .size(with(d) { s.toDp() }, with(d) { (s * 0.9f).toDp() }).tutRect(tutR, "island"))
+                }
                 // ada adları (kilitliyse kilit ve seviye)
                 for (i in ids.indices) {
                     val a = areas.getJSONObject(i)
@@ -258,7 +276,20 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
                     PT("Bir bölgeye dokun: orada ne yaşadığını, ne düştüğünü ve kaçıncı seviyede gitmen gerektiğini söylerim.", 14.sp, Px.Sub, maxLines = 4)
                     Spacer(Modifier.height(8.dp))
                     PT("Her bölge ayrı bir diyar; aralarında yürünmez, kapımdan geçilir.", 13.sp, Px.Sub, maxLines = 3)
-                } else AreaCard(a, sel == here, data.optInt("gold"), data.optDouble("cd", 0.0).toFloat(), data.optBoolean("near", true), items, teleport)
+                } else AreaCard(a, sel == here, data.optInt("gold"), data.optDouble("cd", 0.0).toFloat(), data.optBoolean("near", true), items, tutR, teleport)
+            }
+        }
+        if (tutTarget != null) {
+            val ti = ids.indexOf(tutTarget)
+            val name = areas.optJSONObject(ti)?.optString("name").orEmpty()
+            val cd = data.optDouble("cd", 0.0)
+            when {
+                ti < 0 -> {}
+                sel != ti -> TutLayer(listOf(TutTarget(tutR["island"], "$name'a Dokun", below = true)),
+                    if (tutTarget == "home") "Parlayan Kişisel Üssüm adasına dokun: sağda kartı açılır." else "Şimdi parlayan Başlangıç Ormanı adasına dokun: oradan geri dönersin.",
+                    cardStart = 12, cardEnd = 360)
+                cd > 0 -> TutLayer(emptyList(), "Büyü toparlanıyor: süre bitince Işınlan düğmesi açılır.", cardStart = 12, cardEnd = 360)
+                else -> TutLayer(listOf(TutTarget(tutR["tp"], "Işınlan'a Bas")), "Sağdaki Işınlan düğmesine bas.", cardStart = 12, cardEnd = 360)
             }
         }
     }
@@ -267,7 +298,8 @@ internal fun WizardMapView(data: JSONObject, items: Map<String, Pair<String, Int
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun androidx.compose.foundation.layout.ColumnScope.AreaCard(
-    a: JSONObject, here: Boolean, gold: Int, cd: Float, near: Boolean, items: Map<String, Pair<String, Int>>, teleport: (String) -> Unit,
+    a: JSONObject, here: Boolean, gold: Int, cd: Float, near: Boolean, items: Map<String, Pair<String, Int>>,
+    tutR: MutableMap<String, androidx.compose.ui.geometry.Rect>, teleport: (String) -> Unit,
 ) {
     val id = a.optString("id")
     val open = a.optBoolean("open")
@@ -324,7 +356,7 @@ private fun androidx.compose.foundation.layout.ColumnScope.AreaCard(
         else -> "Işınlan · Ücretsiz"
     }
     val ok = !here && open && cd <= 0f && near && gold >= cost
-    PxButton(label, Modifier.fillMaxWidth(), color = Color(0xFF7A4AB5), icon = "map", height = 48.dp, size = 16.sp, enabled = ok) { teleport(id) }
+    PxButton(label, Modifier.fillMaxWidth().tutRect(tutR, "tp"), color = Color(0xFF7A4AB5), icon = "map", height = 48.dp, size = 16.sp, enabled = ok) { teleport(id) }
     if (open && !here && gold < cost) PT("Yetersiz Altın", 12.sp, Color(0xFFE07060))
 }
 

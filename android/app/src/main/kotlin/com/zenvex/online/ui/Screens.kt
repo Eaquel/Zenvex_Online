@@ -227,9 +227,12 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
     val near = data.optBoolean("near_bench")
 
     // öğretici: hangi sekme, hangi tarif, hangi düğme (adıma göre)
-    val tutR = remember { HashMap<String, androidx.compose.ui.geometry.Rect>() }
+    val tutR = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
     // V19: rehber ve ana görevlerin bütün üretim adımları (Silas'ın motosiklet parçaları dahil): sekme tarifin kendisinden
-    val craftWant = remember(tick) { Tut.craftWant() }
+    // görev değişince (teslim, yeni görev) ekran kapanıp açılmadan güncellensin
+    var qtick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(700); qtick++ } }
+    val craftWant = remember(tick, qtick) { Tut.craftWant() }
     val tutWant: Pair<Int, String>? = craftWant?.let { (id, _) ->
         all.firstOrNull { it.optJSONObject("out")?.optString("id") == id }?.let { it.optInt("tab") to id }
     }
@@ -282,7 +285,11 @@ fun CraftScreen(back: () -> Unit, bench: Boolean = false) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PxPanel(Modifier.weight(1f).fillMaxHeight(), color = Color(0xB4201F1C), pad = 6.dp) {
                 if (list.isEmpty()) PT(if (onlyCan) "Bu Sekmede Şu An Yapabileceğin Bir Şey Yok" else "Tarif Yok", 13.sp, Px.Sub)
-                LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+                // öğretici: istenen tarif listede görünmüyorsa oraya kaydır (görünmeyen satır işaretlenemez)
+                val wantIdx = tutWant?.takeIf { it.first == tab }?.let { w -> list.indexOfFirst { it.optJSONObject("out")?.optString("id") == w.second } } ?: -1
+                LaunchedEffect(wantIdx, tab) { if (wantIdx >= 0) listState.animateScrollToItem(wantIdx) }
+                LazyColumn(Modifier.fillMaxSize(), listState, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(list.size) { k ->
                         val g = list[k]
                         val out = g.optJSONObject("out") ?: JSONObject()
@@ -410,7 +417,11 @@ fun MerchantScreen(back: () -> Unit, openStore: () -> Unit) {
     var tab by remember { mutableIntStateOf(0) }
     var ask by remember { mutableStateOf<AmountAsk?>(null) }
     val data = remember(tick) { GameSession.ui("merchant") }
-    MerchantView(data, tab, { tab = it }, back, openStore,
+    // öğretici "Eşya Sat": Sat sekmesi ve satış düğmesi işaretlenir (görev değişince ekran da güncellensin)
+    var qtick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(Unit) { while (true) { delay(700); qtick++ } }
+    val tutSell = remember(tick, qtick) { Tut.step() == "g6s" }
+    MerchantView(data, tab, { tab = it }, back, openStore, tutSell = tutSell,
         buy = { o -> val r = GameSession.cmd("buy", "i" to o.optInt("i"), "n" to 1); Toaster.show(r.msg, r.ok); tick++; if (r.ok) com.zenvex.online.game.Audio.play("coin") },
         sell = { o ->
             val n = o.optInt("count")
@@ -429,12 +440,17 @@ fun MerchantScreen(back: () -> Unit, openStore: () -> Unit) {
 
 @Composable
 internal fun MerchantView(data: JSONObject, tab: Int, setTab: (Int) -> Unit, back: () -> Unit, openStore: () -> Unit,
-                          buy: (JSONObject) -> Unit, sell: (JSONObject) -> Unit) {
+                          buy: (JSONObject) -> Unit, sell: (JSONObject) -> Unit, tutSell: Boolean = false) {
+    val tutR = remember { androidx.compose.runtime.mutableStateMapOf<String, androidx.compose.ui.geometry.Rect>() }
+    // satış öğreticisinde işaretlenecek eşya: önce kumaş (görev çantaya koyar), yoksa ilk satılabilir eşya
+    val sellList = data.optJSONArray("sell").objs()
+    val tutItem = if (!tutSell) null else (sellList.firstOrNull { it.optJSONObject("item")?.optString("id") == "cloth" } ?: sellList.firstOrNull())
+    Box(Modifier.fillMaxSize()) {
     ScreenFrame("GEZGİN TÜCCAR MARCO", "shop", back, right = {
         Chip("coin", fmt(data.optInt("gold")), Pal.Gold); Spacer(Modifier.width(8.dp))
         GButton("Mağaza", tone = Tone.Blue, icon = "crate", height = 34.dp, size = 12.sp) { openStore() }
     }) {
-        Tabs(listOf("shop" to "Satın Al", "coin" to "Sat", "star" to "Olasılıklar"), tab) { setTab(it) }
+        Tabs(listOf("shop" to "Satın Al", "coin" to "Sat", "star" to "Olasılıklar"), tab, rects = tutR) { setTab(it) }
         Spacer(Modifier.height(10.dp))
         val next = data.optDouble("next").toInt()
         when (tab) {
@@ -479,7 +495,8 @@ internal fun MerchantView(data: JSONObject, tab: Int, setTab: (Int) -> Unit, bac
                             T(it.optString("name"), 13.sp, bold = true, maxLines = 1)
                             T(if (n > 1) "Hepsi: ${fmt(o.optInt("price") * n)}" else " ", 11.sp, Pal.Sub, maxLines = 1)
                             Spacer(Modifier.height(4.dp))
-                            GButton("+${o.optInt("price")}", Modifier.fillMaxWidth(), Tone.Green, icon = "coin", height = 34.dp, size = 13.sp, sub = "tanesi") { sell(o) }
+                            GButton("+${o.optInt("price")}", Modifier.fillMaxWidth().then(if (o === tutItem) Modifier.tutRect(tutR, "sell") else Modifier),
+                                Tone.Green, icon = "coin", height = 34.dp, size = 13.sp, sub = "tanesi") { sell(o) }
                         }
                     }
                 }
@@ -510,6 +527,16 @@ internal fun MerchantView(data: JSONObject, tab: Int, setTab: (Int) -> Unit, bac
                 }
             }
         }
+    }
+    if (tutSell) {
+        when {
+            tab != 1 -> TutLayer(listOf(TutTarget(tutR["tab1"], "Sat'a Dokun", below = true)),
+                "Üstteki parlayan Sat sekmesine dokun: çantandaki satılabilir eşyalar orada.", cardStart = 380, cardEnd = 200)
+            tutItem == null -> TutLayer(emptyList(), "Satacak eşyan yok. Biraz malzeme topla ya da görevin verdiği kumaşı bekle.", cardStart = 380, cardEnd = 200)
+            else -> TutLayer(listOf(TutTarget(tutR["sell"], "Sat'a Bas", below = true)),
+                "Parlayan eşyanın altın düğmesine bas; birden fazlaysa kaç tane satacağını seçersin.", cardStart = 380, cardEnd = 200)
+        }
+    }
     }
 }
 
@@ -626,7 +653,7 @@ fun ChatPanel(modifier: Modifier = Modifier, onClose: () -> Unit, onPlayer: ((ui
                     if (onPlayer != null) onPlayer(who, l.name) else profileOf = l.name
                 } else Modifier), verticalAlignment = Alignment.CenterVertically) {
                     // gönderenin resmi ve çerçevesi (animasyonlu); sistem satırlarında yok
-                    if (l.channel != "system" && l.avatar >= 0) { ProfileAvatar(l.avatar, l.frame, 30.dp); Spacer(Modifier.width(5.dp)) }
+                    if (l.channel != "system" && l.avatar >= 0) { ProfileAvatar(l.avatar, l.frame, 30.dp, account = if (l.mine) Account.id.value else l.uid.removePrefix("a").toLongOrNull() ?: -1); Spacer(Modifier.width(5.dp)) }
                     if (l.tag.isNotEmpty() && l.channel != "clan") PT("[${l.tag}] ", 13.sp, Px.Clan)
                     PT(l.name + ": ", 13.sp, if (l.mine) Px.Name else if (l.channel == "system") Px.Orange else Color(0xFF8CC8FF))
                     PT(l.text, 14.sp, maxLines = 6, outline = true)

@@ -392,7 +392,7 @@ private fun BoardList(cat: BoardCat, preview: JSONArray?, open: (String) -> Unit
                     verticalAlignment = Alignment.CenterVertically) {
                     RankMedal(rk, if (rk <= 3) 44.dp else 36.dp)
                     Spacer(Modifier.width(6.dp))
-                    ProfileAvatar(o.optInt("avatar"), o.optString("frame"), 42.dp, photo = o.optString("photo"))
+                    ProfileAvatar(o.optInt("avatar"), o.optString("frame"), 42.dp, photo = o.optString("photo"), account = o.optLong("id", -1))
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -623,6 +623,8 @@ impl World {
 
     fn push(&mut self, name: &str, kind: Kind, x: f32, y: f32, shape: Shape, hp: f32, phase: f32) {
         let (name, shape) = v10_variant(name, x, y, shape);
+        // V20: çöldeki kaktüs (kuru ağacın çöl hâli) kesilmez: kırılmaz süs
+        let kind = if name == "cactus" { Kind::Prop } else { kind };
         // V11: ağaç ve kaya 500 can (vuruş gücü alete bağlı, bkz. Game::hit_static)
         let hp = if matches!(kind, Kind::Tree | Kind::Rock) { TREE_HP } else { hp };
         let sort_off = match shape {
@@ -1532,13 +1534,15 @@ impl World {
             0.0,
             0.0,
         );
+        // V20: kamptaki iki süs sandığı kalktı (üsse kurulan sandıklarla karışıyordu); nesne sırası değişmesin diye
+        // yerlerinde ot tutamı (çok oyunculu oyunda nesneler sıra numarasıyla eşleşir)
         for (ox, oy) in [(-2.0, -6.0), (2.5, -6.0)] {
             self.push(
-                "chest_wood",
-                Kind::Prop,
+                "grass2",
+                Kind::Deco,
                 cx + ox * t,
                 cy + oy * t,
-                Shape::Circle(0.45 * t),
+                Shape::None,
                 0.0,
                 0.0,
             );
@@ -1959,7 +1963,7 @@ impl World {
                 self.push("lamp", Kind::Lamp, x, y, Shape::Circle(0.15 * t), 0.0, 0.0);
             }
             let (x, y) = at(5.0, 0.5);
-            self.push("chest_wood", Kind::Prop, x, y, Shape::Circle(0.4 * t), 0.0, 0.0);
+            self.push("grass2", Kind::Deco, x, y, Shape::None, 0.0, 0.0);
         }
     }
 

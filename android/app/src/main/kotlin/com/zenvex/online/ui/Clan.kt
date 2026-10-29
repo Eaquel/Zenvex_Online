@@ -264,7 +264,7 @@ private fun ClanMembers(c: JSONObject, myRank: Int, changed: () -> Unit) {
                 val r = o.optInt("rank")
                 Row(Modifier.fillMaxWidth().background(if (i % 2 == 0) Px.Row else Color.Transparent).clickable { pick = o }.padding(6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    ProfileAvatar(o.optInt("avatar"), "", 34.dp)
+                    ProfileAvatar(o.optInt("avatar"), "", 34.dp, account = o.optLong("id", -1))
                     Spacer(Modifier.width(6.dp))
                     Box(Modifier.size(9.dp).clip(CircleShape).background(if (o.optBoolean("online")) Px.Name else Px.Sub))
                     Spacer(Modifier.width(6.dp))

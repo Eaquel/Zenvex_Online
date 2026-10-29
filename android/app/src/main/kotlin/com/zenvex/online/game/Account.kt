@@ -72,7 +72,7 @@ object Account {
         id.value = p.optLong("id", id.value)
         name.value = p.optString("name", name.value)
         clan.value = p.optJSONObject("clan")?.let { Clan(it.optLong("id"), it.optString("name"), it.optInt("color"), it.optBoolean("owner"), it.optInt("rank"), it) }
-        if (p.has("avatar")) profile.value = p
+        if (p.has("avatar")) { profile.value = p; com.zenvex.online.ui.PhotoCache.put(id.value, p.optString("photo")) }
         p.optJSONObject("chars")?.let { c -> levels.clear(); for (k in c.keys()) levels[k] = c.optInt(k) }
         unread.intValue = p.optInt("unread")
         admin.value = p.optBoolean("admin")
