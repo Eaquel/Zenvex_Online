@@ -452,6 +452,8 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
     }
 
     private var trimT = 0f
+    private var xpTxt = ""; private var xpTxtLv = -1; private var xpTxtV = -1; private var xpTxtN = -1
+    private var posTxt = ""; private var posTxtX = Int.MIN_VALUE; private var posTxtY = Int.MIN_VALUE
 
     private fun loop() {
         var last = SystemClock.elapsedRealtimeNanos()
@@ -3277,7 +3279,7 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         // çakışan isim (kalabalıkta) saydamlaşır, kendi ismin ve boss'unki hep tam görünür.
         val cx = sw / 2f; val cy = sh / 2f
         plates.sortWith(compareBy({ if (it.self) 0 else 1 }, { hypot(it.x - cx, it.y - cy) }))
-        val myLevel = GameSession.hud()[Native.LEVEL].toInt()
+        val myLevel = hud[Native.LEVEL].toInt()
         var named = 0
         for (p in plates) {
             if (p.lvl > 0) { drawCreaturePlate(c, p, myLevel); continue }
@@ -3602,8 +3604,16 @@ class GameView(context: Context, private val ui: GameUi) : SurfaceView(context),
         val xpv = hud[Native.XP]; val xpn = max(1f, hud[Native.XPNEXT])
         fill.color = 0xB0101010.toInt(); c.drawRect(0f, sh - 5 * d, sw.toFloat(), sh.toFloat(), fill)
         fill.color = 0xFFE8C840.toInt(); c.drawRect(0f, sh - 5 * d, sw * (xpv / xpn).coerceIn(0f, 1f), sh.toFloat(), fill)
-        drawText(c, "Sv. ${hud[Native.LEVEL].toInt()}  ${xpv.toInt()}/${xpn.toInt()}  %${"%.2f".format(xpv / xpn * 100)}", 8 * d, sh - 8 * d, 11 * d, 0xFFFFF2B0.toInt())
-        drawText(c, "X: ${(hud[Native.PX] / tile).toInt()}  Y: ${(hud[Native.PY] / tile).toInt()}", 8 * d, sh - 22 * d, 12 * d, 0xC0FFFFFF.toInt())
+        // metinler yalnız değer değişince yeniden kurulur (String.format her karede yavaş ve çöp üretiyordu)
+        val lv = hud[Native.LEVEL].toInt(); val xi = xpv.toInt(); val xn = xpn.toInt()
+        if (lv != xpTxtLv || xi != xpTxtV || xn != xpTxtN) {
+            xpTxtLv = lv; xpTxtV = xi; xpTxtN = xn
+            xpTxt = "Sv. $lv  $xi/$xn  %${"%.2f".format(xpv / xpn * 100)}"
+        }
+        drawText(c, xpTxt, 8 * d, sh - 8 * d, 11 * d, 0xFFFFF2B0.toInt())
+        val tx = (hud[Native.PX] / tile).toInt(); val ty = (hud[Native.PY] / tile).toInt()
+        if (tx != posTxtX || ty != posTxtY) { posTxtX = tx; posTxtY = ty; posTxt = "X: $tx  Y: $ty" }
+        drawText(c, posTxt, 8 * d, sh - 22 * d, 12 * d, 0xC0FFFFFF.toInt())
         // ---- sohbet satırları
         synchronized(chatLines) {
             var y = sh - stickR * 3.4f

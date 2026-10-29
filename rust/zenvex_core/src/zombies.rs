@@ -17,6 +17,11 @@ pub const ZOMBIE_PACE: f32 = 0.8;
 pub const ZOMBIE_HP_MULT: f32 = 1.45;
 pub const ZOMBIE_DMG_MULT: f32 = 1.2;
 
+/// Uzak yaratık seyreltmesi bu sayının üstünde başlar (olağan oyunda bölge başına ~14 yaratık: davranış birebir aynı)
+const ZLOD_MIN: usize = 300;
+/// En yakın oyuncuya bu uzaklıktan (Chebyshev, dünya pikseli; ekranın yarısından büyük) ötesi "uzak" sayılır
+const ZLOD_DIST: f32 = 1800.0;
+
 impl Game {
     pub fn make_zombie(&mut self, kind: ZKind, level: u32, x: f32, y: f32) -> Zombie {
         let def = &ZOMBIES[kind as usize];
@@ -265,7 +270,26 @@ impl Game {
         let mut summons: Vec<(f32, f32)> = Vec::new();
         let mut shockwaves: Vec<(f32, f32)> = Vec::new();
         let mut slams: Vec<(f32, f32, f32, f32)> = Vec::new();
+        self.zlod_frame = self.zlod_frame.wrapping_add(1);
+        let lod = n > ZLOD_MIN;
         for zi in 0..n {
+            // kalabalıkta (yüzlerce yaratık) tüm oyunculardan ekran dışı uzaklıkta olanların yapay zekâsı 3 karede bir,
+            // 3 katı zamanla işler: görünen yaratıklar her karede tam hızla; uzaktakilerin toplam hareketi aynı kalır
+            let mut zdt = dt;
+            if lod && !self.zombies[zi].boss && self.zombies[zi].state != ZState::Dead {
+                let z0 = &self.zombies[zi];
+                let mut nd = (lpx - z0.x).abs().max((lpy - z0.y).abs());
+                for t in &targets {
+                    nd = nd.min((t.0 - z0.x).abs().max((t.1 - z0.y).abs()));
+                }
+                if nd > ZLOD_DIST {
+                    if !(self.zlod_frame as usize + zi).is_multiple_of(3) {
+                        continue;
+                    }
+                    zdt = dt * 3.0;
+                }
+            }
+            let dt = zdt;
             let mut z = self.zombies[zi].clone();
             let def = &ZOMBIES[z.kind as usize];
             let (sp_speed, sp_dmg) = crate::data::species(z.species).map_or((1.0, 1.0), |s| (s.speed, s.dmg));

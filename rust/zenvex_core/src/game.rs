@@ -519,6 +519,8 @@ pub struct Game {
     pub rng: Rng,
     pub scratch: Vec<u32>,
     /// zombi itme ızgarası (her karede yeniden kurulur, bellek yeniden kullanılır): hücre başlangıçları ve sıralı zombi dizinleri
+    /** uzak yaratık güncelleme sırası (kalabalıkta ekran dışındakiler 3 karede bir, 3× zamanla) */
+    pub zlod_frame: u32,
     pub sep_start: Vec<u32>,
     pub sep_order: Vec<u32>,
     pub sep_cell: Vec<u32>,
@@ -695,6 +697,7 @@ impl Game {
             textures: Textures::default(),
             rng: Rng::new(seed ^ 0x5EED),
             scratch: Vec::new(),
+            zlod_frame: 0,
             sep_start: Vec::new(),
             sep_order: Vec::new(),
             sep_cell: Vec::new(),

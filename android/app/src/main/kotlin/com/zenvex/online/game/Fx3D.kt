@@ -97,6 +97,8 @@ class Fx3D {
         }
     }
     private val ps = PList()
+    /** yere düşen damlalardan doğan lekeler (her karede yeni liste ayrılmasın) */
+    private val splatTmp = ArrayList<P>()
     private val rnd = Random(7)
 
     private object K {
@@ -687,7 +689,7 @@ class Fx3D {
         if (emit.size > 64) emit.clear()
         val g = unit * 9.8f
         val it = ps.iterator()
-        val splats = ArrayList<P>()
+        val splats = splatTmp.apply { clear() }
         while (it.hasNext()) {
             val p = it.next()
             p.life -= dt
