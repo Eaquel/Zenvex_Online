@@ -188,6 +188,8 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
     var msg by remember { mutableStateOf("") }
     var gold by remember { mutableStateOf("") }
     var gems by remember { mutableStateOf("") }
+    var lvl by remember { mutableStateOf("") }
+    var clvl by remember { mutableStateOf("") }
     val st = d.optJSONObject("stats") ?: JSONObject()
     PT("Hesap Açılışı: ${d.optString("created_at").take(10)} · Son Görülme: ${d.optString("last_seen").take(16).replace('T', ' ')}", 12.sp, Px.Sub)
     if (st.length() > 0) PT("Oynama Süresi: ${st.optLong("time") / 3600} Saat", 12.sp, Px.Sub)
@@ -237,6 +239,19 @@ private fun AdminSummary(target: Long, d: JSONObject, sec: JSONObject?, res: (Re
         Field(gems, { gems = it.filter(Char::isDigit).take(7) }, "Elmas", Modifier.width(110.dp))
         PxButton("Elması Ayarla", color = Px.Dark, height = 38.dp, size = 12.sp, enabled = gems.isNotEmpty()) {
             Account.adminAction(target, JSONObject().put("t", "set_gems").put("v", gems.toLongOrNull() ?: 0), res)
+        }
+    }
+    Spacer(Modifier.height(6.dp))
+    // V20: oyuncu seviyesi (1-50) ve şu an seçili karakterin seviyesi; oyuncu çevrimdışıysa ilk girişte uygulanır
+    PT("Seviye", 15.sp, Px.Clan)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Field(lvl, { lvl = it.filter(Char::isDigit).take(2) }, "Oyuncu Sv", Modifier.width(110.dp))
+        PxButton("Seviyeyi Ayarla", color = Px.Dark, height = 38.dp, size = 12.sp, enabled = lvl.isNotEmpty()) {
+            Account.adminAction(target, JSONObject().put("t", "set_level").put("v", lvl.toIntOrNull() ?: 1), res)
+        }
+        Field(clvl, { clvl = it.filter(Char::isDigit).take(2) }, "Karakter Sv", Modifier.width(120.dp))
+        PxButton("Karakter Seviyesi", color = Px.Dark, height = 38.dp, size = 12.sp, enabled = clvl.isNotEmpty()) {
+            Account.adminAction(target, JSONObject().put("t", "set_char_level").put("v", clvl.toIntOrNull() ?: 1), res)
         }
     }
     Spacer(Modifier.height(6.dp))

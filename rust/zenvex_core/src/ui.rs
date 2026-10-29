@@ -612,6 +612,26 @@ impl Game {
                         self.progress.gold = a["v"].as_u64().unwrap_or(0).min(u32::MAX as u64) as u32;
                         Ok("Yönetici altınını ayarladı".into())
                     }
+                    // V20: yönetici oyuncu seviyesini ayarlar (yükseltirken tecrübe eklenir: seviye ödülleri ve can artışı gelir)
+                    "set_level" => {
+                        let target = (a["v"].as_u64().unwrap_or(1) as u32).clamp(1, progress::MAX_LEVEL);
+                        let p = &mut self.progress;
+                        if target < p.level {
+                            p.level = target;
+                            p.xp = 0;
+                        }
+                        while p.level < target {
+                            let need = progress::xp_to_next(p.level) - p.xp.min(progress::xp_to_next(p.level));
+                            p.add_xp(need.max(1));
+                        }
+                        Ok(format!("Yönetici seviyeni {} yaptı", p.level))
+                    }
+                    "set_char_level" => {
+                        let c = self.progress.character;
+                        self.progress.char_level[c] = (a["v"].as_u64().unwrap_or(1) as u32).clamp(1, progress::MAX_CHAR_LEVEL);
+                        self.progress.char_xp[c] = 0;
+                        Ok(format!("Yönetici karakter seviyeni {} yaptı", self.progress.char_level[c]))
+                    }
                     // V18: kanatları yalnız yönetici takar/çıkarır (kimlik boş = çıkar)
                     "set_wings" => {
                         let id = a["id"].as_str().unwrap_or("");

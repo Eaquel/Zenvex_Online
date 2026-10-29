@@ -55,7 +55,8 @@ Deno.serve(async (req: Request) => {
     return json({ error: "Geçersiz istek" }, 400);
   }
   const { id, key, server, product, token } = body;
-  if (!id || !key || !product || !token || !/^[a-z0-9_]{2,40}$/.test(product)) return json({ error: "Eksik bilgi" }, 400);
+  // kimlik 0 (yönetici hesabı) geçerli: "!id" onu eksik sayıyordu
+  if (id == null || !key || !product || !token || !/^[a-z0-9_]{2,40}$/.test(product)) return json({ error: "Eksik bilgi" }, 400);
   const saRaw = Deno.env.get("GOOGLE_PLAY_SA");
   if (!saRaw) return json({ error: "Ödeme doğrulaması henüz yapılandırılmadı" }, 503);
 

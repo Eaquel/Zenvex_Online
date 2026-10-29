@@ -219,6 +219,12 @@ private fun SupportTicket(o: JSONObject, open: Boolean, openPlayer: (Long) -> Un
     var images by remember { mutableStateOf<List<ImageBitmap>?>(null) }
     var loading by remember { mutableStateOf(false) }
     val paths = o.optJSONArray("paths")?.length() ?: 0
+    var big by remember { mutableStateOf<ImageBitmap?>(null) }
+    big?.let { b ->
+        Dim({ big = null }) {
+            androidx.compose.foundation.Image(b, null, Modifier.fillMaxSize().padding(16.dp), contentScale = ContentScale.Fit)
+        }
+    }
     Column(Modifier.fillMaxWidth().pxPanel(Px.PanelDark).padding(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PT("#${o.optLong("id")} · ${o.optString("topic")}", 14.sp, Px.Clan, Modifier.weight(1f))
@@ -244,8 +250,13 @@ private fun SupportTicket(o: JSONObject, open: Boolean, openPlayer: (Long) -> Un
                             }.onFailure { loading = false; report(it.message ?: "", false) }
                         }
                     } else Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for (b in imgs) androidx.compose.foundation.Image(b, null, Modifier.height(140.dp).width(100.dp), contentScale = ContentScale.Fit)
+                        if (imgs.isEmpty()) PT("Fotoğraflar Açılamadı", 11.sp, Px.Hard)
+                        // dokununca tam ekran
+                        for (b in imgs) androidx.compose.foundation.Image(b, null, Modifier.height(140.dp).width(100.dp).clickable { big = b }, contentScale = ContentScale.Fit)
                     }
+                } else if (o.optInt("photos") > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    PT("${o.optInt("photos")} Fotoğraf Eklenmişti Ama Yüklenemedi", 11.sp, Px.Hard)
                 }
             }
         }

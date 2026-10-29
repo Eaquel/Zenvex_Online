@@ -52,7 +52,9 @@ Deno.serve(async (req: Request) => {
     return json({ ok: true, removed });
   }
 
-  if (!b.id || !b.key || !b.ticket) return json({ error: "Eksik bilgi" }, 400);
+  // yönetici hesabının kimliği 0: "!b.id" 0'ı eksik sayıyor, yöneticinin fotoğraf yüklemesi ve fotoğrafları görmesi
+  // ("Eksik bilgi", 400) hiç çalışmıyordu
+  if (b.id == null || !b.key || !b.ticket) return json({ error: "Eksik bilgi" }, 400);
 
   if (b.op === "photo") {
     const ext = (b.ext ?? "").toLowerCase();
